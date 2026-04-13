@@ -1,0 +1,1 @@
+DELETE FROM prop_explanations WHERE sport = 'nhl';

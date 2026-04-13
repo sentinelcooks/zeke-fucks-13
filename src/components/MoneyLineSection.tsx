@@ -1,0 +1,1223 @@
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  TrendingUp,
+  TrendingDown,
+  Loader2,
+  BarChart3,
+  Minus,
+  ArrowUpDown,
+  Trophy,
+  Swords,
+  ChevronRight,
+  AlertTriangle,
+  Home,
+  Plane,
+  Zap,
+  Moon,
+  Sparkles,
+  Info,
+  DollarSign,
+  Scale,
+  Target,
+} from "lucide-react";
+import { Bar } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  LineController,
+  PointElement,
+  Title,
+  Tooltip,
+  Legend,
+} from "chart.js";
+import { supabase } from "@/integrations/supabase/client";
+import { generateDeviceFingerprint } from "@/utils/fingerprint";
+import { motion, AnimatePresence } from "framer-motion";
+import WrittenAnalysis from "@/components/WrittenAnalysis";
+import { fetchNbaOdds } from "@/services/oddsApi";
+import { getSportsbookInfo } from "@/utils/sportsbookLogos";
+import { useAuth } from "@/contexts/AuthContext";
+import { formatOdds } from "@/utils/oddsFormat";
+import sportNba from "@/assets/logo-nba.png";
+import sportMlb from "@/assets/logo-mlb.png";
+import sportNfl from "@/assets/logo-nfl.png";
+import sportNhl from "@/assets/logo-nhl.png";
+import sportNcaab from "@/assets/sport-ncaab.png";
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, LineController, PointElement, Title, Tooltip, Legend);
+
+type BetType = "moneyline" | "spread" | "total";
+type SportType = "nba" | "ncaab" | "mlb" | "nfl" | "nhl";
+
+interface Team {
+  id: string;
+  abbr: string;
+  name: string;
+  shortName: string;
+  logo: string;
+  record: string;
+  color: string;
+}
+
+function getStoredSessionToken(): string {
+  const remember = localStorage.getItem("primal-remember") === "true";
+  const store = remember ? localStorage : sessionStorage;
+  return (
+    store.getItem("primal-session-token") ||
+    localStorage.getItem("primal-session-token") ||
+    sessionStorage.getItem("primal-session-token") ||
+    ""
+  );
+}
+
+async function callMoneylineApi(action: string, body: Record<string, any>) {
+  const token = getStoredSessionToken();
+  const fingerprint = await generateDeviceFingerprint();
+  const { data, error } = await supabase.functions.invoke(`moneyline-api/${action}`, {
+    body: {
+      ...body,
+      __sec: {
+        "x-session-token": token,
+        "x-device-fingerprint": fingerprint,
+        "x-request-nonce": crypto.randomUUID(),
+      },
+    },
+  });
+  if (error) throw error;
+  return data;
+}
+
+/* ── Vision UI Segmented Control ── */
+function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+  layoutId = "seg-bg",
+}: {
+  options: { value: T; label: string; icon?: React.ReactNode }[];
+  value: T;
+  onChange: (v: T) => void;
+  layoutId?: string;
+}) {
+  return (
+    <div className="relative flex rounded-xl p-1 gap-1" style={{
+      background: 'hsla(228, 20%, 8%, 0.6)',
+      border: '1px solid hsla(228, 30%, 16%, 0.25)',
+    }}>
+      {options.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            onClick={() => onChange(opt.value)}
+            className={`relative flex-1 z-10 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-[11px] font-bold tracking-wider transition-all duration-300 ${active ? "text-accent-foreground" : "text-muted-foreground/65 hover:text-foreground/50"}`}
+          >
+            {active && (
+              <motion.div
+                layoutId={layoutId}
+                className="absolute inset-0 rounded-lg"
+                style={{
+                  background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))',
+                  boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.3)',
+                }}
+                transition={{ type: "spring", stiffness: 400, damping: 30 }}
+              />
+            )}
+            <span className="relative z-10 flex items-center gap-1.5">
+              {opt.icon}
+              {opt.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Confidence Gauge ── */
+function ConfidenceGauge({ value, label }: { value: number; label: string }) {
+  const color =
+    value >= 65 ? "text-nba-green" : value >= 50 ? "text-nba-blue" : value >= 35 ? "text-nba-yellow" : "text-nba-red";
+  return (
+    <div className="flex flex-col items-center justify-center gap-0.5">
+      <div className={`text-4xl font-black ${color}`}>{value}%</div>
+      <div className={`text-[10px] font-bold tracking-[2px] uppercase ${color}`}>{label}</div>
+    </div>
+  );
+}
+
+/* ── Charts ── */
+function H2HChart({ h2h, team1, team2 }: { h2h: any[]; team1: Team; team2: Team }) {
+  if (!h2h.length) return <p className="text-center text-muted-foreground text-sm py-6">No head-to-head data available</p>;
+  const labels = h2h.map((g) => { const d = new Date(g.date); return `${d.getMonth() + 1}/${d.getDate()}`; });
+  return (
+    <div className="h-[260px]">
+      <Bar
+        data={{
+          labels,
+          datasets: [
+            { label: team1.shortName, data: h2h.map((g) => g.team1_score), backgroundColor: team1.color + "cc", borderRadius: 4, barPercentage: 0.7 },
+            { label: team2.shortName, data: h2h.map((g) => g.team2_score), backgroundColor: team2.color + "cc", borderRadius: 4, barPercentage: 0.7 },
+          ],
+        }}
+        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: "#7a8299", font: { size: 11 } } } }, scales: { x: { ticks: { color: "#7a8299", font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: "#7a8299" }, grid: { color: "rgba(30,42,69,0.5)" }, beginAtZero: true } } }}
+      />
+    </div>
+  );
+}
+
+function TotalChart({ h2h, line }: { h2h: any[]; line: number }) {
+  if (!h2h.length) return null;
+  const labels = h2h.map((g) => { const d = new Date(g.date); return `${d.getMonth() + 1}/${d.getDate()}`; });
+  const totals = h2h.map((g) => g.team1_score + g.team2_score);
+  const colors = totals.map((t) => (t > line ? "rgba(0,212,170,0.85)" : "rgba(255,71,87,0.7)"));
+  return (
+    <div className="h-[230px]">
+      <Bar
+        data={{ labels, datasets: [
+          { label: "Combined Score", data: totals, backgroundColor: colors, borderRadius: 4, barPercentage: 0.65 },
+          { label: `Line (${line})`, data: Array(labels.length).fill(line), type: "line" as any, borderColor: "rgba(255,255,255,0.5)", borderDash: [6, 4], borderWidth: 2, pointRadius: 0, fill: false } as any,
+        ] }}
+        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: "#7a8299", font: { size: 11 } } } }, scales: { x: { ticks: { color: "#7a8299", font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: "#7a8299" }, grid: { color: "rgba(30,42,69,0.5)" }, beginAtZero: true } } }}
+      />
+    </div>
+  );
+}
+
+function DifferentialChart({ h2h, team1 }: { h2h: any[]; team1: Team }) {
+  if (!h2h.length) return null;
+  const labels = h2h.map((g) => { const d = new Date(g.date); return `${d.getMonth() + 1}/${d.getDate()}`; });
+  const diffs = h2h.map((g) => g.team1_score - g.team2_score);
+  const colors = diffs.map((d) => (d > 0 ? "rgba(0,212,170,0.85)" : "rgba(255,71,87,0.7)"));
+  return (
+    <div className="h-[200px]">
+      <Bar
+        data={{ labels, datasets: [{ label: `${team1.shortName} Diff`, data: diffs, backgroundColor: colors, borderRadius: 4, barPercentage: 0.6 }] }}
+        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: "#7a8299", font: { size: 11 } } } }, scales: { x: { ticks: { color: "#7a8299", font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: "#7a8299" }, grid: { color: "rgba(30,42,69,0.5)" } } } }}
+      />
+    </div>
+  );
+}
+
+/* ── Team Select ── */
+function TeamSelect({ label, value, onChange, teams }: { label: string; value: string; onChange: (v: string) => void; teams: Team[] }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+  const selected = teams.find((t) => t.abbr === value);
+  const q = query.toLowerCase();
+  const filtered = query
+    ? teams.filter((t: any) => t.name.toLowerCase().includes(q) || t.abbr.toLowerCase().includes(q) || t.shortName.toLowerCase().includes(q) || (t.aliases && t.aliases.some((a: string) => a.includes(q))))
+    : teams;
+
+  React.useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2">{label}</label>
+      <div className="relative rounded-xl overflow-hidden transition-all duration-300 focus-within:shadow-[0_0_20px_hsla(250,76%,62%,0.08)]" style={{
+        background: 'hsla(228, 20%, 10%, 0.6)',
+        border: '1px solid hsla(228, 30%, 20%, 0.25)',
+      }}>
+        {selected && !open && selected.logo && (
+          <img src={selected.logo} alt="" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 object-contain" />
+        )}
+        <input
+          type="text"
+          value={open ? query : selected ? selected.name : ""}
+          placeholder="Search team..."
+          onFocus={() => { setOpen(true); setQuery(""); }}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); if (!e.target.value) onChange(""); }}
+          className={`w-full bg-transparent py-3 text-[13px] font-medium text-foreground placeholder:text-muted-foreground/65 focus:outline-none ${selected && !open ? "pl-10 pr-3" : "px-3"}`}
+        />
+      </div>
+      {open && filtered.length > 0 && (
+        <div className="absolute z-50 mt-2 w-full max-h-56 overflow-y-auto rounded-2xl shadow-2xl shadow-black/60" style={{
+          background: 'linear-gradient(127.09deg, hsla(228, 30%, 12%, 0.98) 19.41%, hsla(228, 30%, 6%, 0.95) 76.65%)',
+          border: '1px solid hsla(228, 30%, 22%, 0.3)',
+          backdropFilter: 'blur(20px)',
+        }}>
+          {filtered.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => { onChange(t.abbr); setQuery(""); setOpen(false); }}
+              className={`w-full flex items-center gap-2.5 px-4 py-3 text-sm text-left hover:bg-accent/6 active:bg-accent/10 transition-colors border-b border-border/10 last:border-0 ${t.abbr === value ? "bg-accent/10 font-semibold" : ""}`}
+            >
+              {t.logo && <img src={t.logo} alt="" className="w-6 h-6 object-contain shrink-0" />}
+              <span className="truncate text-[13px] font-bold text-foreground">{t.name}</span>
+              <span className="ml-auto text-[10px] text-muted-foreground/65 shrink-0">{t.record}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {open && filtered.length === 0 && query && (
+        <div className="absolute z-50 mt-2 w-full rounded-2xl p-4 text-sm text-muted-foreground/65 text-center" style={{
+          background: 'linear-gradient(127.09deg, hsla(228, 30%, 12%, 0.98) 19.41%, hsla(228, 30%, 6%, 0.95) 76.65%)',
+          border: '1px solid hsla(228, 30%, 22%, 0.3)',
+        }}>
+          No teams match "{query}"
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Section ── */
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="vision-card p-4">
+      <h3 className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-3">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+/* ── Spread Team Selector (extracted to avoid hooks-in-IIFE violation) ── */
+function SpreadTeamSelector({
+  team1,
+  team2,
+  teams,
+  spreadTeam,
+  setSpreadTeam,
+}: {
+  team1: string;
+  team2: string;
+  teams: Team[];
+  spreadTeam: string;
+  setSpreadTeam: (v: string) => void;
+}) {
+  const [spreadOpen, setSpreadOpen] = React.useState(false);
+  const spreadRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (spreadRef.current && !spreadRef.current.contains(e.target as Node)) setSpreadOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const spreadOptions = [
+    ...(team1 ? [{ value: team1, label: teams.find((t) => t.abbr === team1)?.name || team1, logo: teams.find((t) => t.abbr === team1)?.logo }] : []),
+    ...(team2 ? [{ value: team2, label: teams.find((t) => t.abbr === team2)?.name || team2, logo: teams.find((t) => t.abbr === team2)?.logo }] : []),
+  ];
+  const selectedOpt = spreadOptions.find((o) => o.value === spreadTeam);
+
+  return (
+    <div ref={spreadRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setSpreadOpen(!spreadOpen)}
+        className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-[13px] font-medium text-left transition-all"
+        style={{
+          background: 'hsla(228, 20%, 10%, 0.6)',
+          border: spreadOpen ? '1px solid hsla(250, 76%, 62%, 0.3)' : '1px solid hsla(228, 30%, 20%, 0.25)',
+          boxShadow: spreadOpen ? '0 0 20px -8px hsla(250, 76%, 62%, 0.15)' : 'none',
+        }}
+      >
+        {selectedOpt?.logo && <img src={selectedOpt.logo} alt="" className="w-5 h-5 object-contain" />}
+        <span className={selectedOpt ? 'text-foreground font-semibold' : 'text-muted-foreground/65'}>{selectedOpt?.label || "Select team..."}</span>
+        <svg className={`ml-auto w-4 h-4 text-muted-foreground/50 transition-transform ${spreadOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+      </button>
+      {spreadOpen && spreadOptions.length > 0 && (
+        <div className="absolute z-50 mt-2 w-full rounded-2xl shadow-2xl shadow-black/60 overflow-hidden" style={{
+          background: 'linear-gradient(127.09deg, hsla(228, 30%, 12%, 0.98) 19.41%, hsla(228, 30%, 6%, 0.95) 76.65%)',
+          border: '1px solid hsla(228, 30%, 22%, 0.3)',
+          backdropFilter: 'blur(20px)',
+        }}>
+          {spreadOptions.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => { setSpreadTeam(opt.value); setSpreadOpen(false); }}
+              className={`w-full flex items-center gap-2.5 px-4 py-3 text-sm text-left transition-colors border-b border-border/10 last:border-0 ${opt.value === spreadTeam ? 'bg-accent/10' : 'hover:bg-accent/6 active:bg-accent/10'}`}
+            >
+              {opt.logo && <img src={opt.logo} alt="" className="w-6 h-6 object-contain shrink-0" />}
+              <span className="truncate text-[13px] font-bold text-foreground">{opt.label}</span>
+              {opt.value === spreadTeam && <span className="ml-auto text-accent text-xs">✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── H2H Table ── */
+function H2HTable({ h2h, team1, team2 }: { h2h: any[]; team1: Team; team2: Team }) {
+  if (!h2h.length) return <p className="text-center text-muted-foreground text-sm">No games played</p>;
+  return (
+    <div className="overflow-x-auto -mx-1">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-border/50">
+            {["Date", team1.abbr, team2.abbr, "Margin", "Total"].map((h) => (
+              <th key={h} className="text-center py-2 px-1.5 text-muted-foreground uppercase tracking-wider font-semibold text-[10px]">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {h2h.map((g, i) => {
+            const margin = g.team1_score - g.team2_score;
+            const total = g.team1_score + g.team2_score;
+            const d = new Date(g.date);
+            return (
+              <tr key={i} className="border-b border-border/30">
+                <td className="text-center py-2 px-1.5 text-muted-foreground">{d.getMonth() + 1}/{d.getDate()}/{String(d.getFullYear()).slice(-2)}</td>
+                <td className={`text-center py-2 px-1.5 font-bold ${g.team1_winner ? "text-nba-green" : "text-foreground"}`}>{g.team1_score}</td>
+                <td className={`text-center py-2 px-1.5 font-bold ${g.team2_winner ? "text-nba-green" : "text-foreground"}`}>{g.team2_score}</td>
+                <td className={`text-center py-2 px-1.5 font-bold ${margin > 0 ? "text-nba-green" : "text-nba-red"}`}>{margin > 0 ? "+" : ""}{margin}</td>
+                <td className="text-center py-2 px-1.5 text-muted-foreground">{total}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/* ── Platform Odds (Real from Odds API) ── */
+function MoneylinePlatformOdds({ team1, team2, sport }: { team1: Team; team2: Team; sport?: string }) {
+  const { profile } = useAuth();
+  const oddsFormat = (profile?.odds_format as "american" | "decimal") || "american";
+  const [platforms, setPlatforms] = useState<Array<{ name: string; logo: string; t1: string; t2: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [isLive, setIsLive] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      try {
+        const data = await fetchNbaOdds(undefined, "h2h", sport);
+        if (cancelled) return;
+        const events: any[] = data?.events || data || [];
+        const normalize = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+        const match = events.find((e: any) => {
+          const home = normalize(e.home_team || "");
+          const away = normalize(e.away_team || "");
+          const t1n = normalize(team1.name);
+          const t2n = normalize(team2.name);
+          const t1s = normalize(team1.shortName || "");
+          const t2s = normalize(team2.shortName || "");
+          return (
+            (home.includes(t1n) || home.includes(t1s) || t1n.includes(home) || t1s.includes(home)) &&
+            (away.includes(t2n) || away.includes(t2s) || t2n.includes(away) || t2s.includes(away))
+          ) || (
+            (home.includes(t2n) || home.includes(t2s) || t2n.includes(home) || t2s.includes(home)) &&
+            (away.includes(t1n) || away.includes(t1s) || t1n.includes(away) || t1s.includes(away))
+          );
+        });
+
+        if (match && match.bookmakers?.length > 0) {
+          const rows = match.bookmakers
+            .map((b: any) => {
+              const h2h = b.markets?.find((m: any) => m.key === "h2h");
+              if (!h2h) return null;
+              const findOdds = (teamName: string) => {
+                const norm = normalize(teamName);
+                const outcome = h2h.outcomes?.find((o: any) => normalize(o.name).includes(norm) || norm.includes(normalize(o.name)));
+                return outcome?.price;
+              };
+              const t1Price = findOdds(team1.name) ?? findOdds(team1.shortName || "");
+              const t2Price = findOdds(team2.name) ?? findOdds(team2.shortName || "");
+              if (t1Price == null || t2Price == null) return null;
+              const info = getSportsbookInfo(b.key);
+              return {
+                name: info.label,
+                logo: info.logo,
+                abbrev: info.abbrev,
+                color: info.color,
+                bookKey: b.key,
+                t1: formatOdds(t1Price, oddsFormat),
+                t2: formatOdds(t2Price, oddsFormat),
+              };
+            })
+            .filter(Boolean);
+
+          if (rows.length > 0) {
+            setPlatforms(rows);
+            setIsLive(true);
+          } else {
+            setIsLive(false);
+          }
+        } else {
+          setIsLive(false);
+        }
+      } catch {
+        setIsLive(false);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [team1.name, team2.name, oddsFormat]);
+
+  if (loading) {
+    return (
+      <div className="vision-card p-4 text-center">
+        <Loader2 className="w-4 h-4 animate-spin mx-auto text-muted-foreground" />
+        <p className="text-[10px] text-muted-foreground/65 mt-1">Fetching live odds...</p>
+      </div>
+    );
+  }
+
+  if (!isLive || platforms.length === 0) return null;
+
+  return (
+    <div className="vision-card p-4 relative overflow-hidden">
+      <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(250,76%,62%,0.15), transparent)' }} />
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))', boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.25)' }}>
+          <Trophy className="w-3.5 h-3.5 text-white" />
+        </div>
+        <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">Platform Odds</span>
+        <div className="ml-auto flex items-center gap-1 px-2 py-1 rounded-full" style={{ background: 'hsla(228, 20%, 12%, 0.5)', border: '1px solid hsla(228, 20%, 20%, 0.2)' }}>
+          <div className="w-1.5 h-1.5 rounded-full bg-nba-green animate-pulse" />
+          <span className="text-[7px] font-bold text-nba-green uppercase tracking-wider">Live</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-1 mb-2 px-1">
+        <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45">Platform</span>
+        <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 text-center">{team1.abbr}</span>
+        <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 text-center">{team2.abbr}</span>
+      </div>
+      <div className="space-y-1.5">
+        {platforms.map((p: any, i: number) => (
+          <motion.div
+            key={p.name}
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.06 }}
+            className="grid grid-cols-3 gap-1 items-center py-2.5 px-2.5 rounded-xl transition-all duration-200 hover:shadow-[0_0_16px_hsla(250,76%,62%,0.08)] group cursor-default"
+            style={{ background: 'hsla(228,20%,10%,0.3)', border: '1px solid transparent' }}
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center overflow-hidden" style={{
+                background: 'hsla(228, 20%, 14%, 0.6)',
+                border: '1px solid hsla(228, 20%, 22%, 0.3)',
+              }}>
+                {p.logo ? (
+                  <img src={p.logo} alt={p.name} className="w-5 h-5 object-contain" loading="lazy" />
+                ) : (
+                  <span className="text-[9px] font-black text-white" style={{ color: p.color }}>{p.abbrev}</span>
+                )}
+              </div>
+              <span className="text-[11px] font-bold text-foreground/80 group-hover:text-foreground transition-colors">{p.name}</span>
+            </div>
+            <span className="text-[13px] font-extrabold tabular-nums text-center text-foreground/70">{p.t1}</span>
+            <span className="text-[13px] font-extrabold tabular-nums text-center text-foreground/70">{p.t2}</span>
+          </motion.div>
+        ))}
+      </div>
+      <p className="text-[8px] text-muted-foreground/45 text-center mt-3 pt-3" style={{ borderTop: '1px solid hsla(228, 18%, 18%, 0.3)' }}>
+        Live odds via The Odds API · Always verify before placing bets
+      </p>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MAIN SECTION COMPONENT
+   ══════════════════════════════════════════════════════════════ */
+interface MoneyLineSectionProps {
+  /** When embedded (e.g. in Analyze tab), the parent controls sport */
+  embeddedSport?: SportType;
+  /** Hide the sport toggle when embedded */
+  hideSportToggle?: boolean;
+  /** Pre-fill team 1 (full name, e.g. "Boston Celtics") */
+  initialTeam1?: string;
+  /** Pre-fill team 2 (full name) */
+  initialTeam2?: string;
+  /** Pre-fill sport */
+  initialSport?: string;
+  /** Auto-trigger analysis after teams load */
+  autoAnalyze?: boolean;
+}
+
+const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hideSportToggle = false, initialTeam1, initialTeam2, initialSport, autoAnalyze = false }) => {
+  const { profile } = useAuth();
+  const oddsFormat = (profile?.odds_format as "american" | "decimal") || "american";
+  const isDecimalFormat = oddsFormat === "decimal";
+  const [internalSport, setInternalSport] = useState<SportType>(embeddedSport || (initialSport as SportType) || "nba");
+  const sport = embeddedSport || internalSport;
+  const setSport = embeddedSport ? () => {} : setInternalSport;
+
+  const [betType, setBetType] = useState<BetType>("moneyline");
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [team1, setTeam1] = useState("");
+  const [team2, setTeam2] = useState("");
+  const [spreadTeam, setSpreadTeam] = useState("");
+  const [spreadLine, setSpreadLine] = useState("");
+  const [totalLine, setTotalLine] = useState("");
+  const [overUnder, setOverUnder] = useState<"over" | "under">("over");
+  const [loading, setLoading] = useState(false);
+  const [teamsLoading, setTeamsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [results, setResults] = useState<any>(null);
+  const [showBetInfo, setShowBetInfo] = useState<string | null>(null);
+  const [didAutoAnalyze, setDidAutoAnalyze] = useState(false);
+
+  useEffect(() => {
+    setTeamsLoading(true);
+    setTeams([]); setTeam1(""); setTeam2(""); setResults(null); setError("");
+    callMoneylineApi("teams", { sport }).then(setTeams).catch(() => {}).finally(() => setTeamsLoading(false));
+  }, [sport]);
+
+  // Auto-fill teams and trigger analysis when navigated from Games
+  useEffect(() => {
+    if (!autoAnalyze || didAutoAnalyze || teams.length === 0 || !initialTeam1 || !initialTeam2) return;
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+    const findTeam = (name: string) => teams.find((t) => normalize(t.name).includes(normalize(name)) || normalize(name).includes(normalize(t.name)));
+    const t1 = findTeam(initialTeam1);
+    const t2 = findTeam(initialTeam2);
+    if (t1 && t2) {
+      setTeam1(t1.abbr);
+      setTeam2(t2.abbr);
+      setDidAutoAnalyze(true);
+    }
+  }, [autoAnalyze, didAutoAnalyze, teams, initialTeam1, initialTeam2]);
+
+  const handleAnalyze = useCallback(async () => {
+    if (!team1 || !team2) { setError("Select both teams"); return; }
+    if (team1 === team2) { setError("Select two different teams"); return; }
+    setLoading(true); setError(""); setResults(null);
+    try {
+      const body: any = { bet_type: betType, team1, team2, sport };
+      if (betType === "spread") {
+        if (!spreadLine) { setError("Enter a spread line"); setLoading(false); return; }
+        body.spread_team = spreadTeam || team1;
+        body.spread_line = spreadLine;
+      }
+      if (betType === "total") {
+        if (!totalLine) { setError("Enter a total line"); setLoading(false); return; }
+        body.total_line = totalLine;
+        body.over_under = overUnder;
+      }
+      const data = await callMoneylineApi("analyze", body);
+      if (data.error) setError(data.error); else setResults(data);
+    } catch { setError("Analysis failed. Please try again."); }
+    finally { setLoading(false); }
+  }, [betType, team1, team2, spreadTeam, spreadLine, totalLine, overUnder, sport]);
+
+  // Auto-trigger analysis once teams are set from Games navigation
+  const autoAnalyzeTriggered = React.useRef(false);
+  useEffect(() => {
+    if (didAutoAnalyze && !autoAnalyzeTriggered.current && team1 && team2) {
+      autoAnalyzeTriggered.current = true;
+      handleAnalyze();
+    }
+  }, [didAutoAnalyze, team1, team2, handleAnalyze]);
+
+  return (
+    <div className="space-y-3">
+      {/* Sport Toggle — only when standalone */}
+      {!hideSportToggle && (
+        <SegmentedControl
+          layoutId="lines-sport"
+          options={[
+            { value: "nba" as SportType, label: "NBA", icon: <img src={sportNba} alt="NBA" className="w-7 h-7 object-contain" /> },
+            { value: "mlb" as SportType, label: "MLB", icon: <img src={sportMlb} alt="MLB" className="w-7 h-7 object-contain" /> },
+            { value: "nfl" as SportType, label: "NFL", icon: <img src={sportNfl} alt="NFL" className="w-7 h-7 object-contain" /> },
+            { value: "nhl" as SportType, label: "NHL", icon: <img src={sportNhl} alt="NHL" className="w-7 h-7 object-contain" /> },
+            { value: "ncaab" as SportType, label: "NCAAB", icon: <img src={sportNcaab} alt="NCAAB" className="w-7 h-7 object-contain" /> },
+          ]}
+          value={sport}
+          onChange={(v) => setSport(v)}
+        />
+      )}
+
+      {sport === "mlb" && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-medium text-nba-yellow" style={{ background: 'hsla(43, 96%, 56%, 0.08)', border: '1px solid hsla(43, 96%, 56%, 0.15)' }}>
+          <span>⚠️</span>
+          <span>MLB data is from last season. More info will come as the season progresses to help predict outcomes.</span>
+        </div>
+      )}
+
+      {teamsLoading && (
+        <div className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          Loading {sport.toUpperCase()} teams...
+        </div>
+      )}
+
+      {/* Analysis Type — with info icons */}
+      <div className="relative flex rounded-xl p-1 gap-1" style={{
+        background: 'hsla(228, 20%, 8%, 0.6)',
+        border: '1px solid hsla(228, 30%, 16%, 0.25)',
+      }}>
+        {([
+          { value: "moneyline" as BetType, label: "Moneyline", icon: <DollarSign className="w-3.5 h-3.5" /> },
+          { value: "spread" as BetType, label: "Spread", icon: <Scale className="w-3.5 h-3.5" /> },
+          { value: "total" as BetType, label: "O/U", icon: <Target className="w-3.5 h-3.5" /> },
+        ]).map((opt) => {
+          const active = betType === opt.value;
+          return (
+            <button
+              key={opt.value}
+              onClick={() => { setBetType(opt.value); setResults(null); setError(""); }}
+              className={`relative flex-1 z-10 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-[11px] font-bold tracking-wider transition-all duration-300 ${active ? "text-accent-foreground" : "text-muted-foreground/65 hover:text-foreground/50"}`}
+            >
+              {active && (
+                <motion.div
+                  layoutId="lines-bettype"
+                  className="absolute inset-0 rounded-lg"
+                  style={{
+                    background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))',
+                    boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.3)',
+                  }}
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+              )}
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowBetInfo(opt.value); }}
+                className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-foreground/60 hover:text-accent hover:bg-accent/15 transition-all z-20"
+              >
+                <Info className="w-2.5 h-2.5" />
+              </button>
+              <span className="relative z-10 flex items-center gap-1.5">
+                {opt.icon}
+                {opt.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Analysis Type Info Dialog */}
+      <AnimatePresence>
+        {showBetInfo && (() => {
+          const betInfoData: Record<string, { icon: React.ReactNode; title: string; desc: string; exampleAmerican: string; exampleDecimal: string; color: string }> = {
+            moneyline: {
+              icon: <DollarSign className="w-4 h-4" />,
+              title: "Moneyline",
+              desc: "The simplest bet — pick which team wins the game outright. No point spread is involved.",
+              exampleAmerican: "Lakers are -150 favorites vs Celtics +130. Bet $150 on Lakers to win $100 profit, or bet $100 on Celtics to win $130 profit.",
+              exampleDecimal: "Lakers are 1.67 favorites vs Celtics at 2.30. Bet $100 on Lakers for a $167 payout, or $100 on Celtics for a $230 payout.",
+              color: "hsl(250 76% 62%)",
+            },
+            spread: {
+              icon: <Scale className="w-4 h-4" />,
+              title: "Spread",
+              desc: "The favorite must win by more than the spread, while the underdog can lose by less than the spread (or win outright) for the bet to hit.",
+              exampleAmerican: "Lakers -5.5 at -110 means they must win by 6+ points. Celtics +5.5 at -110 means they can lose by up to 5 points and the bet still wins.",
+              exampleDecimal: "Lakers -5.5 at 1.91 means they must win by 6+ points. Celtics +5.5 at 1.91 means they can lose by up to 5 points and the bet still wins.",
+              color: "hsl(210 100% 60%)",
+            },
+            total: {
+              icon: <Target className="w-4 h-4" />,
+              title: "Over/Under (Totals)",
+              desc: "Bet on whether the combined final score of both teams will be over or under a set number posted by the sportsbook.",
+              exampleAmerican: sport === "mlb" ? "Total set at 8.5 (-110 both sides) — if the final score is Dodgers 5, Mets 4 (total 9), the Over wins. If it's 3-2 (5), the Under wins."
+                : sport === "nhl" ? "Total set at 5.5 (-110 both sides) — if the final score is Rangers 4, Bruins 3 (total 7), the Over wins. If it's 2-1 (3), the Under wins."
+                : sport === "nfl" ? "Total set at 44.5 (-110 both sides) — if the final score is Chiefs 28, Eagles 24 (total 52), the Over wins. If it's 17-14 (31), the Under wins."
+                : "Total set at 215.5 (-110 both sides) — if the final score is Lakers 112, Celtics 108 (total 220), the Over wins. If it's 105-104 (209), the Under wins.",
+              exampleDecimal: sport === "mlb" ? "Total set at 8.5 (1.91 both sides) — if the final score is Dodgers 5, Mets 4 (total 9), the Over wins. If it's 3-2 (5), the Under wins."
+                : sport === "nhl" ? "Total set at 5.5 (1.91 both sides) — if the final score is Rangers 4, Bruins 3 (total 7), the Over wins. If it's 2-1 (3), the Under wins."
+                : sport === "nfl" ? "Total set at 44.5 (1.91 both sides) — if the final score is Chiefs 28, Eagles 24 (total 52), the Over wins. If it's 17-14 (31), the Under wins."
+                : "Total set at 215.5 (1.91 both sides) — if the final score is Lakers 112, Celtics 108 (total 220), the Over wins. If it's 105-104 (209), the Under wins.",
+              color: "hsl(158 64% 52%)",
+            },
+          };
+          const item = betInfoData[showBetInfo];
+          if (!item) return null;
+          return (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center p-6"
+              onClick={() => setShowBetInfo(null)}
+            >
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative w-full max-w-sm rounded-2xl p-5 space-y-4"
+                style={{
+                  background: 'linear-gradient(127.09deg, hsla(228, 30%, 12%, 0.98) 19.41%, hsla(228, 30%, 6%, 0.95) 76.65%)',
+                  border: '1px solid hsla(228, 30%, 22%, 0.3)',
+                  boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white" style={{ background: item.color }}>
+                      {item.icon}
+                    </div>
+                    <h3 className="text-sm font-bold text-foreground">{item.title}</h3>
+                  </div>
+                  <button onClick={() => setShowBetInfo(null)} className="text-muted-foreground hover:text-foreground text-lg leading-none">&times;</button>
+                </div>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">{item.desc}</p>
+                <div className="rounded-lg p-2.5" style={{ background: 'hsla(228,20%,8%,0.5)', border: '1px solid hsla(228,30%,16%,0.15)' }}>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-accent/70 block mb-1">Example</span>
+                  <p className="text-[10px] leading-relaxed text-muted-foreground/80">{isDecimalFormat ? item.exampleDecimal : item.exampleAmerican}</p>
+                </div>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* Form Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+        className="space-y-3"
+      >
+        <div className="vision-card p-4 space-y-4">
+          <TeamSelect label="Team 1" value={team1} onChange={setTeam1} teams={teams} />
+          <TeamSelect label="Team 2" value={team2} onChange={setTeam2} teams={teams} />
+
+          {/* Spread fields */}
+          {betType === "spread" && (
+            <div className="space-y-3 pt-1">
+              <div>
+              <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2">Spread For</label>
+              <SpreadTeamSelector
+                team1={team1}
+                team2={team2}
+                teams={teams}
+                spreadTeam={spreadTeam}
+                setSpreadTeam={setSpreadTeam}
+              />
+              </div>
+              <div>
+                <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2">Spread Line</label>
+                <div className="rounded-xl overflow-hidden focus-within:shadow-[0_0_12px_hsla(250,76%,62%,0.06)]" style={{
+                  background: 'hsla(228, 20%, 10%, 0.5)',
+                  border: '1px solid hsla(228, 30%, 20%, 0.25)',
+                }}>
+                  <input type="number" value={spreadLine} onChange={(e) => setSpreadLine(e.target.value)} placeholder="-5.5" step="0.5"
+                    className="w-full bg-transparent px-3 py-3 text-[13px] font-medium text-foreground placeholder:text-muted-foreground/65 focus:outline-none" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Total fields */}
+          {betType === "total" && (
+            <div className="space-y-3 pt-1">
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2">Direction</label>
+                  <div className="flex rounded-xl p-1 gap-1" style={{
+                    background: 'hsla(228, 20%, 8%, 0.6)',
+                    border: '1px solid hsla(228, 30%, 16%, 0.25)',
+                  }}>
+                    <motion.button
+                      onClick={() => setOverUnder("over")}
+                      whileTap={{ scale: 0.95 }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-[11px] font-bold tracking-wider transition-all duration-300 ${
+                        overUnder === "over" ? "text-background" : "text-muted-foreground/35 hover:text-foreground/50"
+                      }`}
+                      style={overUnder === "over" ? { background: 'hsl(158 64% 52%)', boxShadow: '0 4px 12px -2px hsla(158,64%,52%,0.3)' } : {}}
+                    >
+                      <TrendingUp className="w-3 h-3" />
+                      OVER
+                    </motion.button>
+                    <motion.button
+                      onClick={() => setOverUnder("under")}
+                      whileTap={{ scale: 0.95 }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-[11px] font-bold tracking-wider transition-all duration-300 ${
+                        overUnder === "under" ? "text-white" : "text-muted-foreground/35 hover:text-foreground/50"
+                      }`}
+                      style={overUnder === "under" ? { background: 'hsl(0 72% 51%)', boxShadow: '0 4px 12px -2px hsla(0,72%,51%,0.3)' } : {}}
+                    >
+                      <TrendingDown className="w-3 h-3" />
+                      UNDER
+                    </motion.button>
+                  </div>
+                </div>
+                <div className="w-24">
+                  <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2 text-center">Total Line</label>
+                  <div className="rounded-xl overflow-hidden focus-within:shadow-[0_0_12px_hsla(250,76%,62%,0.06)]" style={{
+                    background: 'hsla(228, 20%, 10%, 0.5)',
+                    border: '1px solid hsla(228, 30%, 20%, 0.25)',
+                  }}>
+                    <input type="number" value={totalLine} onChange={(e) => setTotalLine(e.target.value)} placeholder={sport === "ncaab" ? "140.5" : sport === "mlb" ? "8.5" : sport === "nhl" ? "5.5" : sport === "nfl" ? "44.5" : "215.5"} step="0.5" min="0"
+                      className="w-full bg-transparent py-2.5 text-center text-lg font-extrabold text-foreground placeholder:text-muted-foreground/12 focus:outline-none tabular-nums" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Analyze Button */}
+        <motion.button
+          onClick={handleAnalyze}
+          disabled={loading}
+          whileTap={{ scale: 0.97 }}
+          className="w-full py-3.5 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{
+            background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))',
+            boxShadow: '0 4px 20px -4px hsla(250,76%,62%,0.4)',
+          }}
+        >
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+          Analyze Matchup
+        </motion.button>
+      </motion.div>
+
+      {/* Loading */}
+      {loading && (
+        <div className="text-center py-12">
+          <div className="w-8 h-8 border-[3px] border-border border-t-accent rounded-full animate-spin mx-auto mb-2" />
+          <p className="text-muted-foreground text-xs">Crunching {sport.toUpperCase()} data...</p>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-center text-destructive text-sm">{error}</div>
+      )}
+
+      {/* ═══ Results ═══ */}
+      {results && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="space-y-3"
+        >
+          {/* Matchup Hero Card */}
+          <div className="vision-card p-5 relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(250,76%,62%,0.2), transparent)' }} />
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col items-center text-center w-[30%]">
+                {results.team1?.logo && <img src={results.team1.logo} alt="" className="w-14 h-14 object-contain mb-1.5 drop-shadow-lg" />}
+                <span className="text-xs font-bold text-foreground leading-tight">{results.team1?.shortName}</span>
+                <span className="text-[10px] text-muted-foreground/65">{results.team1?.record}</span>
+              </div>
+              <div className="flex flex-col items-center text-center w-[40%]">
+                {betType === "moneyline" ? (
+                  <>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-2xl font-black text-nba-green">{results.team1_pct}%</span>
+                      <Swords className="w-4 h-4 text-muted-foreground/55" />
+                      <span className="text-2xl font-black text-nba-red">{results.team2_pct}%</span>
+                    </div>
+                    <span className="text-[10px] font-bold tracking-[2px] uppercase text-accent">{results.verdict}</span>
+                  </>
+                ) : (
+                  <ConfidenceGauge value={results.confidence} label={results.verdict} />
+                )}
+              </div>
+              <div className="flex flex-col items-center text-center w-[30%]">
+                {results.team2?.logo && <img src={results.team2.logo} alt="" className="w-14 h-14 object-contain mb-1.5 drop-shadow-lg" />}
+                <span className="text-xs font-bold text-foreground leading-tight">{results.team2?.shortName}</span>
+                <span className="text-[10px] text-muted-foreground/65">{results.team2?.record}</span>
+              </div>
+            </div>
+            {betType === "moneyline" && (
+              <div className="mt-4">
+                <div className="flex h-2 rounded-full overflow-hidden" style={{ background: 'hsla(228,20%,10%,0.5)' }}>
+                  <div className="bg-nba-green transition-all duration-700 rounded-l-full" style={{ width: `${results.team1_pct}%` }} />
+                  <div className="bg-nba-red transition-all duration-700 rounded-r-full" style={{ width: `${results.team2_pct}%` }} />
+                </div>
+                <div className="flex justify-between mt-1.5 text-[10px] text-muted-foreground/65">
+                  <span>{results.team1?.shortName} {results.team1_pct}%</span>
+                  <span>{results.team2_pct}% {results.team2?.shortName}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Odds & Value Card */}
+          {results.odds && (
+            <div className="vision-card p-4 relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(158,64%,52%,0.2), transparent)' }} />
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{
+                  background: results.odds.ev >= 0
+                    ? 'linear-gradient(135deg, hsl(158 64% 52%), hsl(158 64% 40%))'
+                    : 'linear-gradient(135deg, hsl(0 72% 51%), hsl(0 72% 40%))',
+                  boxShadow: results.odds.ev >= 0
+                    ? '0 4px 12px -2px hsla(158,64%,52%,0.25)'
+                    : '0 4px 12px -2px hsla(0,72%,51%,0.25)',
+                }}>
+                  <DollarSign className="w-3.5 h-3.5 text-white" />
+                </div>
+                <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">Odds & Value</span>
+                <div className={`ml-auto px-2.5 py-1 rounded-full text-[10px] font-extrabold ${
+                  results.odds.ev >= 5 ? "text-nba-green" : results.odds.ev >= 0 ? "text-nba-yellow" : "text-nba-red"
+                }`} style={{
+                  background: results.odds.ev >= 5
+                    ? 'hsla(158, 64%, 52%, 0.1)'
+                    : results.odds.ev >= 0
+                    ? 'hsla(43, 96%, 56%, 0.1)'
+                    : 'hsla(0, 72%, 51%, 0.1)',
+                  border: `1px solid ${
+                    results.odds.ev >= 5
+                      ? 'hsla(158, 64%, 52%, 0.2)'
+                      : results.odds.ev >= 0
+                      ? 'hsla(43, 96%, 56%, 0.2)'
+                      : 'hsla(0, 72%, 51%, 0.2)'
+                  }`,
+                }}>
+                  {results.odds.ev >= 0 ? "+" : ""}{results.odds.ev.toFixed(1)}% EV
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="text-center p-3 rounded-xl" style={{ background: 'hsla(228, 20%, 10%, 0.4)', border: '1px solid hsla(228, 30%, 18%, 0.2)' }}>
+                  <span className="block text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 mb-1">Model Prob</span>
+                  <span className="block text-lg font-extrabold text-accent">{results.odds.impliedProb}%</span>
+                </div>
+                <div className="text-center p-3 rounded-xl" style={{ background: 'hsla(228, 20%, 10%, 0.4)', border: '1px solid hsla(228, 30%, 18%, 0.2)' }}>
+                  <span className="block text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 mb-1">Best Odds</span>
+                  <span className="block text-lg font-extrabold text-foreground">
+                    {formatOdds(results.odds.bestLine.odds, oddsFormat)}
+                  </span>
+                </div>
+                <div className="text-center p-3 rounded-xl" style={{ background: 'hsla(228, 20%, 10%, 0.4)', border: '1px solid hsla(228, 30%, 18%, 0.2)' }}>
+                  <span className="block text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 mb-1">Best Book</span>
+                  <span className="block text-sm font-extrabold text-foreground truncate">{results.odds.bestLine.book}</span>
+                </div>
+              </div>
+
+              {results.odds.allBooks && results.odds.allBooks.length > 1 && (
+                <div className="space-y-1.5">
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45">All Books</span>
+                  {results.odds.allBooks.map((b: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded-lg" style={{ background: 'hsla(228,20%,10%,0.3)' }}>
+                      <span className="text-[11px] font-semibold text-foreground/80">{b.book}</span>
+                      <span className={`text-[12px] font-extrabold tabular-nums ${
+                        i === 0 ? "text-nba-green" : "text-foreground/70"
+                      }`}>
+                        {formatOdds(b.odds, oddsFormat)}
+                        {b.point != null && <span className="text-muted-foreground/50 ml-1">({b.point > 0 ? "+" : ""}{b.point})</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p className="text-[8px] text-muted-foreground/40 text-center mt-3 pt-2" style={{ borderTop: '1px solid hsla(228, 18%, 18%, 0.2)' }}>
+                EV = (Model Prob × Decimal Odds − 1) × 100 · Positive EV = edge over the market
+              </p>
+            </div>
+          )}
+
+          <MoneylinePlatformOdds team1={results.team1} team2={results.team2} sport={results.sport || sport} />
+
+          {(results.head_to_head || []).length > 0 && (
+            <div className="grid grid-cols-4 gap-2">
+              {(() => {
+                const h2h = results.head_to_head;
+                const t1Wins = h2h.filter((g: any) => g.team1_winner).length;
+                const avgTotal = (h2h.reduce((a: number, g: any) => a + g.team1_score + g.team2_score, 0) / h2h.length).toFixed(0);
+                const avgMargin = (h2h.reduce((a: number, g: any) => a + Math.abs(g.team1_score - g.team2_score), 0) / h2h.length).toFixed(1);
+                const highScore = Math.max(...h2h.map((g: any) => Math.max(g.team1_score, g.team2_score)));
+                return [
+                  { label: "H2H", val: `${t1Wins}-${h2h.length - t1Wins}` },
+                  { label: "Avg Tot", val: avgTotal },
+                  { label: "Avg Mar", val: avgMargin },
+                  { label: "High", val: highScore },
+                ].map((s) => (
+                  <div key={s.label} className="vision-card p-2.5 text-center">
+                    <span className="block text-[8px] font-bold uppercase tracking-[0.15em] text-muted-foreground/45 mb-0.5">{s.label}</span>
+                    <span className="block text-base font-extrabold text-accent">{s.val}</span>
+                  </div>
+                ));
+              })()}
+            </div>
+          )}
+
+          <Section title="Head-to-Head Scores">
+            <H2HChart h2h={results.head_to_head || []} team1={results.team1} team2={results.team2} />
+          </Section>
+
+          {(results.head_to_head || []).length > 0 && (
+            <Section title="Score Differential">
+              <DifferentialChart h2h={results.head_to_head} team1={results.team1} />
+            </Section>
+          )}
+
+          {betType === "total" && (results.head_to_head || []).length > 0 && (
+            <Section title="Combined Score History">
+              <TotalChart h2h={results.head_to_head} line={parseFloat(totalLine)} />
+            </Section>
+          )}
+
+          <Section title="Past Meetings">
+            <H2HTable h2h={results.head_to_head || []} team1={results.team1} team2={results.team2} />
+          </Section>
+
+          <Section title="Analysis Breakdown">
+            {(() => {
+              const allFactors: string[] = results.factors || [];
+              const writeupLine = allFactors.find((f: string) => f.startsWith("🤖"));
+              const insightFactors = allFactors.filter((f: string) => !f.startsWith("🤖"));
+
+              return (
+                <div className="space-y-3">
+                  {writeupLine && (
+                    <div className="p-3 rounded-xl" style={{ background: 'linear-gradient(135deg, hsla(250, 76%, 62%, 0.08), hsla(210, 100%, 60%, 0.06))', border: '1px solid hsla(250, 76%, 62%, 0.15)' }}>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <Sparkles className="w-3 h-3 text-accent" />
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-accent">AI Summary</span>
+                      </div>
+                      <p className="text-xs leading-relaxed text-foreground/90">{writeupLine.replace("🤖 ", "")}</p>
+                    </div>
+                  )}
+                  <ul className="space-y-0">
+                    {insightFactors.map((f: string, i: number) => (
+                      <li key={i} className="py-2 border-b border-border/30 last:border-0 text-xs leading-relaxed flex items-start gap-2">
+                        <ChevronRight className="w-3 h-3 mt-0.5 shrink-0 text-accent" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
+          </Section>
+
+          {results.injuries && (results.injuries.team1?.length > 0 || results.injuries.team2?.length > 0) && (
+            <Section title="Injury Report">
+              <div className="space-y-4">
+                {[{ team: results.team1, injuries: results.injuries.team1 }, { team: results.team2, injuries: results.injuries.team2 }].map(({ team, injuries }) => (
+                  <div key={team.abbr}>
+                    <div className="flex items-center gap-2 mb-2">
+                      {team.logo && <img src={team.logo} alt="" className="w-4 h-4 object-contain" />}
+                      <span className="text-xs font-bold text-foreground">{team.shortName}</span>
+                      {injuries.length === 0 && <span className="text-[10px] text-nba-green ml-auto">Healthy</span>}
+                    </div>
+                    {injuries.length > 0 && (
+                      <div className="space-y-1">
+                        {injuries.map((inj: any, i: number) => {
+                          const sc = inj.status?.toLowerCase() === "out" ? "text-nba-red" : inj.status?.toLowerCase() === "doubtful" || inj.status?.toLowerCase() === "questionable" ? "text-nba-yellow" : "text-muted-foreground";
+                          return (
+                            <div key={i} className="flex items-center gap-2 py-1 border-b border-border/20 last:border-0">
+                              <AlertTriangle className={`w-2.5 h-2.5 shrink-0 ${sc}`} />
+                              <span className="text-[11px] font-medium text-foreground">{inj.name}</span>
+                              <span className={`text-[9px] font-bold uppercase tracking-wider ml-auto ${sc}`}>{inj.status}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {results.splits && (
+            <Section title="Home / Away Splits">
+              <div className="space-y-4">
+                {[{ team: results.team1, splits: results.splits.team1 }, { team: results.team2, splits: results.splits.team2 }].map(({ team, splits }) => (
+                  <div key={team.abbr}>
+                    <div className="flex items-center gap-2 mb-2">
+                      {team.logo && <img src={team.logo} alt="" className="w-4 h-4 object-contain" />}
+                      <span className="text-xs font-bold text-foreground">{team.shortName}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-secondary/40 rounded-xl p-3 text-center">
+                        <Home className="w-3.5 h-3.5 mx-auto mb-1 text-nba-green" />
+                        <span className="block text-[9px] uppercase tracking-wider text-muted-foreground">Home</span>
+                        <span className="block text-sm font-extrabold text-foreground">{splits.home.wins}-{splits.home.losses}</span>
+                        <span className="block text-[10px] text-muted-foreground">{(splits.home.winPct * 100).toFixed(0)}% · {splits.home.ppg.toFixed(1)} PPG</span>
+                      </div>
+                      <div className="bg-secondary/40 rounded-xl p-3 text-center">
+                        <Plane className="w-3.5 h-3.5 mx-auto mb-1 text-nba-blue" />
+                        <span className="block text-[9px] uppercase tracking-wider text-muted-foreground">Away</span>
+                        <span className="block text-sm font-extrabold text-foreground">{splits.away.wins}-{splits.away.losses}</span>
+                        <span className="block text-[10px] text-muted-foreground">{(splits.away.winPct * 100).toFixed(0)}% · {splits.away.ppg.toFixed(1)} PPG</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          <div className="grid grid-cols-2 gap-2">
+            {results.back_to_back && (
+              <div className="vision-card p-3">
+                <h3 className="text-[8px] font-bold uppercase tracking-[0.15em] text-muted-foreground/45 mb-2">B2B Status</h3>
+                {[{ team: results.team1, b2b: results.back_to_back.team1 }, { team: results.team2, b2b: results.back_to_back.team2 }].map(({ team, b2b }) => (
+                  <div key={team.abbr} className="flex items-center gap-2 py-1.5 border-b last:border-0" style={{ borderColor: 'hsla(228,18%,18%,0.3)' }}>
+                    {team.logo && <img src={team.logo} alt="" className="w-4 h-4 object-contain" />}
+                    <span className="text-[11px] font-semibold text-foreground truncate">{team.shortName}</span>
+                    {b2b.isB2B ? (
+                      <span className="ml-auto flex items-center gap-1 text-[9px] font-bold text-nba-yellow">
+                        <Moon className="w-2.5 h-2.5" /> B2B
+                      </span>
+                    ) : (
+                      <span className="ml-auto text-[9px] font-bold text-nba-green">✓</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {results.pace && (
+              <div className="vision-card p-3">
+                <h3 className="text-[8px] font-bold uppercase tracking-[0.15em] text-muted-foreground/45 mb-2">Pace</h3>
+                {[{ team: results.team1, pace: results.pace.team1 }, { team: results.team2, pace: results.pace.team2 }].map(({ team, pace }) => (
+                  <div key={team.abbr} className="py-1.5 border-b last:border-0" style={{ borderColor: 'hsla(228,18%,18%,0.3)' }}>
+                    <div className="flex items-center gap-2">
+                      {team.logo && <img src={team.logo} alt="" className="w-4 h-4 object-contain" />}
+                      <span className="text-[11px] font-semibold text-foreground truncate">{team.shortName}</span>
+                      {pace.pace > 0 && (
+                        <span className="ml-auto flex items-center gap-0.5 text-[9px] font-bold text-accent">
+                          <Zap className="w-2.5 h-2.5" />{pace.pace}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-2 text-[9px] text-muted-foreground/65 mt-0.5 pl-6">
+                      <span>{pace.recentPpg} PPG</span>
+                      <span className={pace.recentPpg - pace.recentOppPpg > 0 ? "text-nba-green" : "text-nba-red"}>
+                        {(pace.recentPpg - pace.recentOppPpg) > 0 ? "+" : ""}{(pace.recentPpg - pace.recentOppPpg).toFixed(1)} net
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Written Analysis */}
+      {results && (
+        <WrittenAnalysis
+          type="moneyline"
+          verdict={results.verdict}
+          confidence={results.confidence}
+          playerOrTeam={results.pick || results.team1?.shortName || "Pick"}
+          factors={results.factors}
+          injuries={results.injuries}
+          sport={results.sport}
+        />
+      )}
+
+      {/* Footer badges */}
+      <div className="flex items-center justify-center gap-3 pt-2 pb-4">
+        {["ESPN DATA", "REAL-TIME ODDS", "AI INSIGHTS"].map((badge) => (
+          <span key={badge} className="text-[7px] font-bold uppercase tracking-[0.2em] text-muted-foreground/65 flex items-center gap-1">
+            <span className="text-muted-foreground/10">•</span> {badge}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default MoneyLineSection;

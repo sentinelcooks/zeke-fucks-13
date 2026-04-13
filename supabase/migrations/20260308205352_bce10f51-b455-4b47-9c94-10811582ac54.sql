@@ -1,0 +1,1 @@
+ALTER TABLE public.key_sessions ADD COLUMN IF NOT EXISTS user_agent text;

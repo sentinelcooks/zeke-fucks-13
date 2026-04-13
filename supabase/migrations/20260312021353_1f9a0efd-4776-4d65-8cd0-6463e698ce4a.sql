@@ -1,0 +1,1 @@
+DELETE FROM key_sessions WHERE license_key_id = (SELECT id FROM license_keys WHERE key = 'Chain-11-11-1-3-31-31');

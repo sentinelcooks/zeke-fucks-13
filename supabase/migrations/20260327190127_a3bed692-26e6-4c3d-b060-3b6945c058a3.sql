@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN odds_format text NOT NULL DEFAULT 'american';

@@ -1,0 +1,1 @@
+UPDATE daily_picks SET result = 'pending', avg_value = NULL WHERE pick_date = CURRENT_DATE - INTERVAL '1 day' AND id IN ('9f80d2ee-0e4f-4b21-a9a0-346f23733fb3', '55fa0486-664f-45d4-a247-dceff046bde4');
