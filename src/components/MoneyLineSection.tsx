@@ -385,11 +385,11 @@ function H2HTable({ h2h, team1, team2 }: { h2h: any[]; team1: Team; team2: Team 
   );
 }
 
-/* ── Platform Odds (Real from Odds API) ── */
-function MoneylinePlatformOdds({ team1, team2, sport }: { team1: Team; team2: Team; sport?: string }) {
+/* ── Platform Odds (Real from Odds API) — Now fetches h2h, spreads, totals ── */
+function MoneylinePlatformOdds({ team1, team2, sport, modelProb }: { team1: Team; team2: Team; sport?: string; modelProb?: number }) {
   const { profile } = useAuth();
   const oddsFormat = (profile?.odds_format as "american" | "decimal") || "american";
-  const [platforms, setPlatforms] = useState<Array<{ name: string; logo: string; t1: string; t2: string }>>([]);
+  const [allMarketData, setAllMarketData] = useState<Record<string, Array<{ name: string; logo: string; abbrev: string; color: string; bookKey: string; t1: string; t2: string; t1Raw: number; t2Raw: number; spread1?: string; spread2?: string; total?: string }>>>({});
   const [loading, setLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);
 
@@ -398,7 +398,7 @@ function MoneylinePlatformOdds({ team1, team2, sport }: { team1: Team; team2: Te
     async function load() {
       setLoading(true);
       try {
-        const data = await fetchNbaOdds(undefined, "h2h", sport);
+        const data = await fetchNbaOdds(undefined, "h2h,spreads,totals", sport);
         if (cancelled) return;
         const events: any[] = data?.events || data || [];
         const normalize = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
@@ -419,33 +419,65 @@ function MoneylinePlatformOdds({ team1, team2, sport }: { team1: Team; team2: Te
         });
 
         if (match && match.bookmakers?.length > 0) {
-          const rows = match.bookmakers
-            .map((b: any) => {
-              const h2h = b.markets?.find((m: any) => m.key === "h2h");
-              if (!h2h) return null;
-              const findOdds = (teamName: string) => {
-                const norm = normalize(teamName);
-                const outcome = h2h.outcomes?.find((o: any) => normalize(o.name).includes(norm) || norm.includes(normalize(o.name)));
-                return outcome?.price;
-              };
-              const t1Price = findOdds(team1.name) ?? findOdds(team1.shortName || "");
-              const t2Price = findOdds(team2.name) ?? findOdds(team2.shortName || "");
-              if (t1Price == null || t2Price == null) return null;
-              const info = getSportsbookInfo(b.key);
-              return {
-                name: info.label,
-                logo: info.logo,
-                abbrev: info.abbrev,
-                color: info.color,
-                bookKey: b.key,
-                t1: formatOdds(t1Price, oddsFormat),
-                t2: formatOdds(t2Price, oddsFormat),
-              };
-            })
-            .filter(Boolean);
-
-          if (rows.length > 0) {
-            setPlatforms(rows);
+          const marketTypes = ["h2h", "spreads", "totals"];
+          const result: Record<string, any[]> = {};
+          
+          for (const marketKey of marketTypes) {
+            const rows = match.bookmakers
+              .map((b: any) => {
+                const market = b.markets?.find((m: any) => m.key === marketKey);
+                if (!market) return null;
+                const info = getSportsbookInfo(b.key);
+                
+                if (marketKey === "h2h") {
+                  const findOdds = (teamName: string) => {
+                    const norm = normalize(teamName);
+                    const outcome = market.outcomes?.find((o: any) => normalize(o.name).includes(norm) || norm.includes(normalize(o.name)));
+                    return outcome?.price;
+                  };
+                  const t1Price = findOdds(team1.name) ?? findOdds(team1.shortName || "");
+                  const t2Price = findOdds(team2.name) ?? findOdds(team2.shortName || "");
+                  if (t1Price == null || t2Price == null) return null;
+                  return {
+                    name: info.label, logo: info.logo, abbrev: info.abbrev, color: info.color, bookKey: b.key,
+                    t1: formatOdds(t1Price, oddsFormat), t2: formatOdds(t2Price, oddsFormat),
+                    t1Raw: t1Price, t2Raw: t2Price,
+                  };
+                } else if (marketKey === "spreads") {
+                  const findSpread = (teamName: string) => {
+                    const norm = normalize(teamName);
+                    return market.outcomes?.find((o: any) => normalize(o.name).includes(norm) || norm.includes(normalize(o.name)));
+                  };
+                  const t1Out = findSpread(team1.name) ?? findSpread(team1.shortName || "");
+                  const t2Out = findSpread(team2.name) ?? findSpread(team2.shortName || "");
+                  if (!t1Out || !t2Out) return null;
+                  return {
+                    name: info.label, logo: info.logo, abbrev: info.abbrev, color: info.color, bookKey: b.key,
+                    t1: `${t1Out.point > 0 ? "+" : ""}${t1Out.point} (${formatOdds(t1Out.price, oddsFormat)})`,
+                    t2: `${t2Out.point > 0 ? "+" : ""}${t2Out.point} (${formatOdds(t2Out.price, oddsFormat)})`,
+                    t1Raw: t1Out.price, t2Raw: t2Out.price,
+                    spread1: `${t1Out.point > 0 ? "+" : ""}${t1Out.point}`,
+                    spread2: `${t2Out.point > 0 ? "+" : ""}${t2Out.point}`,
+                  };
+                } else {
+                  const overOut = market.outcomes?.find((o: any) => o.name.toLowerCase() === "over");
+                  const underOut = market.outcomes?.find((o: any) => o.name.toLowerCase() === "under");
+                  if (!overOut || !underOut) return null;
+                  return {
+                    name: info.label, logo: info.logo, abbrev: info.abbrev, color: info.color, bookKey: b.key,
+                    t1: `O ${overOut.point} (${formatOdds(overOut.price, oddsFormat)})`,
+                    t2: `U ${underOut.point} (${formatOdds(underOut.price, oddsFormat)})`,
+                    t1Raw: overOut.price, t2Raw: underOut.price,
+                    total: String(overOut.point),
+                  };
+                }
+              })
+              .filter(Boolean);
+            if (rows.length > 0) result[marketKey] = rows;
+          }
+          
+          if (Object.keys(result).length > 0) {
+            setAllMarketData(result);
             setIsLive(true);
           } else {
             setIsLive(false);
@@ -461,7 +493,7 @@ function MoneylinePlatformOdds({ team1, team2, sport }: { team1: Team; team2: Te
     }
     load();
     return () => { cancelled = true; };
-  }, [team1.name, team2.name, oddsFormat]);
+  }, [team1.name, team2.name, oddsFormat, sport]);
 
   if (loading) {
     return (
@@ -472,57 +504,165 @@ function MoneylinePlatformOdds({ team1, team2, sport }: { team1: Team; team2: Te
     );
   }
 
-  if (!isLive || platforms.length === 0) return null;
+  if (!isLive || Object.keys(allMarketData).length === 0) return null;
+
+  const marketLabels: Record<string, { label: string; icon: React.ReactNode; col1: string; col2: string }> = {
+    h2h: { label: "Moneyline", icon: <DollarSign className="w-3 h-3" />, col1: team1.abbr, col2: team2.abbr },
+    spreads: { label: "Spread", icon: <Scale className="w-3 h-3" />, col1: team1.abbr, col2: team2.abbr },
+    totals: { label: "Over/Under", icon: <Target className="w-3 h-3" />, col1: "Over", col2: "Under" },
+  };
+
+  // Compute EV for each market
+  const evCards: Array<{ market: string; label: string; ev: number; edge: number; bestOdds: number; bestBook: string; modelProbUsed: number }> = [];
+  if (modelProb && modelProb > 0) {
+    const americanToDecimalLocal = (american: number) => {
+      if (american > 0) return american / 100 + 1;
+      return 100 / Math.abs(american) + 1;
+    };
+    
+    for (const [marketKey, rows] of Object.entries(allMarketData)) {
+      if (!rows || rows.length === 0) continue;
+      // For moneyline, use modelProb directly (team1 win prob)
+      // For spreads/totals, use modelProb as a rough proxy
+      const prob = modelProb / 100;
+      let bestOdds = -Infinity;
+      let bestBook = "";
+      for (const row of rows) {
+        if (row.t1Raw > bestOdds) {
+          bestOdds = row.t1Raw;
+          bestBook = row.name;
+        }
+      }
+      const decimalOdds = americanToDecimalLocal(bestOdds);
+      const impliedProb = 1 / decimalOdds;
+      const ev = (prob * decimalOdds - 1) * 100;
+      const edge = (prob - impliedProb) * 100;
+      evCards.push({
+        market: marketKey,
+        label: marketLabels[marketKey]?.label || marketKey,
+        ev: +ev.toFixed(1),
+        edge: +edge.toFixed(1),
+        bestOdds,
+        bestBook,
+        modelProbUsed: modelProb,
+      });
+    }
+  }
 
   return (
-    <div className="vision-card p-4 relative overflow-hidden">
-      <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(250,76%,62%,0.15), transparent)' }} />
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))', boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.25)' }}>
-          <Trophy className="w-3.5 h-3.5 text-white" />
-        </div>
-        <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">Platform Odds</span>
-        <div className="ml-auto flex items-center gap-1 px-2 py-1 rounded-full" style={{ background: 'hsla(228, 20%, 12%, 0.5)', border: '1px solid hsla(228, 20%, 20%, 0.2)' }}>
-          <div className="w-1.5 h-1.5 rounded-full bg-nba-green animate-pulse" />
-          <span className="text-[7px] font-bold text-nba-green uppercase tracking-wider">Live</span>
-        </div>
-      </div>
-      <div className="grid grid-cols-3 gap-1 mb-2 px-1">
-        <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45">Platform</span>
-        <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 text-center">{team1.abbr}</span>
-        <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 text-center">{team2.abbr}</span>
-      </div>
-      <div className="space-y-1.5">
-        {platforms.map((p: any, i: number) => (
-          <motion.div
-            key={p.name}
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: i * 0.06 }}
-            className="grid grid-cols-3 gap-1 items-center py-2.5 px-2.5 rounded-xl transition-all duration-200 hover:shadow-[0_0_16px_hsla(250,76%,62%,0.08)] group cursor-default"
-            style={{ background: 'hsla(228,20%,10%,0.3)', border: '1px solid transparent' }}
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center overflow-hidden" style={{
-                background: 'hsla(228, 20%, 14%, 0.6)',
-                border: '1px solid hsla(228, 20%, 22%, 0.3)',
-              }}>
-                {p.logo ? (
-                  <img src={p.logo} alt={p.name} className="w-5 h-5 object-contain" loading="lazy" />
-                ) : (
-                  <span className="text-[9px] font-black text-white" style={{ color: p.color }}>{p.abbrev}</span>
-                )}
-              </div>
-              <span className="text-[11px] font-bold text-foreground/80 group-hover:text-foreground transition-colors">{p.name}</span>
+    <div className="space-y-3">
+      {/* EV Summary Cards */}
+      {evCards.length > 0 && (
+        <div className="vision-card p-4 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(158,64%,52%,0.15), transparent)' }} />
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))', boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.25)' }}>
+              <Zap className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="text-[13px] font-extrabold tabular-nums text-center text-foreground/70">{p.t1}</span>
-            <span className="text-[13px] font-extrabold tabular-nums text-center text-foreground/70">{p.t2}</span>
-          </motion.div>
-        ))}
+            <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">EV Across All Markets</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {evCards.map((card) => {
+              const evColor = card.ev >= 5 ? "text-nba-green" : card.ev >= 0 ? "text-nba-yellow" : "text-nba-red";
+              const evBg = card.ev >= 5 ? "hsla(158, 64%, 52%, 0.08)" : card.ev >= 0 ? "hsla(43, 96%, 56%, 0.08)" : "hsla(0, 72%, 51%, 0.08)";
+              const evBorder = card.ev >= 5 ? "hsla(158, 64%, 52%, 0.15)" : card.ev >= 0 ? "hsla(43, 96%, 56%, 0.15)" : "hsla(0, 72%, 51%, 0.15)";
+              return (
+                <div key={card.market} className="rounded-xl p-3 space-y-2" style={{ background: evBg, border: `1px solid ${evBorder}` }}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/65">{card.label}</span>
+                    <span className={`text-sm font-extrabold ${evColor}`}>{card.ev >= 0 ? "+" : ""}{card.ev}%</span>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="text-muted-foreground/55">Edge</span>
+                      <span className={`font-bold ${evColor}`}>{card.edge >= 0 ? "+" : ""}{card.edge}%</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="text-muted-foreground/55">Best Odds</span>
+                      <span className="font-bold text-foreground/80">{formatOdds(card.bestOdds, oddsFormat)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="text-muted-foreground/55">Best Book</span>
+                      <span className="font-bold text-foreground/80 truncate max-w-[80px]">{card.bestBook}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[8px] text-muted-foreground/40 text-center mt-3 pt-2" style={{ borderTop: '1px solid hsla(228, 18%, 18%, 0.2)' }}>
+            EV = (Model Prob × Decimal Odds − 1) × 100 · Positive EV = edge over the market
+          </p>
+        </div>
+      )}
+
+      {/* All Market Odds Tables */}
+      <div className="vision-card p-4 relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(250,76%,62%,0.15), transparent)' }} />
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))', boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.25)' }}>
+            <Trophy className="w-3.5 h-3.5 text-white" />
+          </div>
+          <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">Platform Odds</span>
+          <div className="ml-auto flex items-center gap-1 px-2 py-1 rounded-full" style={{ background: 'hsla(228, 20%, 12%, 0.5)', border: '1px solid hsla(228, 20%, 20%, 0.2)' }}>
+            <div className="w-1.5 h-1.5 rounded-full bg-nba-green animate-pulse" />
+            <span className="text-[7px] font-bold text-nba-green uppercase tracking-wider">Live</span>
+          </div>
+        </div>
+
+        <div className="space-y-5">
+          {Object.entries(allMarketData).map(([marketKey, platforms]) => {
+            const meta = marketLabels[marketKey];
+            if (!meta) return null;
+            return (
+              <div key={marketKey}>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <div className="w-5 h-5 rounded-md flex items-center justify-center text-accent" style={{ background: 'hsla(250, 76%, 62%, 0.1)' }}>
+                    {meta.icon}
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/70">{meta.label}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-1 mb-1.5 px-1">
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45">Platform</span>
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 text-center">{meta.col1}</span>
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 text-center">{meta.col2}</span>
+                </div>
+                <div className="space-y-1">
+                  {platforms.map((p: any, i: number) => (
+                    <motion.div
+                      key={`${marketKey}-${p.name}`}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.04 }}
+                      className="grid grid-cols-3 gap-1 items-center py-2 px-2 rounded-xl transition-all duration-200 hover:shadow-[0_0_16px_hsla(250,76%,62%,0.08)] group cursor-default"
+                      style={{ background: 'hsla(228,20%,10%,0.3)', border: '1px solid transparent' }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-md flex items-center justify-center overflow-hidden" style={{
+                          background: 'hsla(228, 20%, 14%, 0.6)',
+                          border: '1px solid hsla(228, 20%, 22%, 0.3)',
+                        }}>
+                          {p.logo ? (
+                            <img src={p.logo} alt={p.name} className="w-4 h-4 object-contain" loading="lazy" />
+                          ) : (
+                            <span className="text-[8px] font-black text-white" style={{ color: p.color }}>{p.abbrev}</span>
+                          )}
+                        </div>
+                        <span className="text-[10px] font-bold text-foreground/80 group-hover:text-foreground transition-colors truncate">{p.name}</span>
+                      </div>
+                      <span className="text-[12px] font-extrabold tabular-nums text-center text-foreground/70">{p.t1}</span>
+                      <span className="text-[12px] font-extrabold tabular-nums text-center text-foreground/70">{p.t2}</span>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-[8px] text-muted-foreground/45 text-center mt-3 pt-3" style={{ borderTop: '1px solid hsla(228, 18%, 18%, 0.3)' }}>
+          Live odds via The Odds API · Always verify before placing bets
+        </p>
       </div>
-      <p className="text-[8px] text-muted-foreground/45 text-center mt-3 pt-3" style={{ borderTop: '1px solid hsla(228, 18%, 18%, 0.3)' }}>
-        Live odds via The Odds API · Always verify before placing bets
-      </p>
     </div>
   );
 }
@@ -1014,7 +1154,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
             </div>
           )}
 
-          <MoneylinePlatformOdds team1={results.team1} team2={results.team2} sport={results.sport || sport} />
+          <MoneylinePlatformOdds team1={results.team1} team2={results.team2} sport={results.sport || sport} modelProb={betType === "moneyline" ? results.team1_pct : results.confidence} />
 
           {(results.head_to_head || []).length > 0 && (
             <div className="grid grid-cols-4 gap-2">

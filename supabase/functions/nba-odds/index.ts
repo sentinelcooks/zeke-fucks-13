@@ -498,23 +498,38 @@ Deno.serve(async (req) => {
 
       let bestMatch: any = null;
 
-      for (const event of events) {
+      // Limit to max 5 events to prevent timeouts
+      const maxEvents = Math.min(events.length, 5);
+      const FETCH_TIMEOUT_MS = 10_000;
+
+      for (let ei = 0; ei < maxEvents; ei++) {
+        const event = events[ei];
         const propsCacheKey = `props-${sport}-${event.id}`;
         let propsData = getCached(propsCacheKey) as any;
 
         if (!propsData) {
-          const multiResult = await fetchMultiRegion(supabase, (apiKey, region, bookmakers) =>
-            `${ODDS_API_BASE}/sports/${sportKey}/events/${event.id}/odds?apiKey=${apiKey}&regions=${region}&oddsFormat=american&bookmakers=${bookmakers}&markets=${propMarkets}`
-          );
-          if (!multiResult) continue;
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-          const playerMap = buildPlayerMap(multiResult.mergedBookmakers);
-          const evData = multiResult.events[0] || {};
-          propsData = {
-            event_id: evData.id, home_team: evData.home_team, away_team: evData.away_team,
-            commence_time: evData.commence_time, players: playerMap, quota: multiResult.quota,
-          };
-          setCache(propsCacheKey, propsData);
+            const multiResult = await fetchMultiRegion(supabase, (apiKey, region, bookmakers) =>
+              `${ODDS_API_BASE}/sports/${sportKey}/events/${event.id}/odds?apiKey=${apiKey}&regions=${region}&oddsFormat=american&bookmakers=${bookmakers}&markets=${propMarkets}`
+            );
+
+            clearTimeout(timeoutId);
+            if (!multiResult) continue;
+
+            const playerMap = buildPlayerMap(multiResult.mergedBookmakers);
+            const evData = multiResult.events[0] || {};
+            propsData = {
+              event_id: evData.id, home_team: evData.home_team, away_team: evData.away_team,
+              commence_time: evData.commence_time, players: playerMap, quota: multiResult.quota,
+            };
+            setCache(propsCacheKey, propsData);
+          } catch (fetchErr) {
+            console.warn(`Event ${event.id} prop fetch failed/timed out, skipping`);
+            continue;
+          }
         }
 
         const normalizedSearch = playerName.toLowerCase().trim();
