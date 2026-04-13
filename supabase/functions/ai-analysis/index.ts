@@ -56,12 +56,13 @@ CRITICAL: Your final verdict MUST ALIGN with "${verdict}" (confidence: ${confide
 If the verdict is "DO NOT BET" or "RISKY", do NOT recommend betting. If it's "STRONG PICK", be assertive.
 Support the model — do NOT contradict it.
 
-Write exactly 3 sections. Each: bold title + 2-3 sentences max.
-1. **Statistical Edge** — Season stats, L10 trends, platoon splits, K rate / ERA / WHIP / OPS supporting the bet.
-2. **Matchup & Park Factor** — Opposing pitcher or hitter matchup, park dimensions, weather, bullpen state, lineup protection.
-3. **Verdict & Risk** — Final recommendation with unit sizing and key risk (e.g., short outing, weather delay, cold bat).
+Write exactly 3 sections. Each MUST be under 50 words and max 3 sentences. No paragraphs.
+Format each as: **Section Title**: plain text analysis.
+Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.
 
-Format: **Title**: Analysis text. No bullets. Be assertive.`;
+1. Statistical Edge — Season stats, L10 trends, platoon splits, K rate / ERA / WHIP / OPS.
+2. Matchup & Park Factor — Opposing pitcher/hitter matchup, park dimensions, weather, bullpen state.
+3. Verdict & Risk — Final recommendation with unit sizing and key risk.`;
 
   if (s === "nhl") return `You are a sharp NHL betting analyst. Be concise and data-driven. Use hockey terminology throughout.
 
@@ -77,12 +78,13 @@ CRITICAL: Your final verdict MUST ALIGN with "${verdict}" (confidence: ${confide
 If the verdict is "DO NOT BET" or "RISKY", do NOT recommend betting. If it's "STRONG PICK", be assertive.
 Support the model — do NOT contradict it.
 
-Write exactly 3 sections. Each: bold title + 2-3 sentences max.
-1. **Statistical Edge** — SOG trends, shooting %, ice time, power-play involvement supporting the bet.
-2. **Matchup & Lineup** — Opposing goalie save %, line combinations, PP/PK time, back-to-back fatigue.
-3. **Verdict & Risk** — Final recommendation with unit sizing and key risk (e.g., goalie change, reduced TOI, cold streak).
+Write exactly 3 sections. Each MUST be under 50 words and max 3 sentences. No paragraphs.
+Format each as: **Section Title**: plain text analysis.
+Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.
 
-Format: **Title**: Analysis text. No bullets. Be assertive.`;
+1. Statistical Edge — SOG trends, shooting %, ice time, power-play involvement.
+2. Matchup & Lineup — Opposing goalie save %, line combinations, PP/PK time, fatigue.
+3. Verdict & Risk — Final recommendation with unit sizing and key risk.`;
 
   // NBA / default
   return `You are a sharp sports betting analyst. Be concise, data-driven, and persuasive.
@@ -100,22 +102,24 @@ CRITICAL: Your final verdict MUST ALIGN with "${verdict}" (confidence: ${confide
 If the verdict is "DO NOT BET" or "RISKY", do NOT recommend betting. If it's "STRONG PICK", be assertive.
 Support the model — do NOT contradict it.
 
-Write exactly 3 sections. Each: bold title + 2 sentences max.
-1. **Statistical Edge** — Hit rates, averages, trends supporting the bet.
-2. **Matchup & Injuries** — Opponent matchup, pace, injuries affecting this prop.
-3. **Verdict & Risk** — Final recommendation with unit sizing and key risk.
+Write exactly 3 sections. Each MUST be under 50 words and max 3 sentences. No paragraphs.
+Format each as: **Section Title**: plain text analysis.
+Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.
 
-Format: **Title**: Analysis text. No bullets. Be assertive.`;
+1. Statistical Edge — Hit rates, averages, trends supporting the bet.
+2. Matchup & Injuries — Opponent matchup, pace, injuries affecting this prop.
+3. Verdict & Risk — Final recommendation with unit sizing and key risk.`;
 }
 
 /* ── Sport-specific system messages ── */
 function getSystemMessage(sport: string, type: string): string {
+  const base = "STRICT RULES: Each section MUST be under 50 words. Maximum 3 sentences per section. No exceptions. No paragraphs. No markdown inside text. Only use **Title**: format for section headers.";
   const s = (sport || "").toLowerCase();
-  if (s === "ufc") return "You are an expert MMA betting analyst. Write concise analytical fight breakdowns in 3 short sections. Never hedge — take a clear stance. Use specific numbers.";
-  if (s === "nhl") return "You are an expert NHL betting analyst. Write concise analytical breakdowns in 3 short sections. Never hedge — take a clear stance. Use hockey terminology: save percentage, GAA, puck line, power play, penalty kill, shots on goal, Corsi, TOI, etc.";
-  if (s === "mlb") return "You are an expert MLB betting analyst. Write concise analytical breakdowns in 3 short sections. Never hedge — take a clear stance. Use baseball terminology: ERA, WHIP, K/9, OPS, wOBA, park factor, bullpen, lineup protection, platoon splits, pitch mix, launch angle, etc.";
-  if (type === "prop") return "You are an expert sports betting analyst. Write concise analytical breakdowns in 3 short sections. Never hedge — take a clear stance. Current injuries matter MORE than historical data.";
-  return "You are an expert sports betting analyst. Write concise analytical breakdowns in 3 short sections. Never hedge — take a clear stance. Current injuries matter MORE than historical data.";
+  if (s === "ufc") return `You are an expert MMA betting analyst. Be concise. Never hedge — take a clear stance. Use specific numbers. ${base}`;
+  if (s === "nhl") return `You are an expert NHL betting analyst. Be concise. Never hedge — take a clear stance. Use hockey terminology: save %, GAA, puck line, PP, PK, SOG, Corsi, TOI. ${base}`;
+  if (s === "mlb") return `You are an expert MLB betting analyst. Be concise. Never hedge — take a clear stance. Use baseball terminology: ERA, WHIP, K/9, OPS, wOBA, park factor. ${base}`;
+  if (type === "prop") return `You are an expert sports betting analyst. Be concise. Never hedge — take a clear stance. Current injuries matter MORE than historical data. ${base}`;
+  return `You are an expert sports betting analyst. Be concise. Never hedge — take a clear stance. Current injuries matter MORE than historical data. ${base}`;
 }
 
 serve(async (req) => {
@@ -195,13 +199,13 @@ Key factors from our model:
 
 CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Support the model's pick — do NOT contradict it.
 
-Write exactly 3 sections. Each: bold title + 2-3 sentences max.
-1. **Goaltending Edge** — Starting goalie matchup, save percentages, GAA, recent form (L5 starts). Which netminder has the advantage and why.
-2. **Special Teams & Matchup** — Power play vs penalty kill efficiency, pace of play, shot volume, back-to-back fatigue, home ice advantage, and any key injuries to skaters.
-3. **Verdict & Puck Line Value** — Final recommendation with unit sizing. Address puck line value if relevant. Flag only meaningful risks (back-to-back, goalie injury, cold streak).
+Write exactly 3 sections. Each MUST be under 50 words and max 3 sentences. No paragraphs.
+Format each as: **Section Title**: plain text analysis.
+Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.
 
-FORMATTING RULES: Write in normal sentence case. Do NOT use ALL CAPS except for the verdict label. Do not number sections with "1.", "2.", "3." — just use the bold title format.
-Format: **Title**: Analysis text. No bullets. Be assertive and decisive.`;
+1. Goaltending Edge — Starting goalie matchup, save %, GAA, recent form.
+2. Special Teams & Matchup — PP/PK efficiency, pace, shot volume, fatigue, injuries.
+3. Verdict & Puck Line Value — Final recommendation with unit sizing and key risk.`;
 
     const ufcMoneylinePrompt = `You are a sharp MMA betting analyst. Be concise and data-driven. NEVER reference team sports concepts.
 
@@ -212,12 +216,13 @@ Model Confidence: ${confidence}%
 Key factors:
 - ${dataPoints || "No additional data"}
 
-Write exactly 3 sections. Each: bold title + 2 sentences max.
-1. **Statistical Edge** — Strike differential, accuracy, takedown defense, win probability vs implied odds.
-2. **Style Matchup** — How styles interact. Striker vs grappler dynamics, reach, finishing tendencies.
-3. **Verdict & Risk** — Final recommendation with unit sizing. Flag only meaningful risks (age 37+, layoff, weight cut).
+Write exactly 3 sections. Each MUST be under 50 words and max 3 sentences. No paragraphs.
+Format each as: **Section Title**: plain text analysis.
+Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.
 
-Format: **Title**: Analysis text. No bullets. Be assertive.`;
+1. Statistical Edge — Strike differential, accuracy, takedown defense, win probability.
+2. Style Matchup — How styles interact, reach, finishing tendencies.
+3. Verdict & Risk — Final recommendation with unit sizing and key risk.`;
 
     const mlbMoneylinePrompt = `You are a sharp MLB betting analyst. Be concise and data-driven. Use baseball terminology throughout.
 
@@ -230,13 +235,13 @@ Key factors from our model:
 
 CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Support the model's pick — do NOT contradict it.
 
-Write exactly 3 sections. Each: bold title + 2-3 sentences max.
-1. **Pitching Matchup** — Starting pitcher ERA, WHIP, K/9, recent form (L3-5 starts), pitch mix, L/R splits. Which starter has the edge.
-2. **Lineup & Park Factor** — Offensive splits, OPS, wOBA, park dimensions, weather, bullpen depth, and key injuries affecting run production.
-3. **Verdict & Run Line Value** — Final recommendation with unit sizing. Address run line value if relevant. Flag key risks (bullpen fatigue, weather, travel).
+Write exactly 3 sections. Each MUST be under 50 words and max 3 sentences. No paragraphs.
+Format each as: **Section Title**: plain text analysis.
+Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.
 
-FORMATTING RULES: Write in normal sentence case. Do NOT use ALL CAPS except for the verdict label. Do not number sections with "1.", "2.", "3." — just use the bold title format.
-Format: **Title**: Analysis text. No bullets. Be assertive and decisive.`;
+1. Pitching Matchup — Starting pitcher ERA, WHIP, K/9, recent form, pitch mix.
+2. Lineup & Park Factor — Offensive splits, OPS, park dimensions, bullpen depth.
+3. Verdict & Run Line Value — Final recommendation with unit sizing and key risk.`;
 
     const genericMoneylinePrompt = `You are a sharp sports betting analyst writing a moneyline/spread/total breakdown. Be specific, data-driven, and concise.
 
@@ -250,13 +255,13 @@ Key factors from our model:
 
 CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Support the model's pick — do NOT contradict it.
 
-Write exactly 3 analysis sections. Each section: bold title + 2 sentences max. Cover:
-1. **Statistical Edge** — Why the model favors this side. Win probability vs implied odds.
-2. **Injury & Lineup Reality** — Current injuries, what they mean for each team. If a team is severely depleted, say so clearly.
-3. **Verdict & Risk** — Final recommendation with unit sizing. Match "${verdict}".
+Write exactly 3 sections. Each MUST be under 50 words and max 3 sentences. No paragraphs.
+Format each as: **Section Title**: plain text analysis.
+Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.
 
-FORMATTING RULES: Write in normal sentence case. Do NOT use ALL CAPS except for the verdict label. Do not number sections with "1.", "2.", "3." — just use the bold title format.
-Format: **Title**: Analysis text. No bullet points. Be assertive and decisive.`;
+1. Statistical Edge — Why the model favors this side, win probability vs implied odds.
+2. Injury & Lineup Reality — Current injuries and what they mean for each team.
+3. Verdict & Risk — Final recommendation with unit sizing. Match "${verdict}".`;
 
     // Select the right prompt
     let prompt: string;
@@ -291,8 +296,8 @@ Format: **Title**: Analysis text. No bullet points. Be assertive and decisive.`;
           { role: "system", content: systemMessage },
           { role: "user", content: prompt },
         ],
-        max_tokens: 1000,
-        temperature: 0.7,
+        max_tokens: 600,
+        temperature: 0.6,
       }),
     });
 
@@ -317,23 +322,32 @@ Format: **Title**: Analysis text. No bullet points. Be assertive and decisive.`;
     const aiData = await aiResponse.json();
     const content = aiData.choices?.[0]?.message?.content || "";
 
-    // ── Improved section parser: split on bold headers ──
+    // ── Regex-based section parser: find **Title**: body ──
     const sections: { title: string; content: string }[] = [];
-    
-    const parts = content.split(/\*\*/).filter((s: string) => s.trim().length > 0);
-    for (let i = 0; i < parts.length; i += 2) {
-      const title = parts[i]?.trim().replace(/^\d+\.\s*/, "").replace(/[:\s]+$/, "");
-      const body = parts[i + 1]?.trim().replace(/^[:\s]+/, "") || "";
-      if (title && body) {
-        sections.push({ title, content: body });
+    const cleanMd = (t: string) => t.replace(/\*\*/g, "").replace(/\*/g, "").replace(/^#+\s*/gm, "").trim();
+
+    // Find all **Title** markers and extract title + body between them
+    const headerRegex = /\*\*([^*]+)\*\*\s*:?\s*/g;
+    const matches: { title: string; index: number; end: number }[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = headerRegex.exec(content)) !== null) {
+      matches.push({ title: m[1].replace(/^\d+\.\s*/, "").trim(), index: m.index, end: m.index + m[0].length });
+    }
+
+    for (let i = 0; i < matches.length; i++) {
+      const start = matches[i].end;
+      const end = i + 1 < matches.length ? matches[i + 1].index : content.length;
+      const body = cleanMd(content.slice(start, end));
+      if (matches[i].title && body) {
+        sections.push({ title: matches[i].title, content: body });
       }
     }
 
     // Fallback if parsing fails
     if (sections.length === 0) {
       const lines = content.split("\n").filter((l: string) => l.trim().length > 0);
-      for (const line of lines.slice(0, 5)) {
-        sections.push({ title: "", content: line.trim() });
+      for (const line of lines.slice(0, 3)) {
+        sections.push({ title: "", content: cleanMd(line) });
       }
     }
 
