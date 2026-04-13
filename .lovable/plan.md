@@ -1,43 +1,48 @@
 
 
-## Plan: Fix Odds Issues & Add Multi-Market EV to Lines Tab
+## Plan: Fix NHL Analysis Quality & Section Parsing
 
-### Problem 1: Player Props "No Odds Found"
-The player-odds endpoint times out because it fetches prop data for every event sequentially. The fix is to add a timeout per event and limit the number of events searched, plus improve the matching to try cached events-only data first before fetching per-event props.
+### Problems Identified
 
-### Problem 2: Add All-Market EV Cards to Lines Tab
-Currently the Lines tab only shows EV for the selected bet type. The user wants to see EV/odds for **all three markets** (moneyline, spreads, totals) after running an analysis.
+1. **Broken section parser** in `ai-analysis/index.ts` — splits on `**` assuming alternating title/body, but the AI output often has extra `**` markers inside body text, causing misaligned parsing and raw markdown leaking into displayed content.
+
+2. **NHL analysis is too verbose** — despite "2-3 sentences max" instruction, the model generates walls of text. The images show paragraphs of unformatted markdown.
+
+3. **No markdown rendering in WrittenAnalysis.tsx** — content is rendered as plain text in a `<p>` tag, so any `**bold**` markers that survive parsing show as literal asterisks.
 
 ---
 
 ### Changes
 
-**1. Update `MoneylinePlatformOdds` component** (`src/components/MoneyLineSection.tsx`)
-- Expand to fetch and display **all three markets** (h2h, spreads, totals) instead of just h2h
-- Show odds rows for each market type with proper labels
-- Add an EV summary card for each market using the model confidence from `results`
+**1. Rewrite the section parser** (`supabase/functions/ai-analysis/index.ts`, lines 320-338)
+- Use a regex-based approach: split on `**Title**:` or `**Title:**` patterns to correctly identify section boundaries
+- Strip any remaining `**` markers from the body content after extraction
+- This prevents the misaligned title/body pairing issue
 
-**2. Create a new `MoneylineEVSummary` component** (inside `MoneyLineSection.tsx`)
-- Takes `oddsData` from the events API (h2h, spreads, totals per bookmaker) and model confidence
-- Calculates EV and edge for each market type (moneyline, spread, total)
-- Displays three EV cards side-by-side similar to the existing `OddsComparison` EV grid
-- Shows best book, best odds, and implied probability for each market
+**2. Tighten NHL & all prompts** (`supabase/functions/ai-analysis/index.ts`)
+- Add explicit token/word limits: "Each section MUST be under 50 words"
+- Add "Do NOT write paragraphs. Maximum 3 sentences per section. No exceptions."
+- Reduce `max_tokens` from 1000 to 600 to hard-cap verbosity
+- Add "Strip all markdown formatting from your response — no asterisks, no bold, no bullets"
 
-**3. Update the results section** in `MoneyLineSection`
-- After analysis results render, show the new multi-market EV summary
-- Pass `results.team1_pct` / `results.confidence` to compute EV for each market
-- The existing single `results.odds` card remains for the selected bet type; the new component shows all three
+**3. Strip markdown in WrittenAnalysis.tsx** (line 342-344)
+- Add a simple function to clean `**` markers and render clean text
+- Replace `{section.content}` with `{cleanMarkdown(section.content)}`
 
-**4. Fix `nba-odds/index.ts` player-odds timeout**
-- Add a 10-second timeout per event prop fetch to prevent the endpoint from hanging
-- Limit event iteration to max 5 events (today's games only)
-- If no events have props cached, try the first 3 events max before returning "not found"
+**4. Redeploy the edge function** after changes
 
 ### Technical Details
 
-- The events endpoint already returns h2h, spreads, and totals data per bookmaker — no additional API calls needed for the Lines tab enhancement
-- EV formula: `(modelProb × decimalOdds − 1) × 100`
-- Edge formula: `modelProb − impliedProb`
-- The `MoneylinePlatformOdds` component will be refactored to accept a `markets` prop to control which markets to display
-- For the player-odds fix, `AbortController` with timeout will be used for per-event fetches
+New parser logic:
+```
+// Split on **Title**: pattern using regex
+const sectionRegex = /\*\*([^*]+)\*\*\s*:?\s*/g;
+// Extract title and everything until the next **Title** as body
+```
+
+Clean markdown helper:
+```
+const cleanMarkdown = (text: string) => 
+  text.replace(/\*\*/g, '').replace(/\*/g, '').trim();
+```
 
