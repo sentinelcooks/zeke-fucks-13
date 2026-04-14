@@ -692,26 +692,78 @@ const SPORT_ODDS_KEYS: Record<string, string> = {
   nfl: "americanfootball_nfl",
 };
 
-async function fetchOddsForMatchup(team1Name: string, team2Name: string, sport: string) {
-  try {
-    const apiKey = Deno.env.get("ODDS_API_KEY");
-    if (!apiKey) return null;
+async function getNextOddsKey(supabase: any): Promise<{ id: string; key: string } | null> {
+  const { data, error } = await supabase
+    .from("odds_api_keys")
+    .select("id, api_key")
+    .eq("is_active", true)
+    .is("exhausted_at", null)
+    .order("last_used_at", { ascending: true, nullsFirst: true })
+    .limit(1)
+    .single();
+  if (!error && data) return { id: data.id, key: data.api_key };
+  const envKey = Deno.env.get("ODDS_API_KEY");
+  if (envKey) return { id: "env-fallback", key: envKey };
+  return null;
+}
 
+async function updateOddsKeyUsage(supabase: any, keyId: string, resp: Response) {
+  if (keyId === "env-fallback") return;
+  const remaining = resp.headers.get("x-requests-remaining");
+  const used = resp.headers.get("x-requests-used");
+  const update: Record<string, any> = { last_used_at: new Date().toISOString() };
+  if (remaining !== null) update.requests_remaining = parseInt(remaining, 10);
+  if (used !== null) update.requests_used = parseInt(used, 10);
+  if (remaining !== null && parseInt(remaining, 10) <= 0) {
+    update.exhausted_at = new Date().toISOString();
+  }
+  await supabase.from("odds_api_keys").update(update).eq("id", keyId);
+}
+
+async function markOddsKeyExhausted(supabase: any, keyId: string, error: string) {
+  if (keyId === "env-fallback") return;
+  await supabase.from("odds_api_keys").update({
+    exhausted_at: new Date().toISOString(),
+    last_error: error,
+    last_used_at: new Date().toISOString(),
+  }).eq("id", keyId);
+}
+
+async function fetchOddsWithRotation(supabase: any, url: string, maxRetries = 3): Promise<Response | null> {
+  for (let i = 0; i < maxRetries; i++) {
+    const keyInfo = await getNextOddsKey(supabase);
+    if (!keyInfo) return null;
+    const fullUrl = url.replace("__API_KEY__", keyInfo.key);
+    const resp = await fetch(fullUrl);
+    if (resp.ok) {
+      await updateOddsKeyUsage(supabase, keyInfo.id, resp);
+      return resp;
+    }
+    if (resp.status === 401 || resp.status === 403) {
+      await markOddsKeyExhausted(supabase, keyInfo.id, `HTTP ${resp.status}`);
+      continue;
+    }
+    return null;
+  }
+  return null;
+}
+
+async function fetchOddsForMatchup(team1Name: string, team2Name: string, sport: string, supabaseClient?: any) {
+  try {
+    const sb = supabaseClient || createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const sportKey = SPORT_ODDS_KEYS[sport] || SPORT_ODDS_KEYS.nba;
-    const resp = await fetch(
-      `https://api.the-odds-api.com/v4/sports/${sportKey}/odds/?apiKey=${apiKey}&regions=us,us2&markets=h2h,spreads,totals&oddsFormat=american`
-    );
-    if (!resp.ok) return null;
+    const url = `https://api.the-odds-api.com/v4/sports/${sportKey}/odds/?apiKey=__API_KEY__&regions=us,us2&markets=h2h,spreads,totals&oddsFormat=american`;
+
+    const resp = await fetchOddsWithRotation(sb, url);
+    if (!resp) return null;
     const events = await resp.json();
 
     const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
     const t1 = norm(team1Name);
     const t2 = norm(team2Name);
 
-    // Use substring matching with last-word comparison for reliability
     const matchesTeam = (haystack: string, needle: string) => {
       if (haystack.includes(needle) || needle.includes(haystack)) return true;
-      // Compare last word (nickname) — e.g. "philadelphiaphillies" vs "phillies"
       const hWords = haystack.replace(/[^a-z]/g, "");
       const nWords = needle.replace(/[^a-z]/g, "");
       if (hWords.length >= 4 && nWords.length >= 4) {
@@ -730,7 +782,6 @@ async function fetchOddsForMatchup(team1Name: string, team2Name: string, sport: 
 
     if (!match) return null;
 
-    // Parse all markets from all books
     const result: Record<string, any[]> = {};
     for (const bm of match.bookmakers || []) {
       for (const mkt of bm.markets || []) {
@@ -890,7 +941,7 @@ Deno.serve(async (req) => {
       const extras = { injuries1, injuries2, splits1, splits2, b2b1, b2b2, pace1, pace2 };
 
       // Fetch live odds for all sports
-      const oddsData = await fetchOddsForMatchup(team1.name, team2.name, sport);
+      const oddsData = await fetchOddsForMatchup(team1.name, team2.name, sport, supabase);
 
       // MLB: delegate to 20-factor model for superior analysis
       if (sport === "mlb") {
