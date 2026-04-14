@@ -8,7 +8,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { MobileHeader } from "@/components/mobile/MobileHeader";
 
 const routeTitles: Record<string, string> = {
-  "/dashboard/home": "Dashboard",
+  "/dashboard/home": "Sentinel Dashboard",
   "/dashboard/games": "Games",
   "/dashboard/analyze": "Analyze",
   "/dashboard/moneyline": "Lines",
@@ -34,7 +34,7 @@ const DashboardLayout = () => {
 
   // Update browser tab title
   useEffect(() => {
-    document.title = title === "Dashboard" ? "Sentinel" : `${title} – Sentinel`;
+    document.title = title === "Sentinel Dashboard" ? "Sentinel" : `${title} – Sentinel`;
   }, [title]);
 
   // Tab-switch scroll restore

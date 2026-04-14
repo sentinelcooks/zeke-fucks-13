@@ -8,7 +8,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { useParlaySlip } from "@/contexts/ParlaySlipContext";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
+
 import { PnLCalendar } from "@/components/PnLCalendar";
 import { useAuth } from "@/contexts/AuthContext";
 import { searchPlayers } from "@/services/api";
@@ -370,7 +370,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
         }
       `}</style>
 
-      <MobileHeader title="Sentinel Dashboard" />
+      
 
       <div className="w-full max-w-[430px] mx-auto px-5 pt-1 pb-6 space-y-6 relative">
         <div className="vision-orb w-64 h-64 -top-20 -right-20" style={{ background: 'hsl(250 76% 62%)' }} />
