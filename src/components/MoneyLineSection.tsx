@@ -1107,12 +1107,6 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
         </div>
       )}
 
-      {/* Footer */}
-      <div className="rounded-xl p-3 text-center" style={{ background: 'hsla(228, 20%, 10%, 0.4)' }}>
-        <p className="text-[8px] text-muted-foreground/45">
-          Live odds via The Odds API · Always verify before placing bets
-        </p>
-      </div>
           </motion.div>
         )}
       </AnimatePresence>
