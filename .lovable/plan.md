@@ -1,47 +1,51 @@
 
+## Plan: Restore NBA Odds Visibility
 
-## Plan: Fix NHL Analysis Wall-of-Text
+### What I found
+The main blocker is not just the screen:
+- The backend odds key pool is exhausted right now: **3/3 keys are exhausted** and each shows **0 requests remaining** with `OUT_OF_USAGE_CREDITS`.
+- The moneyline UI currently **fails silently**. In `MoneylinePlatformOdds`, if no lines come back it returns `null`, so you see nothing instead of a reason.
+- There is also a likely NBA-specific matching weakness: the frontend odds matcher only compares `name` and `shortName`, not team aliases. That can miss teams like **LA Lakers / Los Angeles Lakers**, **NY Knicks / New York Knicks**, etc.
 
-### Root Cause
-Two problems:
-1. **Parser only matches `**Title**:` format** — but the AI model sometimes outputs `### Title` markdown headers instead. When this happens, the regex finds 0 matches and the fallback just takes the first 3 non-empty lines, which can be massive paragraphs.
-2. **Model ignores word limits** — despite "50 words max" instructions, it writes 200+ word paragraphs. No server-side truncation exists as a safety net.
+### What I’ll do
+**1. Fix the backend odds flow**
+- Update `supabase/functions/moneyline-api/index.ts` to use the **same rotating odds-key strategy** as `nba-odds` instead of relying on a single fallback path.
+- Return a structured odds status when lines cannot load, e.g.:
+  - `no_credits`
+  - `no_market_found`
+  - `no_active_lines`
 
-### Changes
+**2. Fix the NBA odds matching**
+- Update `src/components/MoneyLineSection.tsx` so matchup detection uses:
+  - full name
+  - short name
+  - abbreviation
+  - aliases from the team payload
+  - nickname/suffix matching
+- Reuse the stronger matching concept already used in the backend so NBA teams resolve more reliably.
 
-**1. Fix the section parser** (`supabase/functions/ai-analysis/index.ts`, lines 325-352)
-- Add a second regex pass for `### Title` / `## Title` patterns if `**Title**:` yields 0 matches
-- Also try splitting on numbered patterns like `1. Title:` or `1) Title:`
-- This ensures the parser handles whatever format the model decides to use
+**3. Stop hiding the odds section**
+- Replace the current silent `return null` behavior with a visible fallback card:
+  - “Live odds temporarily unavailable”
+  - “No active lines for this matchup”
+  - “Odds feed is out of credits”
+- Keep the section layout intact so the page still looks complete.
 
-**2. Add hard content truncation** (same file, after parsing)
-- After extracting each section body, truncate to 280 characters max (roughly 50 words)
-- Cut at the last complete sentence within the limit if possible
-- This acts as a safety net regardless of how verbose the model is
+**4. Use whatever odds are available**
+- If the full multi-book odds panel fails, keep showing any usable odds returned from `results.odds` instead of hiding everything.
+- This gives the user at least one best-line card while the richer comparison panel is unavailable.
 
-**3. Strengthen the prompt** (same file, NHL moneyline prompt + system message)
-- Add: "You MUST write ONLY 3 short bullet-style sentences per section. If you write more than 50 words in any section, the output will be rejected."
-- Switch from `google/gemini-3-flash-preview` to `google/gemini-2.5-flash` which follows formatting instructions more reliably
+**5. Verify end-to-end**
+- Test NBA moneyline, spreads, and totals after the code changes.
+- Confirm the UI shows:
+  - real odds when credits are available
+  - a clear message when credits are exhausted
+  - no blank/vanishing odds area
 
-**4. Redeploy the `ai-analysis` edge function**
+### Important blocker
+Even after the code fix, **live odds will not reappear until fresh Odds API quota is available**. The current backend key pool is fully exhausted, so part of the fix is restoring valid odds credits in the existing admin odds-key flow.
 
-### Technical Details
-
-New parser fallback chain:
-```
-1. Try **Title**: regex
-2. If 0 matches → try ### Title regex  
-3. If 0 matches → try numbered "1. Title:" regex
-4. If still 0 → split on double newlines, take first 3 chunks
-```
-
-Truncation helper:
-```typescript
-function truncateSection(text: string, maxChars = 280): string {
-  if (text.length <= maxChars) return text;
-  const cut = text.slice(0, maxChars);
-  const lastSentence = cut.lastIndexOf('.');
-  return lastSentence > 100 ? cut.slice(0, lastSentence + 1) : cut + '…';
-}
-```
-
+### Files involved
+- `src/components/MoneyLineSection.tsx`
+- `supabase/functions/moneyline-api/index.ts`
+- Possibly shared helper extraction from `supabase/functions/nba-odds/index.ts` for consistent key rotation / matching behavior
