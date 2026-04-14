@@ -1614,7 +1614,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
             </div>
           )}
 
-          <MoneylinePlatformOdds team1={results.team1} team2={results.team2} sport={results.sport || sport} modelProb={betType === "moneyline" ? results.team1_pct : results.confidence} activeBetType={betType} activeOverUnder={overUnder} />
+          <MoneylinePlatformOdds team1={results.team1} team2={results.team2} sport={results.sport || sport} modelProb={betType === "moneyline" ? results.team1_pct : results.confidence} activeBetType={betType} activeOverUnder={overUnder} factorBreakdown={results.factorBreakdown} />
 
           {(results.head_to_head || []).length > 0 && (
             <div className="grid grid-cols-4 gap-2">
