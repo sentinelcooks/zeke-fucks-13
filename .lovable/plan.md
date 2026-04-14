@@ -1,26 +1,22 @@
 
 
-## Plan: Filter Odds to Match Requested Line
+## Plan: Replace Moneyline Analysis Breakdown with Props-Style
 
 ### Problem
-When checking a prop like "Connor McDavid Over 1 Goal", the odds comparison shows books with different lines (e.g., 1.5, 2.5) instead of only books offering the exact line requested. Alt lines above the requested line should never appear.
+The moneyline "Analysis Breakdown" section uses a custom bar-chart style (team comparison bars with scores). The user wants it to match the Props section, which uses the `WrittenAnalysis` component (timeline-style with icons, narrative sections, and overall verdict).
 
-### Solution
-Filter the returned books **client-side** in `OddsComparison.tsx` after fetching. This avoids changing the backend edge function.
+### Key Insight
+The `WrittenAnalysis` component is **already rendered** below the Analysis Breakdown for moneylines (line 1877). So there are currently two analysis sections stacked — the bar-chart breakdown AND WrittenAnalysis. The fix is simply to remove the redundant bar-chart "Analysis Breakdown" Section.
 
-### Logic
-After `setBooks(data.books)`, filter the books array:
-1. **Exact match first**: Keep only books where `book.line === requested line`
-2. **If no exact matches**: Also include books with lines **below** the requested line (alt lines that are easier to hit)
-3. **Never show** books with lines **above** the requested line
+### Implementation
 
-### File Changed
-**`src/components/OddsComparison.tsx`** (~5 lines added in the `fetchOdds` function):
-- After receiving `data.books`, filter: keep entries where `b.line <= line`, preferring exact matches
-- If there are exact-line books, only show those; otherwise fall back to below-line books
+**File: `src/components/MoneyLineSection.tsx`**
+- Remove the `<Section title="Analysis Breakdown">` block (lines ~1656-1767) which contains the bar-chart team comparison UI
+- The existing `WrittenAnalysis` component (already at line 1877) will serve as the sole analysis section, matching the Props style exactly
 
 ### What Won't Change
-- No backend/edge function changes
-- No UI design changes
-- Works for all sports (NBA, MLB, NHL, NFL, UFC)
+- No backend changes
+- No changes to `WrittenAnalysis.tsx`
+- All other moneyline sections (Past Meetings, Injury Report, Splits, etc.) remain intact
+- The AI Summary that was inside the bar-chart section is already captured by WrittenAnalysis
 
