@@ -855,7 +855,21 @@ const ProfitTrackerPage = () => {
                           <div className="flex items-center gap-1.5">
                             <span className="text-muted-foreground/50 font-bold">#{li + 1}</span>
                             <span className="font-bold uppercase text-[8px] text-accent/70">{leg.sport}</span>
-                            <span className="font-medium text-foreground/80 truncate max-w-[180px]">{leg.pick}</span>
+                            <button
+                              onClick={() => {
+                                const parsed = parseLegPick(leg.pick);
+                                if (parsed) {
+                                  const sport = (leg.sport || "NBA").toLowerCase();
+                                  const route = sport === "nba" || sport === "mlb" || sport === "nhl"
+                                    ? `/dashboard/${sport}`
+                                    : `/dashboard/nba`;
+                                  navigate(route, { state: { autoAnalyze: true, ...parsed, sport: leg.sport } });
+                                }
+                              }}
+                              className="font-medium text-accent/90 hover:text-accent underline decoration-accent/30 hover:decoration-accent truncate max-w-[180px] text-left transition-colors"
+                            >
+                              {leg.pick}
+                            </button>
                           </div>
                           <span className={`font-bold ${
                             leg.grade === "strong" ? "text-nba-green" : leg.grade === "lean" ? "text-nba-yellow" : "text-nba-red"
