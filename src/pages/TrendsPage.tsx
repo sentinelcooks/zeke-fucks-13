@@ -88,7 +88,7 @@ const TrendsPage = () => {
       <div className="vision-orb w-64 h-64 -top-20 -right-20" style={{ background: "hsl(30 100% 50%)" }} />
       <div className="vision-orb w-48 h-48 top-[500px] -left-16" style={{ background: "hsl(250 76% 62%)", animationDelay: "-3s" }} />
 
-      <MobileHeader title="Trends" subtitle="Streaks & hot props" />
+      
 
       {/* Category Tabs */}
       <div className="flex gap-2 relative z-10">

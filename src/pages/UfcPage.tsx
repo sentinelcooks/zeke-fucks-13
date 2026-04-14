@@ -122,7 +122,7 @@ const UfcPage = () => {
 
   return (
     <div className="w-full">
-      <MobileHeader title="UFC Analysis" subtitle="Matchup breakdowns & fight props" />
+      
 
       <div className="px-4 pb-8 space-y-4">
         {/* Back / New Matchup */}

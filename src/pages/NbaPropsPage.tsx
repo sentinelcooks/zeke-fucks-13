@@ -741,7 +741,7 @@ const NbaPropsPage = () => {
       <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(250 76% 62%)' }} />
       <div className="vision-orb w-36 h-36 top-[600px] -left-12" style={{ background: 'hsl(210 100% 60%)', animationDelay: '-4s' }} />
 
-      <MobileHeader title={mode === "lines" ? "Lines" : sport === "ufc" ? "UFC Analysis" : `${sportLabel} Props`} subtitle={mode === "lines" ? "Head-to-head matchup analyzer" : sport === "ufc" ? "Fighter matchup analysis" : "Player prop analysis"} />
+      
       <div className="px-4 pt-4 pb-6 space-y-3 relative z-10">
 
         {/* ── Sport Toggle (always visible) ── */}

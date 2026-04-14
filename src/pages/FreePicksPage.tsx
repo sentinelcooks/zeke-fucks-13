@@ -245,7 +245,7 @@ const FreePicksPage = () => {
       <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: "hsl(250 76% 62%)" }} />
       <div className="vision-orb w-36 h-36 top-[600px] -left-12" style={{ background: "hsl(30 100% 50%)", animationDelay: "-3s" }} />
 
-      <MobileHeader title="Picks & Trends" subtitle="Daily picks, streaks & hot props" />
+      
 
       <div className="px-4 pt-3 pb-2 space-y-2 relative z-10">
         {/* Main category tabs */}

@@ -332,7 +332,7 @@ const ProfitTrackerPage = () => {
       <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(250 76% 62%)' }} />
       <div className="vision-orb w-36 h-36 top-[600px] -left-12" style={{ background: 'hsl(145 60% 45%)', animationDelay: '-4s' }} />
 
-      <MobileHeader title="Profit Tracker" subtitle="Track plays, picks & parlays" />
+      
 
       <div className="px-4 pt-4 pb-32 space-y-3 relative z-10">
 

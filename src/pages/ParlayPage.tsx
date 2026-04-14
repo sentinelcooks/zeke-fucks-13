@@ -233,7 +233,7 @@ const ParlayPage = () => {
 
   return (
     <div className="max-w-[520px] mx-auto pb-8 relative">
-      <MobileHeader title="Parlay Builder" subtitle="Build your ticket. We analyze every leg." />
+      
 
       <div className="px-4 pt-1">
         {/* Legs */}

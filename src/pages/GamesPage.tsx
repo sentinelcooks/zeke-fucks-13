@@ -927,7 +927,7 @@ const GamesPage = () => {
       <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(250 76% 62%)' }} />
       <div className="vision-orb w-36 h-36 top-[500px] -left-12" style={{ background: 'hsl(43 96% 56%)', animationDelay: '-4s' }} />
 
-      <MobileHeader title="Games" subtitle="Today's matchups" />
+      
 
       {/* Sport toggle */}
       <div className="flex p-1 rounded-xl relative z-10" style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>

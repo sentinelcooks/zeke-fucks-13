@@ -3,7 +3,7 @@ import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { motion, AnimatePresence } from "framer-motion";
 import { TrendingUp, TrendingDown, Zap, Clock, Search, Loader2, Link2, X, ChevronDown, ChevronLeft, Target, ArrowRight, Shield, Hand, Crosshair, RotateCcw, Trophy, BarChart3, Activity, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
+
 import { analyzeProp } from "@/services/api";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import OddsComparison from "@/components/OddsComparison";
@@ -281,7 +281,7 @@ const FreePropsPage = () => {
     return (
       <div className="flex flex-col min-h-full relative">
         <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(250 76% 62%)' }} />
-        <MobileHeader title="Prop Analysis" subtitle={`${prop.player_name} — ${PROP_LABELS[prop.prop_type] || prop.prop_type.toUpperCase()}`} />
+        
 
         <div className="px-4 pt-3 pb-28 space-y-3 relative z-10">
           <button
@@ -577,7 +577,7 @@ const FreePropsPage = () => {
   // ── List View ──
   return (
     <div className="flex flex-col min-h-full">
-      <MobileHeader title="Free Props" />
+      
 
       <div className="px-4 pt-3 pb-2 space-y-3">
         {/* Sport Filter */}
