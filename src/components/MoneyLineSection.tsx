@@ -1134,7 +1134,14 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
         body.over_under = overUnder;
       }
       const data = await callMoneylineApi("analyze", body);
-      if (data.error) setError(data.error); else setResults(data);
+      if (data.error) { setError(data.error); } else {
+        setResults(data);
+        // Scroll to top so user sees results from the beginning
+        requestAnimationFrame(() => {
+          const main = document.querySelector("main");
+          if (main) main.scrollTo({ top: 0, behavior: "smooth" });
+        });
+      }
     } catch { setError("Analysis failed. Please try again."); }
     finally { setLoading(false); }
   }, [betType, team1, team2, spreadTeam, spreadLine, totalLine, overUnder, sport]);
