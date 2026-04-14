@@ -253,7 +253,17 @@ const GamesPage = () => {
   };
 
   const fetchGames = async (s: SportFilter, silent = false) => {
-    if (!silent) setLoading(true);
+    // Cancel any in-flight request so stale data from a previous sport never overwrites
+    if (fetchAbort.current) fetchAbort.current.abort();
+    const controller = new AbortController();
+    fetchAbort.current = controller;
+
+    if (!silent) {
+      setLoading(true);
+      // Immediately clear stale games from a different sport
+      setGames([]);
+      setUfcEvents([]);
+    }
     setError("");
     try {
       if (s === "ufc") {
@@ -266,14 +276,17 @@ const GamesPage = () => {
         }),
         fetchOdds(s),
       ]);
+      // If this request was superseded by a newer one, discard the result
+      if (controller.signal.aborted) return;
       if (fnError) throw fnError;
       if (data?.error) { setError(data.error); setGames([]); }
       else setGames(Array.isArray(data) ? data : []);
-    } catch {
+    } catch (e: any) {
+      if (controller.signal.aborted) return;
       setError("Failed to load games");
       setGames([]);
     } finally {
-      if (!silent) setLoading(false);
+      if (!controller.signal.aborted && !silent) setLoading(false);
     }
   };
 
