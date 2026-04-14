@@ -1,32 +1,25 @@
 
 
-## Plan: Fix Long Analysis Text in NHL (and MLB) Moneyline
+## Plan: Remove Duplicate Odds Card & Unify Odds Section
 
-### Root Cause
-The wall-of-text is NOT from the `ai-analysis` edge function (that's working correctly with 3 concise sections). It's from the **`nhl-model` writeup** — a separate AI-generated text block.
+### What's happening now
+There are **two** odds sections rendering for every sport:
+1. A simple "Odds & Value" card (Model Prob / Best Odds / Best Book grid + All Books list) — powered by `results.odds` from the backend model
+2. The full `MoneylinePlatformOdds` component — the richer design with EV hero card, edge projection bar, best line card, and all sportsbooks comparison (the design shown in your screenshots)
 
-Here's the flow:
-1. `nhl-model/index.ts` calls `generateWriteup()` which asks the AI to write 3 sections — but with `max_tokens: 600` and NO truncation, the model often writes 400+ words
-2. `moneyline-api` prepends `🤖` to the writeup and puts it in `factors`
-3. `MoneyLineSection.tsx` line 1614 renders it raw: `{writeupLine.replace("🤖 ", "")}` — no length cap, no markdown stripping
+These are redundant and the first one is the blocky, less polished section you want removed.
 
-So the "AI Summary" box in the Analysis Breakdown section shows the entire untruncated writeup from the model.
+### Changes
 
-### Fix (3 changes)
+**1. Remove the "Odds & Value Card" block** (`MoneyLineSection.tsx`, lines ~1470-1544)
+- Delete the entire `{results.odds && (...)}` card that renders Model Prob / Best Odds / Best Book in a 3-column grid
+- This removes the duplicate; the `MoneylinePlatformOdds` component already covers this data with better design
 
-**1. Truncate the writeup in `nhl-model/index.ts`** (and `mlb-model/index.ts`)
-- After getting the writeup from the AI, truncate it to ~200 chars (2-3 sentences max)
-- Reduce `max_tokens` from 600 to 300
-- Simplify the prompt to request a single short paragraph instead of 3 sections (the 3-section analysis is already handled by `ai-analysis`)
-
-**2. Truncate on display in `MoneyLineSection.tsx`**
-- Add a safety truncation to the writeupLine before rendering (cap at 250 chars, cut at last sentence)
-- Strip `**` markdown from the displayed text
-
-**3. Redeploy `nhl-model` and `mlb-model`**
+**2. Keep `MoneylinePlatformOdds` as the single odds section**
+- Already renders consistently for all sports (NBA, NHL, MLB) using live odds data
+- Already includes: EV across all markets, model vs market hero, edge projection, best line, all sportsbooks list
+- No changes needed to this component
 
 ### Files
-- `supabase/functions/nhl-model/index.ts` — truncate writeup, simplify prompt
-- `supabase/functions/mlb-model/index.ts` — same treatment
-- `src/components/MoneyLineSection.tsx` — truncate writeupLine on display
+- `src/components/MoneyLineSection.tsx` — remove lines ~1470-1544 (the "Odds & Value Card" block)
 
