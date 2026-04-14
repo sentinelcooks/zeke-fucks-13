@@ -1,32 +1,42 @@
 
 
-## Plan: Fix Long Analysis Text in NHL (and MLB) Moneyline
+## Plan: Unify All Sports to NBA's Visual Design
 
-### Root Cause
-The wall-of-text is NOT from the `ai-analysis` edge function (that's working correctly with 3 concise sections). It's from the **`nhl-model` writeup** — a separate AI-generated text block.
+### Current State
 
-Here's the flow:
-1. `nhl-model/index.ts` calls `generateWriteup()` which asks the AI to write 3 sections — but with `max_tokens: 600` and NO truncation, the model often writes 400+ words
-2. `moneyline-api` prepends `🤖` to the writeup and puts it in `factors`
-3. `MoneyLineSection.tsx` line 1614 renders it raw: `{writeupLine.replace("🤖 ", "")}` — no length cap, no markdown stripping
+The app has **two separate analysis UIs**:
 
-So the "AI Summary" box in the Analysis Breakdown section shows the entire untruncated writeup from the model.
+1. **MoneyLineSection.tsx** (1835 lines) — Used for NBA, MLB, NFL, NHL, NCAAB. Already renders ALL sports identically with the Vision UI dark glassmorphism design (vision-card panels, EV hero card, edge projection bar, best line card, sportsbook list, H2H charts, factor breakdown bars, injury report, home/away splits, B2B/pace cards, written analysis).
 
-### Fix (3 changes)
+2. **MlbPredictionsPage.tsx** (472 lines) — A completely separate MLB-only page at `/dashboard/mlb-predictions` with a different visual language (lighter `bg-primary/5` cards, shadcn Tabs/Collapsible, different factor bars, no EV/odds/sportsbook sections). This is the only page that diverges from the NBA design.
 
-**1. Truncate the writeup in `nhl-model/index.ts`** (and `mlb-model/index.ts`)
-- After getting the writeup from the AI, truncate it to ~200 chars (2-3 sentences max)
-- Reduce `max_tokens` from 600 to 300
-- Simplify the prompt to request a single short paragraph instead of 3 sections (the 3-section analysis is already handled by `ai-analysis`)
+**The MoneyLineSection already handles MLB, NFL, NHL, NCAAB with the exact same NBA design.** The only outlier is the standalone MlbPredictionsPage.
 
-**2. Truncate on display in `MoneyLineSection.tsx`**
-- Add a safety truncation to the writeupLine before rendering (cap at 250 chars, cut at last sentence)
-- Strip `**` markdown from the displayed text
+### What I'll Do
 
-**3. Redeploy `nhl-model` and `mlb-model`**
+**1. Remove the MlbPredictionsPage route and redirect it**
+- Change the `/dashboard/mlb-predictions` route in `App.tsx` to redirect to `/dashboard/moneyline` (which already supports MLB via the sport toggle in MoneyLineSection)
+- Update `BottomTabBar.tsx` mapping for `mlb-predictions` path
+- Remove the `MlbPredictionsPage` import from `App.tsx`
 
-### Files
-- `supabase/functions/nhl-model/index.ts` — truncate writeup, simplify prompt
-- `supabase/functions/mlb-model/index.ts` — same treatment
-- `src/components/MoneyLineSection.tsx` — truncate writeupLine on display
+**2. Verify MoneyLineSection sport-specific terminology**
+- Confirm the spread label says "Run Line" for MLB and "Puck Line" for NHL (currently both show generic "Spread")
+- Add sport-aware label mapping in the bet type tabs and odds sections:
+  - MLB: Spread → Run Line
+  - NHL: Spread → Puck Line  
+  - NFL/NCAAB/NBA: Spread (as-is)
+
+**3. Update any navigation links pointing to mlb-predictions**
+- Search for and redirect any internal links to the unified moneyline page with MLB pre-selected
+
+### Files Changed
+- `src/App.tsx` — Remove MlbPredictionsPage import, redirect route
+- `src/components/mobile/BottomTabBar.tsx` — Update path mapping
+- `src/components/MoneyLineSection.tsx` — Add sport-specific market terminology (Run Line, Puck Line)
+- `src/pages/MlbPredictionsPage.tsx` — Can be deleted (no longer referenced)
+
+### What Won't Change
+- No backend logic, edge functions, or data fetching
+- No routing structure changes beyond the redirect
+- MoneyLineSection already handles all sports identically — no new components needed
 
