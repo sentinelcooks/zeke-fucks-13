@@ -1,33 +1,27 @@
 
 
-## Plan: Fix NHL Odds Prop Type Mapping
+## Plan: Make Parlay Leg Picks Clickable for Analysis
 
 ### Problem
-NHL prop types use shorthand values (`sog`, `goals`, `g+a`, `ppg`, etc.) that don't map to the Odds API's expected market keys (`player_shots_on_goal`, `player_goals`, `player_power_play_points`, etc.). The edge function converts unknown prop types to `player_{propType}`, resulting in keys like `player_sog` which the API doesn't recognize.
+In the saved parlays on the Profit Tracker page, the leg pick text (e.g., "Mark Stone OVER 1.5 sog") is static. The user wants it to be clickable and navigate to the corresponding player analysis page with the prop pre-filled.
 
-### Solution
-Add an NHL prop type mapping table in the edge function, similar to the existing `MLB_PROP_MAP`.
+### Approach
+The NbaPropsPage already supports `location.state` with `autoAnalyze` to pre-fill and auto-run analysis. We just need to:
 
-### File Changed
+1. Parse the `leg.pick` string to extract player name, over/under, line, and prop type
+2. Wrap the pick text in a clickable element that navigates to `/dashboard/nba` with the correct state
 
-**`supabase/functions/nba-odds/index.ts`** — Add an `NHL_PROP_MAP` alongside the existing `MLB_PROP_MAP` (~line 469):
+### Implementation
 
-```
-NHL_PROP_MAP = {
-  goals: "player_goals",
-  nhl_points: "player_points",
-  nhl_assists: "player_assists",
-  sog: "player_shots_on_goal",
-  "g+a": "player_points",         // goals+assists = points in NHL
-  ppg: "player_power_play_points",
-  blocked_shots: "player_blocked_shots",
-}
-```
+**File: `src/pages/ProfitTrackerPage.tsx`**
 
-Then add a check after the MLB mapping block: if `sport === "nhl"` and the prop type is in `NHL_PROP_MAP`, use the mapped value.
+1. Import `useNavigate` from `react-router-dom`
+2. Add a helper function to parse leg pick strings (e.g., `"Mark Stone OVER 1.5 sog"` → `{ player: "Mark Stone", over_under: "over", line: 1.5, prop_type: "sog" }`)
+3. In the parlay legs rendering (lines 852-863), wrap the pick text `<span>` in a clickable button/link that calls `navigate("/dashboard/nba", { state: { autoAnalyze: true, player, prop_type, line, over_under, sport } })`
+4. Style the pick text with underline/accent color to indicate it's clickable
 
 ### What Won't Change
-- No client-side changes needed
-- No UI changes
-- NBA/MLB/UFC odds unaffected
+- No backend changes
+- No changes to NbaPropsPage or MoneyLinePage (they already handle navigation state)
+- Parlay card layout stays the same — only the pick text becomes interactive
 
