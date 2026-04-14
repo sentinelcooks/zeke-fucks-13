@@ -11,7 +11,7 @@ import { Search, Loader2, Target, TrendingUp, TrendingDown, Crosshair, Shield, H
 import { searchPlayers, getTeams, analyzeProp, searchUfcFighters, analyzeUfcMatchup } from "@/services/api";
 import { supabase } from "@/integrations/supabase/client";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import OddsComparison from "@/components/OddsComparison";
+
 import { motion, AnimatePresence } from "framer-motion";
 import { useParlaySlip } from "@/contexts/ParlaySlipContext";
 import WrittenAnalysis from "@/components/WrittenAnalysis";
@@ -1897,14 +1897,6 @@ const NbaPropsPage = () => {
                 />
               </Section>
 
-              <OddsComparison
-                playerName={player}
-                propType={propType}
-                line={parseFloat(line) || 0}
-                overUnder={overUnder}
-                sport={sport}
-                modelHitRate={results.confidence}
-              />
 
               <Section title={propType === "3pm" ? "3PT Zones" : propType === "rebounds" ? "Rebound Zones" : propType === "assists" ? "Assist Zones" : "Scoring Zones"} defaultOpen={false}>
                 <ShotChart propType={propType} playerName={player} analysisData={results} />
