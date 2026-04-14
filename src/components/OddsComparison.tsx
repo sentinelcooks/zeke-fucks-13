@@ -66,7 +66,12 @@ const OddsComparison = ({ playerName, propType, line, overUnder, sport = "nba", 
     try {
       const data = await fetchPlayerOdds(playerName, propType, overUnder, sport);
       if (data.found && data.books?.length > 0) {
-        setBooks(data.books);
+        // Filter: exact line first, then alt lines below (never above)
+        const exactMatches = data.books.filter((b: BookOdds) => b.line === line);
+        const belowMatches = data.books.filter((b: BookOdds) => b.line < line);
+        const filtered = exactMatches.length > 0 ? exactMatches : belowMatches;
+        setBooks(filtered.length > 0 ? filtered : []);
+        if (filtered.length === 0) setError("No live odds found for this line");
       } else {
         setBooks([]);
         setError("No live odds found for this player");
