@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Clock, Loader2, Calendar, Bell, BellOff, RefreshCw, Swords, Search, ChevronDown } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { supabase } from "@/integrations/supabase/client";
@@ -927,7 +927,7 @@ const GamesPage = () => {
       <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(250 76% 62%)' }} />
       <div className="vision-orb w-36 h-36 top-[500px] -left-12" style={{ background: 'hsl(43 96% 56%)', animationDelay: '-4s' }} />
 
-      <MobileHeader title="Games" subtitle="Today's matchups" />
+      
 
       {/* Sport toggle */}
       <div className="flex p-1 rounded-xl relative z-10" style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>

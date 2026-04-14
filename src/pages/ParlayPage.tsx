@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Plus, Trash2, Loader2, Search, Zap, BookOpen, Trophy, DollarSign, Target } from "lucide-react";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
+
 import { motion, AnimatePresence } from "framer-motion";
 import NbaLegInput, { NbaLegData } from "@/components/parlay/NbaLegInput";
 import UfcLegInput, { UfcLegData } from "@/components/parlay/UfcLegInput";
@@ -233,7 +233,7 @@ const ParlayPage = () => {
 
   return (
     <div className="max-w-[520px] mx-auto pb-8 relative">
-      <MobileHeader title="Parlay Builder" subtitle="Build your ticket. We analyze every leg." />
+      
 
       <div className="px-4 pt-1">
         {/* Legs */}

@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
+
 import { PnLCalendar } from "@/components/PnLCalendar";
 import { useAuth } from "@/contexts/AuthContext";
 import { ModernHomeLayout } from "@/components/home/ModernHomeLayout";
@@ -219,7 +219,7 @@ const HomePage = () => {
       <div className="vision-orb w-64 h-64 -top-20 -right-20" style={{ background: 'hsl(250 76% 62%)' }} />
       <div className="vision-orb w-48 h-48 top-[400px] -left-16" style={{ background: 'hsl(190 90% 55%)', animationDelay: '-3s' }} />
 
-      <MobileHeader title="Dashboard" />
+      
 
       {/* ── QUICK ACCESS — shown first for new users ── */}
       {isNewUser && (

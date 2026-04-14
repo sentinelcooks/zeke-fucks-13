@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Calculator, Scan, Loader2, ArrowRightLeft, DollarSign, TrendingUp, AlertTriangle, RefreshCw, CheckCircle2 } from "lucide-react";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
+
 import { fetchNbaOdds, type OddsEvent } from "@/services/oddsApi";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 
@@ -723,7 +723,7 @@ const ArbitragePage = () => {
       <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(250 76% 62%)' }} />
       <div className="vision-orb w-36 h-36 top-[600px] -left-12" style={{ background: 'hsl(160 84% 39%)', animationDelay: '-4s' }} />
 
-      <MobileHeader title="Arbitrage" subtitle="Find & calculate guaranteed profits" />
+      
 
       <div className="px-4 pt-4 pb-32 space-y-3 relative z-10">
         <TabSelector tab={tab} setTab={setTab} />

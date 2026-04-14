@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Globe, Bell, BellOff, LogOut, User, Check, ChevronRight, Hash, MessageSquare, Send, Loader2, CheckCircle, CreditCard, Palette } from "lucide-react";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -204,7 +204,7 @@ const SettingsPage = () => {
     <div className="px-4 pt-2 pb-4 space-y-4 relative">
       <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(250 76% 62%)' }} />
 
-      <MobileHeader title="Settings" subtitle="Configure your experience" />
+      
 
       {/* Account */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="vision-card overflow-hidden relative z-10">
