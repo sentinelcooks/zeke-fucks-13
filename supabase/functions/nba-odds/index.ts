@@ -64,7 +64,6 @@ const MLB_PROP_MARKETS = [
   "batter_home_runs",
   "batter_total_bases",
   "batter_rbis",
-  "batter_runs",
   "batter_walks",
   "batter_stolen_bases",
 ].join(",");
@@ -189,8 +188,8 @@ async function fetchWithRotation(
       continue; // retry without marking exhausted
     }
     if (resp.status === 422) {
-      // Invalid request (unsupported market/region combo) — don't blame the key
-      console.warn(`Request returned 422 (invalid params), skipping`);
+      const errBody = await resp.text();
+      console.warn(`Request returned 422 (invalid params): ${errBody.substring(0, 200)}`);
       return null;
     }
     await updateKeyUsage(supabase, keyInfo.id, resp);
@@ -498,12 +497,20 @@ Deno.serve(async (req) => {
 
       let bestMatch: any = null;
 
-      // Limit to max 5 events to prevent timeouts
-      const maxEvents = Math.min(events.length, 5);
+      // Filter to only upcoming events (not started yet) — props unavailable for live games
+      const now = Date.now();
+      const upcomingEvents = events.filter((e: any) => {
+        if (!e.commence_time) return true;
+        return new Date(e.commence_time).getTime() > now;
+      });
+
+      // Use only us/us2 regions for props (us_dfs/us_ex don't support them)
+      const PROP_REGIONS = REGION_CONFIGS.filter(c => c.region === "us" || c.region === "us2");
+      const maxEvents = upcomingEvents.length;
       const FETCH_TIMEOUT_MS = 10_000;
 
       for (let ei = 0; ei < maxEvents; ei++) {
-        const event = events[ei];
+        const event = upcomingEvents[ei];
         const propsCacheKey = `props-${sport}-${event.id}`;
         let propsData = getCached(propsCacheKey) as any;
 
@@ -513,7 +520,8 @@ Deno.serve(async (req) => {
             const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
             const multiResult = await fetchMultiRegion(supabase, (apiKey, region, bookmakers) =>
-              `${ODDS_API_BASE}/sports/${sportKey}/events/${event.id}/odds?apiKey=${apiKey}&regions=${region}&oddsFormat=american&bookmakers=${bookmakers}&markets=${propMarkets}`
+              `${ODDS_API_BASE}/sports/${sportKey}/events/${event.id}/odds?apiKey=${apiKey}&regions=${region}&oddsFormat=american&bookmakers=${bookmakers}&markets=${propMarkets}`,
+              PROP_REGIONS,
             );
 
             clearTimeout(timeoutId);
@@ -562,7 +570,11 @@ Deno.serve(async (req) => {
       }
 
       if (!bestMatch) {
-        return json({ found: false, message: `No odds found for ${playerName} (${propMarketKey})`, events_checked: events.length });
+        const liveCount = events.length - upcomingEvents.length;
+        const msg = upcomingEvents.length === 0
+          ? `No upcoming games found for ${sport.toUpperCase()} — all ${events.length} games are live or completed. Props are only available before game time.`
+          : `No odds found for ${playerName} (${propMarketKey}). Checked ${upcomingEvents.length} upcoming events (${liveCount} live/completed skipped).`;
+        return json({ found: false, message: msg, events_checked: events.length, upcoming_checked: upcomingEvents.length });
       }
       return json({ found: true, ...bestMatch });
     }
