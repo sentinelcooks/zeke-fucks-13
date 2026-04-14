@@ -9,6 +9,7 @@ import {
   Trophy,
   Swords,
   ChevronRight,
+  ChevronDown,
   AlertTriangle,
   Home,
   Plane,
@@ -19,6 +20,8 @@ import {
   DollarSign,
   Scale,
   Target,
+  Shield,
+  Crown,
 } from "lucide-react";
 import { Bar } from "react-chartjs-2";
 import {
@@ -385,13 +388,14 @@ function H2HTable({ h2h, team1, team2 }: { h2h: any[]; team1: Team; team2: Team 
   );
 }
 
-/* ── Platform Odds (Real from Odds API) — Now fetches h2h, spreads, totals ── */
-function MoneylinePlatformOdds({ team1, team2, sport, modelProb }: { team1: Team; team2: Team; sport?: string; modelProb?: number }) {
+/* ── Platform Odds (Real from Odds API) — OddsProjection-style design ── */
+function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType = "moneyline", activeOverUnder = "over" }: { team1: Team; team2: Team; sport?: string; modelProb?: number; activeBetType?: BetType; activeOverUnder?: "over" | "under" }) {
   const { profile } = useAuth();
   const oddsFormat = (profile?.odds_format as "american" | "decimal") || "american";
   const [allMarketData, setAllMarketData] = useState<Record<string, Array<{ name: string; logo: string; abbrev: string; color: string; bookKey: string; t1: string; t2: string; t1Raw: number; t2Raw: number; spread1?: string; spread2?: string; total?: string }>>>({});
   const [loading, setLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);
+  const [showExplainer, setShowExplainer] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -512,31 +516,40 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb }: { team1: Team
     totals: { label: "Over/Under", icon: <Target className="w-3 h-3" />, col1: "Over", col2: "Under" },
   };
 
+  // Helpers
+  const americanToDecimalLocal = (american: number) => {
+    if (american > 0) return american / 100 + 1;
+    return 100 / Math.abs(american) + 1;
+  };
+  const impliedProbLocal = (american: number) => {
+    if (american < 0) return Math.abs(american) / (Math.abs(american) + 100) * 100;
+    return 100 / (american + 100) * 100;
+  };
+
+  // Map betType to market key
+  const betTypeToMarketKey: Record<string, string> = { moneyline: "h2h", spread: "spreads", total: "totals" };
+  const activeMarketKey = betTypeToMarketKey[activeBetType] || "h2h";
+
   // Compute EV for each market
-  const evCards: Array<{ market: string; label: string; ev: number; edge: number; bestOdds: number; bestBook: string; modelProbUsed: number }> = [];
+  const evCards: Array<{ market: string; label: string; ev: number; edge: number; bestOdds: number; bestBook: string; modelProbUsed: number; bestImplied: number }> = [];
   if (modelProb && modelProb > 0) {
-    const americanToDecimalLocal = (american: number) => {
-      if (american > 0) return american / 100 + 1;
-      return 100 / Math.abs(american) + 1;
-    };
-    
     for (const [marketKey, rows] of Object.entries(allMarketData)) {
       if (!rows || rows.length === 0) continue;
-      // For moneyline, use modelProb directly (team1 win prob)
-      // For spreads/totals, use modelProb as a rough proxy
       const prob = modelProb / 100;
+      // For totals, use t1Raw for over, t2Raw for under
       let bestOdds = -Infinity;
       let bestBook = "";
       for (const row of rows) {
-        if (row.t1Raw > bestOdds) {
-          bestOdds = row.t1Raw;
+        const relevantOdds = (marketKey === "totals" && activeOverUnder === "under") ? row.t2Raw : row.t1Raw;
+        if (relevantOdds > bestOdds) {
+          bestOdds = relevantOdds;
           bestBook = row.name;
         }
       }
       const decimalOdds = americanToDecimalLocal(bestOdds);
-      const impliedProb = 1 / decimalOdds;
+      const implied = impliedProbLocal(bestOdds);
       const ev = (prob * decimalOdds - 1) * 100;
-      const edge = (prob - impliedProb) * 100;
+      const edge = modelProb - implied;
       evCards.push({
         market: marketKey,
         label: marketLabels[marketKey]?.label || marketKey,
@@ -545,14 +558,283 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb }: { team1: Team
         bestOdds,
         bestBook,
         modelProbUsed: modelProb,
+        bestImplied: implied,
       });
     }
   }
 
+  // Active market EV data for hero card
+  const activeEV = evCards.find(c => c.market === activeMarketKey);
+  const hasPositiveEV = activeEV ? activeEV.ev > 0 : false;
+  const edgeLabel = activeEV ? (
+    activeEV.edge >= 10 ? { label: "STRONG EDGE", color: "text-nba-green", bg: "bg-nba-green/10" } :
+    activeEV.edge >= 5 ? { label: "EDGE", color: "text-nba-green", bg: "bg-nba-green/10" } :
+    activeEV.edge >= 2 ? { label: "SLIGHT EDGE", color: "text-nba-blue", bg: "bg-nba-blue/10" } :
+    activeEV.edge >= 0 ? { label: "FAIR", color: "text-muted-foreground", bg: "bg-secondary/40" } :
+    activeEV.edge >= -5 ? { label: "OVERPRICED", color: "text-nba-yellow", bg: "bg-nba-yellow/10" } :
+    { label: "BAD VALUE", color: "text-nba-red", bg: "bg-nba-red/10" }
+  ) : null;
+
+  // All books for the active market with EV
+  const activeMarketBooks = allMarketData[activeMarketKey] || [];
+  const activeMarketBooksWithEV = activeMarketBooks.map(row => {
+    const relevantOdds = (activeMarketKey === "totals" && activeOverUnder === "under") ? row.t2Raw : row.t1Raw;
+    const implied = impliedProbLocal(relevantOdds);
+    const ev = modelProb ? ((modelProb / 100) * americanToDecimalLocal(relevantOdds) - 1) * 100 : 0;
+    const edge = modelProb ? modelProb - implied : 0;
+    return { ...row, relevantOdds, implied, ev, edge };
+  }).sort((a, b) => b.relevantOdds - a.relevantOdds);
+
+  const bestBook = activeMarketBooksWithEV[0];
+
+  const getEVColorLocal = (ev: number) => {
+    if (ev >= 5) return "text-nba-green";
+    if (ev >= 0) return "text-nba-blue";
+    if (ev >= -5) return "text-nba-yellow";
+    return "text-nba-red";
+  };
+
   return (
     <div className="space-y-3">
-      {/* EV Summary Cards */}
-      {evCards.length > 0 && (
+      {/* ── MODEL vs MARKET HERO CARD ── */}
+      {activeEV && modelProb && modelProb > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative rounded-2xl overflow-hidden p-5"
+          style={{
+            background: 'linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.94) 19.41%, hsla(228, 30%, 8%, 0.49) 76.65%)',
+            border: `1px solid ${hasPositiveEV ? 'hsla(158,64%,52%,0.25)' : 'hsla(228,30%,22%,0.3)'}`,
+          }}
+        >
+          {hasPositiveEV && <div className="absolute inset-0 bg-gradient-to-b from-[hsla(158,64%,52%,0.06)] to-transparent pointer-events-none" />}
+          <div className="relative z-10">
+            {/* EV Verdict Banner */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                {hasPositiveEV ? (
+                  <div className="w-8 h-8 rounded-lg bg-nba-green/15 flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4 text-nba-green" />
+                  </div>
+                ) : (
+                  <div className="w-8 h-8 rounded-lg bg-nba-red/15 flex items-center justify-center">
+                    <TrendingDown className="w-4 h-4 text-nba-red" />
+                  </div>
+                )}
+                <div>
+                  <p className={`text-[13px] font-extrabold ${hasPositiveEV ? "text-nba-green" : "text-nba-red"}`}>
+                    {hasPositiveEV ? "+EV Opportunity" : "Negative EV"}
+                  </p>
+                  <p className="text-[9px] text-muted-foreground/65">Model vs Market comparison</p>
+                </div>
+              </div>
+              {edgeLabel && (
+                <div className={`px-2.5 py-1 rounded-lg text-[10px] font-black tracking-wider ${edgeLabel.bg} ${edgeLabel.color}`}>
+                  {edgeLabel.label}
+                </div>
+              )}
+            </div>
+
+            {/* Model vs Implied Grid */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <div className="rounded-xl p-3 text-center" style={{ background: 'hsla(228, 20%, 10%, 0.7)' }}>
+                <div className="flex items-center justify-center gap-1 mb-1.5">
+                  <Zap className="w-3 h-3 text-accent" />
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-accent/60">Our Model</span>
+                </div>
+                <span className="block text-xl font-extrabold tabular-nums text-accent">{modelProb.toFixed(1)}%</span>
+                <span className="block text-[8px] text-muted-foreground/55 mt-0.5">
+                  {activeBetType === "moneyline" ? "Win Probability" : "Hit Probability"}
+                </span>
+              </div>
+              <div className="rounded-xl p-3 text-center" style={{ background: 'hsla(228, 20%, 10%, 0.7)' }}>
+                <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/65 block mb-1.5">Implied</span>
+                <span className="block text-xl font-extrabold tabular-nums text-foreground/60">{activeEV.bestImplied.toFixed(1)}%</span>
+                <span className="block text-[8px] text-muted-foreground/55 mt-0.5">Best Book</span>
+              </div>
+              <div className="rounded-xl p-3 text-center" style={{ background: 'hsla(228, 20%, 10%, 0.7)' }}>
+                <div className="flex items-center justify-center gap-1 mb-1.5">
+                  <Shield className="w-3 h-3 text-[hsl(var(--nba-cyan))]" />
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-[hsl(var(--nba-cyan))]/60">Edge</span>
+                </div>
+                <span className={`block text-xl font-extrabold tabular-nums ${getEVColorLocal(activeEV.edge)}`}>
+                  {activeEV.edge > 0 ? "+" : ""}{activeEV.edge.toFixed(1)}%
+                </span>
+                <span className="block text-[8px] text-muted-foreground/55 mt-0.5">Model Edge</span>
+              </div>
+            </div>
+
+            {/* Edge Projection Bar */}
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/55">Edge Projection</span>
+                <span className={`text-[11px] font-extrabold tabular-nums ${getEVColorLocal(activeEV.ev)}`}>
+                  EV: {activeEV.ev > 0 ? "+" : ""}{activeEV.ev.toFixed(1)}%
+                </span>
+              </div>
+              <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: 'hsla(228, 20%, 12%, 0.8)' }}>
+                <div
+                  className="absolute top-0 left-0 h-full rounded-full opacity-30"
+                  style={{ width: `${Math.min(activeEV.bestImplied, 100)}%`, background: 'hsl(228 10% 45%)' }}
+                />
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(modelProb, 100)}%` }}
+                  transition={{ duration: 0.8, delay: 0.2 }}
+                  className="absolute top-0 left-0 h-full rounded-full"
+                  style={{ background: hasPositiveEV
+                    ? 'linear-gradient(90deg, hsl(158 64% 52% / 0.8), hsl(158 64% 52% / 0.4))'
+                    : 'linear-gradient(90deg, hsl(0 72% 51% / 0.7), hsl(0 72% 51% / 0.3))'
+                  }}
+                />
+                <div
+                  className="absolute top-0 h-full w-px bg-foreground/30"
+                  style={{ left: `${Math.min(activeEV.bestImplied, 100)}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-[8px] text-muted-foreground/50">0%</span>
+                <div className="flex items-center gap-3">
+                  <span className="flex items-center gap-1 text-[8px] text-muted-foreground/55">
+                    <span className="w-2 h-1 rounded-full" style={{ background: hasPositiveEV ? 'hsl(158 64% 52%)' : 'hsl(0 72% 51%)' }} /> Model
+                  </span>
+                  <span className="flex items-center gap-1 text-[8px] text-muted-foreground/55">
+                    <span className="w-2 h-1 rounded-full bg-muted-foreground/55" /> Implied
+                  </span>
+                </div>
+                <span className="text-[8px] text-muted-foreground/50">100%</span>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── WHAT IS EDGE & EV EXPLAINER ── */}
+      {activeEV && modelProb && modelProb > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl overflow-hidden"
+          style={{
+            background: 'linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.94) 19.41%, hsla(228, 30%, 8%, 0.49) 76.65%)',
+            border: '1px solid hsla(250,76%,62%,0.15)',
+          }}
+        >
+          <button
+            onClick={() => setShowExplainer(!showExplainer)}
+            className="w-full flex items-center justify-between px-4 py-3 text-left group"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center">
+                <Info className="w-3.5 h-3.5 text-accent" />
+              </div>
+              <span className="text-[11px] font-bold text-foreground/70 group-hover:text-foreground transition-colors">
+                What do Edge & EV mean?
+              </span>
+            </div>
+            <motion.div animate={{ rotate: showExplainer ? 180 : 0 }} transition={{ duration: 0.25 }}>
+              <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/65" />
+            </motion.div>
+          </button>
+          <AnimatePresence initial={false}>
+            {showExplainer && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="overflow-hidden"
+              >
+                <div className="px-4 pb-4 space-y-3">
+                  <div className="rounded-xl p-3.5 space-y-2" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+                    <div className="flex items-center gap-1.5">
+                      <Shield className="w-3 h-3 text-[hsl(var(--nba-cyan))]" />
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-[hsl(var(--nba-cyan))]">Edge</span>
+                    </div>
+                    <p className="text-[11px] text-foreground/60 leading-relaxed">
+                      Edge is the difference between what <strong className="text-foreground/80">our model thinks will happen</strong> and what the <strong className="text-foreground/80">sportsbooks think</strong>.
+                    </p>
+                    <div className="rounded-lg p-3" style={{ background: 'hsla(228, 20%, 8%, 0.7)' }}>
+                      <div className="flex items-center gap-2 text-[11px]">
+                        <span className="text-accent font-bold">Our model: {modelProb.toFixed(0)}%</span>
+                        <span className="text-muted-foreground/55">—</span>
+                        <span className="text-foreground/50 font-bold">Books: {activeEV.bestImplied.toFixed(0)}%</span>
+                        <span className="text-muted-foreground/55">=</span>
+                        <span className={`font-extrabold ${activeEV.edge > 0 ? 'text-nba-green' : 'text-nba-red'}`}>{activeEV.edge > 0 ? '+' : ''}{activeEV.edge.toFixed(1)}% edge</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-xl p-3.5 space-y-2" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+                    <div className="flex items-center gap-1.5">
+                      <TrendingUp className="w-3 h-3 text-nba-green" />
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-nba-green">Expected Value (EV)</span>
+                    </div>
+                    <p className="text-[11px] text-foreground/60 leading-relaxed">
+                      EV tells you <strong className="text-foreground/80">how much you'd profit per $100 bet</strong> over time if our model is right.
+                    </p>
+                    <div className="rounded-lg p-3" style={{ background: 'hsla(228, 20%, 8%, 0.7)' }}>
+                      <div className="flex items-center gap-2 text-[11px]">
+                        <span className="text-muted-foreground/50">This bet's EV:</span>
+                        <span className={`font-extrabold ${activeEV.ev > 0 ? 'text-nba-green' : 'text-nba-red'}`}>{activeEV.ev > 0 ? '+' : ''}{activeEV.ev.toFixed(1)}%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      )}
+
+      {/* ── BEST LINE AVAILABLE ── */}
+      {bestBook && modelProb && modelProb > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="relative rounded-2xl overflow-hidden p-4"
+          style={{
+            background: 'linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.94) 19.41%, hsla(228, 30%, 8%, 0.49) 76.65%)',
+            border: '1px solid hsla(158,64%,52%,0.2)',
+          }}
+        >
+          <div className="absolute inset-0 bg-gradient-to-b from-[hsla(158,64%,52%,0.04)] to-transparent pointer-events-none" />
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-3">
+              <Crown className="w-4 h-4 text-nba-green" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-nba-green/70">Best Line Available</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center overflow-hidden" style={{ background: 'hsla(228, 20%, 14%, 0.6)', border: '1px solid hsla(228, 20%, 22%, 0.3)' }}>
+                  {bestBook.logo ? (
+                    <img src={bestBook.logo} alt={bestBook.name} className="w-7 h-7 object-contain" />
+                  ) : (
+                    <span className="text-[12px] font-black text-white">{bestBook.abbrev}</span>
+                  )}
+                </div>
+                <div>
+                  <p className="text-[15px] font-extrabold text-foreground">{bestBook.name}</p>
+                  <p className="text-[10px] text-muted-foreground/65">
+                    {activeMarketKey === "totals" 
+                      ? `${activeOverUnder.toUpperCase()} ${bestBook.total || ""}`
+                      : activeMarketKey === "spreads" 
+                      ? `${team1.abbr} ${bestBook.spread1 || ""}`
+                      : `${team1.shortName} ML`}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-black tabular-nums font-mono text-nba-green">{formatOdds(bestBook.relevantOdds, oddsFormat)}</p>
+                <p className="text-[10px] text-muted-foreground/65 tabular-nums">{bestBook.implied.toFixed(1)}% implied</p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── EV ACROSS ALL MARKETS ── */}
+      {evCards.length > 1 && (
         <div className="vision-card p-4 relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(158,64%,52%,0.15), transparent)' }} />
           <div className="flex items-center gap-2 mb-4">
@@ -563,11 +845,12 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb }: { team1: Team
           </div>
           <div className="grid grid-cols-3 gap-2">
             {evCards.map((card) => {
+              const isActive = card.market === activeMarketKey;
               const evColor = card.ev >= 5 ? "text-nba-green" : card.ev >= 0 ? "text-nba-yellow" : "text-nba-red";
               const evBg = card.ev >= 5 ? "hsla(158, 64%, 52%, 0.08)" : card.ev >= 0 ? "hsla(43, 96%, 56%, 0.08)" : "hsla(0, 72%, 51%, 0.08)";
               const evBorder = card.ev >= 5 ? "hsla(158, 64%, 52%, 0.15)" : card.ev >= 0 ? "hsla(43, 96%, 56%, 0.15)" : "hsla(0, 72%, 51%, 0.15)";
               return (
-                <div key={card.market} className="rounded-xl p-2.5 flex flex-col gap-2" style={{ background: evBg, border: `1px solid ${evBorder}` }}>
+                <div key={card.market} className={`rounded-xl p-2.5 flex flex-col gap-2 ${isActive ? "ring-1 ring-accent/30" : ""}`} style={{ background: evBg, border: `1px solid ${evBorder}` }}>
                   <div className="text-center">
                     <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/65 leading-tight block">{card.label}</span>
                     <span className={`text-lg font-extrabold ${evColor} leading-none mt-0.5 block`}>{card.ev >= 0 ? "+" : ""}{card.ev}%</span>
@@ -590,76 +873,161 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb }: { team1: Team
               );
             })}
           </div>
-          <p className="text-[8px] text-muted-foreground/40 text-center mt-3 pt-2" style={{ borderTop: '1px solid hsla(228, 18%, 18%, 0.2)' }}>
-            EV = (Model Prob × Decimal Odds − 1) × 100 · Positive EV = edge over the market
-          </p>
         </div>
       )}
 
-      {/* All Market Odds Tables */}
-      <div className="vision-card p-4 relative overflow-hidden">
-        <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(250,76%,62%,0.15), transparent)' }} />
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))', boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.25)' }}>
-            <Trophy className="w-3.5 h-3.5 text-white" />
+      {/* ── ALL SPORTSBOOKS for active market ── */}
+      {activeMarketBooksWithEV.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between px-1 mb-1">
+            <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">All Sportsbooks</span>
+            <span className="text-[9px] text-muted-foreground/50">{activeMarketBooksWithEV.length} books</span>
           </div>
-          <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">Platform Odds</span>
-          <div className="ml-auto flex items-center gap-1 px-2 py-1 rounded-full" style={{ background: 'hsla(228, 20%, 12%, 0.5)', border: '1px solid hsla(228, 20%, 20%, 0.2)' }}>
-            <div className="w-1.5 h-1.5 rounded-full bg-nba-green animate-pulse" />
-            <span className="text-[7px] font-bold text-nba-green uppercase tracking-wider">Live</span>
-          </div>
-        </div>
-
-        <div className="space-y-5">
-          {Object.entries(allMarketData).map(([marketKey, platforms]) => {
-            const meta = marketLabels[marketKey];
-            if (!meta) return null;
+          {activeMarketBooksWithEV.map((book, i) => {
+            const isBest = i === 0;
             return (
-              <div key={marketKey}>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <div className="w-5 h-5 rounded-md flex items-center justify-center text-accent" style={{ background: 'hsla(250, 76%, 62%, 0.1)' }}>
-                    {meta.icon}
-                  </div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/70">{meta.label}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-1 mb-1.5 px-1">
-                  <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45">Platform</span>
-                  <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 text-center">{meta.col1}</span>
-                  <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 text-center">{meta.col2}</span>
-                </div>
-                <div className="space-y-1">
-                  {platforms.map((p: any, i: number) => (
-                    <motion.div
-                      key={`${marketKey}-${p.name}`}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.04 }}
-                      className="grid grid-cols-3 gap-1 items-center py-2 px-2 rounded-xl transition-all duration-200 hover:shadow-[0_0_16px_hsla(250,76%,62%,0.08)] group cursor-default"
-                      style={{ background: 'hsla(228,20%,10%,0.3)', border: '1px solid transparent' }}
-                    >
+              <motion.div
+                key={`${activeMarketKey}-${book.name}`}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.15 + i * 0.05 }}
+                className={`relative rounded-xl overflow-hidden transition-all ${isBest ? "ring-1 ring-nba-green/20" : ""}`}
+                style={{
+                  background: 'linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.7) 19.41%, hsla(228, 30%, 8%, 0.4) 76.65%)',
+                  border: '1px solid hsla(228, 30%, 22%, 0.2)',
+                }}
+              >
+                <div className="flex items-center justify-between px-4 py-3.5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden" style={{ background: 'hsla(228, 20%, 14%, 0.6)', border: '1px solid hsla(228, 20%, 22%, 0.3)' }}>
+                      {book.logo ? (
+                        <img src={book.logo} alt={book.name} className="w-5 h-5 object-contain" />
+                      ) : (
+                        <span className="text-[10px] font-black" style={{ color: book.color }}>{book.abbrev}</span>
+                      )}
+                    </div>
+                    <div>
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-md flex items-center justify-center overflow-hidden" style={{
-                          background: 'hsla(228, 20%, 14%, 0.6)',
-                          border: '1px solid hsla(228, 20%, 22%, 0.3)',
-                        }}>
-                          {p.logo ? (
-                            <img src={p.logo} alt={p.name} className="w-4 h-4 object-contain" loading="lazy" />
-                          ) : (
-                            <span className="text-[8px] font-black text-white" style={{ color: p.color }}>{p.abbrev}</span>
-                          )}
-                        </div>
-                        <span className="text-[10px] font-bold text-foreground/80 group-hover:text-foreground transition-colors truncate">{p.name}</span>
+                        <span className="text-[12px] font-bold text-foreground/80">{book.name}</span>
+                        {isBest && <span className="text-[8px] font-black text-nba-green bg-nba-green/10 px-1.5 py-0.5 rounded-md">BEST</span>}
                       </div>
-                      <span className="text-[12px] font-extrabold tabular-nums text-center text-foreground/70">{p.t1}</span>
-                      <span className="text-[12px] font-extrabold tabular-nums text-center text-foreground/70">{p.t2}</span>
-                    </motion.div>
-                  ))}
+                      <span className="text-[9px] text-muted-foreground/55">
+                        {activeMarketKey === "totals"
+                          ? `${activeOverUnder.toUpperCase()} ${book.total || ""}`
+                          : activeMarketKey === "spreads"
+                          ? `${team1.abbr} ${book.spread1 || ""}`
+                          : `${team1.shortName} ML`}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-center">
+                      <span className="block text-[10px] font-bold tabular-nums text-foreground/50">{book.implied.toFixed(1)}%</span>
+                      <span className="block text-[7px] text-muted-foreground/50 uppercase">Implied</span>
+                    </div>
+                    {modelProb && modelProb > 0 && (
+                      <div className="text-center min-w-[44px]">
+                        <span className={`block text-[10px] font-bold tabular-nums ${getEVColorLocal(book.ev)}`}>
+                          {book.ev > 0 ? "+" : ""}{book.ev.toFixed(1)}%
+                        </span>
+                        <span className="block text-[7px] text-muted-foreground/50 uppercase">EV</span>
+                      </div>
+                    )}
+                    <div className="text-right min-w-[52px]">
+                      <span className={`block text-[15px] font-black font-mono tabular-nums ${isBest ? "text-nba-green" : "text-foreground/70"}`}>
+                        {formatOdds(book.relevantOdds, oddsFormat)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
+                {modelProb && modelProb > 0 && (
+                  <div className="px-4 pb-2.5">
+                    <div className="h-1 rounded-full overflow-hidden" style={{ background: 'hsla(228, 20%, 12%, 0.8)' }}>
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${Math.min(Math.max(book.edge + 50, 0), 100)}%` }}
+                        transition={{ duration: 0.6, delay: 0.2 + i * 0.05 }}
+                        className="h-full rounded-full"
+                        style={{ background: book.edge > 0
+                          ? 'linear-gradient(90deg, hsl(158 64% 52% / 0.6), hsl(158 64% 52% / 0.3))'
+                          : 'linear-gradient(90deg, hsl(0 72% 51% / 0.5), hsl(0 72% 51% / 0.2))'
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </motion.div>
             );
           })}
         </div>
-        <p className="text-[8px] text-muted-foreground/45 text-center mt-3 pt-3" style={{ borderTop: '1px solid hsla(228, 18%, 18%, 0.3)' }}>
+      )}
+
+      {/* ── OTHER MARKETS TABLE ── */}
+      {Object.keys(allMarketData).filter(k => k !== activeMarketKey).length > 0 && (
+        <div className="vision-card p-4 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(250,76%,62%,0.15), transparent)' }} />
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))', boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.25)' }}>
+              <Trophy className="w-3.5 h-3.5 text-white" />
+            </div>
+            <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">Other Markets</span>
+            <div className="ml-auto flex items-center gap-1 px-2 py-1 rounded-full" style={{ background: 'hsla(228, 20%, 12%, 0.5)', border: '1px solid hsla(228, 20%, 20%, 0.2)' }}>
+              <div className="w-1.5 h-1.5 rounded-full bg-nba-green animate-pulse" />
+              <span className="text-[7px] font-bold text-nba-green uppercase tracking-wider">Live</span>
+            </div>
+          </div>
+          <div className="space-y-5">
+            {Object.entries(allMarketData).filter(([k]) => k !== activeMarketKey).map(([marketKey, platforms]) => {
+              const meta = marketLabels[marketKey];
+              if (!meta) return null;
+              return (
+                <div key={marketKey}>
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <div className="w-5 h-5 rounded-md flex items-center justify-center text-accent" style={{ background: 'hsla(250, 76%, 62%, 0.1)' }}>
+                      {meta.icon}
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/70">{meta.label}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 mb-1.5 px-1">
+                    <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45">Platform</span>
+                    <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 text-center">{meta.col1}</span>
+                    <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 text-center">{meta.col2}</span>
+                  </div>
+                  <div className="space-y-1">
+                    {platforms.map((p: any, i: number) => (
+                      <motion.div
+                        key={`${marketKey}-${p.name}`}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.04 }}
+                        className="grid grid-cols-3 gap-1 items-center py-2 px-2 rounded-xl transition-all duration-200 group cursor-default"
+                        style={{ background: 'hsla(228,20%,10%,0.3)', border: '1px solid transparent' }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-md flex items-center justify-center overflow-hidden" style={{ background: 'hsla(228, 20%, 14%, 0.6)', border: '1px solid hsla(228, 20%, 22%, 0.3)' }}>
+                            {p.logo ? (
+                              <img src={p.logo} alt={p.name} className="w-4 h-4 object-contain" loading="lazy" />
+                            ) : (
+                              <span className="text-[8px] font-black text-white" style={{ color: p.color }}>{p.abbrev}</span>
+                            )}
+                          </div>
+                          <span className="text-[10px] font-bold text-foreground/80 group-hover:text-foreground transition-colors truncate">{p.name}</span>
+                        </div>
+                        <span className="text-[12px] font-extrabold tabular-nums text-center text-foreground/70">{p.t1}</span>
+                        <span className="text-[12px] font-extrabold tabular-nums text-center text-foreground/70">{p.t2}</span>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="rounded-xl p-3 text-center" style={{ background: 'hsla(228, 20%, 10%, 0.4)' }}>
+        <p className="text-[8px] text-muted-foreground/45">
           Live odds via The Odds API · Always verify before placing bets
         </p>
       </div>
@@ -1154,7 +1522,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
             </div>
           )}
 
-          <MoneylinePlatformOdds team1={results.team1} team2={results.team2} sport={results.sport || sport} modelProb={betType === "moneyline" ? results.team1_pct : results.confidence} />
+          <MoneylinePlatformOdds team1={results.team1} team2={results.team2} sport={results.sport || sport} modelProb={betType === "moneyline" ? results.team1_pct : results.confidence} activeBetType={betType} activeOverUnder={overUnder} />
 
           {(results.head_to_head || []).length > 0 && (
             <div className="grid grid-cols-4 gap-2">
