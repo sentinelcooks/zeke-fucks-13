@@ -534,11 +534,6 @@ Deno.serve(async (req) => {
               commence_time: evData.commence_time, players: playerMap, quota: multiResult.quota,
             };
             setCache(propsCacheKey, propsData);
-            const playerCount = Object.keys(playerMap).length;
-            console.log(`Event ${event.id} (${evData.home_team} vs ${evData.away_team}): ${playerCount} players found`);
-            if (playerCount > 0) {
-              console.log(`Sample players: ${Object.keys(playerMap).slice(0, 5).join(", ")}`);
-            }
           } catch (fetchErr) {
             console.warn(`Event ${event.id} prop fetch failed/timed out, skipping`);
             continue;
