@@ -616,8 +616,45 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
     return "text-nba-red";
   };
 
+  // Extract model weight categories from factorBreakdown
+  const modelWeights = factorBreakdown?.filter((f: any) => f.weight > 0).slice(0, 4) || [];
+
   return (
     <div className="space-y-3">
+      {/* ── COLLAPSIBLE ODDS & EV ANALYSIS HEADER ── */}
+      <button
+        onClick={() => setShowOddsSection(!showOddsSection)}
+        className="w-full vision-card px-4 py-3 flex items-center justify-between group"
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-accent" />
+          <div className="text-left">
+            <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-foreground/80">Odds & EV Analysis</span>
+            <p className="text-[9px] text-muted-foreground/55">{team1.name} vs {team2.name}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {isLive && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'hsla(158, 64%, 52%, 0.08)', border: '1px solid hsla(158, 64%, 52%, 0.15)' }}>
+              <div className="w-1.5 h-1.5 rounded-full bg-nba-green animate-pulse" />
+              <span className="text-[7px] font-bold text-nba-green uppercase tracking-wider">Live</span>
+            </div>
+          )}
+          <motion.div animate={{ rotate: showOddsSection ? 180 : 0 }} transition={{ duration: 0.25 }}>
+            <ChevronDown className="w-4 h-4 text-muted-foreground/65" />
+          </motion.div>
+        </div>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {showOddsSection && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="overflow-hidden space-y-3"
+          >
       {/* ── MODEL vs MARKET HERO CARD ── */}
       {activeEV && modelProb && modelProb > 0 && (
         <motion.div
