@@ -261,8 +261,21 @@ export function OddsProjection({
     setError("");
     try {
       const result = await fetchPlayerOdds(playerName, propType, overUnder, sport);
-      if (result.found) setData(result);
-      else setError(result.message || "No odds available for this player");
+      if (result.found && result.books?.length > 0) {
+        // Filter: exact line first, then alt lines below (never above)
+        const exactMatches = result.books.filter((b: any) => b.line === line);
+        const belowMatches = result.books.filter((b: any) => b.line < line);
+        const filtered = exactMatches.length > 0 ? exactMatches : belowMatches;
+        if (filtered.length > 0) {
+          setData({ ...result, books: filtered });
+        } else {
+          setError("No odds found for this exact line");
+        }
+      } else if (result.found) {
+        setData(result);
+      } else {
+        setError(result.message || "No odds available for this player");
+      }
     } catch (e: any) {
       setError("Failed to fetch live odds");
     } finally {
