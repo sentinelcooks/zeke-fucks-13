@@ -723,6 +723,29 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
               </div>
             </div>
 
+            {/* ── MODEL WEIGHTS ── */}
+            {modelWeights.length > 0 && (
+              <div className="mb-4">
+                <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 block mb-2">Model Weights</span>
+                <div className="flex items-center gap-3">
+                  {modelWeights.map((f: any, i: number) => {
+                    const score = f.team1Score ?? f.score ?? 50;
+                    const weightPct = (f.weight * 100).toFixed(0);
+                    return (
+                      <div key={i} className="text-center flex-1">
+                        <span className={`block text-[15px] font-extrabold tabular-nums ${score >= 55 ? 'text-nba-green' : score <= 45 ? 'text-nba-red' : 'text-foreground/70'}`}>
+                          {score.toFixed(1)}%
+                        </span>
+                        <span className="block text-[8px] text-muted-foreground/50 mt-0.5 truncate">
+                          {f.label} ({weightPct}%)
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Edge Projection Bar */}
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1.5">
