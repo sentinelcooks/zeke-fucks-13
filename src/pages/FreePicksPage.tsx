@@ -374,7 +374,7 @@ const FreePicksPage = () => {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.03 }}
-                    onClick={() => navigate("/dashboard/nba")}
+                    onClick={() => navigate("/dashboard/analyze")}
                     className="w-full text-left ios-row active:bg-card-hover transition-colors"
                   >
                     <div className="flex-1 min-w-0">

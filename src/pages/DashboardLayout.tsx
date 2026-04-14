@@ -10,7 +10,7 @@ import { MobileHeader } from "@/components/mobile/MobileHeader";
 const routeTitles: Record<string, string> = {
   "/dashboard/home": "Dashboard",
   "/dashboard/games": "Games",
-  "/dashboard/nba": "Analyze",
+  "/dashboard/analyze": "Analyze",
   "/dashboard/moneyline": "Lines",
   "/dashboard/picks": "Picks & Trends",
   "/dashboard/free-props": "Free Props",

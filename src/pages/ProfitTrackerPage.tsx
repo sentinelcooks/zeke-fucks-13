@@ -870,7 +870,7 @@ const ProfitTrackerPage = () => {
                                   const sport = (leg.sport || "NBA").toLowerCase();
                                   const route = sport === "nba" || sport === "mlb" || sport === "nhl"
                                     ? `/dashboard/${sport}`
-                                    : `/dashboard/nba`;
+                                    : `/dashboard/analyze`;
                                   navigate(route, { state: { autoAnalyze: true, ...parsed, sport: leg.sport } });
                                 }
                               }}

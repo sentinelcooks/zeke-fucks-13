@@ -18,7 +18,7 @@ import {
 const items = [
   { title: "Free Picks", url: "/dashboard/picks", icon: Flame },
   { title: "Free Props", url: "/dashboard/free-props", icon: Sparkles },
-  { title: "NBA Props", url: "/dashboard/nba", icon: BarChart3 },
+  { title: "Analyze", url: "/dashboard/analyze", icon: BarChart3 },
   { title: "Money Line", url: "/dashboard/moneyline", icon: TrendingUp },
   { title: "UFC Analysis", url: "/dashboard/ufc", icon: Crosshair },
   { title: "Parlay Builder", url: "/dashboard/parlay", icon: Layers },
