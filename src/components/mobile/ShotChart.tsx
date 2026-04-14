@@ -145,7 +145,7 @@ function NhlRink({ zones }: { zones: CourtZone[] }) {
         <rect x="46" y="93" width="8" height="3" rx="0.5" fill="none" stroke="hsl(0 72% 50% / 0.5)" strokeWidth="0.5" />
         <line x1="47" y1="93" x2="47" y2="96" stroke="hsl(0 72% 50% / 0.2)" strokeWidth="0.3" />
         <line x1="49" y1="93" x2="49" y2="96" stroke="hsl(0 72% 50% / 0.2)" strokeWidth="0.3" />
-        <line x1="51" y1="93" x2="51" y2="96" stroke="hsl(0 72% 50% / 0.2" strokeWidth="0.3" />
+        <line x1="51" y1="93" x2="51" y2="96" stroke="hsl(0 72% 50% / 0.2)" strokeWidth="0.3" />
         <line x1="53" y1="93" x2="53" y2="96" stroke="hsl(0 72% 50% / 0.2)" strokeWidth="0.3" />
       </g>
 
