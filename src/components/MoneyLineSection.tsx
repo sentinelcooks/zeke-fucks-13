@@ -274,19 +274,34 @@ function TeamSelect({ label, value, onChange, teams }: { label: string; value: s
 }
 
 /* ── Section ── */
-function Section({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
+function Section({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = React.useState(defaultOpen);
   return (
-    <div className="vision-card p-4">
+    <div className="vision-card overflow-hidden relative">
+      <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(250,76%,62%,0.12), transparent)' }} />
       <button
         type="button"
-        className="w-full flex items-center justify-between"
+        className="w-full flex items-center justify-between px-4 py-3"
         onClick={() => setOpen(!open)}
       >
         <h3 className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">{title}</h3>
-        <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground/55 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+        <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.3, ease: "easeInOut" }}>
+          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/55" />
+        </motion.div>
       </button>
-      {open && <div className="mt-3">{children}</div>}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -968,151 +983,25 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
 
       {/* ── ALL SPORTSBOOKS for active market ── */}
       {activeMarketBooksWithEV.length > 0 && (
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between px-1 mb-1">
-            <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">All Sportsbooks</span>
-            <span className="text-[9px] text-muted-foreground/50">{activeMarketBooksWithEV.length} books</span>
-          </div>
-          {activeMarketBooksWithEV.map((book, i) => {
-            const isBest = i === 0;
-            return (
-              <motion.div
-                key={`${activeMarketKey}-${book.name}`}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.15 + i * 0.05 }}
-                className={`relative rounded-xl overflow-hidden transition-all ${isBest ? "ring-1 ring-nba-green/20" : ""}`}
-                style={{
-                  background: 'linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.7) 19.41%, hsla(228, 30%, 8%, 0.4) 76.65%)',
-                  border: '1px solid hsla(228, 30%, 22%, 0.2)',
-                }}
-              >
-                <div className="flex items-center justify-between px-4 py-3.5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden" style={{ background: 'hsla(228, 20%, 14%, 0.6)', border: '1px solid hsla(228, 20%, 22%, 0.3)' }}>
-                      {book.logo ? (
-                        <img src={book.logo} alt={book.name} className="w-5 h-5 object-contain" />
-                      ) : (
-                        <span className="text-[10px] font-black" style={{ color: book.color }}>{book.abbrev}</span>
-                      )}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[12px] font-bold text-foreground/80">{book.name}</span>
-                        {isBest && <span className="text-[8px] font-black text-nba-green bg-nba-green/10 px-1.5 py-0.5 rounded-md">BEST</span>}
-                      </div>
-                      <span className="text-[9px] text-muted-foreground/55">
-                        {activeMarketKey === "totals"
-                          ? `${activeOverUnder.toUpperCase()} ${book.total || ""}`
-                          : activeMarketKey === "spreads"
-                          ? `${team1.abbr} ${book.spread1 || ""}`
-                          : `${team1.shortName} ML`}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-center">
-                      <span className="block text-[10px] font-bold tabular-nums text-foreground/50">{book.implied.toFixed(1)}%</span>
-                      <span className="block text-[7px] text-muted-foreground/50 uppercase">Implied</span>
-                    </div>
-                    {modelProb && modelProb > 0 && (
-                      <div className="text-center min-w-[44px]">
-                        <span className={`block text-[10px] font-bold tabular-nums ${getEVColorLocal(book.ev)}`}>
-                          {book.ev > 0 ? "+" : ""}{book.ev.toFixed(1)}%
-                        </span>
-                        <span className="block text-[7px] text-muted-foreground/50 uppercase">EV</span>
-                      </div>
-                    )}
-                    <div className="text-right min-w-[52px]">
-                      <span className={`block text-[15px] font-black font-mono tabular-nums ${isBest ? "text-nba-green" : "text-foreground/70"}`}>
-                        {formatOdds(book.relevantOdds, oddsFormat)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                {modelProb && modelProb > 0 && (
-                  <div className="px-4 pb-2.5">
-                    <div className="h-1 rounded-full overflow-hidden" style={{ background: 'hsla(228, 20%, 12%, 0.8)' }}>
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${Math.min(Math.max(book.edge + 50, 0), 100)}%` }}
-                        transition={{ duration: 0.6, delay: 0.2 + i * 0.05 }}
-                        className="h-full rounded-full"
-                        style={{ background: book.edge > 0
-                          ? 'linear-gradient(90deg, hsl(158 64% 52% / 0.6), hsl(158 64% 52% / 0.3))'
-                          : 'linear-gradient(90deg, hsl(0 72% 51% / 0.5), hsl(0 72% 51% / 0.2))'
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </motion.div>
-            );
-          })}
-        </div>
+        <AllSportsbooksCollapsible
+          activeMarketBooksWithEV={activeMarketBooksWithEV}
+          activeMarketKey={activeMarketKey}
+          activeOverUnder={activeOverUnder}
+          team1={team1}
+          modelProb={modelProb}
+          oddsFormat={oddsFormat}
+          getEVColorLocal={getEVColorLocal}
+        />
       )}
 
       {/* ── OTHER MARKETS TABLE ── */}
       {Object.keys(allMarketData).filter(k => k !== activeMarketKey).length > 0 && (
-        <div className="vision-card p-4 relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(250,76%,62%,0.15), transparent)' }} />
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))', boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.25)' }}>
-              <Trophy className="w-3.5 h-3.5 text-white" />
-            </div>
-            <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">Other Markets</span>
-            <div className="ml-auto flex items-center gap-1 px-2 py-1 rounded-full" style={{ background: 'hsla(228, 20%, 12%, 0.5)', border: '1px solid hsla(228, 20%, 20%, 0.2)' }}>
-              <div className="w-1.5 h-1.5 rounded-full bg-nba-green animate-pulse" />
-              <span className="text-[7px] font-bold text-nba-green uppercase tracking-wider">Live</span>
-            </div>
-          </div>
-          <div className="space-y-5">
-            {Object.entries(allMarketData).filter(([k]) => k !== activeMarketKey).map(([marketKey, platforms]) => {
-              const meta = marketLabels[marketKey];
-              if (!meta) return null;
-              return (
-                <div key={marketKey}>
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <div className="w-5 h-5 rounded-md flex items-center justify-center text-accent" style={{ background: 'hsla(250, 76%, 62%, 0.1)' }}>
-                      {meta.icon}
-                    </div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/70">{meta.label}</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-1 mb-1.5 px-1">
-                    <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45">Platform</span>
-                    <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 text-center">{meta.col1}</span>
-                    <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 text-center">{meta.col2}</span>
-                  </div>
-                  <div className="space-y-1">
-                    {platforms.map((p: any, i: number) => (
-                      <motion.div
-                        key={`${marketKey}-${p.name}`}
-                        initial={{ opacity: 0, x: -8 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: i * 0.04 }}
-                        className="grid grid-cols-3 gap-1 items-center py-2 px-2 rounded-xl transition-all duration-200 group cursor-default"
-                        style={{ background: 'hsla(228,20%,10%,0.3)', border: '1px solid transparent' }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-md flex items-center justify-center overflow-hidden" style={{ background: 'hsla(228, 20%, 14%, 0.6)', border: '1px solid hsla(228, 20%, 22%, 0.3)' }}>
-                            {p.logo ? (
-                              <img src={p.logo} alt={p.name} className="w-4 h-4 object-contain" loading="lazy" />
-                            ) : (
-                              <span className="text-[8px] font-black text-white" style={{ color: p.color }}>{p.abbrev}</span>
-                            )}
-                          </div>
-                          <span className="text-[10px] font-bold text-foreground/80 group-hover:text-foreground transition-colors truncate">{p.name}</span>
-                        </div>
-                        <span className="text-[12px] font-extrabold tabular-nums text-center text-foreground/70">{p.t1}</span>
-                        <span className="text-[12px] font-extrabold tabular-nums text-center text-foreground/70">{p.t2}</span>
-                      </motion.div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <OtherMarketsCollapsible
+          allMarketData={allMarketData}
+          activeMarketKey={activeMarketKey}
+          marketLabels={marketLabels}
+          oddsFormat={oddsFormat}
+        />
       )}
 
           </motion.div>
