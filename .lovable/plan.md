@@ -1,22 +1,33 @@
 
 
-## Plan: Replace Moneyline Analysis Breakdown with Props-Style
+## Plan: Fix NHL Odds Prop Type Mapping
 
 ### Problem
-The moneyline "Analysis Breakdown" section uses a custom bar-chart style (team comparison bars with scores). The user wants it to match the Props section, which uses the `WrittenAnalysis` component (timeline-style with icons, narrative sections, and overall verdict).
+NHL prop types use shorthand values (`sog`, `goals`, `g+a`, `ppg`, etc.) that don't map to the Odds API's expected market keys (`player_shots_on_goal`, `player_goals`, `player_power_play_points`, etc.). The edge function converts unknown prop types to `player_{propType}`, resulting in keys like `player_sog` which the API doesn't recognize.
 
-### Key Insight
-The `WrittenAnalysis` component is **already rendered** below the Analysis Breakdown for moneylines (line 1877). So there are currently two analysis sections stacked — the bar-chart breakdown AND WrittenAnalysis. The fix is simply to remove the redundant bar-chart "Analysis Breakdown" Section.
+### Solution
+Add an NHL prop type mapping table in the edge function, similar to the existing `MLB_PROP_MAP`.
 
-### Implementation
+### File Changed
 
-**File: `src/components/MoneyLineSection.tsx`**
-- Remove the `<Section title="Analysis Breakdown">` block (lines ~1656-1767) which contains the bar-chart team comparison UI
-- The existing `WrittenAnalysis` component (already at line 1877) will serve as the sole analysis section, matching the Props style exactly
+**`supabase/functions/nba-odds/index.ts`** — Add an `NHL_PROP_MAP` alongside the existing `MLB_PROP_MAP` (~line 469):
+
+```
+NHL_PROP_MAP = {
+  goals: "player_goals",
+  nhl_points: "player_points",
+  nhl_assists: "player_assists",
+  sog: "player_shots_on_goal",
+  "g+a": "player_points",         // goals+assists = points in NHL
+  ppg: "player_power_play_points",
+  blocked_shots: "player_blocked_shots",
+}
+```
+
+Then add a check after the MLB mapping block: if `sport === "nhl"` and the prop type is in `NHL_PROP_MAP`, use the mapped value.
 
 ### What Won't Change
-- No backend changes
-- No changes to `WrittenAnalysis.tsx`
-- All other moneyline sections (Past Meetings, Injury Report, Splits, etc.) remain intact
-- The AI Summary that was inside the bar-chart section is already captured by WrittenAnalysis
+- No client-side changes needed
+- No UI changes
+- NBA/MLB/UFC odds unaffected
 
