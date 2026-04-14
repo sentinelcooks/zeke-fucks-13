@@ -561,29 +561,29 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb }: { team1: Team
             </div>
             <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">EV Across All Markets</span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {evCards.map((card) => {
               const evColor = card.ev >= 5 ? "text-nba-green" : card.ev >= 0 ? "text-nba-yellow" : "text-nba-red";
               const evBg = card.ev >= 5 ? "hsla(158, 64%, 52%, 0.08)" : card.ev >= 0 ? "hsla(43, 96%, 56%, 0.08)" : "hsla(0, 72%, 51%, 0.08)";
               const evBorder = card.ev >= 5 ? "hsla(158, 64%, 52%, 0.15)" : card.ev >= 0 ? "hsla(43, 96%, 56%, 0.15)" : "hsla(0, 72%, 51%, 0.15)";
               return (
-                <div key={card.market} className="rounded-xl p-3 space-y-2" style={{ background: evBg, border: `1px solid ${evBorder}` }}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/65">{card.label}</span>
-                    <span className={`text-sm font-extrabold ${evColor}`}>{card.ev >= 0 ? "+" : ""}{card.ev}%</span>
+                <div key={card.market} className="rounded-xl p-2.5 flex flex-col gap-2" style={{ background: evBg, border: `1px solid ${evBorder}` }}>
+                  <div className="text-center">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/65 leading-tight block">{card.label}</span>
+                    <span className={`text-lg font-extrabold ${evColor} leading-none mt-0.5 block`}>{card.ev >= 0 ? "+" : ""}{card.ev}%</span>
                   </div>
                   <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[10px]">
-                      <span className="text-muted-foreground/55">Edge</span>
+                    <div className="flex items-center justify-between text-[9px]">
+                      <span className="text-muted-foreground/50">Edge</span>
                       <span className={`font-bold ${evColor}`}>{card.edge >= 0 ? "+" : ""}{card.edge}%</span>
                     </div>
-                    <div className="flex items-center justify-between text-[10px]">
-                      <span className="text-muted-foreground/55">Best Odds</span>
+                    <div className="flex items-center justify-between text-[9px]">
+                      <span className="text-muted-foreground/50">Odds</span>
                       <span className="font-bold text-foreground/80">{formatOdds(card.bestOdds, oddsFormat)}</span>
                     </div>
-                    <div className="flex items-center justify-between text-[10px]">
-                      <span className="text-muted-foreground/55">Best Book</span>
-                      <span className="font-bold text-foreground/80 truncate max-w-[80px]">{card.bestBook}</span>
+                    <div className="flex items-center justify-between text-[9px]">
+                      <span className="text-muted-foreground/50">Book</span>
+                      <span className="font-bold text-foreground/80 truncate max-w-[60px]">{card.bestBook}</span>
                     </div>
                   </div>
                 </div>
