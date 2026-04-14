@@ -406,20 +406,32 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
         if (cancelled) return;
         const events: any[] = data?.events || data || [];
         const normalize = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+
+        // Enhanced matching with aliases and abbreviations
+        const teamMatches = (eventTeam: string, team: Team) => {
+          const et = normalize(eventTeam);
+          const tn = normalize(team.name);
+          const ts = normalize(team.shortName || "");
+          const ta = normalize(team.abbr || "");
+          if (et.includes(tn) || tn.includes(et)) return true;
+          if (ts && (et.includes(ts) || ts.includes(et))) return true;
+          if (ta && ta.length >= 2 && et.includes(ta)) return true;
+          // Nickname suffix matching (e.g. "losangeleslakers" ends with "lakers")
+          if (ts.length >= 4 && (et.endsWith(ts) || ts.endsWith(et.slice(-Math.min(et.length, 10))))) return true;
+          // Check aliases if available
+          const aliases: string[] = (team as any).aliases || [];
+          for (const alias of aliases) {
+            const na = normalize(alias);
+            if (na && (et.includes(na) || na.includes(et))) return true;
+          }
+          return false;
+        };
+
         const match = events.find((e: any) => {
-          const home = normalize(e.home_team || "");
-          const away = normalize(e.away_team || "");
-          const t1n = normalize(team1.name);
-          const t2n = normalize(team2.name);
-          const t1s = normalize(team1.shortName || "");
-          const t2s = normalize(team2.shortName || "");
-          return (
-            (home.includes(t1n) || home.includes(t1s) || t1n.includes(home) || t1s.includes(home)) &&
-            (away.includes(t2n) || away.includes(t2s) || t2n.includes(away) || t2s.includes(away))
-          ) || (
-            (home.includes(t2n) || home.includes(t2s) || t2n.includes(home) || t2s.includes(home)) &&
-            (away.includes(t1n) || away.includes(t1s) || t1n.includes(away) || t1s.includes(away))
-          );
+          const home = e.home_team || "";
+          const away = e.away_team || "";
+          return (teamMatches(home, team1) && teamMatches(away, team2)) ||
+                 (teamMatches(home, team2) && teamMatches(away, team1));
         });
 
         if (match && match.bookmakers?.length > 0) {
@@ -508,7 +520,16 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
     );
   }
 
-  if (!isLive || Object.keys(allMarketData).length === 0) return null;
+  if (!isLive || Object.keys(allMarketData).length === 0) {
+    return (
+      <div className="vision-card p-4">
+        <div className="flex items-center gap-2 text-muted-foreground/65">
+          <AlertTriangle className="w-4 h-4 text-nba-yellow shrink-0" />
+          <p className="text-[11px]">Live odds temporarily unavailable for this matchup. Analysis is still fully powered by our model data.</p>
+        </div>
+      </div>
+    );
+  }
 
   const marketLabels: Record<string, { label: string; icon: React.ReactNode; col1: string; col2: string }> = {
     h2h: { label: "Moneyline", icon: <DollarSign className="w-3 h-3" />, col1: team1.abbr, col2: team2.abbr },
