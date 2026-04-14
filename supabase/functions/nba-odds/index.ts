@@ -64,7 +64,6 @@ const MLB_PROP_MARKETS = [
   "batter_home_runs",
   "batter_total_bases",
   "batter_rbis",
-  "batter_runs",
   "batter_walks",
   "batter_stolen_bases",
 ].join(",");
