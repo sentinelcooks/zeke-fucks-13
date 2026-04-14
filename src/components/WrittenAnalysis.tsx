@@ -340,7 +340,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
                           </h4>
                         )}
                         <p className="text-[13px] leading-relaxed text-foreground/70">
-                          {section.content}
+                          {section.content.replace(/\*\*/g, "").replace(/\*/g, "").trim()}
                         </p>
                       </div>
                     </div>
