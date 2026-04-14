@@ -484,17 +484,30 @@ Deno.serve(async (req) => {
         walks_allowed: "pitcher_walks",
       };
 
+      const NHL_PROP_MAP: Record<string, string> = {
+        goals: "player_goals",
+        nhl_points: "player_points",
+        nhl_assists: "player_assists",
+        sog: "player_shots_on_goal",
+        "g+a": "player_points",
+        ppg: "player_power_play_points",
+        blocked_shots: "player_blocked_shots",
+      };
+
       const validPrefixes = ["player_", "pitcher_", "batter_"];
       const alreadyPrefixed = validPrefixes.some(p => (propType || "").startsWith(p));
       let propMarketKey: string;
+      const ptLower = (propType || "").toLowerCase();
       if (alreadyPrefixed) {
         propMarketKey = propType
           .replace("pts+reb+ast", "points_rebounds_assists")
           .replace("3-pointers", "threes")
           // Strip sport-specific infixes: player_nhl_points → player_points
           .replace(/^(player_)(nhl_|mlb_|nba_|nfl_|ufc_)/i, "$1");
-      } else if (sport === "mlb" && MLB_PROP_MAP[(propType || "").toLowerCase()]) {
-        propMarketKey = MLB_PROP_MAP[(propType || "").toLowerCase()];
+      } else if (sport === "mlb" && MLB_PROP_MAP[ptLower]) {
+        propMarketKey = MLB_PROP_MAP[ptLower];
+      } else if (sport === "nhl" && NHL_PROP_MAP[ptLower]) {
+        propMarketKey = NHL_PROP_MAP[ptLower];
       } else {
         propMarketKey = `player_${(propType || "points").replace("pts+reb+ast", "points_rebounds_assists").replace("3-pointers", "threes")}`;
       }
