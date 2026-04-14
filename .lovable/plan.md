@@ -1,42 +1,29 @@
 
 
-## Plan: Auto-Restore Scroll Position on Browser Tab Return
+## Plan: Rename `/dashboard/nba` Route to `/dashboard/analyze`
 
 ### Problem
-When a user is deep in a page (e.g. viewing prop analytics with results scrolled down), accidentally switches browser tabs, and comes back within 10 seconds, they lose their scroll position because the layout resets scroll to top on route change.
+The URL shows `/dashboard/nba` even when you're viewing MLB, NHL, or UFC props — confusing since that route hosts all sports, not just NBA.
 
 ### Changes
 
-**`src/pages/DashboardLayout.tsx`**
+Rename the route path from `nba` to `analyze` across all references:
 
-1. **Save scroll position + route on visibility change** — Listen for the `visibilitychange` event on `document`. When the page becomes `hidden`, snapshot `{ pathname, scrollTop, timestamp }` into a ref (not state, to avoid re-renders).
+**`src/App.tsx`** — Change `<Route path="nba" ...>` to `<Route path="analyze" ...>`
 
-2. **Restore on return** — When the page becomes `visible` again, check if:
-   - The user returned within 10 seconds (`Date.now() - timestamp < 10_000`)
-   - The route hasn't changed (`pathname === location.pathname`)
-   
-   If both conditions are true, restore `mainRef.current.scrollTop` to the saved value.
+**`src/pages/DashboardLayout.tsx`** — Update route title key from `/dashboard/nba` to `/dashboard/analyze`
 
-3. **Guard the existing scroll-to-top** — The current `useEffect` that scrolls to top on `location.pathname` change should skip restoration if the user just returned from a tab switch (use a `skipNextScrollReset` ref flag set during restore, cleared after the effect runs).
+**`src/components/mobile/BottomTabBar.tsx`** — Update tab path and parent-mapping entries
 
-### How It Works
+**`src/components/home/ModernHomeLayout.tsx`** — Update quick link path
 
-```
-User viewing prop analysis (scrolled to 1200px)
-  → switches browser tab (saves {path: "/dashboard/nba", scroll: 1200, time: now})
-  → comes back in 5 seconds
-  → scroll restored to 1200px ✓
+**`src/pages/HomePage.tsx`** — Update quick link path
 
-User switches tab, comes back after 15 seconds
-  → 15s > 10s threshold → no restore, normal behavior
+**`src/pages/FreePicksPage.tsx`** — Update navigation call
 
-User switches tab then navigates via bookmark to different page
-  → pathname mismatch → no restore
-```
+**`src/pages/ProfitTrackerPage.tsx`** — Update fallback route in re-analyze logic
 
-### What Won't Change
-- No backend changes
-- No new dependencies
-- Normal in-app navigation scroll-to-top behavior unchanged
-- No localStorage needed (ref-only, session-scoped)
+**`src/components/AppSidebar.tsx`** — Update sidebar link URL
+
+All changes are simple string replacements of `/dashboard/nba` → `/dashboard/analyze`. No backend or functionality changes.
 
