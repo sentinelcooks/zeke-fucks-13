@@ -86,6 +86,13 @@ function VisionSelect({ label, children, ...props }: { label: string; children: 
 
 /* ══════════════════════════════════════════════════════════════
    MAIN PAGE
+/* ── Parse leg pick string ── */
+function parseLegPick(pick: string): { player: string; over_under: string; line: number; prop_type: string } | null {
+  const match = pick.match(/^(.+?)\s+(OVER|UNDER)\s+([\d.]+)\s+(.+)$/i);
+  if (!match) return null;
+  return { player: match[1].trim(), over_under: match[2].toLowerCase(), line: parseFloat(match[3]), prop_type: match[4].trim().toLowerCase() };
+}
+
    ══════════════════════════════════════════════════════════════ */
 const ProfitTrackerPage = () => {
   const { user } = useAuth();
