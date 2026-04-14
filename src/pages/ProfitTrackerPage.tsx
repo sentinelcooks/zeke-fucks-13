@@ -93,7 +93,7 @@ function parseLegPick(pick: string): { player: string; over_under: string; line:
   return { player: match[1].trim(), over_under: match[2].toLowerCase(), line: parseFloat(match[3]), prop_type: match[4].trim().toLowerCase() };
 }
 
-   ══════════════════════════════════════════════════════════════ */
+   /* ══════════════════════════════════════════════════════════════ */
 const ProfitTrackerPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
