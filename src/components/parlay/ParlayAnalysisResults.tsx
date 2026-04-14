@@ -88,6 +88,7 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
         legs: JSON.stringify(legs), result: "pending",
       } as any);
       setSaved(true);
+      clearSlip();
     } catch (e) { console.error("Failed to save parlay:", e); }
     finally { setSaving(false); }
   };
