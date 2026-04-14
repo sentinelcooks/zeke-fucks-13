@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Globe, Bell, BellOff, LogOut, User, Check, ChevronRight, Hash, MessageSquare, Send, Loader2, CheckCircle, CreditCard, Palette } from "lucide-react";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";

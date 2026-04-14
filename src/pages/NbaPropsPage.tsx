@@ -15,7 +15,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { motion, AnimatePresence } from "framer-motion";
 import { useParlaySlip } from "@/contexts/ParlaySlipContext";
 import WrittenAnalysis from "@/components/WrittenAnalysis";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
+
 import { PropExplainerDialog, usePropExplainerAutoShow } from "@/components/PropExplainerDialog";
 
 import { PlayerCard } from "@/components/mobile/PlayerCard";

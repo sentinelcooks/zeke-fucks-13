@@ -5,12 +5,32 @@ import { FloatingParlaySlip } from "@/components/FloatingParlaySlip";
 import AppFooter from "@/components/AppFooter";
 import { RateAppDialog } from "@/components/RateAppDialog";
 import { useSubscription } from "@/hooks/useSubscription";
+import { MobileHeader } from "@/components/mobile/MobileHeader";
+
+const routeTitles: Record<string, string> = {
+  "/dashboard/home": "Dashboard",
+  "/dashboard/games": "Games",
+  "/dashboard/nba": "Analyze",
+  "/dashboard/moneyline": "Lines",
+  "/dashboard/picks": "Picks & Trends",
+  "/dashboard/free-props": "Free Props",
+  "/dashboard/free-picks": "Picks & Trends",
+  "/dashboard/tracker": "Profit Tracker",
+  "/dashboard/parlay": "Parlay Builder",
+  "/dashboard/settings": "Settings",
+  "/dashboard/arbitrage": "Arbitrage",
+  "/dashboard/ufc": "UFC Analysis",
+  "/dashboard/trends": "Trends",
+  "/dashboard/legal": "Legal",
+};
 
 const DashboardLayout = () => {
   const mainRef = useRef<HTMLElement>(null);
   const location = useLocation();
   const { isSubscribed, isLoading } = useSubscription();
   const [showRate, setShowRate] = useState(false);
+
+  const title = routeTitles[location.pathname] || "Sentinel";
 
   useEffect(() => {
     mainRef.current?.scrollTo(0, 0);
@@ -36,6 +56,9 @@ const DashboardLayout = () => {
     <div className="min-h-screen flex flex-col w-full min-w-0 bg-background max-w-[430px] mx-auto relative overflow-x-hidden">
       {/* Ambient background glow */}
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full opacity-[0.03] pointer-events-none" style={{ background: 'radial-gradient(circle, hsl(250 76% 62%), transparent 70%)' }} />
+      
+      {/* Pinned header */}
+      <MobileHeader title={title} />
       
       {/* Main content */}
       <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden pb-20">

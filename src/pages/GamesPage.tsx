@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Clock, Loader2, Calendar, Bell, BellOff, RefreshCw, Swords, Search, ChevronDown } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { supabase } from "@/integrations/supabase/client";

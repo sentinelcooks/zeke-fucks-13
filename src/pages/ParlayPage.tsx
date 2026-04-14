@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Plus, Trash2, Loader2, Search, Zap, BookOpen, Trophy, DollarSign, Target } from "lucide-react";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
+
 import { motion, AnimatePresence } from "framer-motion";
 import NbaLegInput, { NbaLegData } from "@/components/parlay/NbaLegInput";
 import UfcLegInput, { UfcLegData } from "@/components/parlay/UfcLegInput";

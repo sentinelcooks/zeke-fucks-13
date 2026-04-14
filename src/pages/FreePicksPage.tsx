@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
+
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 
 /* ── Types ── */

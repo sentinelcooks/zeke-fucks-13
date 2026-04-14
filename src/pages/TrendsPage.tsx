@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Flame, Shield, MapPin, TrendingUp, Zap, Filter, ChevronRight, Trophy, Star, BarChart3 } from "lucide-react";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
+
 import { supabase } from "@/integrations/supabase/client";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 

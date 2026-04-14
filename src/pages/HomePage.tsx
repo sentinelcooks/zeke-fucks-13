@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
+
 import { PnLCalendar } from "@/components/PnLCalendar";
 import { useAuth } from "@/contexts/AuthContext";
 import { ModernHomeLayout } from "@/components/home/ModernHomeLayout";

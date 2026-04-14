@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Calculator, Scan, Loader2, ArrowRightLeft, DollarSign, TrendingUp, AlertTriangle, RefreshCw, CheckCircle2 } from "lucide-react";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
+
 import { fetchNbaOdds, type OddsEvent } from "@/services/oddsApi";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 

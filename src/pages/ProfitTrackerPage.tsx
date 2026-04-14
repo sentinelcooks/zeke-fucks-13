@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
+
 import ProfitCharts from "@/components/ProfitCharts";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { PlayerAutocomplete, getLinePlaceholder } from "@/components/tracker/PlayerAutocomplete";

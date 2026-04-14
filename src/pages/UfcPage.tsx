@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Search, Loader2, Swords, Trophy, BarChart3, Clock, Zap, Crosshair, Shield, Target, Flame, ArrowLeft } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import WrittenAnalysis from "@/components/WrittenAnalysis";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
+
 import { searchUfcFighters, analyzeUfcMatchup } from "@/services/api";
 import { fetchNbaOdds } from "@/services/oddsApi";
 

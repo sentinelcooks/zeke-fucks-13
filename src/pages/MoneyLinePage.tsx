@@ -1,6 +1,5 @@
 import React from "react";
 import { useLocation } from "react-router-dom";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
 import MoneyLineSection from "@/components/MoneyLineSection";
 
 const MoneyLinePage = () => {
