@@ -249,7 +249,7 @@ const FreePicksPage = () => {
 
       <div className="px-4 pt-3 pb-2 space-y-2 relative z-10">
         {/* Main category tabs */}
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.key;
@@ -261,7 +261,7 @@ const FreePicksPage = () => {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold tracking-wide transition-all ${
+                className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold tracking-wide transition-all ${
                   active
                     ? "text-white shadow-lg shadow-accent/20"
                     : "text-muted-foreground/50 hover:text-muted-foreground/70"
