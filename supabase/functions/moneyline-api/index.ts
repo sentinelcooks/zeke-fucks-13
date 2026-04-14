@@ -941,7 +941,11 @@ Deno.serve(async (req) => {
       const extras = { injuries1, injuries2, splits1, splits2, b2b1, b2b2, pace1, pace2 };
 
       // Fetch live odds for all sports (using rotating key pool)
-      const oddsDb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const masterUrl = Deno.env.get("MASTER_SUPABASE_URL");
+      const masterKey = Deno.env.get("MASTER_SUPABASE_SERVICE_KEY");
+      const oddsDb = (masterUrl && masterKey)
+        ? createClient(masterUrl, masterKey)
+        : createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
       const oddsData = await fetchOddsForMatchup(team1.name, team2.name, sport, oddsDb);
 
       // MLB: delegate to 20-factor model for superior analysis
