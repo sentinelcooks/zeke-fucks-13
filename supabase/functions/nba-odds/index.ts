@@ -189,8 +189,8 @@ async function fetchWithRotation(
       continue; // retry without marking exhausted
     }
     if (resp.status === 422) {
-      // Invalid request (unsupported market/region combo) — don't blame the key
-      console.warn(`Request returned 422 (invalid params), skipping`);
+      const errBody = await resp.text();
+      console.warn(`Request returned 422 (invalid params): ${errBody.substring(0, 200)}`);
       return null;
     }
     await updateKeyUsage(supabase, keyInfo.id, resp);
