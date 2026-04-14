@@ -80,7 +80,7 @@ function AppRoutes() {
         <Route path="home" element={<HomePage />} />
         <Route path="picks" element={<FreePicksPage />} />
         <Route path="free-props" element={<FreePropsPage />} />
-        <Route path="nba" element={<NbaPropsPage />} />
+        <Route path="analyze" element={<NbaPropsPage />} />
         <Route path="moneyline" element={<MoneyLinePage />} />
         <Route path="ufc" element={<UfcPage />} />
         <Route path="parlay" element={<ParlayPage />} />

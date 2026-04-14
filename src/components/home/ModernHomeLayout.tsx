@@ -348,7 +348,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const ringOffset = ringCircumference - (stats.hitRate / 100) * ringCircumference;
 
   const quickLinks = [
-    { label: "Analyze", icon: BarChart3, path: "/dashboard/nba", gradient: "from-[hsl(250,76%,62%)] to-[hsl(210,100%,60%)]", desc: "Props & Lines" },
+    { label: "Analyze", icon: BarChart3, path: "/dashboard/analyze", gradient: "from-[hsl(250,76%,62%)] to-[hsl(210,100%,60%)]", desc: "Props & Lines" },
     { label: "Picks", icon: Sparkles, path: "/dashboard/picks", gradient: "from-[hsl(30,100%,50%)] to-[hsl(15,100%,55%)]", desc: "Today's picks" },
     { label: "Parlay", icon: Layers, path: "/dashboard/parlay", gradient: "from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)]", desc: "Build a slip" },
     { label: "Lines", icon: Crosshair, path: "/dashboard/moneyline", gradient: "from-[hsl(190,90%,55%)] to-[hsl(210,100%,60%)]", desc: "Moneylines" },
@@ -679,7 +679,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                               },
                             });
                           } else {
-                            navigate("/dashboard/nba", {
+                            navigate("/dashboard/analyze", {
                               state: {
                                 autoAnalyze: true,
                                 player: pick.player_name,
