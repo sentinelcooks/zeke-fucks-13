@@ -363,8 +363,173 @@ function BasketballCourt({ zones }: { zones: CourtZone[] }) {
   );
 }
 
+// MLB Baseball Diamond SVG
+function BaseballDiamond({ zones }: { zones: CourtZone[] }) {
+  const homeX = 50;
+  const homeY = 88;
+
+  return (
+    <svg viewBox="0 0 100 100" className="w-full" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="mlbGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="1.2" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        {zones.map((zone, i) => (
+          <linearGradient
+            key={`mlb-trail-grad-${i}`}
+            id={`mlbTrailGrad${i}`}
+            gradientUnits="userSpaceOnUse"
+            x1={zone.cx}
+            y1={zone.cy}
+            x2={homeX}
+            y2={homeY}
+          >
+            <stop offset="0%" stopColor={getTrailColor(zone.percentage)} stopOpacity="0.5" />
+            <stop offset="60%" stopColor={getTrailColor(zone.percentage)} stopOpacity="0.15" />
+            <stop offset="100%" stopColor={getTrailColor(zone.percentage)} stopOpacity="0" />
+          </linearGradient>
+        ))}
+        {zones.map((_, i) => (
+          <style key={`mlb-dash-${i}`}>
+            {`
+              @keyframes mlbHit${i} {
+                0% { stroke-dashoffset: 60; opacity: 0; }
+                15% { opacity: 1; }
+                70% { opacity: 0.6; }
+                100% { stroke-dashoffset: 0; opacity: 0; }
+              }
+              .mlb-hit-trail-${i} {
+                animation: mlbHit${i} 2.5s ease-out ${i * 0.2 + 0.3}s infinite;
+                stroke-dasharray: 3 57;
+                stroke-dashoffset: 60;
+              }
+            `}
+          </style>
+        ))}
+      </defs>
+
+      {/* Background - field surface */}
+      <rect x="0" y="0" width="100" height="100" rx="2" fill="hsl(140 15% 8%)" stroke="hsl(140 10% 16%)" strokeWidth="0.4" />
+
+      {/* Outfield fence arc */}
+      <path d="M 5 55 Q 5 5 50 5 Q 95 5 95 55" fill="none" stroke="hsl(140 15% 20%)" strokeWidth="0.4" />
+
+      {/* Warning track arc */}
+      <path d="M 8 55 Q 8 10 50 10 Q 92 10 92 55" fill="none" stroke="hsl(140 15% 15%)" strokeWidth="0.3" strokeDasharray="2 2" />
+
+      {/* Infield dirt arc */}
+      <path d="M 30 75 Q 30 45 50 45 Q 70 45 70 75" fill="hsl(30 20% 12% / 0.3)" stroke="hsl(30 15% 22%)" strokeWidth="0.35" />
+
+      {/* Basepaths - diamond shape */}
+      <path d="M 50 88 L 72 65 L 50 42 L 28 65 Z" fill="none" stroke="hsl(140 10% 25%)" strokeWidth="0.4" />
+
+      {/* Bases */}
+      {/* Home plate */}
+      <g filter="url(#mlbGlow)">
+        <path d="M 48 88 L 50 91 L 52 88 L 51 86.5 L 49 86.5 Z" fill="hsl(0 0% 85% / 0.4)" stroke="hsl(0 0% 70% / 0.5)" strokeWidth="0.3" />
+      </g>
+      {/* First base */}
+      <rect x="70.5" y="63.5" width="3" height="3" transform="rotate(45 72 65)" fill="hsl(0 0% 85% / 0.25)" stroke="hsl(0 0% 50% / 0.3)" strokeWidth="0.3" />
+      {/* Second base */}
+      <rect x="48.5" y="40.5" width="3" height="3" transform="rotate(45 50 42)" fill="hsl(0 0% 85% / 0.25)" stroke="hsl(0 0% 50% / 0.3)" strokeWidth="0.3" />
+      {/* Third base */}
+      <rect x="26.5" y="63.5" width="3" height="3" transform="rotate(45 28 65)" fill="hsl(0 0% 85% / 0.25)" stroke="hsl(0 0% 50% / 0.3)" strokeWidth="0.3" />
+
+      {/* Pitcher's mound */}
+      <circle cx="50" cy="65" r="2" fill="hsl(30 20% 15% / 0.4)" stroke="hsl(30 15% 25%)" strokeWidth="0.3" />
+      <rect x="49" y="64.5" width="2" height="1" fill="hsl(0 0% 70% / 0.3)" rx="0.2" />
+
+      {/* Foul lines */}
+      <line x1="50" y1="88" x2="5" y2="43" stroke="hsl(0 0% 30% / 0.25)" strokeWidth="0.3" />
+      <line x1="50" y1="88" x2="95" y2="43" stroke="hsl(0 0% 30% / 0.25)" strokeWidth="0.3" />
+
+      {/* Hit arc trails */}
+      {zones.filter(z => z.label !== "Walks").map((zone, i) => {
+        const arcPath = getShotArcPath(zone.cx, zone.cy, homeX, homeY);
+        return (
+          <g key={`mlb-trail-${i}`}>
+            <path
+              d={arcPath}
+              fill="none"
+              stroke={getTrailColor(zone.percentage)}
+              strokeWidth="0.25"
+              opacity="0.12"
+              strokeDasharray="1.5 1.5"
+            />
+            <path
+              d={arcPath}
+              fill="none"
+              stroke={`url(#mlbTrailGrad${i})`}
+              strokeWidth="0.6"
+              strokeLinecap="round"
+              className={`mlb-hit-trail-${i}`}
+            />
+          </g>
+        );
+      })}
+
+      {/* Stat zones */}
+      {zones.map((zone, i) => (
+        <g key={zone.label}>
+          <motion.circle
+            cx={zone.cx}
+            cy={zone.cy}
+            r={zone.r + 1}
+            fill="none"
+            stroke={getZoneStroke(zone.percentage)}
+            strokeWidth="0.3"
+            initial={{ r: 0, opacity: 0 }}
+            animate={{ r: zone.r + 1, opacity: 0.5 }}
+            transition={{ delay: i * 0.05 + 0.1, type: "spring", stiffness: 200, damping: 20 }}
+          />
+          <motion.circle
+            cx={zone.cx}
+            cy={zone.cy}
+            r={zone.r}
+            fill={getZoneFill(zone.percentage)}
+            stroke={getZoneStroke(zone.percentage)}
+            strokeWidth="0.4"
+            initial={{ r: 0, opacity: 0 }}
+            animate={{ r: zone.r, opacity: 1 }}
+            transition={{ delay: i * 0.05, type: "spring", stiffness: 300, damping: 20 }}
+          />
+          <text
+            x={zone.cx}
+            y={zone.cy - 0.8}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill={getTextFill(zone.percentage)}
+            fontSize="3.2"
+            fontWeight="700"
+            fontFamily="-apple-system, 'SF Pro Display', 'Inter', sans-serif"
+          >
+            {zone.percentage}%
+          </text>
+          <text
+            x={zone.cx}
+            y={zone.cy + 2.8}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill="hsl(0 0% 45%)"
+            fontSize="1.8"
+            fontWeight="500"
+            fontFamily="-apple-system, 'SF Pro Display', 'Inter', sans-serif"
+          >
+            {zone.label === "Walks" ? `${zone.attempts} BB` : `${zone.attempts} H`}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 export function ShotChart({ propType = "points", playerName = "", analysisData, sport = "nba" }: ShotChartProps) {
   const isNhl = sport === "nhl" || analysisData?.shot_chart_type === "nhl";
+  const isMlb = sport === "mlb" || analysisData?.shot_chart_type === "mlb";
 
   const zones: CourtZone[] = useMemo(() => {
     const shotChart = analysisData?.shot_chart;
@@ -385,9 +550,9 @@ export function ShotChart({ propType = "points", playerName = "", analysisData, 
   if (zones.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground text-xs">
-        <p>No {isNhl ? "scoring zone" : "shot chart"} data available for this player</p>
+        <p>No {isMlb ? "hit zone" : isNhl ? "scoring zone" : "shot chart"} data available for this player</p>
         <p className="mt-1 text-[10px] opacity-60">
-          {isNhl ? "Scoring data is available for goal-scoring props" : "Shot data is only available for scoring-based props"}
+          {isMlb ? "Hit data is available for batting props" : isNhl ? "Scoring data is available for goal-scoring props" : "Shot data is only available for scoring-based props"}
         </p>
       </div>
     );
@@ -395,14 +560,23 @@ export function ShotChart({ propType = "points", playerName = "", analysisData, 
 
   const totalAttempts = zones.reduce((sum, z) => sum + z.attempts, 0);
 
+  const chartComponent = isMlb
+    ? <BaseballDiamond zones={zones} />
+    : isNhl
+      ? <NhlRink zones={zones} />
+      : <BasketballCourt zones={zones} />;
+
+  const subtitle = isMlb
+    ? `Real batting data · ${totalAttempts} total plate appearances`
+    : isNhl
+      ? `Real shooting data · ${totalAttempts} total shots on goal`
+      : `Real shooting data · ${totalAttempts} total attempts`;
+
   return (
     <div className="w-full max-w-[360px] mx-auto">
-      {isNhl ? <NhlRink zones={zones} /> : <BasketballCourt zones={zones} />}
+      {chartComponent}
       <p className="text-center text-[9px] text-muted-foreground/50 mt-1">
-        {isNhl
-          ? `Real shooting data · ${totalAttempts} total shots on goal`
-          : `Real shooting data · ${totalAttempts} total attempts`
-        }
+        {subtitle}
       </p>
     </div>
   );

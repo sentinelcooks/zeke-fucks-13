@@ -381,7 +381,7 @@ const FreePropsPage = () => {
 
                 <OddsComparison playerName={prop.player_name} propType={propType} line={lineNum} overUnder={overUnder} sport={prop.sport as "nba" | "mlb" | "nhl" | "nfl" | "ufc"} modelHitRate={results.confidence} />
 
-                <Section title={prop.sport === "nhl" ? "Scoring Zones" : propType === "3pm" ? "3PT Zones" : propType === "rebounds" ? "Rebound Zones" : propType === "assists" ? "Assist Zones" : "Scoring Zones"} defaultOpen={false}>
+                <Section title={prop.sport === "mlb" ? "Hit Zones" : prop.sport === "nhl" ? "Scoring Zones" : propType === "3pm" ? "3PT Zones" : propType === "rebounds" ? "Rebound Zones" : propType === "assists" ? "Assist Zones" : "Scoring Zones"} defaultOpen={false}>
                   <ShotChart propType={propType} playerName={prop.player_name} analysisData={results} sport={prop.sport} />
                 </Section>
 
