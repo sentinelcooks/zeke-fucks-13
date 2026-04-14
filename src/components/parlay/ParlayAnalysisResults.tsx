@@ -71,6 +71,7 @@ function getUnitSizing(overallConfidence: number, legCount: number, parlayOdds: 
 export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayout, profit, overallConfidence, stake, overallWriteup }: Props) {
   const { fmt } = useOddsFormat();
   const { user } = useAuth();
+  const { clearSlip } = useParlaySlip();
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const overallGrade = overallConfidence >= 60 ? "strong" : overallConfidence >= 40 ? "lean" : "risky";
