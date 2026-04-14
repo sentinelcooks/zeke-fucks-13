@@ -498,9 +498,16 @@ Deno.serve(async (req) => {
 
       let bestMatch: any = null;
 
-      // Search all events — use only us/us2 regions for props (us_dfs/us_ex don't support them)
+      // Filter to only upcoming events (not started yet) — props unavailable for live games
+      const now = Date.now();
+      const upcomingEvents = events.filter((e: any) => {
+        if (!e.commence_time) return true;
+        return new Date(e.commence_time).getTime() > now;
+      });
+
+      // Use only us/us2 regions for props (us_dfs/us_ex don't support them)
       const PROP_REGIONS = REGION_CONFIGS.filter(c => c.region === "us" || c.region === "us2");
-      const maxEvents = events.length;
+      const maxEvents = upcomingEvents.length;
       const FETCH_TIMEOUT_MS = 10_000;
 
       for (let ei = 0; ei < maxEvents; ei++) {
