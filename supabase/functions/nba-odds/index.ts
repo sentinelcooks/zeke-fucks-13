@@ -498,8 +498,9 @@ Deno.serve(async (req) => {
 
       let bestMatch: any = null;
 
-      // Limit to max 5 events to prevent timeouts
-      const maxEvents = Math.min(events.length, 5);
+      // Search all events — use only us/us2 regions for props (us_dfs/us_ex don't support them)
+      const PROP_REGIONS = REGION_CONFIGS.filter(c => c.region === "us" || c.region === "us2");
+      const maxEvents = events.length;
       const FETCH_TIMEOUT_MS = 10_000;
 
       for (let ei = 0; ei < maxEvents; ei++) {
@@ -513,7 +514,8 @@ Deno.serve(async (req) => {
             const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
             const multiResult = await fetchMultiRegion(supabase, (apiKey, region, bookmakers) =>
-              `${ODDS_API_BASE}/sports/${sportKey}/events/${event.id}/odds?apiKey=${apiKey}&regions=${region}&oddsFormat=american&bookmakers=${bookmakers}&markets=${propMarkets}`
+              `${ODDS_API_BASE}/sports/${sportKey}/events/${event.id}/odds?apiKey=${apiKey}&regions=${region}&oddsFormat=american&bookmakers=${bookmakers}&markets=${propMarkets}`,
+              PROP_REGIONS,
             );
 
             clearTimeout(timeoutId);
