@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Plus, Trash2, TrendingUp, TrendingDown, DollarSign, Download, X,
@@ -85,9 +86,17 @@ function VisionSelect({ label, children, ...props }: { label: string; children: 
 
 /* ══════════════════════════════════════════════════════════════
    MAIN PAGE
-   ══════════════════════════════════════════════════════════════ */
+/* ── Parse leg pick string ── */
+function parseLegPick(pick: string): { player: string; over_under: string; line: number; prop_type: string } | null {
+  const match = pick.match(/^(.+?)\s+(OVER|UNDER)\s+([\d.]+)\s+(.+)$/i);
+  if (!match) return null;
+  return { player: match[1].trim(), over_under: match[2].toLowerCase(), line: parseFloat(match[3]), prop_type: match[4].trim().toLowerCase() };
+}
+
+   /* ══════════════════════════════════════════════════════════════ */
 const ProfitTrackerPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { fmt, oddsFormat } = useOddsFormat();
   const licenseKey = user?.id || "default";
 
@@ -854,7 +863,21 @@ const ProfitTrackerPage = () => {
                           <div className="flex items-center gap-1.5">
                             <span className="text-muted-foreground/50 font-bold">#{li + 1}</span>
                             <span className="font-bold uppercase text-[8px] text-accent/70">{leg.sport}</span>
-                            <span className="font-medium text-foreground/80 truncate max-w-[180px]">{leg.pick}</span>
+                            <button
+                              onClick={() => {
+                                const parsed = parseLegPick(leg.pick);
+                                if (parsed) {
+                                  const sport = (leg.sport || "NBA").toLowerCase();
+                                  const route = sport === "nba" || sport === "mlb" || sport === "nhl"
+                                    ? `/dashboard/${sport}`
+                                    : `/dashboard/nba`;
+                                  navigate(route, { state: { autoAnalyze: true, ...parsed, sport: leg.sport } });
+                                }
+                              }}
+                              className="font-medium text-accent/90 hover:text-accent underline decoration-accent/30 hover:decoration-accent truncate max-w-[180px] text-left transition-colors"
+                            >
+                              {leg.pick}
+                            </button>
                           </div>
                           <span className={`font-bold ${
                             leg.grade === "strong" ? "text-nba-green" : leg.grade === "lean" ? "text-nba-yellow" : "text-nba-red"
