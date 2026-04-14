@@ -389,13 +389,14 @@ function H2HTable({ h2h, team1, team2 }: { h2h: any[]; team1: Team; team2: Team 
 }
 
 /* ── Platform Odds (Real from Odds API) — OddsProjection-style design ── */
-function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType = "moneyline", activeOverUnder = "over" }: { team1: Team; team2: Team; sport?: string; modelProb?: number; activeBetType?: BetType; activeOverUnder?: "over" | "under" }) {
+function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType = "moneyline", activeOverUnder = "over", factorBreakdown }: { team1: Team; team2: Team; sport?: string; modelProb?: number; activeBetType?: BetType; activeOverUnder?: "over" | "under"; factorBreakdown?: any[] }) {
   const { profile } = useAuth();
   const oddsFormat = (profile?.odds_format as "american" | "decimal") || "american";
   const [allMarketData, setAllMarketData] = useState<Record<string, Array<{ name: string; logo: string; abbrev: string; color: string; bookKey: string; t1: string; t2: string; t1Raw: number; t2Raw: number; spread1?: string; spread2?: string; total?: string }>>>({});
   const [loading, setLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);
   const [showExplainer, setShowExplainer] = useState(false);
+  const [showOddsSection, setShowOddsSection] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -615,8 +616,45 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
     return "text-nba-red";
   };
 
+  // Extract model weight categories from factorBreakdown
+  const modelWeights = factorBreakdown?.filter((f: any) => f.weight > 0).slice(0, 4) || [];
+
   return (
     <div className="space-y-3">
+      {/* ── COLLAPSIBLE ODDS & EV ANALYSIS HEADER ── */}
+      <button
+        onClick={() => setShowOddsSection(!showOddsSection)}
+        className="w-full vision-card px-4 py-3 flex items-center justify-between group"
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-accent" />
+          <div className="text-left">
+            <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-foreground/80">Odds & EV Analysis</span>
+            <p className="text-[9px] text-muted-foreground/55">{team1.name} vs {team2.name}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {isLive && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'hsla(158, 64%, 52%, 0.08)', border: '1px solid hsla(158, 64%, 52%, 0.15)' }}>
+              <div className="w-1.5 h-1.5 rounded-full bg-nba-green animate-pulse" />
+              <span className="text-[7px] font-bold text-nba-green uppercase tracking-wider">Live</span>
+            </div>
+          )}
+          <motion.div animate={{ rotate: showOddsSection ? 180 : 0 }} transition={{ duration: 0.25 }}>
+            <ChevronDown className="w-4 h-4 text-muted-foreground/65" />
+          </motion.div>
+        </div>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {showOddsSection && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="overflow-hidden space-y-3"
+          >
       {/* ── MODEL vs MARKET HERO CARD ── */}
       {activeEV && modelProb && modelProb > 0 && (
         <motion.div
@@ -684,6 +722,29 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
                 <span className="block text-[8px] text-muted-foreground/55 mt-0.5">Model Edge</span>
               </div>
             </div>
+
+            {/* ── MODEL WEIGHTS ── */}
+            {modelWeights.length > 0 && (
+              <div className="mb-4">
+                <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 block mb-2">Model Weights</span>
+                <div className="flex items-center gap-3">
+                  {modelWeights.map((f: any, i: number) => {
+                    const score = f.team1Score ?? f.score ?? 50;
+                    const weightPct = (f.weight * 100).toFixed(0);
+                    return (
+                      <div key={i} className="text-center flex-1">
+                        <span className={`block text-[15px] font-extrabold tabular-nums ${score >= 55 ? 'text-nba-green' : score <= 45 ? 'text-nba-red' : 'text-foreground/70'}`}>
+                          {score.toFixed(1)}%
+                        </span>
+                        <span className="block text-[8px] text-muted-foreground/50 mt-0.5 truncate">
+                          {f.label} ({weightPct}%)
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Edge Projection Bar */}
             <div className="mb-3">
@@ -1052,6 +1113,9 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
           Live odds via The Odds API · Always verify before placing bets
         </p>
       </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -1550,7 +1614,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
             </div>
           )}
 
-          <MoneylinePlatformOdds team1={results.team1} team2={results.team2} sport={results.sport || sport} modelProb={betType === "moneyline" ? results.team1_pct : results.confidence} activeBetType={betType} activeOverUnder={overUnder} />
+          <MoneylinePlatformOdds team1={results.team1} team2={results.team2} sport={results.sport || sport} modelProb={betType === "moneyline" ? results.team1_pct : results.confidence} activeBetType={betType} activeOverUnder={overUnder} factorBreakdown={results.factorBreakdown} />
 
           {(results.head_to_head || []).length > 0 && (
             <div className="grid grid-cols-4 gap-2">
