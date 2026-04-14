@@ -1897,14 +1897,6 @@ const NbaPropsPage = () => {
                 />
               </Section>
 
-              <OddsComparison
-                playerName={player}
-                propType={propType}
-                line={parseFloat(line) || 0}
-                overUnder={overUnder}
-                sport={sport}
-                modelHitRate={results.confidence}
-              />
 
               <Section title={propType === "3pm" ? "3PT Zones" : propType === "rebounds" ? "Rebound Zones" : propType === "assists" ? "Assist Zones" : "Scoring Zones"} defaultOpen={false}>
                 <ShotChart propType={propType} playerName={player} analysisData={results} />
