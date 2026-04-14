@@ -1177,6 +1177,78 @@ function computeNhlScoringZones(games: GameRow[]) {
   return zones;
 }
 
+// ── MLB Hit/Scoring Zones from Game Log (real data) ───────────────
+function computeMlbScoringZones(games: GameRow[]) {
+  if (!games.length) return [];
+
+  let totalHits = 0, totalHR = 0, totalTB = 0, totalWalks = 0;
+  let totalSB = 0, totalRuns = 0, totalRBI = 0, totalAB = 0;
+
+  for (const g of games) {
+    totalHits += g.hits || 0;
+    totalHR += g.home_runs || 0;
+    totalTB += g.total_bases || 0;
+    totalWalks += g.walks || 0;
+    totalSB += g.stolen_bases || 0;
+    totalRuns += g.runs || 0;
+    totalRBI += g.rbi || 0;
+    totalAB += g.at_bats || 0;
+  }
+
+  if (totalHits === 0 && totalWalks === 0 && totalHR === 0) return [];
+
+  // Estimate extra-base hits (doubles + triples) from total bases
+  // TB = 1*singles + 2*doubles + 3*triples + 4*HR
+  // extraBaseTB = TB - hits - 3*HR  =>  extra base hits ≈ extraBaseTB / 1.5
+  const extraBaseTB = Math.max(0, totalTB - totalHits - 3 * totalHR);
+  const estimatedExtraBaseHits = Math.round(extraBaseTB / 1.5);
+  const singles = Math.max(0, totalHits - totalHR - estimatedExtraBaseHits);
+
+  // Distribute extra-base hits across outfield zones (L/C/R)
+  const ofLeft = Math.round(estimatedExtraBaseHits * 0.35);
+  const ofCenter = Math.round(estimatedExtraBaseHits * 0.30);
+  const ofRight = estimatedExtraBaseHits - ofLeft - ofCenter;
+
+  const pct = (val: number, total: number) => total > 0 ? Math.round((val / total) * 1000) / 10 : 0;
+  const plateAppearances = totalAB + totalWalks;
+
+  const zones = [];
+
+  // Infield — singles
+  if (singles > 0) {
+    zones.push({ label: "Infield", percentage: pct(singles, plateAppearances), attempts: singles, cx: 50, cy: 62, r: 8 });
+  }
+
+  // Outfield Left
+  if (ofLeft > 0) {
+    zones.push({ label: "OF Left", percentage: pct(ofLeft, plateAppearances), attempts: ofLeft, cx: 20, cy: 35, r: 7 });
+  }
+
+  // Outfield Center
+  if (ofCenter > 0) {
+    zones.push({ label: "OF Center", percentage: pct(ofCenter, plateAppearances), attempts: ofCenter, cx: 50, cy: 25, r: 7 });
+  }
+
+  // Outfield Right
+  if (ofRight > 0) {
+    zones.push({ label: "OF Right", percentage: pct(ofRight, plateAppearances), attempts: ofRight, cx: 80, cy: 35, r: 7 });
+  }
+
+  // Over the Fence — home runs
+  if (totalHR > 0) {
+    zones.push({ label: "Over Fence", percentage: pct(totalHR, plateAppearances), attempts: totalHR, cx: 50, cy: 12, r: 7 });
+  }
+
+  // On Base — walks
+  if (totalWalks > 0) {
+    zones.push({ label: "Walks", percentage: pct(totalWalks, plateAppearances), attempts: totalWalks, cx: 15, cy: 80, r: 6 });
+  }
+
+  console.log(`MLB Scoring zones: ${totalHits}H ${totalHR}HR ${totalTB}TB ${totalWalks}BB, PA: ${plateAppearances}, Games: ${games.length}`);
+
+  return zones;
+}
+
 
 const PROP_DISPLAY: Record<string, string> = {
   points: "Points", rebounds: "Rebounds", assists: "Assists",
@@ -2771,6 +2843,12 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
       if (nhlZones.length > 0) {
         result.shot_chart = nhlZones;
         result.shot_chart_type = "nhl";
+      }
+    } else if (cfg.searchLeague === "mlb") {
+      const mlbZones = computeMlbScoringZones(games);
+      if (mlbZones.length > 0) {
+        result.shot_chart = mlbZones;
+        result.shot_chart_type = "mlb";
       }
     } else {
       const shootingSplits = computeShootingSplits(games);
