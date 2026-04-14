@@ -89,6 +89,7 @@ function VisionSelect({ label, children, ...props }: { label: string; children: 
    ══════════════════════════════════════════════════════════════ */
 const ProfitTrackerPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { fmt, oddsFormat } = useOddsFormat();
   const licenseKey = user?.id || "default";
 
