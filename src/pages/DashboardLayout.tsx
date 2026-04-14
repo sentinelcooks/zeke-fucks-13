@@ -34,7 +34,7 @@ const DashboardLayout = () => {
 
   // Update browser tab title
   useEffect(() => {
-    document.title = title === "Dashboard" ? "Sentinel" : `${title} – Sentinel`;
+    document.title = title === "Sentinel Dashboard" ? "Sentinel" : `${title} – Sentinel`;
   }, [title]);
 
   // Tab-switch scroll restore
