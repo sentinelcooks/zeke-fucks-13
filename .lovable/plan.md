@@ -1,54 +1,41 @@
 
 
-## Plan: Add In-Depth Analysis Animation Style to All Collapsible Sections
+## Plan: Add MLB Scoring Zones (Baseball Diamond Visualization)
 
-### Problem
-The `Section` component in `MoneyLineSection.tsx` (used for Head-to-Head Scores, Score Differential, Past Meetings, Injury Report, Home/Away Splits) uses a basic CSS transition with no animated expand/collapse. The "All Sportsbooks" and "Other Markets" sections are not collapsible at all. The user wants all of these to match the smooth `AnimatePresence` + `motion.div` animation style used in the In-Depth Analysis component.
+### What Changes
 
-### Changes
+**1. Backend — `supabase/functions/nba-api/index.ts`**
 
-**`src/components/MoneyLineSection.tsx`**
+Add a `computeMlbScoringZones(games: GameRow[])` function that derives zone data from existing MLB game log stats (hits, home_runs, total_bases, walks, stolen_bases, runs, rbi). Zones on a baseball diamond:
 
-1. **Upgrade the `Section` component** (lines 276-292):
-   - Replace the CSS `transition-transform` chevron with a `motion.div` rotating chevron
-   - Replace the conditional `{open && ...}` render with `AnimatePresence` + `motion.div` that animates `height: 0 → auto` and `opacity: 0 → 1` on expand, reverse on collapse
-   - Add `overflow-hidden` to the motion wrapper
-   - Default `defaultOpen` to `false` (collapsed by default, matching the screenshots)
-   - Add the subtle gradient accent line at the top of the card
+- **Infield** (cx: 50, cy: 62) — singles/grounders, derived from `hits - home_runs - estimated_extra_base`
+- **Outfield Left** (cx: 20, cy: 35) — portion of extra-base hits
+- **Outfield Center** (cx: 50, cy: 25) — portion of extra-base hits  
+- **Outfield Right** (cx: 80, cy: 35) — portion of extra-base hits
+- **Over the Fence** (cx: 50, cy: 12) — home runs
+- **On Base** (cx: 15, cy: 80) — walks (OBP contribution)
 
-2. **Make "All Sportsbooks" collapsible** (lines 969-1053):
-   - Add `useState` (`allBooksOpen`, default `false`)
-   - Convert the header `div` into a clickable `button` with rotating chevron
-   - Wrap the sportsbook list in `AnimatePresence` + `motion.div`
+Each zone shows a percentage (e.g., hit rate or share of total bases) and attempt count. Wire it into the existing `shot_chart` result block alongside the NHL check (~line 2769), setting `shot_chart_type: "mlb"`.
 
-3. **Make "Other Markets" collapsible** (lines 1055-1116):
-   - Add `useState` (`otherMarketsOpen`, default `false`)
-   - Convert the header into a clickable `button` with rotating chevron
-   - Wrap content in `AnimatePresence` + `motion.div`
+**2. Frontend — `src/components/mobile/ShotChart.tsx`**
 
-### Animation Pattern (matching WrittenAnalysis)
-```tsx
-<motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.3 }}>
-  <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/65" />
-</motion.div>
+Add a `BaseballDiamond` SVG component matching the style of `NhlRink` and `BasketballCourt`:
+- Dark background with subtle diamond/field lines (basepaths, infield arc, outfield fence arc, bases, home plate, pitcher's mound)
+- Same animated zone bubbles with `motion.circle`, color coding, and arc trails pointing toward home plate
+- Same gradient accent line and glow filter pattern
 
-<AnimatePresence initial={false}>
-  {open && (
-    <motion.div
-      initial={{ height: 0, opacity: 0 }}
-      animate={{ height: "auto", opacity: 1 }}
-      exit={{ height: 0, opacity: 0 }}
-      transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-      className="overflow-hidden"
-    >
-      {content}
-    </motion.div>
-  )}
-</AnimatePresence>
-```
+Update the main `ShotChart` export to detect `mlb` sport and render `BaseballDiamond`. Update empty-state text for MLB context.
+
+**3. Frontend — `src/pages/NbaPropsPage.tsx`**
+
+Update the Section title logic (~line 1901) to include MLB: show "Hit Zones" or "Scoring Zones" for MLB props.
+
+**4. Frontend — `src/pages/FreePropsPage.tsx`**
+
+Same Section title update if MLB is referenced there.
 
 ### What Won't Change
-- No backend changes
-- All content inside each section stays identical
-- The existing Odds & EV Analysis collapsible header keeps its current animation
+- NBA basketball court and NHL rink visualizations stay identical
+- No database migrations needed
+- All existing zone color/styling helper functions are reused
 
