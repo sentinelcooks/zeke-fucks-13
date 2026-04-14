@@ -1,29 +1,20 @@
 
 
-## Plan: Rename `/dashboard/nba` Route to `/dashboard/analyze`
+## Plan: Remove the "AI Analysis" Section
 
-### Problem
-The URL shows `/dashboard/nba` even when you're viewing MLB, NHL, or UFC props — confusing since that route hosts all sports, not just NBA.
+### What
+The "AI Analysis" section (the collapsible accordion showing bullet-point reasoning lines like "⚾ MLB 20-Factor Batter Model — Shohei Ohtani") is redundant — the Written Analysis section below already presents the same information in a more polished narrative format.
 
 ### Changes
 
-Rename the route path from `nba` to `analyze` across all references:
+**`src/pages/NbaPropsPage.tsx`** (~lines 2038-2057)
+- Remove the entire `<Section title="AI Analysis">` block that maps over `results.reasoning`
 
-**`src/App.tsx`** — Change `<Route path="nba" ...>` to `<Route path="analyze" ...>`
+**`src/pages/FreePropsPage.tsx`** (~lines 514-530)
+- Remove the same `<Section title="AI Analysis">` block from the free props results
 
-**`src/pages/DashboardLayout.tsx`** — Update route title key from `/dashboard/nba` to `/dashboard/analyze`
-
-**`src/components/mobile/BottomTabBar.tsx`** — Update tab path and parent-mapping entries
-
-**`src/components/home/ModernHomeLayout.tsx`** — Update quick link path
-
-**`src/pages/HomePage.tsx`** — Update quick link path
-
-**`src/pages/FreePicksPage.tsx`** — Update navigation call
-
-**`src/pages/ProfitTrackerPage.tsx`** — Update fallback route in re-analyze logic
-
-**`src/components/AppSidebar.tsx`** — Update sidebar link URL
-
-All changes are simple string replacements of `/dashboard/nba` → `/dashboard/analyze`. No backend or functionality changes.
+### What Won't Change
+- Written Analysis section stays (it already covers the AI narrative)
+- No backend changes
+- All other sections (Hit Rates, Odds, Game Log, etc.) unaffected
 
