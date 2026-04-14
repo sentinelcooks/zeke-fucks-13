@@ -5,6 +5,62 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/* ── Truncate a section to ~50 words ── */
+function truncateSection(text: string, maxChars = 280): string {
+  if (text.length <= maxChars) return text;
+  const cut = text.slice(0, maxChars);
+  const lastSentence = cut.lastIndexOf('.');
+  return lastSentence > 100 ? cut.slice(0, lastSentence + 1) : cut + '…';
+}
+
+/* ── Multi-format section parser ── */
+function parseSections(content: string): { title: string; content: string }[] {
+  const cleanMd = (t: string) => t.replace(/\*\*/g, "").replace(/\*/g, "").replace(/^#+\s*/gm, "").trim();
+
+  // Strategy 1: **Title**: body
+  let sections = parseWithRegex(content, /\*\*([^*]+)\*\*\s*:?\s*/g, cleanMd);
+  if (sections.length >= 2) return sections;
+
+  // Strategy 2: ### Title or ## Title
+  sections = parseWithRegex(content, /^#{2,3}\s+(.+)$/gm, cleanMd);
+  if (sections.length >= 2) return sections;
+
+  // Strategy 3: Numbered patterns like "1. Title:" or "1) Title:"
+  sections = parseWithRegex(content, /^\d+[.)]\s*([^:\n]+):\s*/gm, cleanMd);
+  if (sections.length >= 2) return sections;
+
+  // Strategy 4: Split on double newlines
+  const chunks = content.split(/\n\n+/).filter(c => c.trim().length > 0);
+  return chunks.slice(0, 3).map(c => ({ title: "", content: truncateSection(cleanMd(c)) }));
+}
+
+function parseWithRegex(
+  content: string,
+  regex: RegExp,
+  cleanMd: (t: string) => string
+): { title: string; content: string }[] {
+  const matches: { title: string; index: number; end: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(content)) !== null) {
+    matches.push({
+      title: m[1].replace(/^\d+[.)]\s*/, "").trim(),
+      index: m.index,
+      end: m.index + m[0].length,
+    });
+  }
+
+  const sections: { title: string; content: string }[] = [];
+  for (let i = 0; i < matches.length; i++) {
+    const start = matches[i].end;
+    const end = i + 1 < matches.length ? matches[i + 1].index : content.length;
+    const body = truncateSection(cleanMd(content.slice(start, end)));
+    if (matches[i].title && body) {
+      sections.push({ title: matches[i].title, content: body });
+    }
+  }
+  return sections;
+}
+
 /* ── Sport-specific injury instructions ── */
 function getInjuryInstructions(sport: string): string {
   const s = (sport || "").toLowerCase();
@@ -42,6 +98,10 @@ function getPropPrompt(body: any, injurySection: string, teammatesSection: strin
   const dataPoints = (body.reasoning || body.factors || []).join("\n- ");
   const s = (sport || "").toLowerCase();
 
+  const formatRule = `Write exactly 3 sections. Each MUST be 2-3 sentences and under 50 words. NO EXCEPTIONS — output is auto-truncated.
+Format each as: **Section Title**: plain text analysis.
+Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.`;
+
   if (s === "mlb") return `You are a sharp MLB betting analyst. Be concise and data-driven. Use baseball terminology throughout.
 
 Player: ${playerOrTeam}
@@ -56,9 +116,7 @@ CRITICAL: Your final verdict MUST ALIGN with "${verdict}" (confidence: ${confide
 If the verdict is "DO NOT BET" or "RISKY", do NOT recommend betting. If it's "STRONG PICK", be assertive.
 Support the model — do NOT contradict it.
 
-Write exactly 3 sections. Each MUST be under 50 words and max 3 sentences. No paragraphs.
-Format each as: **Section Title**: plain text analysis.
-Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.
+${formatRule}
 
 1. Statistical Edge — Season stats, L10 trends, platoon splits, K rate / ERA / WHIP / OPS.
 2. Matchup & Park Factor — Opposing pitcher/hitter matchup, park dimensions, weather, bullpen state.
@@ -78,9 +136,7 @@ CRITICAL: Your final verdict MUST ALIGN with "${verdict}" (confidence: ${confide
 If the verdict is "DO NOT BET" or "RISKY", do NOT recommend betting. If it's "STRONG PICK", be assertive.
 Support the model — do NOT contradict it.
 
-Write exactly 3 sections. Each MUST be under 50 words and max 3 sentences. No paragraphs.
-Format each as: **Section Title**: plain text analysis.
-Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.
+${formatRule}
 
 1. Statistical Edge — SOG trends, shooting %, ice time, power-play involvement.
 2. Matchup & Lineup — Opposing goalie save %, line combinations, PP/PK time, fatigue.
@@ -102,9 +158,7 @@ CRITICAL: Your final verdict MUST ALIGN with "${verdict}" (confidence: ${confide
 If the verdict is "DO NOT BET" or "RISKY", do NOT recommend betting. If it's "STRONG PICK", be assertive.
 Support the model — do NOT contradict it.
 
-Write exactly 3 sections. Each MUST be under 50 words and max 3 sentences. No paragraphs.
-Format each as: **Section Title**: plain text analysis.
-Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.
+${formatRule}
 
 1. Statistical Edge — Hit rates, averages, trends supporting the bet.
 2. Matchup & Injuries — Opponent matchup, pace, injuries affecting this prop.
@@ -113,7 +167,7 @@ Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only 
 
 /* ── Sport-specific system messages ── */
 function getSystemMessage(sport: string, type: string): string {
-  const base = "STRICT RULES: Each section MUST be under 50 words. Maximum 3 sentences per section. No exceptions. No paragraphs. No markdown inside text. Only use **Title**: format for section headers.";
+  const base = "STRICT RULES: Each section MUST be 2-3 sentences and under 50 words. No exceptions. No paragraphs. No markdown inside text. Only use **Title**: format for section headers. Output that exceeds 50 words per section will be auto-truncated.";
   const s = (sport || "").toLowerCase();
   if (s === "ufc") return `You are an expert MMA betting analyst. Be concise. Never hedge — take a clear stance. Use specific numbers. ${base}`;
   if (s === "nhl") return `You are an expert NHL betting analyst. Be concise. Never hedge — take a clear stance. Use hockey terminology: save %, GAA, puck line, PP, PK, SOG, Corsi, TOI. ${base}`;
@@ -187,6 +241,10 @@ serve(async (req) => {
     const isUfc = sportLower === "ufc";
     const isNhl = sportLower === "nhl";
 
+    const formatRule = `Write exactly 3 sections. Each MUST be 2-3 sentences and under 50 words. NO EXCEPTIONS.
+Format each as: **Section Title**: plain text analysis.
+Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.`;
+
     // ── NHL-specific moneyline/puckline/total prompt ──
     const nhlMoneylinePrompt = `You are a sharp NHL betting analyst. Be concise and data-driven. Use hockey terminology throughout.
 
@@ -199,9 +257,7 @@ Key factors from our model:
 
 CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Support the model's pick — do NOT contradict it.
 
-Write exactly 3 sections. Each MUST be under 50 words and max 3 sentences. No paragraphs.
-Format each as: **Section Title**: plain text analysis.
-Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.
+${formatRule}
 
 1. Goaltending Edge — Starting goalie matchup, save %, GAA, recent form.
 2. Special Teams & Matchup — PP/PK efficiency, pace, shot volume, fatigue, injuries.
@@ -216,9 +272,7 @@ Model Confidence: ${confidence}%
 Key factors:
 - ${dataPoints || "No additional data"}
 
-Write exactly 3 sections. Each MUST be under 50 words and max 3 sentences. No paragraphs.
-Format each as: **Section Title**: plain text analysis.
-Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.
+${formatRule}
 
 1. Statistical Edge — Strike differential, accuracy, takedown defense, win probability.
 2. Style Matchup — How styles interact, reach, finishing tendencies.
@@ -235,9 +289,7 @@ Key factors from our model:
 
 CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Support the model's pick — do NOT contradict it.
 
-Write exactly 3 sections. Each MUST be under 50 words and max 3 sentences. No paragraphs.
-Format each as: **Section Title**: plain text analysis.
-Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.
+${formatRule}
 
 1. Pitching Matchup — Starting pitcher ERA, WHIP, K/9, recent form, pitch mix.
 2. Lineup & Park Factor — Offensive splits, OPS, park dimensions, bullpen depth.
@@ -255,9 +307,7 @@ Key factors from our model:
 
 CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Support the model's pick — do NOT contradict it.
 
-Write exactly 3 sections. Each MUST be under 50 words and max 3 sentences. No paragraphs.
-Format each as: **Section Title**: plain text analysis.
-Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.
+${formatRule}
 
 1. Statistical Edge — Why the model favors this side, win probability vs implied odds.
 2. Injury & Lineup Reality — Current injuries and what they mean for each team.
@@ -291,7 +341,7 @@ Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only 
         "Authorization": `Bearer ${LOVABLE_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemMessage },
           { role: "user", content: prompt },
@@ -322,32 +372,14 @@ Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only 
     const aiData = await aiResponse.json();
     const content = aiData.choices?.[0]?.message?.content || "";
 
-    // ── Regex-based section parser: find **Title**: body ──
-    const sections: { title: string; content: string }[] = [];
-    const cleanMd = (t: string) => t.replace(/\*\*/g, "").replace(/\*/g, "").replace(/^#+\s*/gm, "").trim();
+    // Parse sections using multi-format parser
+    const sections = parseSections(content).slice(0, 3);
 
-    // Find all **Title** markers and extract title + body between them
-    const headerRegex = /\*\*([^*]+)\*\*\s*:?\s*/g;
-    const matches: { title: string; index: number; end: number }[] = [];
-    let m: RegExpExecArray | null;
-    while ((m = headerRegex.exec(content)) !== null) {
-      matches.push({ title: m[1].replace(/^\d+\.\s*/, "").trim(), index: m.index, end: m.index + m[0].length });
-    }
-
-    for (let i = 0; i < matches.length; i++) {
-      const start = matches[i].end;
-      const end = i + 1 < matches.length ? matches[i + 1].index : content.length;
-      const body = cleanMd(content.slice(start, end));
-      if (matches[i].title && body) {
-        sections.push({ title: matches[i].title, content: body });
-      }
-    }
-
-    // Fallback if parsing fails
+    // Fallback if parsing still fails
     if (sections.length === 0) {
       const lines = content.split("\n").filter((l: string) => l.trim().length > 0);
       for (const line of lines.slice(0, 3)) {
-        sections.push({ title: "", content: cleanMd(line) });
+        sections.push({ title: "", content: truncateSection(line.replace(/\*\*/g, "").replace(/\*/g, "").replace(/^#+\s*/gm, "").trim()) });
       }
     }
 
