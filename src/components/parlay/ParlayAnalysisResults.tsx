@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useParlaySlip } from "@/contexts/ParlaySlipContext";
 
 interface LegAnalysis {
   legIndex: number;
