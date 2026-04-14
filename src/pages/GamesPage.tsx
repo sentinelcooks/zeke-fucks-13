@@ -128,6 +128,7 @@ const GamesPage = () => {
     } catch { return new Set(); }
   });
   const notifTimeouts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const fetchAbort = useRef<AbortController | null>(null);
 
   // Sync notifiedGames to localStorage & schedule/clear notifications
   useEffect(() => {
