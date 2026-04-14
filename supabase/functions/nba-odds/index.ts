@@ -488,7 +488,11 @@ Deno.serve(async (req) => {
       const alreadyPrefixed = validPrefixes.some(p => (propType || "").startsWith(p));
       let propMarketKey: string;
       if (alreadyPrefixed) {
-        propMarketKey = propType.replace("pts+reb+ast", "points_rebounds_assists").replace("3-pointers", "threes");
+        propMarketKey = propType
+          .replace("pts+reb+ast", "points_rebounds_assists")
+          .replace("3-pointers", "threes")
+          // Strip sport-specific infixes: player_nhl_points → player_points
+          .replace(/^(player_)(nhl_|mlb_|nba_|nfl_|ufc_)/i, "$1");
       } else if (sport === "mlb" && MLB_PROP_MAP[(propType || "").toLowerCase()]) {
         propMarketKey = MLB_PROP_MAP[(propType || "").toLowerCase()];
       } else {
