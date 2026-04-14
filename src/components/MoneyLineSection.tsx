@@ -1187,7 +1187,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
       }}>
         {([
           { value: "moneyline" as BetType, label: "Moneyline", icon: <DollarSign className="w-3.5 h-3.5" /> },
-          { value: "spread" as BetType, label: "Spread", icon: <Scale className="w-3.5 h-3.5" /> },
+          { value: "spread" as BetType, label: sport === "mlb" ? "Run Line" : sport === "nhl" ? "Puck Line" : "Spread", icon: <Scale className="w-3.5 h-3.5" /> },
           { value: "total" as BetType, label: "O/U", icon: <Target className="w-3.5 h-3.5" /> },
         ]).map((opt) => {
           const active = betType === opt.value;
