@@ -1090,6 +1090,9 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
           Live odds via The Odds API · Always verify before placing bets
         </p>
       </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
