@@ -8,7 +8,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { useParlaySlip } from "@/contexts/ParlaySlipContext";
-import { MobileHeader } from "@/components/mobile/MobileHeader";
+
 import { PnLCalendar } from "@/components/PnLCalendar";
 import { useAuth } from "@/contexts/AuthContext";
 import { searchPlayers } from "@/services/api";
