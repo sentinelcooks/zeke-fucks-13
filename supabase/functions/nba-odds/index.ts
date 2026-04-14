@@ -511,7 +511,7 @@ Deno.serve(async (req) => {
       const FETCH_TIMEOUT_MS = 10_000;
 
       for (let ei = 0; ei < maxEvents; ei++) {
-        const event = events[ei];
+        const event = upcomingEvents[ei];
         const propsCacheKey = `props-${sport}-${event.id}`;
         let propsData = getCached(propsCacheKey) as any;
 
@@ -571,7 +571,11 @@ Deno.serve(async (req) => {
       }
 
       if (!bestMatch) {
-        return json({ found: false, message: `No odds found for ${playerName} (${propMarketKey})`, events_checked: events.length });
+        const liveCount = events.length - upcomingEvents.length;
+        const msg = upcomingEvents.length === 0
+          ? `No upcoming games found for ${sport.toUpperCase()} — all ${events.length} games are live or completed. Props are only available before game time.`
+          : `No odds found for ${playerName} (${propMarketKey}). Checked ${upcomingEvents.length} upcoming events (${liveCount} live/completed skipped).`;
+        return json({ found: false, message: msg, events_checked: events.length, upcoming_checked: upcomingEvents.length });
       }
       return json({ found: true, ...bestMatch });
     }
