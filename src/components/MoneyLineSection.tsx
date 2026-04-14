@@ -274,11 +274,19 @@ function TeamSelect({ label, value, onChange, teams }: { label: string; value: s
 }
 
 /* ── Section ── */
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = React.useState(defaultOpen);
   return (
     <div className="vision-card p-4">
-      <h3 className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-3">{title}</h3>
-      {children}
+      <button
+        type="button"
+        className="w-full flex items-center justify-between"
+        onClick={() => setOpen(!open)}
+      >
+        <h3 className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">{title}</h3>
+        <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground/55 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && <div className="mt-3">{children}</div>}
     </div>
   );
 }
