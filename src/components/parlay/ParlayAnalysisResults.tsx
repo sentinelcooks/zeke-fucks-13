@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useParlaySlip } from "@/contexts/ParlaySlipContext";
 
 interface LegAnalysis {
   legIndex: number;
@@ -70,6 +71,7 @@ function getUnitSizing(overallConfidence: number, legCount: number, parlayOdds: 
 export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayout, profit, overallConfidence, stake, overallWriteup }: Props) {
   const { fmt } = useOddsFormat();
   const { user } = useAuth();
+  const { clearSlip } = useParlaySlip();
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const overallGrade = overallConfidence >= 60 ? "strong" : overallConfidence >= 40 ? "lean" : "risky";
@@ -86,6 +88,7 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
         legs: JSON.stringify(legs), result: "pending",
       } as any);
       setSaved(true);
+      clearSlip();
     } catch (e) { console.error("Failed to save parlay:", e); }
     finally { setSaving(false); }
   };
