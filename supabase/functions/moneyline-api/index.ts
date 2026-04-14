@@ -912,9 +912,7 @@ Deno.serve(async (req) => {
 
             if (mlbResp.ok) {
               const mlbResult = await mlbResp.json();
-              const factors: string[] = (mlbResult.factorBreakdown || []).map((f: any) =>
-                factorToInsight(f, team1.shortName, team2.shortName)
-              );
+              const factors: string[] = [];
               for (const w of mlbResult.injuries?.warnings || []) factors.push(w);
               if (mlbResult.writeup) factors.push(`🤖 ${mlbResult.writeup}`);
 
@@ -970,9 +968,7 @@ Deno.serve(async (req) => {
 
             if (nhlResp.ok) {
               const nhlResult = await nhlResp.json();
-              const factors: string[] = (nhlResult.factorBreakdown || []).map((f: any) =>
-                factorToInsight(f, team1.shortName, team2.shortName)
-              );
+              const factors: string[] = [];
               for (const w of nhlResult.injuries?.warnings || []) factors.push(w);
               if (nhlResult.writeup) factors.push(`🤖 ${nhlResult.writeup}`);
 
@@ -1024,14 +1020,11 @@ Deno.serve(async (req) => {
         return json({ error: "Invalid bet_type. Use: moneyline, spread, or total" }, 400);
       }
 
-      // Transform raw factors through factorToInsight for clean display
-      const cleanFactors = (analysis.factorBreakdown || []).map((f: any) =>
-        factorToInsight(f, team1.shortName, team2.shortName)
-      );
+      // Keep only special emoji-prefixed lines in factors array; factorBreakdown is passed raw
       const specialLines = (analysis.factors || []).filter((f: string) =>
         f.startsWith("🤖") || f.startsWith("🚨") || f.startsWith("😴") || f.startsWith("💀") || f.startsWith("📐") || f.startsWith("⚡")
       );
-      analysis.factors = [...cleanFactors, ...specialLines];
+      analysis.factors = specialLines;
 
       // Compute odds/EV for generic model
       const modelConf = bet_type === "moneyline" ? analysis.team1_pct : analysis.confidence;

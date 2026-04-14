@@ -1571,7 +1571,16 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
             {(() => {
               const allFactors: string[] = results.factors || [];
               const writeupLine = allFactors.find((f: string) => f.startsWith("🤖"));
-              const insightFactors = allFactors.filter((f: string) => !f.startsWith("🤖"));
+              const specialFactors = allFactors.filter((f: string) => !f.startsWith("🤖") && f.trim().length > 0);
+              const breakdown: any[] = (results.factorBreakdown || [])
+                .slice()
+                .sort((a: any, b: any) => (b.weight || 0) - (a.weight || 0));
+
+              const getBarColor = (score: number) => {
+                if (score >= 55) return "bg-nba-green";
+                if (score <= 45) return "bg-nba-red";
+                return "bg-muted-foreground";
+              };
 
               return (
                 <div className="space-y-3">
@@ -1584,14 +1593,82 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                       <p className="text-xs leading-relaxed text-foreground/90">{writeupLine.replace("🤖 ", "")}</p>
                     </div>
                   )}
-                  <ul className="space-y-0">
-                    {insightFactors.map((f: string, i: number) => (
-                      <li key={i} className="py-2 border-b border-border/30 last:border-0 text-xs leading-relaxed flex items-start gap-2">
-                        <ChevronRight className="w-3 h-3 mt-0.5 shrink-0 text-accent" />
-                        <span>{f}</span>
-                      </li>
-                    ))}
-                  </ul>
+
+                  {breakdown.length > 0 ? (
+                    <div className="space-y-2">
+                      {breakdown.map((f: any, i: number) => {
+                        const t1 = f.team1Score ?? 50;
+                        const t2 = f.team2Score ?? 50;
+                        const advantage = t1 > t2 ? "team1" : t2 > t1 ? "team2" : "even";
+                        const favoredName = advantage === "team1" ? results.team1?.shortName : advantage === "team2" ? results.team2?.shortName : "Even";
+
+                        return (
+                          <div key={i} className="p-2.5 rounded-xl bg-secondary/30 border border-border/20">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-[11px] font-bold text-foreground">{f.label}</span>
+                              {f.weight > 0 && (
+                                <span className="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-accent/10 text-accent">
+                                  {(f.weight * 100).toFixed(0)}% wt
+                                </span>
+                              )}
+                            </div>
+                            <div className="space-y-1.5">
+                              {/* Team 1 bar */}
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-semibold text-muted-foreground w-12 truncate">{results.team1?.shortName}</span>
+                                <div className="flex-1 h-2 bg-card rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full transition-all duration-700 ${getBarColor(t1)}`}
+                                    style={{ width: `${t1}%` }}
+                                  />
+                                </div>
+                                <span className={`text-[10px] font-extrabold w-6 text-right ${getBarColor(t1).replace('bg-', 'text-')}`}>{t1}</span>
+                              </div>
+                              {/* Team 2 bar */}
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-semibold text-muted-foreground w-12 truncate">{results.team2?.shortName}</span>
+                                <div className="flex-1 h-2 bg-card rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full transition-all duration-700 ${getBarColor(t2)}`}
+                                    style={{ width: `${t2}%` }}
+                                  />
+                                </div>
+                                <span className={`text-[10px] font-extrabold w-6 text-right ${getBarColor(t2).replace('bg-', 'text-')}`}>{t2}</span>
+                              </div>
+                            </div>
+                            <div className="mt-1.5 text-[9px] font-semibold text-muted-foreground">
+                              {advantage !== "even" ? (
+                                <span className="text-nba-green">✓ {favoredName} favored</span>
+                              ) : (
+                                <span>Even matchup</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    /* Fallback for old responses without factorBreakdown */
+                    <ul className="space-y-0">
+                      {specialFactors.map((f: string, i: number) => (
+                        <li key={i} className="py-2 border-b border-border/30 last:border-0 text-xs leading-relaxed flex items-start gap-2">
+                          <ChevronRight className="w-3 h-3 mt-0.5 shrink-0 text-accent" />
+                          <span>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {specialFactors.length > 0 && breakdown.length > 0 && (
+                    <div className="space-y-0 pt-2 border-t border-border/20">
+                      {specialFactors.map((f: string, i: number) => (
+                        <div key={i} className="py-1.5 text-xs leading-relaxed flex items-start gap-2">
+                          <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0 text-nba-yellow" />
+                          <span className="text-foreground/80">{f}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })()}
