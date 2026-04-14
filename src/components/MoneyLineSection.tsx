@@ -1611,7 +1611,13 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                         <Sparkles className="w-3 h-3 text-accent" />
                         <span className="text-[9px] font-bold uppercase tracking-widest text-accent">AI Summary</span>
                       </div>
-                      <p className="text-xs leading-relaxed text-foreground/90">{writeupLine.replace("🤖 ", "")}</p>
+                      <p className="text-xs leading-relaxed text-foreground/90">{(() => {
+                        const clean = writeupLine.replace("🤖 ", "").replace(/\*\*/g, "").replace(/^#+\s*/gm, "");
+                        if (clean.length <= 250) return clean;
+                        const cut = clean.slice(0, 250);
+                        const lastDot = cut.lastIndexOf(".");
+                        return lastDot > 80 ? cut.slice(0, lastDot + 1) : cut + "…";
+                      })()}</p>
                     </div>
                   )}
 

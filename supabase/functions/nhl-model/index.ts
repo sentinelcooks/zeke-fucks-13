@@ -527,19 +527,7 @@ async function generateWriteup(prediction: any, betType: string): Promise<string
 
      const prompt = betType === "player_prop"
        ? `You are a sharp NHL analyst. ${goalieInfo} Top matchup factors: ${topFactors}. Injuries: ${injuryInfo}. Write 2-3 sentences about how the team matchup context (goalies, special teams, pace) affects this player prop. Do NOT state a confidence percentage or verdict.`
-       : `You are a sharp NHL betting analyst. Analyze this ${btLabel} prediction.
-
-Confidence: ${prediction.confidence}% | Verdict: ${prediction.verdict}
-${goalieInfo}
-Top factors: ${topFactors}
-Injuries: ${injuryInfo}
-
-Write exactly 3 sections with bold headers. Each section: 2 sentences max.
-1. **Goaltending Edge** — Compare starting goalies, save %, GAA, recent form.
-2. **Special Teams & Matchup** — PP%, PK%, pace, rest, home ice, key injuries.
-3. **Verdict & Risk** — Final call with unit sizing and key risk factor.
-
-Format: **Title**: Analysis text. No bullets. Be assertive.`;
+       : `You are a sharp NHL analyst. ${btLabel} pick: ${prediction.confidence}% confidence, ${prediction.verdict}. ${goalieInfo} Key factors: ${topFactors}. Injuries: ${injuryInfo}. Write ONE short paragraph (2-3 sentences max, under 200 characters). Be direct, no headers, no bullets, no bold text.`;
 
     const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -547,16 +535,22 @@ Format: **Title**: Analysis text. No bullets. Be assertive.`;
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
-          { role: "system", content: "You are an expert NHL betting analyst. Write sharp, data-driven analysis in exactly 3 bold-header sections. Use hockey terminology: save percentage, GAA, puck line, power play, penalty kill, Corsi. Never hedge." },
+          { role: "system", content: "You are a concise NHL analyst. Write a single short paragraph, no markdown formatting, no bold, no headers. Maximum 2-3 sentences." },
           { role: "user", content: prompt },
         ],
-        max_tokens: 600,
+        max_tokens: 200,
       }),
     });
 
     if (!resp.ok) return "";
     const data = await resp.json();
-    return data.choices?.[0]?.message?.content || "";
+    const raw = data.choices?.[0]?.message?.content || "";
+    // Strip markdown and truncate
+    const clean = raw.replace(/\*\*/g, "").replace(/^#+\s*/gm, "").replace(/\n{2,}/g, " ").trim();
+    if (clean.length <= 250) return clean;
+    const cut = clean.slice(0, 250);
+    const lastDot = cut.lastIndexOf(".");
+    return lastDot > 80 ? cut.slice(0, lastDot + 1) : cut + "…";
   } catch { return ""; }
 }
 
