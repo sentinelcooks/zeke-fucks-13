@@ -8,7 +8,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ParlaySlipProvider } from "@/contexts/ParlaySlipContext";
 import DashboardLayout from "./pages/DashboardLayout";
 import NbaPropsPage from "./pages/NbaPropsPage";
-import MlbPredictionsPage from "./pages/MlbPredictionsPage";
+
 import UfcPage from "./pages/UfcPage";
 import ParlayPage from "./pages/ParlayPage";
 import ProfitTrackerPage from "./pages/ProfitTrackerPage";
@@ -88,7 +88,7 @@ function AppRoutes() {
         
         <Route path="games" element={<GamesPage />} />
         <Route path="arbitrage" element={<ArbitragePage />} />
-        <Route path="mlb-predictions" element={<MlbPredictionsPage />} />
+        <Route path="mlb-predictions" element={<Navigate to="/dashboard/moneyline" replace />} />
         <Route path="trends" element={<Navigate to="/dashboard/free-picks" replace />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="legal" element={<LegalPage />} />
