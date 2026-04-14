@@ -11,7 +11,7 @@ import { Search, Loader2, Target, TrendingUp, TrendingDown, Crosshair, Shield, H
 import { searchPlayers, getTeams, analyzeProp, searchUfcFighters, analyzeUfcMatchup } from "@/services/api";
 import { supabase } from "@/integrations/supabase/client";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import OddsComparison from "@/components/OddsComparison";
+
 import { motion, AnimatePresence } from "framer-motion";
 import { useParlaySlip } from "@/contexts/ParlaySlipContext";
 import WrittenAnalysis from "@/components/WrittenAnalysis";
