@@ -2696,14 +2696,22 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
 
   try { result.season_avg = await getSeasonAvg(playerId, cfg); } catch { /* ignore */ }
 
-  // Compute shooting splits from game log (real data)
+  // Compute shooting/scoring zones from game log (real data)
   try {
-    const shootingSplits = computeShootingSplits(games);
-    if (shootingSplits.length > 0) {
-      result.shot_chart = shootingSplits;
+    if (cfg.searchLeague === "nhl") {
+      const nhlZones = computeNhlScoringZones(games);
+      if (nhlZones.length > 0) {
+        result.shot_chart = nhlZones;
+        result.shot_chart_type = "nhl";
+      }
+    } else {
+      const shootingSplits = computeShootingSplits(games);
+      if (shootingSplits.length > 0) {
+        result.shot_chart = shootingSplits;
+      }
     }
   } catch (e) {
-    console.error("Shooting splits error:", e);
+    console.error("Shooting/scoring splits error:", e);
   }
 
   // ── MLB: Use 20-Factor Player Prop Engine ──
