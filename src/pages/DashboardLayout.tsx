@@ -8,7 +8,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { MobileHeader } from "@/components/mobile/MobileHeader";
 
 const routeTitles: Record<string, string> = {
-  "/dashboard/home": "Dashboard",
+  "/dashboard/home": "Sentinel Dashboard",
   "/dashboard/games": "Games",
   "/dashboard/analyze": "Analyze",
   "/dashboard/moneyline": "Lines",
