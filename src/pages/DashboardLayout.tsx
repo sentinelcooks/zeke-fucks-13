@@ -32,6 +32,11 @@ const DashboardLayout = () => {
 
   const title = routeTitles[location.pathname] || "Sentinel";
 
+  // Update browser tab title
+  useEffect(() => {
+    document.title = title === "Dashboard" ? "Sentinel" : `${title} – Sentinel`;
+  }, [title]);
+
   // Tab-switch scroll restore
   const scrollSnapshot = useRef<{ pathname: string; scrollTop: number; timestamp: number } | null>(null);
   const skipNextScrollReset = useRef(false);
