@@ -1,18 +1,26 @@
 
 
-## Plan: Clear Parlay Slip After Saving to History
+## Plan: Filter Odds to Match Requested Line
 
-### What's Changing
+### Problem
+When checking a prop like "Connor McDavid Over 1 Goal", the odds comparison shows books with different lines (e.g., 1.5, 2.5) instead of only books offering the exact line requested. Alt lines above the requested line should never appear.
 
-When a user saves a parlay to history via the "SAVE PARLAY TO HISTORY" button in `ParlayAnalysisResults`, the floating parlay slip widget should automatically clear all legs so it disappears.
+### Solution
+Filter the returned books **client-side** in `OddsComparison.tsx` after fetching. This avoids changing the backend edge function.
 
-### Implementation
+### Logic
+After `setBooks(data.books)`, filter the books array:
+1. **Exact match first**: Keep only books where `book.line === requested line`
+2. **If no exact matches**: Also include books with lines **below** the requested line (alt lines that are easier to hit)
+3. **Never show** books with lines **above** the requested line
 
-**In `src/components/parlay/ParlayAnalysisResults.tsx`:**
+### File Changed
+**`src/components/OddsComparison.tsx`** (~5 lines added in the `fetchOdds` function):
+- After receiving `data.books`, filter: keep entries where `b.line <= line`, preferring exact matches
+- If there are exact-line books, only show those; otherwise fall back to below-line books
 
-1. Import `useParlaySlip` from `@/contexts/ParlaySlipContext`
-2. Destructure `clearSlip` from the hook
-3. After `setSaved(true)` on successful save (line 88), call `clearSlip()` to empty the slip
-
-This is a ~3-line change. No other files need modification — the `FloatingParlaySlip` already hides itself when `legs.length === 0`.
+### What Won't Change
+- No backend/edge function changes
+- No UI design changes
+- Works for all sports (NBA, MLB, NHL, NFL, UFC)
 
