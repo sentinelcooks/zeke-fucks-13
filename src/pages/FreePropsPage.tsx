@@ -511,21 +511,6 @@ const FreePropsPage = () => {
                   </motion.div>
                 )}
 
-                <Section title="AI Analysis">
-                  <div className="space-y-1">
-                    {(results.reasoning || []).map((r: string, i: number) => {
-                      const type = getReasoningType(r);
-                      const dotColor = type === "green" ? "bg-emerald-400" : type === "red" ? "bg-red-400" : type === "yellow" ? "bg-amber-400" : "bg-muted-foreground/55";
-                      return (
-                        <motion.div key={i} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
-                          className="flex items-start gap-3 py-2.5 border-b border-border/10 last:border-0">
-                          <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${dotColor}`} />
-                          <span className="text-[13px] leading-relaxed text-foreground/70">{r}</span>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                </Section>
 
                 {/* Correlated Props */}
                 {prop.sport === "nba" && (
