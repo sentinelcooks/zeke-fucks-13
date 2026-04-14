@@ -1,11 +1,11 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.fd1a37d25cae46559759862d87a0489e',
+  appId: 'app.sentinel.analytics',
   appName: 'Primal Analytics',
   webDir: 'dist',
   server: {
-    url: 'https://fd1a37d2-5cae-4655-9759-862d87a0489e.lovableproject.com?forceHideBadge=true',
+    url: 'https://violet-key-login.lovable.app',
     cleartext: true,
   },
 };
