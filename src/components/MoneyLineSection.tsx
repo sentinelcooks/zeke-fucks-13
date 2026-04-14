@@ -9,6 +9,7 @@ import {
   Trophy,
   Swords,
   ChevronRight,
+  ChevronDown,
   AlertTriangle,
   Home,
   Plane,
@@ -19,6 +20,8 @@ import {
   DollarSign,
   Scale,
   Target,
+  Shield,
+  Crown,
 } from "lucide-react";
 import { Bar } from "react-chartjs-2";
 import {
