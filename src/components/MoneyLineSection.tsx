@@ -389,13 +389,14 @@ function H2HTable({ h2h, team1, team2 }: { h2h: any[]; team1: Team; team2: Team 
 }
 
 /* ── Platform Odds (Real from Odds API) — OddsProjection-style design ── */
-function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType = "moneyline", activeOverUnder = "over" }: { team1: Team; team2: Team; sport?: string; modelProb?: number; activeBetType?: BetType; activeOverUnder?: "over" | "under" }) {
+function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType = "moneyline", activeOverUnder = "over", factorBreakdown }: { team1: Team; team2: Team; sport?: string; modelProb?: number; activeBetType?: BetType; activeOverUnder?: "over" | "under"; factorBreakdown?: any[] }) {
   const { profile } = useAuth();
   const oddsFormat = (profile?.odds_format as "american" | "decimal") || "american";
   const [allMarketData, setAllMarketData] = useState<Record<string, Array<{ name: string; logo: string; abbrev: string; color: string; bookKey: string; t1: string; t2: string; t1Raw: number; t2Raw: number; spread1?: string; spread2?: string; total?: string }>>>({});
   const [loading, setLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);
   const [showExplainer, setShowExplainer] = useState(false);
+  const [showOddsSection, setShowOddsSection] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
