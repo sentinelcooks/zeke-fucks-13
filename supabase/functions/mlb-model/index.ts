@@ -510,7 +510,12 @@ async function generateWriteup(prediction: any, betType: string): Promise<string
     
     if (!resp.ok) return "";
     const data = await resp.json();
-    return data.choices?.[0]?.message?.content || "";
+    const raw = data.choices?.[0]?.message?.content || "";
+    const clean = raw.replace(/\*\*/g, "").replace(/^#+\s*/gm, "").replace(/\n{2,}/g, " ").trim();
+    if (clean.length <= 250) return clean;
+    const cut = clean.slice(0, 250);
+    const lastDot = cut.lastIndexOf(".");
+    return lastDot > 80 ? cut.slice(0, lastDot + 1) : cut + "…";
   } catch { return ""; }
 }
 
