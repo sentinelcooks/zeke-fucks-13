@@ -1898,8 +1898,8 @@ const NbaPropsPage = () => {
               </Section>
 
 
-              <Section title={propType === "3pm" ? "3PT Zones" : propType === "rebounds" ? "Rebound Zones" : propType === "assists" ? "Assist Zones" : "Scoring Zones"} defaultOpen={false}>
-                <ShotChart propType={propType} playerName={player} analysisData={results} />
+              <Section title={sport === "nhl" ? "Scoring Zones" : propType === "3pm" ? "3PT Zones" : propType === "rebounds" ? "Rebound Zones" : propType === "assists" ? "Assist Zones" : "Scoring Zones"} defaultOpen={false}>
+                <ShotChart propType={propType} playerName={player} analysisData={results} sport={sport} />
               </Section>
 
               {results.next_game && (
