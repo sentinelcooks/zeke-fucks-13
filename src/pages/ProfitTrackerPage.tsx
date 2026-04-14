@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Plus, Trash2, TrendingUp, TrendingDown, DollarSign, Download, X,
