@@ -33,7 +33,7 @@ export function HitRateRing({ rate, hits, total, label, delay = 0 }: HitRateRing
       initial={{ opacity: 0, scale: 0.8 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ delay }}
-      className="flex flex-col items-center"
+      className="flex flex-col items-center min-w-0 flex-shrink-0"
     >
       <div className="relative w-20 h-20">
         <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80">
