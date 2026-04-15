@@ -240,10 +240,33 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       });
   }, [user]);
 
-  useEffect(() => {
+  const fetchTodayPicks = useCallback(async () => {
     const today = new Date().toISOString().split("T")[0];
     const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
 
+    const [todayRes, yesterdayRes] = await Promise.all([
+      supabase.from("daily_picks").select("*").eq("pick_date", today).order("hit_rate", { ascending: false }).limit(30),
+      supabase.from("daily_picks").select("*").eq("pick_date", yesterday).order("created_at", { ascending: false }),
+    ]);
+
+    let picks = ((todayRes.data as DailyPick[]) || []).filter(p => p.hit_rate >= 70);
+    if (userSports.length > 0) {
+      picks.sort((a, b) => {
+        const aMatch = userSports.includes(a.sport?.toLowerCase()) ? 1 : 0;
+        const bMatch = userSports.includes(b.sport?.toLowerCase()) ? 1 : 0;
+        if (bMatch !== aMatch) return bMatch - aMatch;
+        return b.hit_rate - a.hit_rate;
+      });
+    } else {
+      picks.sort((a, b) => b.hit_rate - a.hit_rate);
+    }
+    setTodayPicks(picks);
+    setYesterdayPicks((yesterdayRes.data as DailyPick[]) || []);
+    setPicksLoading(false);
+    setLastRefreshed(new Date());
+  }, [userSports]);
+
+  useEffect(() => {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
     if (supabaseUrl && anonKey) {
@@ -253,41 +276,26 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       }).catch(() => {});
     }
 
-    const fetchPicks = (isInitial = false) => {
-      Promise.all([
-        ...(isInitial ? [supabase.from("daily_picks").select("*").eq("pick_date", today).order("hit_rate", { ascending: false }).limit(30)] : []),
-        supabase.from("daily_picks").select("*").eq("pick_date", yesterday).order("created_at", { ascending: false }),
-      ]).then((results) => {
-        if (isInitial) {
-          const todayRes = results[0];
-          const yesterdayRes = results[1];
-          let picks = ((todayRes.data as DailyPick[]) || []).filter(p => p.hit_rate >= 70);
-          if (userSports.length > 0) {
-            picks.sort((a, b) => {
-              const aMatch = userSports.includes(a.sport?.toLowerCase()) ? 1 : 0;
-              const bMatch = userSports.includes(b.sport?.toLowerCase()) ? 1 : 0;
-              if (bMatch !== aMatch) return bMatch - aMatch;
-              return b.hit_rate - a.hit_rate;
-            });
-          } else {
-            picks.sort((a, b) => b.hit_rate - a.hit_rate);
-          }
-          setTodayPicks(picks);
-          setYesterdayPicks((yesterdayRes.data as DailyPick[]) || []);
-          setPicksLoading(false);
-        } else {
-          const yesterdayRes = results[0];
-          setYesterdayPicks((yesterdayRes.data as DailyPick[]) || []);
-        }
-      });
-    };
-
-    fetchPicks(true);
+    fetchTodayPicks();
 
     // Auto-refresh yesterday's results every 60 seconds
-    const interval = setInterval(() => fetchPicks(false), 60000);
+    const interval = setInterval(async () => {
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+      const { data } = await supabase.from("daily_picks").select("*").eq("pick_date", yesterday).order("created_at", { ascending: false });
+      setYesterdayPicks((data as DailyPick[]) || []);
+    }, 60000);
     return () => clearInterval(interval);
-  }, [userSports]);
+  }, [fetchTodayPicks]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await supabase.functions.invoke("daily-picks");
+      await fetchTodayPicks();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchTodayPicks]);
 
   // Fetch player headshots for prop picks only
   useEffect(() => {
