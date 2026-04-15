@@ -1,19 +1,36 @@
 
 
-## Plan: Make All UFC Reasoning Text White
+## Plan: Fix NHL In-Depth Analysis Verdict Contradiction
 
 ### Problem
-Multiple reasoning text elements in the UFC results section appear grey instead of white. The user circled the reasoning text under the "STRONG" badge.
+The AI-generated "Verdict & Risk" section sometimes contradicts the top-level verdict direction (e.g., model says "LEAN OVER" but the writeup says "fade the over"). The CRITICAL instruction only enforces the verdict label ("STRONG PICK", "LEAN", etc.) but doesn't enforce the over/under direction.
+
+### Root Cause
+In `supabase/functions/ai-analysis/index.ts`, the CRITICAL instruction says:
+> "Your final verdict MUST ALIGN with '${verdict}'"
+
+But `verdict` is just "STRONG PICK" or "LEAN" — it doesn't include the direction (OVER/UNDER). The AI sees conflicting data points and picks its own direction.
 
 ### Changes
 
-**`src/pages/UfcPage.tsx`** — 2 lines:
+**`supabase/functions/ai-analysis/index.ts`** — Update all CRITICAL instruction blocks (6 occurrences across prop and moneyline prompts):
 
-1. **Line 252** — Change `text-muted-foreground/50` to `text-white` on round predictions reasoning text.
-2. **Line 392** — Change `text-foreground` to `text-white` on ML Pick reasoning text.
+Replace each instance of:
+```
+CRITICAL: Your final verdict MUST ALIGN with "${verdict}" ...
+```
 
-(Line 339 in the Top Pick card already uses `text-white` — no change needed.)
+With:
+```
+CRITICAL: Your final verdict MUST ALIGN with "${verdict}" and the direction "${overUnder || 'OVER'}" ${line || "N/A"} — if the model says ${overUnder || "OVER"} ${line || "N/A"}, your Verdict & Risk section MUST recommend ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the top-level recommendation or direction.
+```
+
+For moneyline prompts (no overUnder), strengthen to:
+```
+CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Your Verdict & Risk section must echo this exact recommendation — never contradict the top-level verdict. Support the model's pick decisively.
+```
 
 ### Scope
-- 1 file, 2 class name changes
+- 1 file, ~6 line groups updated
+- No frontend changes needed
 
