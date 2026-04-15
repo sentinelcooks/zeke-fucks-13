@@ -23,7 +23,7 @@ function getTextColor(rate: number): string {
 }
 
 export function HitRateRing({ rate, hits, total, label, delay = 0 }: HitRateRingProps) {
-  const radius = 32;
+  const radius = 26;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (rate / 100) * circumference;
   const color = getRingColor(rate);
@@ -35,11 +35,11 @@ export function HitRateRing({ rate, hits, total, label, delay = 0 }: HitRateRing
       transition={{ delay }}
       className="flex flex-col items-center min-w-0 flex-shrink-0"
     >
-      <div className="relative w-20 h-20">
-        <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80">
-          <circle cx="40" cy="40" r={radius} fill="none" stroke="hsl(220, 15%, 12%)" strokeWidth="5" />
+      <div className="relative w-16 h-16">
+        <svg className="w-full h-full -rotate-90" viewBox="0 0 66 66">
+          <circle cx="33" cy="33" r={radius} fill="none" stroke="hsl(220, 15%, 12%)" strokeWidth="5" />
           <motion.circle
-            cx="40" cy="40" r={radius}
+            cx="33" cy="33" r={radius}
             fill="none"
             stroke={color}
             strokeWidth="5"
@@ -51,7 +51,7 @@ export function HitRateRing({ rate, hits, total, label, delay = 0 }: HitRateRing
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className={`text-sm font-black tabular-nums ${getTextColor(rate)}`}>{rate}%</span>
+          <span className={`text-xs font-black tabular-nums ${getTextColor(rate)}`}>{rate}%</span>
         </div>
       </div>
       <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground mt-1.5">{label}</span>
