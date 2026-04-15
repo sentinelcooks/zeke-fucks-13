@@ -234,23 +234,21 @@ function BetSection({ icon, title, predictions }: { icon: React.ReactNode; title
               p.confidence === "lean" ? "border-[hsl(var(--nba-blue)/0.3)] bg-[hsl(var(--nba-blue)/0.06)]" :
               "border-border/20 bg-secondary/20"
             }`}>
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <span className={`text-xs font-extrabold leading-tight ${
-                  p.confidence === "strong" ? "text-nba-green" : p.confidence === "lean" ? "text-[hsl(var(--nba-blue))]" : "text-muted-foreground"
-                }`}>{p.bet}</span>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {p.probability && (
-                    <span className={`text-[11px] font-extrabold ${
-                      p.confidence === "strong" ? "text-nba-green" : p.confidence === "lean" ? "text-[hsl(var(--nba-blue))]" : "text-muted-foreground/60"
-                    }`}>{p.probability}%</span>
-                  )}
-                  <span className={`text-[8px] uppercase font-bold px-1.5 py-0.5 rounded-full ${
-                    p.confidence === "strong" ? "bg-nba-green text-accent-foreground" :
-                    p.confidence === "lean" ? "bg-[hsl(var(--nba-blue))] text-primary-foreground" :
-                    "bg-muted/50 text-muted-foreground/60"
-                  }`}>{p.confidence}</span>
-                </div>
+              <div className="flex items-center gap-1.5 mb-1">
+                {p.probability && (
+                  <span className={`text-[11px] font-extrabold ${
+                    p.confidence === "strong" ? "text-nba-green" : p.confidence === "lean" ? "text-[hsl(var(--nba-blue))]" : "text-muted-foreground/60"
+                  }`}>{p.probability}%</span>
+                )}
+                <span className={`text-[8px] uppercase font-bold px-1.5 py-0.5 rounded-full ${
+                  p.confidence === "strong" ? "bg-nba-green text-accent-foreground" :
+                  p.confidence === "lean" ? "bg-[hsl(var(--nba-blue))] text-primary-foreground" :
+                  "bg-muted/50 text-muted-foreground/60"
+                }`}>{p.confidence}</span>
               </div>
+              <span className={`text-sm font-extrabold block mb-1 ${
+                p.confidence === "strong" ? "text-nba-green" : p.confidence === "lean" ? "text-[hsl(var(--nba-blue))]" : "text-muted-foreground"
+              }`}>{p.bet}</span>
               <p className="text-[10px] text-muted-foreground/50 leading-snug">{p.reasoning}</p>
             </div>
           ))}
