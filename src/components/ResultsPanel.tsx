@@ -19,6 +19,13 @@ interface ResultsPanelProps {
   data: any;
 }
 
+function fmtDate(raw: string) {
+  if (!raw) return "—";
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw;
+  return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
+}
+
 function getHitRateColor(rate: number) {
   if (rate >= 65) return "text-nba-green";
   if (rate >= 50) return "text-nba-blue";
@@ -86,7 +93,7 @@ function HitRateBar({ title, data: hr }: { title: string; data: any }) {
 
 function GameChart({ data }: { data: any }) {
   const games = data.game_log || [];
-  const labels = games.map((g: any) => g.date);
+  const labels = games.map((g: any) => fmtDate(g.date));
   const values = games.map((g: any) => g.stat_value);
   const lineval = data.line;
 
@@ -162,7 +169,7 @@ function GamesTable({ games, line, overUnder, propType }: { games: any[]; line: 
             const isHit = overUnder === "over" ? sv > line : sv < line;
             return (
               <tr key={i} className="border-b border-border hover:bg-secondary/50 transition-colors">
-                <td className="text-center py-2 px-1.5 whitespace-nowrap">{g.date}</td>
+                <td className="text-center py-2 px-1.5 whitespace-nowrap">{fmtDate(g.date)}</td>
                 <td className="text-center py-2 px-1.5 whitespace-nowrap">{g.matchup}</td>
                 <td className={`text-center py-2 px-1.5 ${g.result === "W" ? "text-nba-green" : "text-nba-red"}`}>{g.result}</td>
                 <td className="text-center py-2 px-1.5">{g.MIN}</td>
