@@ -340,6 +340,7 @@ const OnboardingPage = () => {
   const [step, setStep] = useState(0);
   const [dir, setDir] = useState(1);
   const [referral, setReferral] = useState<string | null>(null);
+  const [otherReferralText, setOtherReferralText] = useState("");
   const [sports, setSports] = useState<string[]>([]);
   const [style, setStyle] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -357,7 +358,7 @@ const OnboardingPage = () => {
 
   const saveOnboardingData = () => {
     // Store in localStorage for post-auth save
-    localStorage.setItem("sentinel_onboarding_referral", referral || "");
+    localStorage.setItem("sentinel_onboarding_referral", referral === "Other" && otherReferralText.trim() ? `Other: ${otherReferralText.trim()}` : referral || "");
     localStorage.setItem("sentinel_onboarding_sports", JSON.stringify(sports));
     localStorage.setItem("sentinel_onboarding_style", style || "");
   };
@@ -557,6 +558,19 @@ const OnboardingPage = () => {
                     <Tile key={r.label} emoji={'emoji' in r ? r.emoji : undefined} sportLogo={'icon' in r ? r.icon : undefined} label={r.label} selected={referral === r.label}
                       onClick={() => setReferral(r.label)} idx={i} />
                   ))}
+                  {referral === "Other" && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} transition={{ duration: 0.2 }}>
+                      <input
+                        type="text"
+                        value={otherReferralText}
+                        onChange={(e) => setOtherReferralText(e.target.value)}
+                        placeholder="Tell us where..."
+                        maxLength={100}
+                        autoFocus
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-card/80 border border-primary/40 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      />
+                    </motion.div>
+                  )}
                 </div>
               </motion.div>
             )}
