@@ -25,6 +25,8 @@ interface Game {
   commence_time: string;
   home_team: string;
   away_team: string;
+  home_logo?: string;
+  away_logo?: string;
   status?: string;
   status_detail?: string;
   short_detail?: string;
@@ -634,9 +636,22 @@ const GamesPage = () => {
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold text-muted-foreground/55 uppercase w-8">Away</span>
-            {getTeamLogoUrl(game.away_team, sport as "nba" | "mlb" | "nhl" | "nfl") && (
-              <img src={getTeamLogoUrl(game.away_team, sport as "nba" | "mlb" | "nhl" | "nfl")} alt="" className="w-5 h-5 object-contain" />
-            )}
+            {(() => {
+              const url = game.away_logo || getTeamLogoUrl(game.away_team, sport as "nba" | "mlb" | "nhl" | "nfl");
+              const initials = game.away_team.split(" ").map(w => w[0]).join("").slice(0, 2);
+              return url ? (
+                <img src={url} alt="" className="w-5 h-5 object-contain" onError={(e) => {
+                  const el = e.currentTarget;
+                  const fallback = document.createElement("div");
+                  fallback.className = "w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-muted-foreground shrink-0";
+                  fallback.style.background = "hsla(228,20%,25%,0.6)";
+                  fallback.textContent = initials;
+                  el.parentElement?.replaceChild(fallback, el);
+                }} />
+              ) : (
+                <div className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-muted-foreground shrink-0" style={{ background: "hsla(228,20%,25%,0.6)" }}>{initials}</div>
+              );
+            })()}
             <span className={`text-[13px] font-bold flex-1 truncate ${awayWon ? 'text-[hsl(142,71%,45%)]' : 'text-foreground'}`}>{game.away_team}</span>
             {odds?.awayEV != null && !isEnded && !isLive && (
               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md" style={{ background: evColor(odds.awayEV), color: evTextColor(odds.awayEV) }}>
@@ -654,9 +669,22 @@ const GamesPage = () => {
           <div className="h-px w-full" style={{ background: 'linear-gradient(90deg, transparent, hsla(228,18%,15%,0.5), transparent)' }} />
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold text-muted-foreground/55 uppercase w-8">Home</span>
-            {getTeamLogoUrl(game.home_team, sport as "nba" | "mlb" | "nhl" | "nfl") && (
-              <img src={getTeamLogoUrl(game.home_team, sport as "nba" | "mlb" | "nhl" | "nfl")} alt="" className="w-5 h-5 object-contain" />
-            )}
+            {(() => {
+              const url = game.home_logo || getTeamLogoUrl(game.home_team, sport as "nba" | "mlb" | "nhl" | "nfl");
+              const initials = game.home_team.split(" ").map(w => w[0]).join("").slice(0, 2);
+              return url ? (
+                <img src={url} alt="" className="w-5 h-5 object-contain" onError={(e) => {
+                  const el = e.currentTarget;
+                  const fallback = document.createElement("div");
+                  fallback.className = "w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-muted-foreground shrink-0";
+                  fallback.style.background = "hsla(228,20%,25%,0.6)";
+                  fallback.textContent = initials;
+                  el.parentElement?.replaceChild(fallback, el);
+                }} />
+              ) : (
+                <div className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-muted-foreground shrink-0" style={{ background: "hsla(228,20%,25%,0.6)" }}>{initials}</div>
+              );
+            })()}
             <span className={`text-[13px] font-bold flex-1 truncate ${homeWon ? 'text-[hsl(142,71%,45%)]' : 'text-foreground'}`}>{game.home_team}</span>
             {odds?.homeEV != null && !isEnded && !isLive && (
               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md" style={{ background: evColor(odds.homeEV), color: evTextColor(odds.homeEV) }}>
