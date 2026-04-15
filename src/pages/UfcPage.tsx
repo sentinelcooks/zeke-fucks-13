@@ -331,12 +331,12 @@ function MatchupResults({ data }: { data: any }) {
             boxShadow: best_bet?.confidence === "strong" ? '0 0 24px hsla(var(--nba-green), 0.15)' : 'none',
           }}>
           <Trophy className={`w-5 h-5 mb-1 ${confidenceColor(best_bet?.confidence)}`} />
-          <span className="text-[8px] uppercase tracking-wider text-muted-foreground mb-0.5">Top Pick</span>
+          <span className="text-[8px] uppercase tracking-wider text-white/70 mb-0.5">Top Pick</span>
           <div className={`text-xs font-extrabold leading-tight ${confidenceColor(best_bet?.confidence)}`}>{best_bet?.bet}</div>
           {best_bet?.probability && (
             <div className={`text-lg font-extrabold ${confidenceColor(best_bet?.confidence)}`}>{best_bet.probability}%</div>
           )}
-          <p className="text-[8px] text-white mt-0.5 leading-snug line-clamp-3">{best_bet?.reasoning}</p>
+          <p className="text-[8px] text-white/90 mt-0.5 leading-snug line-clamp-3">{best_bet?.reasoning}</p>
         </div>
 
         {/* Fighter 2 */}
