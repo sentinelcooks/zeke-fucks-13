@@ -2787,7 +2787,7 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
   // AI Injury Impact Analysis
   const injuryInsights = analyzeInjuryImpact(
     player.position, player.full_name,
-    teammateInjuries, opponentInjuries, propType
+    teammateInjuries, opponentInjuries, propType, sport
   );
 
   // Cross-reference: analyze player's performance in games without key injured teammates
