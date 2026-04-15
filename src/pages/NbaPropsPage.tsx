@@ -813,7 +813,7 @@ const NbaPropsPage = () => {
                 key={s.value}
                 onClick={() => setLinesSport(s.value as any)}
                 whileTap={{ scale: 0.96 }}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl text-[11px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden ${
+                className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-[13px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden ${
                   active ? "text-white" : "text-muted-foreground/55 hover:text-muted-foreground/50"
                 }`}
                 style={active ? {
@@ -821,7 +821,7 @@ const NbaPropsPage = () => {
                   boxShadow: `0 4px 16px -2px ${s.color}55`,
                 } : {}}
               >
-                <img src={s.logo} alt={s.label} className={`h-5 w-5 object-contain ${active ? '' : 'opacity-70'}`} />
+                <img src={s.logo} alt={s.label} className={`h-7 w-7 object-contain ${active ? '' : 'opacity-70'}`} />
                 <span className="relative z-10">{s.label}</span>
               </motion.button>
             );
