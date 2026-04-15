@@ -144,7 +144,7 @@ const Tile = ({ label, emoji, icon: Icon, sub, selected, onClick, idx, sportLogo
     transition={stagger(idx, 0.05)}
     onClick={onClick}
     whileTap={{ scale: 0.96 }}
-    className={`relative w-full flex items-center gap-3.5 px-4 py-3.5 rounded-xl text-left transition-all duration-300
+    className={`relative w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-left transition-all duration-300
       ${selected
         ? "bg-primary/[0.12] border border-primary/40 shadow-[0_0_24px_hsla(250,76%,62%,0.12)]"
         : "bg-card/80 border border-border/60 hover:border-primary/25 hover:bg-card"}`}
@@ -172,7 +172,7 @@ const Tile = ({ label, emoji, icon: Icon, sub, selected, onClick, idx, sportLogo
 
 /* ═══ Section header ═══ */
 const Header = ({ emoji, title, sub }: { emoji?: string; title: string; sub: string }) => (
-  <div className="text-center mb-8">
+  <div className="text-center mb-5">
     {emoji && (
       <motion.div initial={{ scale: 0, rotate: -20 }} animate={{ scale: 1, rotate: 0 }}
         transition={{ type: "spring", stiffness: 400, damping: 15 }}
@@ -387,7 +387,7 @@ const OnboardingPage = () => {
   const isRevealStep = false;
 
   return (
-    <div className="min-h-[100dvh] bg-background flex flex-col items-center relative overflow-hidden">
+    <div className="h-[100dvh] bg-background flex flex-col items-center relative overflow-hidden">
       {/* Ambient glow */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-[-30%] left-1/2 -translate-x-1/2 w-[700px] h-[700px] rounded-full opacity-[0.04]"
@@ -433,7 +433,7 @@ const OnboardingPage = () => {
       </AnimatePresence>
 
       {/* Content */}
-      <div className="flex-1 flex items-center justify-center w-full px-6 py-6 relative z-10">
+      <div className="flex-1 flex items-center justify-center w-full px-6 py-6 relative z-10 overflow-y-auto min-h-0">
         <div className="w-full max-w-md">
           <AnimatePresence mode="wait" custom={dir}>
 
@@ -552,7 +552,7 @@ const OnboardingPage = () => {
             {current === "referral" && (
               <motion.div key="referral" custom={dir} variants={slideVariants} initial="enter" animate="center" exit="exit" transition={pageTransition}>
                 <Header emoji="👋" title="Where'd you find us?" sub="Help us understand where our community grows" />
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {REFERRALS.map((r, i) => (
                     <Tile key={r.label} emoji={'emoji' in r ? r.emoji : undefined} sportLogo={'icon' in r ? r.icon : undefined} label={r.label} selected={referral === r.label}
                       onClick={() => setReferral(r.label)} idx={i} />
