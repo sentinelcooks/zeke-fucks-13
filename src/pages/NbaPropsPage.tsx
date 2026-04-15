@@ -1910,7 +1910,7 @@ const NbaPropsPage = () => {
                 </motion.button>
               )}
 
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 <StatPill label="Season" value={results.season_hit_rate?.avg ?? "--"} delay={0.2} />
                 <StatPill label="L10" value={results.last_10?.avg ?? "--"} delay={0.25} />
                 <StatPill label="L5" value={results.last_5?.avg ?? "--"} delay={0.3} />
@@ -1952,7 +1952,7 @@ const NbaPropsPage = () => {
               )}
 
               <Section title="Hit Rates" icon={<Target className="w-3.5 h-3.5" />}>
-                <div className="flex justify-around overflow-x-auto scrollbar-hide py-2">
+                <div className="flex justify-center gap-4 overflow-x-auto scrollbar-hide py-2">
                   <HitRateRing rate={results.season_hit_rate?.rate || 0} hits={results.season_hit_rate?.hits || 0} total={results.season_hit_rate?.total || 0} label="Season" delay={0} />
                   <HitRateRing rate={results.last_10?.rate || 0} hits={results.last_10?.hits || 0} total={results.last_10?.total || 0} label="L10" delay={0.1} />
                   <HitRateRing rate={results.last_5?.rate || 0} hits={results.last_5?.hits || 0} total={results.last_5?.total || 0} label="L5" delay={0.2} />
