@@ -286,18 +286,17 @@ const GamesPage = () => {
       if (s === "ufc") {
         await Promise.all([fetchUfcEvents(controller.signal), fetchOdds(s, controller.signal)]);
       } else {
-      }
-      const [{ data, error: fnError }] = await Promise.all([
-        supabase.functions.invoke("games-schedule", {
-          body: { sport: SPORT_MAP[s as Exclude<SportFilter, "ufc">] },
-        }),
-        fetchOdds(s, controller.signal),
-      ]);
-      // If this request was superseded by a newer one, discard the result
-      if (controller.signal.aborted) return;
-      if (fnError) throw fnError;
-      if (data?.error) { setError(data.error); setGames([]); }
-      else setGames(Array.isArray(data) ? data : []);
+        const [{ data, error: fnError }] = await Promise.all([
+          supabase.functions.invoke("games-schedule", {
+            body: { sport: SPORT_MAP[s as Exclude<SportFilter, "ufc">] },
+          }),
+          fetchOdds(s, controller.signal),
+        ]);
+        // If this request was superseded by a newer one, discard the result
+        if (controller.signal.aborted) return;
+        if (fnError) throw fnError;
+        if (data?.error) { setError(data.error); setGames([]); }
+        else setGames(Array.isArray(data) ? data : []);
       }
     } catch (e: any) {
       if (controller.signal.aborted) return;
