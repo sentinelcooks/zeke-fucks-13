@@ -1872,7 +1872,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
 
       {/* Footer badges */}
       <div className="flex items-center justify-center gap-3 pt-2 pb-4">
-        {["ESPN DATA", "REAL-TIME ODDS", "AI INSIGHTS"].map((badge) => (
+        {["ADVANCED REAL-TIME DATA", "REAL-TIME ODDS", "AI INSIGHTS"].map((badge) => (
           <span key={badge} className="text-[7px] font-bold uppercase tracking-[0.2em] text-muted-foreground/65 flex items-center gap-1">
             <span className="text-muted-foreground/10">•</span> {badge}
           </span>

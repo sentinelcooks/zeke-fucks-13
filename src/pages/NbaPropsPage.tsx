@@ -1007,7 +1007,7 @@ const NbaPropsPage = () => {
             </div>
 
             <div className="flex items-center justify-center gap-3 pt-0.5">
-              {["ESPN Data", "UFCStats", "AI Insights"].map((label, i) => (
+              {["Advanced Real-Time Data", "UFCStats", "AI Insights"].map((label, i) => (
                 <div key={label} className="flex items-center gap-1.5">
                   {i > 0 && <div className="w-px h-2 bg-border/15" />}
                   <div className="w-1 h-1 rounded-full bg-accent/15" />
@@ -1404,7 +1404,7 @@ const NbaPropsPage = () => {
 
           {/* Data sources footer */}
           <div className="flex items-center justify-center gap-3 pt-0.5">
-            {["ESPN Data", "Real-Time Odds", "AI Insights"].map((label, i) => (
+            {["Advanced Real-Time Data", "Real-Time Odds", "AI Insights"].map((label, i) => (
               <div key={label} className="flex items-center gap-1.5">
                 {i > 0 && <div className="w-px h-2 bg-border/15" />}
                 <div className="w-1 h-1 rounded-full bg-accent/15" />
