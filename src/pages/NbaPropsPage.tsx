@@ -960,21 +960,45 @@ const NbaPropsPage = () => {
                   <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
                     className="absolute left-4 right-4 mt-2 rounded-2xl overflow-hidden z-50 shadow-2xl shadow-black/60 max-h-[240px] overflow-y-auto"
                     style={{ background: 'linear-gradient(127deg, hsla(228,30%,12%,0.98) 19%, hsla(228,30%,6%,0.95) 77%)', border: '1px solid hsla(228,30%,22%,0.3)', backdropFilter: 'blur(20px)' }}>
+                    <div className="px-4 py-2.5 border-b border-border/20">
+                      <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">Fighters</span>
+                    </div>
                     {ufcSuggestions1.map((s, i) => (
                       <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
                         onClick={() => { setFighter1(s.name); setShowUfcSug1(false); }}
-                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-accent/6 border-b border-border/10 last:border-0">
-                        {s.headshot ? (
-                          <img src={s.headshot} alt={s.name} className="w-8 h-8 rounded-full object-cover bg-input shrink-0" />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-input shrink-0 flex items-center justify-center text-muted-foreground/40 text-[10px] font-bold">
-                            {s.name?.charAt(0)}
-                          </div>
-                        )}
-                        <div className="flex flex-col">
-                          <span className="text-[13px] font-bold text-foreground">{s.name}</span>
-                          {s.record && <span className="text-[10px] text-muted-foreground/65">{s.record}</span>}
+                        className="flex items-center gap-3.5 px-4 py-3 cursor-pointer hover:bg-accent/6 active:bg-accent/10 transition-all border-b border-border/10 last:border-0 group">
+                        <div className="relative w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 group-hover:ring-1 group-hover:ring-accent/20 transition-all" style={{
+                          background: 'linear-gradient(135deg, hsla(228,30%,18%,1), hsla(228,30%,10%,1))',
+                          border: '1px solid hsla(228,30%,22%,0.3)',
+                        }}>
+                          {s.headshot ? (
+                            <>
+                              <img src={s.headshot} alt={s.name} className="w-full h-full object-cover object-top"
+                                onError={(e) => { 
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                  const parent = (e.target as HTMLImageElement).parentElement;
+                                  const fallback = parent?.querySelector('[data-fallback]');
+                                  if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                }} />
+                              <div data-fallback className="absolute inset-0 items-center justify-center" style={{ display: 'none' }}>
+                                <span className="text-xs font-black text-muted-foreground/45">{s.name.split(" ").map((n: string) => n[0]).join("")}</span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="text-xs font-black text-muted-foreground/45">{s.name.split(" ").map((n: string) => n[0]).join("")}</span>
+                            </div>
+                          )}
                         </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-bold text-foreground truncate leading-tight">{s.name}</p>
+                          {s.record && (
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-[10px] font-bold text-accent/70 bg-accent/8 px-1.5 py-0.5 rounded-md leading-none">{s.record}</span>
+                            </div>
+                          )}
+                        </div>
+                        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/45 -rotate-90 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </motion.div>
                     ))}
                   </motion.div>
@@ -1029,21 +1053,45 @@ const NbaPropsPage = () => {
                   <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
                     className="absolute left-4 right-4 mt-2 rounded-2xl overflow-hidden z-50 shadow-2xl shadow-black/60 max-h-[240px] overflow-y-auto"
                     style={{ background: 'linear-gradient(127deg, hsla(228,30%,12%,0.98) 19%, hsla(228,30%,6%,0.95) 77%)', border: '1px solid hsla(228,30%,22%,0.3)', backdropFilter: 'blur(20px)' }}>
+                    <div className="px-4 py-2.5 border-b border-border/20">
+                      <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">Fighters</span>
+                    </div>
                     {ufcSuggestions2.map((s, i) => (
                       <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
                         onClick={() => { setFighter2(s.name); setShowUfcSug2(false); }}
-                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-accent/6 border-b border-border/10 last:border-0">
-                        {s.headshot ? (
-                          <img src={s.headshot} alt={s.name} className="w-8 h-8 rounded-full object-cover bg-input shrink-0" />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-input shrink-0 flex items-center justify-center text-muted-foreground/40 text-[10px] font-bold">
-                            {s.name?.charAt(0)}
-                          </div>
-                        )}
-                        <div className="flex flex-col">
-                          <span className="text-[13px] font-bold text-foreground">{s.name}</span>
-                          {s.record && <span className="text-[10px] text-muted-foreground/65">{s.record}</span>}
+                        className="flex items-center gap-3.5 px-4 py-3 cursor-pointer hover:bg-accent/6 active:bg-accent/10 transition-all border-b border-border/10 last:border-0 group">
+                        <div className="relative w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 group-hover:ring-1 group-hover:ring-accent/20 transition-all" style={{
+                          background: 'linear-gradient(135deg, hsla(228,30%,18%,1), hsla(228,30%,10%,1))',
+                          border: '1px solid hsla(228,30%,22%,0.3)',
+                        }}>
+                          {s.headshot ? (
+                            <>
+                              <img src={s.headshot} alt={s.name} className="w-full h-full object-cover object-top"
+                                onError={(e) => { 
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                  const parent = (e.target as HTMLImageElement).parentElement;
+                                  const fallback = parent?.querySelector('[data-fallback]');
+                                  if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                }} />
+                              <div data-fallback className="absolute inset-0 items-center justify-center" style={{ display: 'none' }}>
+                                <span className="text-xs font-black text-muted-foreground/45">{s.name.split(" ").map((n: string) => n[0]).join("")}</span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="text-xs font-black text-muted-foreground/45">{s.name.split(" ").map((n: string) => n[0]).join("")}</span>
+                            </div>
+                          )}
                         </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-bold text-foreground truncate leading-tight">{s.name}</p>
+                          {s.record && (
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-[10px] font-bold text-accent/70 bg-accent/8 px-1.5 py-0.5 rounded-md leading-none">{s.record}</span>
+                            </div>
+                          )}
+                        </div>
+                        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/45 -rotate-90 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </motion.div>
                     ))}
                   </motion.div>
