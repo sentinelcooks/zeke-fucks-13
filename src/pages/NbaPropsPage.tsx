@@ -2183,6 +2183,23 @@ const NbaPropsPage = () => {
                                 <motion.button
                                   whileTap={{ scale: 0.85 }}
                                   onClick={() => {
+                                    setPlayer(c.correlated_player);
+                                    setPropType(c.correlated_prop);
+                                    setOverUnder("over");
+                                    setLine("");
+                                    const cats = sport === "mlb" ? MLB_PROP_CATEGORIES : sport === "nhl" ? NHL_PROP_CATEGORIES : NBA_PROP_CATEGORIES;
+                                    const matchCat = cats.find(cat => cat.props.some(p => p.value === c.correlated_prop));
+                                    if (matchCat) setActiveCategory(matchCat.category);
+                                    setTimeout(() => handleAnalyze(), 150);
+                                    resultsRef.current?.scrollIntoView({ behavior: "smooth" });
+                                  }}
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors bg-white/5 text-muted-foreground/65 hover:text-primary hover:bg-primary/10"
+                                >
+                                  <Search className="w-3.5 h-3.5" />
+                                </motion.button>
+                                <motion.button
+                                  whileTap={{ scale: 0.85 }}
+                                  onClick={() => {
                                     if (isInSlip) {
                                       setParlaySlip(prev => prev.filter(s => !(s.player === c.correlated_player && s.prop === c.correlated_prop)));
                                     } else {
