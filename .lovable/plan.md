@@ -1,36 +1,22 @@
 
 
-## Plan: Fix NHL In-Depth Analysis Verdict Contradiction
+## Plan: Fix Hit Rate Rings Clipping Off Screen
 
 ### Problem
-The AI-generated "Verdict & Risk" section sometimes contradicts the top-level verdict direction (e.g., model says "LEAN OVER" but the writeup says "fade the over"). The CRITICAL instruction only enforces the verdict label ("STRONG PICK", "LEAN", etc.) but doesn't enforce the over/under direction.
-
-### Root Cause
-In `supabase/functions/ai-analysis/index.ts`, the CRITICAL instruction says:
-> "Your final verdict MUST ALIGN with '${verdict}'"
-
-But `verdict` is just "STRONG PICK" or "LEAN" — it doesn't include the direction (OVER/UNDER). The AI sees conflicting data points and picks its own direction.
+5 rings at 80px each (400px total) plus gaps exceed the viewport width on mobile (320-430px), causing the last 1-2 rings to clip off-screen.
 
 ### Changes
 
-**`supabase/functions/ai-analysis/index.ts`** — Update all CRITICAL instruction blocks (6 occurrences across prop and moneyline prompts):
+**`src/components/mobile/HitRateRing.tsx`**:
+- Reduce ring size from `w-20 h-20` to `w-16 h-16`, and SVG radius from 32 to 26 accordingly.
+- Reduce percentage text from `text-sm` to `text-xs`.
 
-Replace each instance of:
-```
-CRITICAL: Your final verdict MUST ALIGN with "${verdict}" ...
-```
+**`src/pages/NbaPropsPage.tsx`** (line 1954):
+- Change container from `flex justify-between gap-3 px-1` to `flex justify-between gap-1 px-0` to minimize wasted space.
 
-With:
-```
-CRITICAL: Your final verdict MUST ALIGN with "${verdict}" and the direction "${overUnder || 'OVER'}" ${line || "N/A"} — if the model says ${overUnder || "OVER"} ${line || "N/A"}, your Verdict & Risk section MUST recommend ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the top-level recommendation or direction.
-```
+**`src/pages/FreePropsPage.tsx`** (line 369):
+- Apply the same tighter container styling for consistency.
 
-For moneyline prompts (no overUnder), strengthen to:
-```
-CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Your Verdict & Risk section must echo this exact recommendation — never contradict the top-level verdict. Support the model's pick decisively.
-```
-
-### Scope
-- 1 file, ~6 line groups updated
-- No frontend changes needed
+### Result
+All 5 rings fit within 320px screens without clipping.
 
