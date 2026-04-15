@@ -437,6 +437,13 @@ const GamesPage = () => {
     }
   };
 
+  // Cache current sport data whenever it changes
+  useEffect(() => {
+    if (!loading && !error) {
+      sportCache.current[sport] = { games, ufcEvents, oddsMap };
+    }
+  }, [games, ufcEvents, oddsMap, loading, error, sport]);
+
   useEffect(() => { fetchGames(sport); }, [sport]);
 
   // Auto-refresh: 10s when live games exist, 60s otherwise — silent to avoid spinner flicker
