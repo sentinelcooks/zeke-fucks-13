@@ -336,7 +336,7 @@ function MatchupResults({ data }: { data: any }) {
           {best_bet?.probability && (
             <div className={`text-lg font-extrabold ${confidenceColor(best_bet?.confidence)}`}>{best_bet.probability}%</div>
           )}
-          <p className="text-[8px] text-foreground mt-0.5 leading-snug line-clamp-3">{best_bet?.reasoning}</p>
+          <p className="text-[8px] text-white mt-0.5 leading-snug line-clamp-3">{best_bet?.reasoning}</p>
         </div>
 
         {/* Fighter 2 */}
