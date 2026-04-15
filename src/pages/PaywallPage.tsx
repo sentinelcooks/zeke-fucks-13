@@ -153,13 +153,40 @@ const FEATURES: Feature[] = [
     label: "Profit Tracker & Analytics",
     description: "Track every play, see your P&L calendar, and share your results.",
     preview: (
-      <div className="grid grid-cols-7 gap-0.5">
-        {[1, 1, -1, 1, 0, 1, -1, 1, 1, 1, -1, 1, 1, 0, -1, 1, 1, 1, -1, 1, 1].map((v, i) => (
-          <div
-            key={i}
-            className={`w-4 h-4 rounded-sm ${v > 0 ? "bg-green-500/40" : v < 0 ? "bg-red-500/40" : "bg-muted/30"}`}
-          />
-        ))}
+      <div className="space-y-2">
+        {/* Mini stats */}
+        <div className="flex gap-1 justify-between">
+          {[{ l: "Win Rate", v: "67%" }, { l: "Profit", v: "+$482" }, { l: "ROI", v: "+12.3%" }].map(s => (
+            <div key={s.l} className="flex-1 text-center rounded-md bg-muted/50 py-1 px-1">
+              <div className="text-[8px] text-muted-foreground">{s.l}</div>
+              <div className="text-[10px] font-bold text-green-400">{s.v}</div>
+            </div>
+          ))}
+        </div>
+        {/* P&L Calendar */}
+        <div className="grid grid-cols-7 gap-[3px]">
+          {["S","M","T","W","T","F","S"].map((d,i) => (
+            <div key={i} className="text-[7px] text-muted-foreground/50 text-center font-medium">{d}</div>
+          ))}
+          {[0,0,3,2,1,-1,2, 3,-2,1,0,2,-1,3, 1,2,-1,3,2,1,-2].map((v, i) => (
+            <div
+              key={i}
+              className={`w-full aspect-square rounded-sm ${
+                v > 2 ? "bg-green-500/60" : v > 0 ? "bg-green-500/30" : v === 0 ? "bg-muted/20" : v > -2 ? "bg-red-500/30" : "bg-red-500/50"
+              }`}
+            />
+          ))}
+        </div>
+        {/* Sparkline */}
+        <div className="flex items-end gap-[2px] h-5 px-1">
+          {[12,8,-5,15,6,-3,18,10,-7,14].map((v, i) => (
+            <div
+              key={i}
+              className={`flex-1 rounded-sm ${v > 0 ? "bg-green-500/50" : "bg-red-500/40"}`}
+              style={{ height: `${Math.abs(v) / 18 * 100}%` }}
+            />
+          ))}
+        </div>
       </div>
     ),
   },
