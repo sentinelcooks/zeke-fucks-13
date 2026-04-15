@@ -231,7 +231,9 @@ async function analyzeGameBets(
       const analyzePath = "/analyze";
       // moneyline-api/analyze expects team1/team2; mlb-model/nhl-model expect team1_id/team2_id
       const bodyPayload = modelEndpoint === "moneyline-api"
-        ? { team1: game.home, team2: game.away, bet_type: betType, sport: game.sport }
+        ? { team1: game.home, team2: game.away, bet_type: betType, sport: game.sport,
+            ...(betType === "spread" ? { spread_line: 0 } : {}),
+            ...(betType === "total" ? { total_line: 210 } : {}) }
         : { team1_id: game.homeId, team2_id: game.awayId, bet_type: betType, game_id: game.gameId };
       console.log(`  Calling ${modelEndpoint}${analyzePath} for ${game.away}@${game.home} (${betType})`);
       const resp = await fetch(`${supabaseUrl}/functions/v1/${modelEndpoint}${analyzePath}`, {
