@@ -623,15 +623,16 @@ Deno.serve(async (req) => {
       console.log(`Got ${propSuggestions.length} lineup-based prop suggestions (${Math.round((Date.now() - startTime) / 1000)}s elapsed)`);
 
       // Analyze props through model
-      for (let i = 0; i < propSuggestions.length && i < 12; i += 4) {
+      for (let i = 0; i < propSuggestions.length && i < 12; i += 2) {
         if (isTimedOut()) { console.log("⏱️ Timeout approaching, stopping prop analysis"); break; }
-        const batch = propSuggestions.slice(i, i + 4);
+        const batch = propSuggestions.slice(i, i + 2);
         const results = await Promise.allSettled(
           batch.map(pl =>
-            analyzePlayerProp(pl.name, pl.prop_type, pl.line, pl.direction, pl.opponent, pl.sport, supabaseUrl, serviceKey)
+            retryWithBackoff(() => analyzePlayerProp(pl.name, pl.prop_type, pl.line, pl.direction, pl.opponent, pl.sport, supabaseUrl, serviceKey), 2, `prop-${pl.name}`)
               .then(result => ({ pl, result }))
           )
         );
+        await delay(1500);
 
         for (const r of results) {
           if (r.status !== "fulfilled" || !r.value.result) continue;
