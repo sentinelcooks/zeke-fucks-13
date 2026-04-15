@@ -2187,7 +2187,7 @@ const NbaPropsPage = () => {
                                     setPropType(c.correlated_prop);
                                     setOverUnder("over");
                                     setLine("");
-                                    const cats = sport === "mlb" ? MLB_PROP_CATEGORIES : sport === "nhl" ? NHL_PROP_CATEGORIES : NBA_PROP_CATEGORIES;
+                                    const cats = NBA_PROP_CATEGORIES;
                                     const matchCat = cats.find(cat => cat.props.some(p => p.value === c.correlated_prop));
                                     if (matchCat) setActiveCategory(matchCat.category);
                                     setTimeout(() => handleAnalyze(), 150);
