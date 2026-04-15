@@ -8,6 +8,25 @@ const corsHeaders = {
 
 const AI_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
+// ── Retry with exponential backoff for rate-limited calls ──
+async function retryWithBackoff<T>(fn: () => Promise<T>, maxRetries = 3, label = ""): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (e: any) {
+      const isRateLimit = e?.message?.includes?.("RateLimitError") || e?.message?.includes?.("429") || e?.status === 429;
+      if (!isRateLimit || attempt === maxRetries) throw e;
+      const waitMs = Math.pow(2, attempt + 1) * 1000 + Math.random() * 1000;
+      console.warn(`⏳ Rate limited${label ? ` (${label})` : ""}, retry ${attempt + 1}/${maxRetries} in ${Math.round(waitMs / 1000)}s`);
+      await new Promise(r => setTimeout(r, waitMs));
+    }
+  }
+  throw new Error("retryWithBackoff exhausted");
+}
+
+// ── Delay helper ──
+const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+
 const ESPN_SPORTS: Record<string, { sport: string; league: string }> = {
   nba: { sport: "basketball", league: "nba" },
   mlb: { sport: "baseball", league: "mlb" },
