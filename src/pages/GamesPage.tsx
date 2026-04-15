@@ -839,8 +839,8 @@ const GamesPage = () => {
       </div>
       <div className="grid grid-cols-[auto_1fr_auto_1fr_auto] items-center gap-1.5 mt-5 pr-1">
         <FighterAvatar id={fight.fighter1Id} name={fight.fighter1} />
-        <div className="min-w-0 overflow-hidden">
-          <span className="text-[11px] font-bold text-foreground truncate block">{fight.fighter1}</span>
+        <div className="min-w-0">
+          <span className="text-[11px] font-bold text-foreground block leading-tight">{fight.fighter1}</span>
           {fightOdds.f1ML != null && (
             <div className="flex items-center gap-1 mt-0.5">
               <span className="text-[10px] font-bold" style={{ color: mlColor(fightOdds.f1ML) }}>{fmt(fightOdds.f1ML)}</span>
@@ -853,8 +853,8 @@ const GamesPage = () => {
           )}
         </div>
         <span className="text-[10px] font-extrabold text-muted-foreground/50 justify-self-center px-1">VS</span>
-        <div className="min-w-0 overflow-hidden text-right">
-          <span className="text-[11px] font-bold text-foreground truncate block">{fight.fighter2}</span>
+        <div className="min-w-0 text-right">
+          <span className="text-[11px] font-bold text-foreground block leading-tight">{fight.fighter2}</span>
           {fightOdds.f2ML != null && (
             <div className="flex items-center justify-end gap-1 mt-0.5">
               {fightOdds.f2EV != null && (
