@@ -112,9 +112,8 @@ Model Confidence: ${confidence}%
 Data points:
 - ${dataPoints || "No additional data"}${injurySection}${teammatesSection}
 
-CRITICAL: Your final verdict MUST ALIGN with "${verdict}" (confidence: ${confidence}%).
+CRITICAL: Your final verdict MUST ALIGN with "${verdict}" and the direction "${overUnder || 'OVER'}" ${line || "N/A"}. If the model says ${overUnder || "OVER"} ${line || "N/A"}, your Verdict & Risk section MUST recommend ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the top-level recommendation or direction.
 If the verdict is "DO NOT BET" or "RISKY", do NOT recommend betting. If it's "STRONG PICK", be assertive.
-Support the model — do NOT contradict it.
 
 ${formatRule}
 
@@ -132,9 +131,8 @@ Model Confidence: ${confidence}%
 Data points:
 - ${dataPoints || "No additional data"}${injurySection}${teammatesSection}
 
-CRITICAL: Your final verdict MUST ALIGN with "${verdict}" (confidence: ${confidence}%).
+CRITICAL: Your final verdict MUST ALIGN with "${verdict}" and the direction "${overUnder || 'OVER'}" ${line || "N/A"}. If the model says ${overUnder || "OVER"} ${line || "N/A"}, your Verdict & Risk section MUST recommend ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the top-level recommendation or direction.
 If the verdict is "DO NOT BET" or "RISKY", do NOT recommend betting. If it's "STRONG PICK", be assertive.
-Support the model — do NOT contradict it.
 
 ${formatRule}
 
@@ -154,9 +152,8 @@ Sport: ${sport || "nba"}
 Data points:
 - ${dataPoints || "No additional data"}${injurySection}${teammatesSection}
 
-CRITICAL: Your final verdict MUST ALIGN with "${verdict}" (confidence: ${confidence}%).
+CRITICAL: Your final verdict MUST ALIGN with "${verdict}" and the direction "${overUnder || 'OVER'}" ${line || "N/A"}. If the model says ${overUnder || "OVER"} ${line || "N/A"}, your Verdict & Risk section MUST recommend ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the top-level recommendation or direction.
 If the verdict is "DO NOT BET" or "RISKY", do NOT recommend betting. If it's "STRONG PICK", be assertive.
-Support the model — do NOT contradict it.
 
 ${formatRule}
 
@@ -255,7 +252,7 @@ Model Confidence: ${confidence}%
 Key factors from our model:
 - ${dataPoints || "No additional data"}${injuryPromptSection}
 
-CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Support the model's pick — do NOT contradict it.
+CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Your Verdict & Risk section must echo this exact recommendation — never contradict the top-level verdict. Support the model's pick decisively.
 
 ${formatRule}
 
@@ -287,7 +284,7 @@ Model Confidence: ${confidence}%
 Key factors from our model:
 - ${dataPoints || "No additional data"}${injuryPromptSection}
 
-CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Support the model's pick — do NOT contradict it.
+CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Your Verdict & Risk section must echo this exact recommendation — never contradict the top-level verdict. Support the model's pick decisively.
 
 ${formatRule}
 
@@ -305,7 +302,7 @@ Sport: ${sport || "nba"}
 Key factors from our model:
 - ${dataPoints || "No additional data"}${injuryPromptSection}${withoutTeammatesSection}
 
-CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Support the model's pick — do NOT contradict it.
+CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Your Verdict & Risk section must echo this exact recommendation — never contradict the top-level verdict. Support the model's pick decisively.
 
 ${formatRule}
 
