@@ -806,7 +806,6 @@ const NbaPropsPage = () => {
             { value: "mlb", label: "MLB", color: "#002D72", logo: mlbLogo, h: "h-5" },
             { value: "nfl", label: "NFL", color: "#013369", logo: sportNflLogo, h: "h-6" },
             { value: "nhl", label: "NHL", color: "#111111", logo: nhlLogo, h: "h-9" },
-            { value: "ncaab", label: "NCAAB", color: "#1a1a2e", logo: sportNcaabLogo, h: "h-5" },
           ].map((s) => {
             const active = linesSport === s.value;
             return (
