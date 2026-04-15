@@ -337,7 +337,7 @@ async function getGameLog(playerId: string, season?: number, config?: EspnConfig
     const pimIdx = getIdx("PIM");
     const pmIdx = getIdx("+/-");
     const ppgIdx = getIdx("PPG") !== -1 ? getIdx("PPG") : getIdx("PPP");
-    const toiIdx = getIdx("TOI");
+    const toiIdx = getIdx("TOI") !== -1 ? getIdx("TOI") : getIdx("TOI/G");
 
     console.log("ESPN labels:", topLabels);
     console.log("Sport:", cfg.searchLeague, "Total events:", Object.keys(events).length, "Total stat rows:", Object.keys(statRows).length);
