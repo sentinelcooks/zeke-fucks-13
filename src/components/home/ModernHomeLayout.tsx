@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Flame, ChevronRight, Sparkles, CheckCircle2, XCircle,
   BarChart3, Layers, Crosshair, Activity, Trophy, Percent,
-  Users, TrendingDown, Zap, DollarSign, Target
+  Users, TrendingDown, Zap, DollarSign, Target, RefreshCw
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
