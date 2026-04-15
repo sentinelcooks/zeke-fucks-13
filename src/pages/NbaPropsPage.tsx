@@ -969,13 +969,13 @@ const NbaPropsPage = () => {
                       <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
                         onClick={() => { setFighter1(s.name); setShowUfcSug1(false); }}
                         className="flex items-center gap-3.5 px-4 py-3 cursor-pointer hover:bg-accent/6 active:bg-accent/10 transition-all border-b border-border/10 last:border-0 group">
-                        <div className="relative w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 group-hover:ring-1 group-hover:ring-accent/20 transition-all" style={{
+                        <div className="relative w-11 h-11 rounded-full overflow-hidden flex-shrink-0 group-hover:ring-1 group-hover:ring-accent/20 transition-all" style={{
                           background: 'linear-gradient(135deg, hsla(228,30%,18%,1), hsla(228,30%,10%,1))',
                           border: '1px solid hsla(228,30%,22%,0.3)',
                         }}>
                           {s.headshot ? (
                             <>
-                              <img src={s.headshot} alt={s.name} className="w-full h-full object-cover object-top"
+                              <img src={s.headshot} alt={s.name} className="w-full h-full object-cover object-center"
                                 onError={(e) => { 
                                   (e.target as HTMLImageElement).style.display = 'none';
                                   const parent = (e.target as HTMLImageElement).parentElement;
@@ -1062,13 +1062,13 @@ const NbaPropsPage = () => {
                       <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
                         onClick={() => { setFighter2(s.name); setShowUfcSug2(false); }}
                         className="flex items-center gap-3.5 px-4 py-3 cursor-pointer hover:bg-accent/6 active:bg-accent/10 transition-all border-b border-border/10 last:border-0 group">
-                        <div className="relative w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 group-hover:ring-1 group-hover:ring-accent/20 transition-all" style={{
+                        <div className="relative w-11 h-11 rounded-full overflow-hidden flex-shrink-0 group-hover:ring-1 group-hover:ring-accent/20 transition-all" style={{
                           background: 'linear-gradient(135deg, hsla(228,30%,18%,1), hsla(228,30%,10%,1))',
                           border: '1px solid hsla(228,30%,22%,0.3)',
                         }}>
                           {s.headshot ? (
                             <>
-                              <img src={s.headshot} alt={s.name} className="w-full h-full object-cover object-top"
+                              <img src={s.headshot} alt={s.name} className="w-full h-full object-cover object-center"
                                 onError={(e) => { 
                                   (e.target as HTMLImageElement).style.display = 'none';
                                   const parent = (e.target as HTMLImageElement).parentElement;

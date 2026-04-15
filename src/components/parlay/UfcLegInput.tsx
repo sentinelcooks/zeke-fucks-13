@@ -66,12 +66,12 @@ export default function UfcLegInput({ data, onChange }: Props) {
               else { onChange({ ...data, fighter2: s.name }); setShow2(false); }
             }}
               className="flex items-center gap-3.5 px-3 py-2.5 cursor-pointer hover:bg-accent/6 active:bg-accent/10 transition-all first:rounded-t-xl last:rounded-b-xl group">
-              <div className="relative w-9 h-9 rounded-lg overflow-hidden flex-shrink-0" style={{
+              <div className="relative w-9 h-9 rounded-full overflow-hidden flex-shrink-0" style={{
                 background: 'linear-gradient(135deg, hsla(228,30%,18%,1), hsla(228,30%,10%,1))',
                 border: '1px solid hsla(228,30%,22%,0.3)',
               }}>
                 {s.headshot ? (
-                  <img src={s.headshot} alt={s.name} className="w-full h-full object-cover object-top"
+                  <img src={s.headshot} alt={s.name} className="w-full h-full object-cover object-center"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 ) : null}
                 <div className="absolute inset-0 flex items-center justify-center">
