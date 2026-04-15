@@ -2201,10 +2201,10 @@ const NbaPropsPage = () => {
                                   whileTap={{ scale: 0.85 }}
                                   onClick={() => {
                                     if (isInSlip) {
-                                      setParlaySlip(prev => prev.filter(s => !(s.player === c.correlated_player && s.prop === c.correlated_prop)));
+                                      const leg = globalSlip.legs.find(l => l.player === c.correlated_player && l.propType === c.correlated_prop && l.line === "");
+                                      if (leg) globalSlip.removeLeg(leg.id);
                                     } else {
-                                      setParlaySlip(prev => [...prev, { player: c.correlated_player, prop: c.correlated_prop, team: c.correlated_team, hit_rate: c.hit_rate }]);
-                                      setShowSlip(true);
+                                      globalSlip.addLeg({ sport: "NBA", player: c.correlated_player, propType: c.correlated_prop, line: "", overUnder: "over", odds: -110 });
                                     }
                                   }}
                                   className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
