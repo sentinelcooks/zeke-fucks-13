@@ -22,10 +22,10 @@
     --primary-foreground: 0 0% 100%;
 
     --secondary: 228 20% 14%;
-    --secondary-foreground: 228 12% 80%;
+    --secondary-foreground: 228 12% 86%;
 
     --muted: 228 20% 12%;
-    --muted-foreground: 228 12% 75%;
+    --muted-foreground: 228 12% 82%;
 
     --accent: 250 76% 62%;
     --accent-foreground: 0 0% 100%;
@@ -61,7 +61,7 @@
     --gradient-cyan: linear-gradient(135deg, hsl(190 90% 55%), hsl(210 100% 60%));
 
     --sidebar-background: 228 28% 6%;
-    --sidebar-foreground: 228 10% 63%;
+    --sidebar-foreground: 228 10% 72%;
     --sidebar-primary: 250 76% 62%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 228 20% 14%;
