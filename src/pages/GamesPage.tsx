@@ -130,6 +130,10 @@ const GamesPage = () => {
   const notifTimeouts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const fetchAbort = useRef<AbortController | null>(null);
 
+  // Per-sport cache to enable instant switching
+  const sportCache = useRef<Partial<Record<SportFilter, { games: Game[]; ufcEvents: UfcEvent[]; oddsMap: Record<string, RealOdds> }>>>({});
+
+
   // Sync notifiedGames to localStorage & schedule/clear notifications
   useEffect(() => {
     localStorage.setItem("sentinel_game_notifications", JSON.stringify([...notifiedGames]));
@@ -252,7 +256,18 @@ const GamesPage = () => {
     }
   };
 
-  const fetchGames = async (s: SportFilter, silent = false) => {
+  const fetchGames = async (s: SportFilter, silent = false, force = false) => {
+    // If cached and not forced, restore instantly
+    if (!force && !silent && sportCache.current[s]) {
+      const cached = sportCache.current[s]!;
+      setGames(cached.games);
+      setUfcEvents(cached.ufcEvents);
+      setOddsMap(cached.oddsMap);
+      setLoading(false);
+      setError("");
+      return;
+    }
+
     // Cancel any in-flight request so stale data from a previous sport never overwrites
     if (fetchAbort.current) fetchAbort.current.abort();
     const controller = new AbortController();
@@ -421,6 +436,13 @@ const GamesPage = () => {
       setLoading(false);
     }
   };
+
+  // Cache current sport data whenever it changes
+  useEffect(() => {
+    if (!loading && !error) {
+      sportCache.current[sport] = { games, ufcEvents, oddsMap };
+    }
+  }, [games, ufcEvents, oddsMap, loading, error, sport]);
 
   useEffect(() => { fetchGames(sport); }, [sport]);
 
@@ -953,14 +975,40 @@ const GamesPage = () => {
           <Calendar className="w-3 h-3" />
           <span className="font-bold uppercase tracking-wider">{tz.replace(/_/g, " ")}</span>
         </div>
-        <button onClick={() => fetchGames(sport)} className="flex items-center gap-1 text-[9px] text-accent/60 font-bold">
+        <button onClick={() => fetchGames(sport, false, true)} className="flex items-center gap-1 text-[9px] text-accent/60 font-bold">
           <RefreshCw className="w-3 h-3" /> Refresh
         </button>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-6 h-6 animate-spin text-accent/40" />
+        <div className="space-y-2 relative z-10">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="vision-card p-4 animate-pulse">
+              <div className="flex items-center justify-between mb-3">
+                <div className="h-3 w-16 rounded bg-muted/30" />
+                <div className="h-3 w-12 rounded bg-muted/30" />
+              </div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-muted/30" />
+                  <div className="h-4 w-24 rounded bg-muted/30" />
+                </div>
+                <div className="h-4 w-10 rounded bg-muted/30" />
+              </div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-muted/30" />
+                  <div className="h-4 w-28 rounded bg-muted/30" />
+                </div>
+                <div className="h-4 w-10 rounded bg-muted/30" />
+              </div>
+              <div className="flex gap-2 mt-2">
+                <div className="h-6 flex-1 rounded bg-muted/20" />
+                <div className="h-6 flex-1 rounded bg-muted/20" />
+                <div className="h-6 flex-1 rounded bg-muted/20" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : error ? (
         <div className="vision-card p-6 text-center">
