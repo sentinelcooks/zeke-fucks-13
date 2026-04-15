@@ -190,7 +190,7 @@ function Section({ title, children, defaultOpen = true, icon }: { title: string;
       >
         <div className="flex items-center gap-2.5">
           {icon && <span className="text-accent/50">{icon}</span>}
-          <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted-foreground/50 group-hover:text-foreground/60 transition-colors">{title}</span>
+          <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted-foreground group-hover:text-foreground transition-colors">{title}</span>
         </div>
         <motion.div
           animate={{ rotate: open ? 180 : 0 }}
