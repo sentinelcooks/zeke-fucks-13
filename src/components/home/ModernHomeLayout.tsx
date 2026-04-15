@@ -222,7 +222,8 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const [yesterdayPicks, setYesterdayPicks] = useState<DailyPick[]>([]);
   const [picksLoading, setPicksLoading] = useState(true);
   const [userSports, setUserSports] = useState<string[]>([]);
-  const [minsAgo] = useState(() => Math.floor(Math.random() * 7) + 2);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [headshots, setHeadshots] = useState<Record<string, string>>({});
 
   useEffect(() => {
