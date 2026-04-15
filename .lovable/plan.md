@@ -1,26 +1,51 @@
 
 
-## Plan: Upgrade UFC Fighter Search Dropdown to Match NBA Player Search Design
+## Plan: Fix Correlated Props Not Working
 
-### What
-Restyle both UFC fighter search dropdowns (Fighter 1 and Fighter 2) to match the NBA "Player Search" dropdown design — larger rounded-xl headshot thumbnails, initials fallback, record displayed as a colored badge, "FIGHTERS" section header, and hover chevron.
+### Root Cause
+Two issues are preventing correlated props from returning results:
 
-### Changes — `src/pages/NbaPropsPage.tsx`
+1. **Frontend sends empty team**: The frontend extracts team via `data.team || data.player_info?.team` but the `analyzeProp` response stores it at `data.player.team_abbr`. So `team` is always `""`.
 
-**Fighter 1 dropdown (lines 958-981)** and **Fighter 2 dropdown (lines 1027-1051)** — replace both with the NBA-style layout:
+2. **Edge function team detection fails**: When the correlated-props function receives an empty team, it tries ESPN search to detect the team, but the ESPN search response format (`searchData.items[0].team?.abbreviation`) doesn't match the actual response structure. The player's team comes nested differently.
 
-1. Add a `"FIGHTERS"` section header at the top of each dropdown (matching the `"PLAYERS"` header in the NBA dropdown)
+3. **No error surfaced**: When 0 correlations are found, the UI silently shows nothing instead of a helpful message.
 
-2. Replace the small `w-8 h-8 rounded-full` headshot with a larger `w-11 h-11 rounded-xl` container with gradient background and border, matching the NBA style
+### Changes
 
-3. Add proper image error handling with a hidden fallback initials div (same pattern as NBA)
+**1. `src/pages/NbaPropsPage.tsx`** — Fix team extraction (2 locations)
 
-4. Show fighter name as `text-[13px] font-bold` with record displayed as a colored accent badge (`text-[10px] font-bold text-accent/70 bg-accent/8 px-1.5 py-0.5 rounded-md`) instead of plain muted text
+Replace:
+```ts
+const playerTeam = data.team || data.player_info?.team || "";
+```
+With:
+```ts
+const playerTeam = data.team || data.player?.team_abbr || data.player?.team || data.player_info?.team || "";
+```
+At lines 585 and 726.
 
-5. Add a hover chevron arrow on the right side (`ChevronDown -rotate-90`, opacity transition on group hover)
+Also add "Correlated props unavailable" fallback text when `corrProps.length === 0` and not loading (around line 2181), replacing the current empty state.
 
-6. Match the `gap-3.5`, `group` class, and `active:bg-accent/10` interaction styles from the NBA dropdown
+**2. `src/pages/FreePropsPage.tsx`** — Same team extraction fix
 
-### No backend changes needed
-The UFC search API already returns `headshot` URLs from ESPN — this is purely a frontend styling update.
+Replace line 265:
+```ts
+const playerTeam = data.team || data.player_info?.team || prop.team || "";
+```
+With:
+```ts
+const playerTeam = data.team || data.player?.team_abbr || data.player?.team || data.player_info?.team || prop.team || "";
+```
+
+**3. `supabase/functions/correlated-props/index.ts`** — Improve team detection fallback
+
+When ESPN search doesn't return a team abbreviation, fetch the athlete endpoint directly (`/athletes/{id}`) to get the team. Also add a `team.$ref` fallback. Add logging for better debugging.
+
+**4. UI fallback** — Show "Correlated props unavailable" message in both NbaPropsPage and FreePropsPage when the function returns empty or errors, instead of silently hiding the section.
+
+### Scope
+- 2 frontend files (team extraction + error UI)
+- 1 edge function (team detection fallback + logging)
+- Redeploy correlated-props
 
