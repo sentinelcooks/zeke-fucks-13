@@ -1029,7 +1029,7 @@ const GamesPage = () => {
         </div>
       ) : error ? (
         <div className="vision-card p-6 text-center">
-          <p className="text-sm text-muted-foreground/50">{error}</p>
+          <p className="text-sm text-muted-foreground/50">No {sport === "ufc" ? "UFC" : sport.toUpperCase()} games scheduled today</p>
         </div>
       ) : sport === "ufc" ? (
         <div className="space-y-4 relative z-10">
