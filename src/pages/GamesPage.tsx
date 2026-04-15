@@ -164,11 +164,12 @@ const GamesPage = () => {
     if (tid) { clearTimeout(tid); notifTimeouts.current.delete(gameId); }
   }, []);
 
-  const fetchOdds = async (s: SportFilter) => {
+  const fetchOdds = async (s: SportFilter, signal?: AbortSignal) => {
     try {
       const sportKey = s === "ufc" ? "mma_mixed_martial_arts" : SPORT_MAP[s as Exclude<SportFilter, "ufc">];
       // Fetch h2h, spreads, totals in one call
       const data = await fetchNbaOdds(undefined, "h2h,spreads,totals", sportKey);
+      if (signal?.aborted) return;
       const events: any[] = data?.events || data || [];
       const map: Record<string, RealOdds> = {};
 
@@ -250,6 +251,7 @@ const GamesPage = () => {
           homeEV, awayEV, books,
         };
       }
+      if (signal?.aborted) return;
       setOddsMap(map);
     } catch (e) {
       console.warn("Failed to fetch odds:", e);
