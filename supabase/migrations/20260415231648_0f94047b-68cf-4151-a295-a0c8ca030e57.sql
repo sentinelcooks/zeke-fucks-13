@@ -1,0 +1,1 @@
+ALTER TABLE public.correlated_props ADD COLUMN IF NOT EXISTS correlated_line numeric DEFAULT 0;

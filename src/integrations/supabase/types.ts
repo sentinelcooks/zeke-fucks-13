@@ -61,6 +61,7 @@ export type Database = {
       }
       correlated_props: {
         Row: {
+          correlated_line: number | null
           correlated_player: string
           correlated_prop: string
           correlated_team: string | null
@@ -74,6 +75,7 @@ export type Database = {
           sport: string
         }
         Insert: {
+          correlated_line?: number | null
           correlated_player: string
           correlated_prop: string
           correlated_team?: string | null
@@ -87,6 +89,7 @@ export type Database = {
           sport?: string
         }
         Update: {
+          correlated_line?: number | null
           correlated_player?: string
           correlated_prop?: string
           correlated_team?: string | null
