@@ -206,33 +206,6 @@ const ResultsPanel = ({ data }: ResultsPanelProps) => {
   const comb = data.h2h_combined || {};
   const other = data.other_games || {};
 
-  // MTD (Month-to-Date) calculation
-  const mtd = (() => {
-    if (!data.game_log?.length) return { rate: 0, hits: 0, total: 0, avg: undefined };
-    const now = new Date();
-    const curMonth = now.getMonth();
-    const curYear = now.getFullYear();
-    const getStatVal = (g: any) => {
-      const pt = data.prop_type;
-      if (pt === "pts+reb+ast") return (g.PTS || 0) + (g.REB || 0) + (g.AST || 0);
-      const map: any = { points: "PTS", rebounds: "REB", assists: "AST", "3-pointers": "FG3M", steals: "STL", blocks: "BLK", turnovers: "TOV" };
-      return g[map[pt]] || 0;
-    };
-    const mtdGames = data.game_log.filter((g: any) => {
-      const d = new Date(g.date);
-      return d.getMonth() === curMonth && d.getFullYear() === curYear;
-    });
-    const mtdTotal = mtdGames.length;
-    const mtdHits = mtdGames.filter((g: any) => {
-      const val = getStatVal(g);
-      return data.over_under === "over" ? val > data.line : val < data.line;
-    }).length;
-    return {
-      rate: mtdTotal > 0 ? Math.round((mtdHits / mtdTotal) * 100) : 0,
-      hits: mtdHits, total: mtdTotal,
-      avg: mtdTotal > 0 ? +(mtdGames.reduce((s: number, g: any) => s + getStatVal(g), 0) / mtdTotal).toFixed(1) : undefined,
-    };
-  })();
 
   return (
     <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-400">
@@ -268,7 +241,7 @@ const ResultsPanel = ({ data }: ResultsPanelProps) => {
           { label: "Season Avg", val: data.season_hit_rate?.avg },
           { label: "L10 Avg", val: data.last_10?.avg },
           { label: "L5 Avg", val: data.last_5?.avg },
-          { label: "MTD Avg", val: mtd.avg },
+          
           { label: "H2H Avg", val: h2h.avg },
         ].map((s) => (
           <div key={s.label} className="bg-card border border-border rounded-xl p-4 text-center">
@@ -289,7 +262,7 @@ const ResultsPanel = ({ data }: ResultsPanelProps) => {
           <HitRateBar title="Season" data={data.season_hit_rate} />
           <HitRateBar title="Last 10" data={data.last_10} />
           <HitRateBar title="Last 5" data={data.last_5} />
-          <HitRateBar title="MTD" data={mtd} />
+          
           <HitRateBar title={data.home_away?.location?.toUpperCase() || "Home/Away"} data={data.home_away} />
           <HitRateBar title={h2h.opponent ? `vs ${h2h.opponent}` : "vs Opponent"} data={h2h} />
         </div>
