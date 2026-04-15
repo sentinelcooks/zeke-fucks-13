@@ -707,7 +707,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       </button>
                       <button
                         onClick={() => {
-                          addLeg({
+                          setSlipSheetPick({
                             sport: pick.sport.toUpperCase() as "NBA" | "MLB" | "NHL" | "UFC" | "NFL",
                             player: pick.player_name,
                             propType: pick.prop_type,
@@ -716,7 +716,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                             opponent: pick.opponent || "",
                             odds: parseInt(pick.odds || "-110"),
                           });
-                          navigate("/dashboard/parlay");
+                          setSlipSheetOpen(true);
                         }}
                         className="flex items-center justify-center active:opacity-80"
                         style={{

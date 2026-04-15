@@ -1797,7 +1797,7 @@ const NbaPropsPage = () => {
                       const existing = globalSlip.legs.find(l => l.player === player && l.propType === propType && l.line === line);
                       if (existing) globalSlip.removeLeg(existing.id);
                     } else {
-                      globalSlip.addLeg({
+                      setSlipSheetPick({
                         sport: sport === "mlb" ? "MLB" : sport === "nhl" ? "NHL" : "NBA",
                         player,
                         propType,
@@ -1807,6 +1807,7 @@ const NbaPropsPage = () => {
                         odds: -110,
                         confidence: typeof results.confidence === "number" ? results.confidence : results.confidence?.overall_confidence,
                       });
+                      setSlipSheetOpen(true);
                     }
                   }}
                   className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-[12px] font-bold tracking-wider transition-all ${
