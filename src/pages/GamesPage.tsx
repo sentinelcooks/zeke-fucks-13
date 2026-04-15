@@ -837,7 +837,7 @@ const GamesPage = () => {
           {isNotified ? <Bell className="w-3.5 h-3.5 text-accent" /> : <BellOff className="w-3.5 h-3.5 text-muted-foreground/40" />}
         </button>
       </div>
-      <div className="grid grid-cols-[auto_1fr_auto_1fr_auto] items-center gap-1.5 mt-6">
+      <div className="grid grid-cols-[auto_1fr_auto_1fr_auto] items-center gap-1.5 mt-2">
         <FighterAvatar id={fight.fighter1Id} name={fight.fighter1} />
         <div className="min-w-0 overflow-hidden">
           <span className="text-[11px] font-bold text-foreground truncate block">{fight.fighter1}</span>
