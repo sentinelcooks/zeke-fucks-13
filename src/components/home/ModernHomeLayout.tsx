@@ -250,6 +250,21 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     ]);
 
     let picks = ((todayRes.data as DailyPick[]) || []).filter(p => p.hit_rate >= 70);
+
+    // Fallback: if no picks today, fetch most recent picks from the last 3 days
+    if (picks.length === 0) {
+      const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString().split("T")[0];
+      const { data: recentData } = await supabase
+        .from("daily_picks")
+        .select("*")
+        .gte("pick_date", threeDaysAgo)
+        .lt("pick_date", today)
+        .order("pick_date", { ascending: false })
+        .order("hit_rate", { ascending: false })
+        .limit(30);
+      picks = ((recentData as DailyPick[]) || []).filter(p => p.hit_rate >= 70);
+    }
+
     if (userSports.length > 0) {
       picks.sort((a, b) => {
         const aMatch = userSports.includes(a.sport?.toLowerCase()) ? 1 : 0;

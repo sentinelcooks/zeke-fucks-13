@@ -8,6 +8,25 @@ const corsHeaders = {
 
 const AI_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
+// ── Retry with exponential backoff for rate-limited calls ──
+async function retryWithBackoff<T>(fn: () => Promise<T>, maxRetries = 3, label = ""): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (e: any) {
+      const isRateLimit = e?.message?.includes?.("RateLimitError") || e?.message?.includes?.("429") || e?.status === 429;
+      if (!isRateLimit || attempt === maxRetries) throw e;
+      const waitMs = Math.pow(2, attempt + 1) * 1000 + Math.random() * 1000;
+      console.warn(`⏳ Rate limited${label ? ` (${label})` : ""}, retry ${attempt + 1}/${maxRetries} in ${Math.round(waitMs / 1000)}s`);
+      await new Promise(r => setTimeout(r, waitMs));
+    }
+  }
+  throw new Error("retryWithBackoff exhausted");
+}
+
+// ── Delay helper ──
+const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+
 const ESPN_SPORTS: Record<string, { sport: string; league: string }> = {
   nba: { sport: "basketball", league: "nba" },
   mlb: { sport: "baseball", league: "mlb" },
@@ -562,7 +581,7 @@ Deno.serve(async (req) => {
 
     // ── Rank games by anticipation using AI ──
     console.log("Ranking games by anticipation...");
-    const rankedGames = await rankGamesByAnticipation(allGames, LOVABLE_API_KEY);
+    const rankedGames = await retryWithBackoff(() => rankGamesByAnticipation(allGames, LOVABLE_API_KEY), 3, "ranking");
     console.log(`⏱️ Ranking took ${Math.round((Date.now() - startTime) / 1000)}s`);
 
     const allPicks: any[] = [];
@@ -570,12 +589,15 @@ Deno.serve(async (req) => {
     // ── Phase 2: Game-level bets (Moneylines, Spreads, O/U) — top 12 ranked ──
     console.log("Phase 2: Analyzing game-level bets (ranked by anticipation)...");
     const gamesForBets = rankedGames.slice(0, 12);
-    for (const game of gamesForBets) {
+    for (let gi = 0; gi < gamesForBets.length; gi++) {
+      const game = gamesForBets[gi];
       if (isTimedOut()) { console.log("⏱️ Timeout approaching, stopping game bets"); break; }
       try {
-        const picks = await analyzeGameBets(game, supabaseUrl, serviceKey);
+        const picks = await retryWithBackoff(() => analyzeGameBets(game, supabaseUrl, serviceKey), 2, `game-${game.away}@${game.home}`);
         allPicks.push(...picks);
       } catch (e) { console.error(`Game bet error:`, e); }
+      // Throttle between games to avoid rate limits on downstream model calls
+      if (gi < gamesForBets.length - 1) await delay(1500);
     }
     console.log(`Phase 2 complete: ${allPicks.length} game-level picks (${Math.round((Date.now() - startTime) / 1000)}s elapsed)`);
 
@@ -593,22 +615,24 @@ Deno.serve(async (req) => {
         if (isTimedOut()) { console.log("⏱️ Timeout approaching, stopping lineup scan"); break; }
         if (r.status !== "fulfilled" || r.value.lineup.length === 0) continue;
         const { game, lineup } = r.value;
-        const suggestions = await getLineupPropSuggestions(lineup, game.sport, LOVABLE_API_KEY);
+        const suggestions = await retryWithBackoff(() => getLineupPropSuggestions(lineup, game.sport, LOVABLE_API_KEY), 2, `lineup-${game.sport}`);
         propSuggestions.push(...suggestions.map(s => ({ ...s, sport: game.sport })));
+        await delay(2000); // Throttle between AI lineup calls
       }
 
       console.log(`Got ${propSuggestions.length} lineup-based prop suggestions (${Math.round((Date.now() - startTime) / 1000)}s elapsed)`);
 
       // Analyze props through model
-      for (let i = 0; i < propSuggestions.length && i < 12; i += 4) {
+      for (let i = 0; i < propSuggestions.length && i < 12; i += 2) {
         if (isTimedOut()) { console.log("⏱️ Timeout approaching, stopping prop analysis"); break; }
-        const batch = propSuggestions.slice(i, i + 4);
+        const batch = propSuggestions.slice(i, i + 2);
         const results = await Promise.allSettled(
           batch.map(pl =>
-            analyzePlayerProp(pl.name, pl.prop_type, pl.line, pl.direction, pl.opponent, pl.sport, supabaseUrl, serviceKey)
+            retryWithBackoff(() => analyzePlayerProp(pl.name, pl.prop_type, pl.line, pl.direction, pl.opponent, pl.sport, supabaseUrl, serviceKey), 2, `prop-${pl.name}`)
               .then(result => ({ pl, result }))
           )
         );
+        await delay(1500);
 
         for (const r of results) {
           if (r.status !== "fulfilled" || !r.value.result) continue;
@@ -653,12 +677,14 @@ Deno.serve(async (req) => {
       const remainingGamesForBets = rankedGames.slice(12);
       if (remainingGamesForBets.length > 0) {
         console.log(`Expansion: analyzing ${remainingGamesForBets.length} additional games for game-level bets`);
-        for (const game of remainingGamesForBets) {
+        for (let gi = 0; gi < remainingGamesForBets.length; gi++) {
+          const game = remainingGamesForBets[gi];
           if (isTimedOut() || allPicks.length >= 20) break;
           try {
-            const picks = await analyzeGameBets(game, supabaseUrl, serviceKey, 65);
+            const picks = await retryWithBackoff(() => analyzeGameBets(game, supabaseUrl, serviceKey, 65), 2, `exp-game`);
             allPicks.push(...picks);
           } catch (e) { console.error(`Expansion game bet error:`, e); }
+          if (gi < remainingGamesForBets.length - 1) await delay(1500);
         }
         console.log(`Expansion game bets done: ${allPicks.length} total picks (${Math.round((Date.now() - startTime) / 1000)}s elapsed)`);
       }
@@ -678,21 +704,23 @@ Deno.serve(async (req) => {
             if (isTimedOut()) break;
             if (r.status !== "fulfilled" || r.value.lineup.length === 0) continue;
             const { game, lineup } = r.value;
-            const suggestions = await getLineupPropSuggestions(lineup, game.sport, LOVABLE_API_KEY);
+            const suggestions = await retryWithBackoff(() => getLineupPropSuggestions(lineup, game.sport, LOVABLE_API_KEY), 2, `exp-lineup`);
             expansionSuggestions.push(...suggestions.map(s => ({ ...s, sport: game.sport })));
+            await delay(2000);
           }
 
           console.log(`Expansion: ${expansionSuggestions.length} prop suggestions (${Math.round((Date.now() - startTime) / 1000)}s elapsed)`);
 
-          for (let i = 0; i < expansionSuggestions.length && i < 12; i += 4) {
+          for (let i = 0; i < expansionSuggestions.length && i < 12; i += 2) {
             if (isTimedOut() || allPicks.length >= 20) break;
-            const batch = expansionSuggestions.slice(i, i + 4);
+            const batch = expansionSuggestions.slice(i, i + 2);
             const results = await Promise.allSettled(
               batch.map(pl =>
-                analyzePlayerProp(pl.name, pl.prop_type, pl.line, pl.direction, pl.opponent, pl.sport, supabaseUrl, serviceKey)
+                retryWithBackoff(() => analyzePlayerProp(pl.name, pl.prop_type, pl.line, pl.direction, pl.opponent, pl.sport, supabaseUrl, serviceKey), 2, `exp-prop-${pl.name}`)
                   .then(result => ({ pl, result }))
               )
             );
+            await delay(1500);
 
             for (const r of results) {
               if (r.status !== "fulfilled" || !r.value.result) continue;
