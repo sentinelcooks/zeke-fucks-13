@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Flame, ChevronRight, Sparkles, CheckCircle2, XCircle,
   BarChart3, Layers, Crosshair, Activity, Trophy, Percent,
-  Users, TrendingDown, Zap, DollarSign, Target
+  Users, TrendingDown, Zap, DollarSign, Target, RefreshCw
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
@@ -222,7 +222,8 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const [yesterdayPicks, setYesterdayPicks] = useState<DailyPick[]>([]);
   const [picksLoading, setPicksLoading] = useState(true);
   const [userSports, setUserSports] = useState<string[]>([]);
-  const [minsAgo] = useState(() => Math.floor(Math.random() * 7) + 2);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [headshots, setHeadshots] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -239,10 +240,33 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       });
   }, [user]);
 
-  useEffect(() => {
+  const fetchTodayPicks = useCallback(async () => {
     const today = new Date().toISOString().split("T")[0];
     const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
 
+    const [todayRes, yesterdayRes] = await Promise.all([
+      supabase.from("daily_picks").select("*").eq("pick_date", today).order("hit_rate", { ascending: false }).limit(30),
+      supabase.from("daily_picks").select("*").eq("pick_date", yesterday).order("created_at", { ascending: false }),
+    ]);
+
+    let picks = ((todayRes.data as DailyPick[]) || []).filter(p => p.hit_rate >= 70);
+    if (userSports.length > 0) {
+      picks.sort((a, b) => {
+        const aMatch = userSports.includes(a.sport?.toLowerCase()) ? 1 : 0;
+        const bMatch = userSports.includes(b.sport?.toLowerCase()) ? 1 : 0;
+        if (bMatch !== aMatch) return bMatch - aMatch;
+        return b.hit_rate - a.hit_rate;
+      });
+    } else {
+      picks.sort((a, b) => b.hit_rate - a.hit_rate);
+    }
+    setTodayPicks(picks);
+    setYesterdayPicks((yesterdayRes.data as DailyPick[]) || []);
+    setPicksLoading(false);
+    setLastRefreshed(new Date());
+  }, [userSports]);
+
+  useEffect(() => {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
     if (supabaseUrl && anonKey) {
@@ -252,41 +276,26 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       }).catch(() => {});
     }
 
-    const fetchPicks = (isInitial = false) => {
-      Promise.all([
-        ...(isInitial ? [supabase.from("daily_picks").select("*").eq("pick_date", today).order("hit_rate", { ascending: false }).limit(30)] : []),
-        supabase.from("daily_picks").select("*").eq("pick_date", yesterday).order("created_at", { ascending: false }),
-      ]).then((results) => {
-        if (isInitial) {
-          const todayRes = results[0];
-          const yesterdayRes = results[1];
-          let picks = ((todayRes.data as DailyPick[]) || []).filter(p => p.hit_rate >= 70);
-          if (userSports.length > 0) {
-            picks.sort((a, b) => {
-              const aMatch = userSports.includes(a.sport?.toLowerCase()) ? 1 : 0;
-              const bMatch = userSports.includes(b.sport?.toLowerCase()) ? 1 : 0;
-              if (bMatch !== aMatch) return bMatch - aMatch;
-              return b.hit_rate - a.hit_rate;
-            });
-          } else {
-            picks.sort((a, b) => b.hit_rate - a.hit_rate);
-          }
-          setTodayPicks(picks);
-          setYesterdayPicks((yesterdayRes.data as DailyPick[]) || []);
-          setPicksLoading(false);
-        } else {
-          const yesterdayRes = results[0];
-          setYesterdayPicks((yesterdayRes.data as DailyPick[]) || []);
-        }
-      });
-    };
-
-    fetchPicks(true);
+    fetchTodayPicks();
 
     // Auto-refresh yesterday's results every 60 seconds
-    const interval = setInterval(() => fetchPicks(false), 60000);
+    const interval = setInterval(async () => {
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+      const { data } = await supabase.from("daily_picks").select("*").eq("pick_date", yesterday).order("created_at", { ascending: false });
+      setYesterdayPicks((data as DailyPick[]) || []);
+    }, 60000);
     return () => clearInterval(interval);
-  }, [userSports]);
+  }, [fetchTodayPicks]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await supabase.functions.invoke("daily-picks");
+      await fetchTodayPicks();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchTodayPicks]);
 
   // Fetch player headshots for prop picks only
   useEffect(() => {
@@ -435,9 +444,19 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               <Flame className="w-4 h-4" style={{ color: 'hsl(250 76% 62%)', animation: 'pulse-fire 3s ease-in-out infinite' }} />
               <span className="text-xs font-bold tracking-[0.15em] uppercase" style={{ color: 'hsl(250 76% 62%)' }}>Today's Edge</span>
             </div>
-            <span className="text-[10px] text-muted-foreground/40">
-              Updated {minsAgo}m ago
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-muted-foreground/40">
+                Updated {Math.max(1, Math.round((Date.now() - lastRefreshed.getTime()) / 60000))}m ago
+              </span>
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="p-1 rounded-md hover:bg-secondary/30 transition-colors disabled:opacity-50"
+                title="Refresh picks"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-muted-foreground/60 ${refreshing ? "animate-spin" : ""}`} />
+              </button>
+            </div>
           </div>
 
           {picksLoading ? (
