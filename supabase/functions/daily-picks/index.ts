@@ -581,7 +581,7 @@ Deno.serve(async (req) => {
 
     // ── Rank games by anticipation using AI ──
     console.log("Ranking games by anticipation...");
-    const rankedGames = await rankGamesByAnticipation(allGames, LOVABLE_API_KEY);
+    const rankedGames = await retryWithBackoff(() => rankGamesByAnticipation(allGames, LOVABLE_API_KEY), 3, "ranking");
     console.log(`⏱️ Ranking took ${Math.round((Date.now() - startTime) / 1000)}s`);
 
     const allPicks: any[] = [];
@@ -589,12 +589,15 @@ Deno.serve(async (req) => {
     // ── Phase 2: Game-level bets (Moneylines, Spreads, O/U) — top 12 ranked ──
     console.log("Phase 2: Analyzing game-level bets (ranked by anticipation)...");
     const gamesForBets = rankedGames.slice(0, 12);
-    for (const game of gamesForBets) {
+    for (let gi = 0; gi < gamesForBets.length; gi++) {
+      const game = gamesForBets[gi];
       if (isTimedOut()) { console.log("⏱️ Timeout approaching, stopping game bets"); break; }
       try {
-        const picks = await analyzeGameBets(game, supabaseUrl, serviceKey);
+        const picks = await retryWithBackoff(() => analyzeGameBets(game, supabaseUrl, serviceKey), 2, `game-${game.away}@${game.home}`);
         allPicks.push(...picks);
       } catch (e) { console.error(`Game bet error:`, e); }
+      // Throttle between games to avoid rate limits on downstream model calls
+      if (gi < gamesForBets.length - 1) await delay(1500);
     }
     console.log(`Phase 2 complete: ${allPicks.length} game-level picks (${Math.round((Date.now() - startTime) / 1000)}s elapsed)`);
 
