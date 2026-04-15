@@ -1,19 +1,22 @@
 
 
-## Plan: Add AI Written Analysis to Free Props Detail View
+## Plan: Fix UFC Fighter Search Headshot Styling
 
-### What's Happening
-The `WrittenAnalysis` component is present on the Analyze tab (`NbaPropsPage.tsx`) and working correctly. However, the **Free Props detail view** (`FreePropsPage.tsx`) — which claims to "mirror NbaPropsPage results exactly" — is missing the AI written analysis section entirely. When you tap a free prop and see its breakdown, there's no In-Depth Analysis section.
+### Problem
+The fighter headshot thumbnails in the search dropdown look bad — they're square with `rounded-xl` and use `object-top` positioning, which crops faces poorly. The reference image shows circular headshots with proper face centering.
 
-### Fix
+### Changes
 
-**`src/pages/FreePropsPage.tsx`** — Add `WrittenAnalysis` after the minutes trend section (around line 520), before Correlated Props:
+**`src/pages/NbaPropsPage.tsx`** — Update both Fighter 1 and Fighter 2 dropdown headshot containers (lines ~972 and ~1040):
 
-1. Import `WrittenAnalysis` at the top
-2. Insert the component with the same props as NbaPropsPage:
-   - `type="prop"`, `verdict`, `confidence`, `playerOrTeam`, `line`, `propDisplay`, `overUnder`, `reasoning`, `seasonHitRate`, `last10`, `last5`, `h2hAvg`, `ev`, `edge`, `minutesTrend`, `injuries`, `sport`, `withoutTeammatesData`
+1. Change container from `w-11 h-11 rounded-xl` to `w-11 h-11 rounded-full` for circular shape
+2. Change image from `object-cover object-top` to `object-cover object-center` for better face centering
+3. Update the border style to match circular design (softer border)
+4. Same changes apply to the fallback initials container
+
+Both Fighter 1 (around line 972) and Fighter 2 (around line 1040) dropdowns need identical updates.
 
 ### Scope
-- 1 file changed, ~20 lines added (1 import + component insertion)
-- No backend changes — uses the existing `ai-analysis` edge function which is working correctly
+- 1 file, 2 locations (~4 lines each)
+- Purely cosmetic CSS changes
 
