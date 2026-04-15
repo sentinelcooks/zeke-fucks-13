@@ -754,7 +754,7 @@ const GamesPage = () => {
   const FighterAvatar = ({ id, name }: { id?: string; name: string }) => {
     const src = fighterHeadshot(id);
     return (
-      <div className="w-11 h-11 rounded-full bg-secondary/40 border border-border/20 overflow-hidden shrink-0">
+      <div className="w-9 h-9 rounded-full bg-secondary/40 border border-border/20 overflow-hidden shrink-0">
         {src ? (
           <img src={src} alt={name} className="w-full h-full object-cover object-top scale-[1.35]" onError={(e) => {
             (e.target as HTMLImageElement).style.display = 'none';
