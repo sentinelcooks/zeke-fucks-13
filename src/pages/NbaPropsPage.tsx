@@ -735,6 +735,42 @@ const NbaPropsPage = () => {
   const h2h = results?.head_to_head || {};
   const prev = results?.prev_season_h2h || {};
 
+  // MTD (Month-to-Date) calculation
+  const mtd = (() => {
+    if (!results?.game_log?.length) return { rate: 0, hits: 0, total: 0, avg: undefined };
+    const now = new Date();
+    const curMonth = now.getMonth();
+    const curYear = now.getFullYear();
+    const getStatVal = (g: any) => {
+      const pt = results.prop_type || propType;
+      if (pt === "pts+reb+ast") return (g.PTS || 0) + (g.REB || 0) + (g.AST || 0);
+      if (pt === "pts+reb") return (g.PTS || 0) + (g.REB || 0);
+      if (pt === "pts+ast") return (g.PTS || 0) + (g.AST || 0);
+      if (pt === "reb+ast") return (g.REB || 0) + (g.AST || 0);
+      if (pt === "stl+blk") return (g.STL || 0) + (g.BLK || 0);
+      if (pt?.startsWith("1q_")) return g.stat_value ?? 0;
+      const map: any = { points: "PTS", rebounds: "REB", assists: "AST", "3-pointers": "FG3M", steals: "STL", blocks: "BLK", turnovers: "TOV", free_throws: "FTM", field_goals: "FGM", fg_attempts: "FGA", ft_attempts: "FTA", minutes: "MIN" };
+      return g[map[pt]] || 0;
+    };
+    const mtdGames = results.game_log.filter((g: any) => {
+      const d = new Date(g.date);
+      return d.getMonth() === curMonth && d.getFullYear() === curYear;
+    });
+    const mtdTotal = mtdGames.length;
+    const theLine = results.line ?? (parseFloat(line) || 0);
+    const dir = results.over_under || overUnder;
+    const mtdHits = mtdGames.filter((g: any) => {
+      const val = getStatVal(g);
+      return dir === "over" ? val > theLine : val < theLine;
+    }).length;
+    return {
+      rate: mtdTotal > 0 ? Math.round((mtdHits / mtdTotal) * 100) : 0,
+      hits: mtdHits,
+      total: mtdTotal,
+      avg: mtdTotal > 0 ? +(mtdGames.reduce((s: number, g: any) => s + getStatVal(g), 0) / mtdTotal).toFixed(1) : undefined,
+    };
+  })();
+
   const sportLabel = sport === "ufc" ? "UFC" : sport === "mlb" ? "MLB" : sport === "nhl" ? "NHL" : "NBA";
   const sportEmoji = sport === "ufc" ? "🥊" : sport === "mlb" ? "⚾" : sport === "nhl" ? "🏒" : "🏀";
 
@@ -1837,10 +1873,11 @@ const NbaPropsPage = () => {
                 </motion.button>
               )}
 
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-5 gap-2">
                 <StatPill label="Season" value={results.season_hit_rate?.avg ?? "--"} delay={0.2} />
                 <StatPill label="L10" value={results.last_10?.avg ?? "--"} delay={0.25} />
                 <StatPill label="L5" value={results.last_5?.avg ?? "--"} delay={0.3} />
+                <StatPill label="MTD" value={mtd.avg ?? "--"} delay={0.325} />
                 <StatPill label={`vs ${h2h.opponent || results.next_game?.opponent_name || "OPP"}`} value={h2h.avg ?? "--"} delay={0.35} />
               </div>
 
@@ -1882,7 +1919,8 @@ const NbaPropsPage = () => {
                   <HitRateRing rate={results.season_hit_rate?.rate || 0} hits={results.season_hit_rate?.hits || 0} total={results.season_hit_rate?.total || 0} label="Season" delay={0} />
                   <HitRateRing rate={results.last_10?.rate || 0} hits={results.last_10?.hits || 0} total={results.last_10?.total || 0} label="L10" delay={0.1} />
                   <HitRateRing rate={results.last_5?.rate || 0} hits={results.last_5?.hits || 0} total={results.last_5?.total || 0} label="L5" delay={0.2} />
-                  <HitRateRing rate={h2h.rate || 0} hits={h2h.hits || 0} total={h2h.total || 0} label={`vs ${h2h.opponent || results.next_game?.opponent_name || "OPP"}`} delay={0.3} />
+                  <HitRateRing rate={mtd.rate || 0} hits={mtd.hits || 0} total={mtd.total || 0} label="MTD" delay={0.25} />
+                  <HitRateRing rate={h2h.rate || 0} hits={h2h.hits || 0} total={h2h.total || 0} label={`vs ${h2h.opponent || results.next_game?.opponent_name || "OPP"}`} delay={0.35} />
                 </div>
               </Section>
 
