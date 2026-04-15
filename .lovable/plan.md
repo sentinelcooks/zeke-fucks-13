@@ -1,36 +1,20 @@
 
 
-## Plan: Fix Analyze Button and Make Correlated Props Specific
+## Plan: Fix Hit Rates Section — Restore Missing Rings and Fix Overflow
 
-### Problem 1 — Analyze button on correlated props fails
-The search icon button on each correlated prop card sets `setLine("")` then calls `handleAnalyze()` after 150ms. But `handleAnalyze()` validates `parseFloat(line) > 0` — since line is empty, it always fails with "Enter a valid line value". The correlated prop's computed line is never passed to the UI.
-
-### Problem 2 — Correlated props are not specific
-The edge function computes a median-based `line` for each correlated prop (e.g., "Over 7.5 Assists") but never returns it. The UI just shows "ASSISTS" without the specific line, making the correlation vague and the analyze button unusable.
+### Problem
+1. The **Home/Away** hit rate ring was removed — only 4 rings show instead of 5.
+2. The container uses `flex justify-center gap-4` which causes rings to clip on narrow screens.
 
 ### Changes
 
-**`supabase/functions/correlated-props/index.ts`** — Add `correlated_line` to the response:
+**`src/pages/NbaPropsPage.tsx`** (~lines 1955-1961):
+1. Change container from `flex justify-center gap-4` to `flex justify-between gap-3 px-1`.
+2. Re-add the Home/Away `HitRateRing` using `results.home_away` data.
 
-1. Add `correlated_line: number` to the `Correlation` interface.
-2. In `computeCorrelations` (line 247), include the computed `line` value in each pushed correlation object.
-3. In the cache insert (line 369), include `correlated_line` in the DB rows.
-4. Update `generateReasoning` to mention the specific line (e.g., "Over 7.5 Assists" instead of just "Assists").
+**`src/components/mobile/HitRateRing.tsx`**:
+1. Add `min-w-0 flex-shrink-0` to the wrapper div to prevent layout collapse.
 
-**Database migration** — Add `correlated_line` column:
-
-```sql
-ALTER TABLE public.correlated_props ADD COLUMN IF NOT EXISTS correlated_line numeric DEFAULT 0;
-```
-
-**`src/pages/NbaPropsPage.tsx`** — Update correlated props UI and analyze handler:
-
-1. Update the `corrProps` state type to include `correlated_line?: number`.
-2. In the correlated prop card display (~line 2175), show the specific line: "Over 7.5 ASSISTS" instead of just "ASSISTS".
-3. Fix the search icon `onClick` (~line 2185-2194): set `setLine(String(c.correlated_line || ""))` instead of `setLine("")`, and pass the line directly to `analyzeProp()` rather than relying on stale state via `handleAnalyze()`.
-
-### Scope
-- 1 edge function updated + redeployed
-- 1 migration (add column)
-- 1 frontend file updated (~15 lines changed)
+### Result
+All 5 hit rate rings (Season, L10, L5, Home/Away, vs Opponent) visible without clipping on mobile.
 
