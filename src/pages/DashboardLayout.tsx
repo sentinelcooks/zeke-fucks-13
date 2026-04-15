@@ -72,6 +72,7 @@ const DashboardLayout = () => {
       skipNextScrollReset.current = false;
       return;
     }
+    window.scrollTo(0, 0);
     mainRef.current?.scrollTo(0, 0);
   }, [location.pathname]);
 
