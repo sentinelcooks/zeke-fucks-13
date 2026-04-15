@@ -1,17 +1,24 @@
 
 
-## Plan: Increase Gray Text Brightness Globally
+## Plan: Fix Tab Switch Scroll Reset
 
 ### Problem
-Muted/gray text (`text-muted-foreground`) is too dim across the app, making it hard to read.
+The existing scroll reset (line 75) only scrolls `mainRef.current` (the `<main>` element). The outer window/viewport scroll position isn't being reset, so users see stale scroll positions when switching tabs.
 
 ### Change
 
-**`src/index.css`** — Bump the lightness of `--muted-foreground` and `--secondary-foreground` CSS variables:
+**`src/pages/DashboardLayout.tsx`** — In the existing `useEffect` at line 70-76, add `window.scrollTo(0, 0)` alongside the existing `mainRef.current?.scrollTo(0, 0)`:
 
-- `--muted-foreground`: `228 12% 75%` → `228 12% 82%` (line 28)
-- `--secondary-foreground`: `228 12% 80%` → `228 12% 86%` (line 25)
-- `--sidebar-foreground`: `228 10% 63%` → `228 10% 72%` (line 55)
+```tsx
+useEffect(() => {
+  if (skipNextScrollReset.current) {
+    skipNextScrollReset.current = false;
+    return;
+  }
+  window.scrollTo(0, 0);
+  mainRef.current?.scrollTo(0, 0);
+}, [location.pathname]);
+```
 
-This is a single-file, 3-line edit that affects every component using these tokens — no per-component changes needed.
+Single line addition. Ensures both the window and the scrollable main container reset on every route change.
 
