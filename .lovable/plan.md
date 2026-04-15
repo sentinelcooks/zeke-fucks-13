@@ -1,38 +1,26 @@
 
 
-## Plan: Rework "Add to Parlay" as Bottom Sheet Experience
+## Plan: Fetch Best Sportsbook Odds in AddToSlipSheet
 
-### Overview
-Create a reusable `AddToSlipSheet` bottom sheet component. Instead of immediately adding to the slip, tapping "Add to Parlay" or "+ Add to Slip" opens a styled bottom sheet where the user confirms the pick, enters a stake, and sees a live payout calculation.
+### Problem
+The odds shown in the bottom sheet are hardcoded (`-110` in NbaPropsPage, or whatever static value is passed from the home carousel). They don't reflect actual live odds from the best sportsbook.
 
-### New Component: `src/components/AddToSlipSheet.tsx`
+### Solution
+When the `AddToSlipSheet` opens, fetch live player odds via `fetchPlayerOdds` and display the best available line with the sportsbook name. Show a loading state while fetching.
 
-A Drawer-based bottom sheet that receives pick details and renders:
-- **Handle bar** at top (existing Drawer pattern)
-- **Player name + prop + direction + line + odds** summary
-- **Stake input** with `$` prefix, numeric, live payout = stake × decimal odds
-- **"Add to Slip" confirm button** with `linear-gradient(135deg, #7c6ff7, #22d3ee)`
-- **"Cancel" ghost button** below
-- Background `#111327`, border-radius `20px 20px 0 0`
-- On confirm: calls `addLeg()` from `ParlaySlipContext`, closes sheet, shows toast
+### Changes
 
-### Changes to `src/pages/NbaPropsPage.tsx` (~line 1789-1833)
-- Instead of directly calling `globalSlip.addLeg(...)`, set state to open the sheet with pick details
-- Render `<AddToSlipSheet>` at the bottom of the component
-- Keep the "REMOVE FROM PARLAY" inline behavior (no sheet needed for removal)
+**`src/components/AddToSlipSheet.tsx`**
 
-### Changes to `src/components/home/ModernHomeLayout.tsx` (~line 708-729)
-- Instead of directly calling `addLeg(...)` and navigating, open the same sheet
-- Remove the immediate `navigate("/dashboard/parlay")` — user stays on current page after adding
-
-### Technical Details
-- Uses existing `vaul` Drawer primitive (already in project)
-- Custom styling via inline styles for `#111327` background and `20px` radius
-- Payout calculation: `americanToDecimal(odds) × stake` using existing `americanToDecimal` util
-- Sheet state: `{ open, player, propType, line, overUnder, odds, sport, opponent, confidence }`
+1. Import `fetchPlayerOdds` from `@/services/oddsApi` and `getSportsbookInfo` from `@/utils/sportsbookLogos`, plus `Loader2` icon
+2. Add state: `liveOdds` (best odds number), `bestBook` (string), `loadingOdds` (boolean)
+3. Add `useEffect` that fires when `open && pick` — calls `fetchPlayerOdds(pick.player, pick.propType, pick.overUnder, pick.sport.toLowerCase())`, finds the book with the best (highest) odds, and sets `liveOdds`/`bestBook`
+4. Use `liveOdds ?? pick.odds` for payout calculation and display
+5. Show the best sportsbook name + logo next to the odds (e.g. "FanDuel" with its icon)
+6. Show a small spinner while odds are loading
+7. On confirm, pass `liveOdds ?? pick.odds` to `addLeg` so the slip stores the real odds
 
 ### Scope
-- 1 new file: `src/components/AddToSlipSheet.tsx`
-- 2 edited files: `NbaPropsPage.tsx`, `ModernHomeLayout.tsx`
-- No database or backend changes
+- Single file edit: `src/components/AddToSlipSheet.tsx`
+- No backend changes
 
