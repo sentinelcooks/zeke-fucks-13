@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Search } from "lucide-react";
+import { Search, ChevronDown } from "lucide-react";
 import { searchUfcFighters } from "@/services/api";
 
 export interface UfcLegData {
@@ -65,8 +65,24 @@ export default function UfcLegInput({ data, onChange }: Props) {
               if (side === 1) { onChange({ ...data, fighter1: s.name }); setShow1(false); }
               else { onChange({ ...data, fighter2: s.name }); setShow2(false); }
             }}
-              className="px-3 py-2 text-xs cursor-pointer hover:bg-accent/10 transition-colors first:rounded-t-xl last:rounded-b-xl">
-              {s.name} {s.record && <span className="text-muted-foreground/60">({s.record})</span>}
+              className="flex items-center gap-3.5 px-3 py-2.5 cursor-pointer hover:bg-accent/6 active:bg-accent/10 transition-all first:rounded-t-xl last:rounded-b-xl group">
+              <div className="relative w-9 h-9 rounded-lg overflow-hidden flex-shrink-0" style={{
+                background: 'linear-gradient(135deg, hsla(228,30%,18%,1), hsla(228,30%,10%,1))',
+                border: '1px solid hsla(228,30%,22%,0.3)',
+              }}>
+                {s.headshot ? (
+                  <img src={s.headshot} alt={s.name} className="w-full h-full object-cover object-top"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                ) : null}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-[9px] font-black text-muted-foreground/45">{s.name?.charAt(0)}</span>
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-xs font-bold text-foreground truncate block">{s.name}</span>
+                {s.record && <span className="text-[9px] font-bold text-accent/70 bg-accent/8 px-1 py-0.5 rounded leading-none mt-0.5 inline-block">{s.record}</span>}
+              </div>
+              <ChevronDown className="w-3 h-3 text-muted-foreground/45 -rotate-90 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
           ))}
         </div>
