@@ -21,8 +21,8 @@ const PLANS: Plan[] = [
   {
     id: "weekly",
     label: "Weekly",
-    price: "$14.99",
-    perMonth: "$2.14 / day",
+    price: "$9.99",
+    perMonth: "$1.43 / day",
     trialText: "7-day free trial",
   },
   {
