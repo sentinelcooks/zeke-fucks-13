@@ -11,6 +11,7 @@ import { Search, Loader2, Target, TrendingUp, TrendingDown, Crosshair, Shield, H
 import { searchPlayers, getTeams, analyzeProp, searchUfcFighters, analyzeUfcMatchup } from "@/services/api";
 import { supabase } from "@/integrations/supabase/client";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { AddToSlipSheet } from "@/components/AddToSlipSheet";
 
 import { motion, AnimatePresence } from "framer-motion";
 import { useParlaySlip } from "@/contexts/ParlaySlipContext";
@@ -410,6 +411,8 @@ const NbaPropsPage = () => {
   const [parlaySlip, setParlaySlip] = useState<Array<{ player: string; prop: string; team: string | null; hit_rate: number }>>([]);
   const [showSlip, setShowSlip] = useState(false);
   const [stakeAmount, setStakeAmount] = useState("10");
+  const [slipSheetOpen, setSlipSheetOpen] = useState(false);
+  const [slipSheetPick, setSlipSheetPick] = useState<import("@/components/AddToSlipSheet").SlipSheetPick | null>(null);
   const [oppQuery, setOppQuery] = useState("");
   const [showOppDropdown, setShowOppDropdown] = useState(false);
   const oppDropdownRef = useRef<HTMLDivElement>(null);
@@ -2257,6 +2260,7 @@ const NbaPropsPage = () => {
         isOpen={!!explainerProp}
         onClose={() => setExplainerProp(null)}
       />
+      <AddToSlipSheet open={slipSheetOpen} onOpenChange={setSlipSheetOpen} pick={slipSheetPick} />
     </div>
   );
 };

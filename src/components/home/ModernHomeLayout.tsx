@@ -12,6 +12,7 @@ import { useParlaySlip } from "@/contexts/ParlaySlipContext";
 import { PnLCalendar } from "@/components/PnLCalendar";
 import { useAuth } from "@/contexts/AuthContext";
 import { searchPlayers } from "@/services/api";
+import { AddToSlipSheet } from "@/components/AddToSlipSheet";
 
 interface Play {
   id: string;
@@ -214,6 +215,8 @@ interface ModernHomeLayoutProps {
 export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const navigate = useNavigate();
   const { addLeg } = useParlaySlip();
+  const [slipSheetOpen, setSlipSheetOpen] = useState(false);
+  const [slipSheetPick, setSlipSheetPick] = useState<import("@/components/AddToSlipSheet").SlipSheetPick | null>(null);
   const { user, profile } = useAuth();
   const [todayPicks, setTodayPicks] = useState<DailyPick[]>([]);
   const [yesterdayPicks, setYesterdayPicks] = useState<DailyPick[]>([]);
@@ -928,6 +931,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
         <PnLCalendar plays={plays} />
 
       </div>
+      <AddToSlipSheet open={slipSheetOpen} onOpenChange={setSlipSheetOpen} pick={slipSheetPick} />
     </div>
   );
 }
