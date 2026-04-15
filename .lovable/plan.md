@@ -1,29 +1,31 @@
 
 
-## Plan: Improve Games Tab Sport Switching
+## Plan: Fix Sport Switching Showing Wrong Data
 
-### Changes to `src/pages/GamesPage.tsx`
+### Root Cause
+Three race conditions in `GamesPage.tsx`:
 
-**1. Add per-sport cache using `useRef`**
+1. **`fetchOdds`** (line 167) calls `setOddsMap()` directly — no abort check, so odds from a previous sport can arrive late and overwrite current sport's odds.
+2. **`fetchUfcEvents`** (line 308) calls `setUfcEvents()` and `setGames([])` directly — same problem, no abort check.
+3. **UFC path** in `fetchGames` (line 284-286) returns early after dispatching async work, never checks `controller.signal.aborted`.
 
-Add a `useRef` cache map (`Record<SportFilter, { games, ufcEvents, oddsMap }>`) that stores fetched data per sport. When switching to a previously loaded sport, instantly restore from cache instead of fetching.
+### Fix (single file: `src/pages/GamesPage.tsx`)
 
-**2. Update `fetchGames` to populate cache**
+**1. Pass the AbortController's signal to `fetchOdds` and `fetchUfcEvents`**
 
-After a successful fetch, store the results in the cache ref. On sport switch (`useEffect`), check cache first — if data exists, restore it immediately (no loading state). Only fetch from API on first load or manual refresh.
+Both functions will accept an `AbortSignal` parameter. Before calling any `set*` state function, check `signal.aborted` — if true, discard the result silently.
 
-**3. Manual refresh bypasses cache**
+**2. Fix the UFC early return**
 
-The existing "Refresh" button will pass a `force` flag that skips the cache check and re-fetches from API, updating the cache afterward.
+The UFC branch currently does `await Promise.all([fetchUfcEvents(), fetchOdds(s)]); return;` which skips the abort check in the `finally` block. Move the abort check and `setLoading(false)` into both helper functions, or restructure so the UFC path flows through the same `finally` block.
 
-**4. Replace spinner with skeleton cards**
+**3. Bind sport identity to each fetch cycle**
 
-Replace the current `<Loader2>` spinner (lines 961-964) with 4 skeleton game cards that match the `GameCard` dimensions — two team name bars, score area, and odds row, all with `animate-pulse`. This avoids the blank screen flash.
+Capture the `sport` value at the start of `fetchGames` and compare it against `sport` state before setting data. Combined with the abort signal, this eliminates all race conditions.
 
 ### Technical Details
-
-- Cache is `useRef` (not `useState`) to avoid re-renders on cache writes
-- Silent auto-refresh (10s/60s) updates cache too, keeping it fresh
-- Skeleton cards: `vision-card` container with `h-[140px]` rounded pulse bars mimicking team logos, names, and odds layout
-- No new files or dependencies
+- `fetchOdds(s, signal)` — add `if (signal.aborted) return;` before `setOddsMap(map)`
+- `fetchUfcEvents(signal)` — add `if (signal.aborted) return;` before `setUfcEvents(events)` and `setGames([])`
+- Remove the early `return` on line 286; let UFC path fall through to the existing abort-check logic in `finally`
+- No new dependencies or files
 
