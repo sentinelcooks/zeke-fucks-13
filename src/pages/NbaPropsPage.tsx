@@ -757,7 +757,7 @@ const NbaPropsPage = () => {
       return d.getMonth() === curMonth && d.getFullYear() === curYear;
     });
     const mtdTotal = mtdGames.length;
-    const theLine = results.line ?? parseFloat(line) || 0;
+    const theLine = results.line ?? (parseFloat(line) || 0);
     const dir = results.over_under || overUnder;
     const mtdHits = mtdGames.filter((g: any) => {
       const val = getStatVal(g);
