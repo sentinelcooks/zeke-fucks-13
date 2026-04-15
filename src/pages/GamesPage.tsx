@@ -164,12 +164,11 @@ const GamesPage = () => {
     if (tid) { clearTimeout(tid); notifTimeouts.current.delete(gameId); }
   }, []);
 
-  const fetchOdds = async (s: SportFilter, signal?: AbortSignal) => {
+  const fetchOdds = async (s: SportFilter, signal?: AbortSignal): Promise<Record<string, RealOdds>> => {
     try {
       const sportKey = s === "ufc" ? "mma_mixed_martial_arts" : SPORT_MAP[s as Exclude<SportFilter, "ufc">];
-      // Fetch h2h, spreads, totals in one call
       const data = await fetchNbaOdds(undefined, "h2h,spreads,totals", sportKey);
-      if (signal?.aborted) return;
+      if (signal?.aborted) return {};
       const events: any[] = data?.events || data || [];
       const map: Record<string, RealOdds> = {};
 
@@ -230,7 +229,6 @@ const GamesPage = () => {
           }
         }
 
-        // Calculate EV: compare best odds against consensus implied probability
         let homeEV: number | null = null;
         let awayEV: number | null = null;
         if (allHomeMLs.length >= 2 && bestHomeML !== null) {
@@ -242,7 +240,6 @@ const GamesPage = () => {
           awayEV = Math.round(calcEV(bestAwayML, avgAwayProb) * 10) / 10;
         }
 
-        // Key by normalized home+away
         const key = normalize(ev.home_team || "") + "|" + normalize(ev.away_team || "");
         map[key] = {
           homeML: bestHomeML, awayML: bestAwayML,
@@ -251,10 +248,11 @@ const GamesPage = () => {
           homeEV, awayEV, books,
         };
       }
-      if (signal?.aborted) return;
-      setOddsMap(map);
+      if (signal?.aborted) return {};
+      return map;
     } catch (e) {
       console.warn("Failed to fetch odds:", e);
+      return {};
     }
   };
 
@@ -277,26 +275,38 @@ const GamesPage = () => {
 
     if (!silent) {
       setLoading(true);
-      // Immediately clear stale games from a different sport
       setGames([]);
       setUfcEvents([]);
     }
     setError("");
     try {
       if (s === "ufc") {
-        await Promise.all([fetchUfcEvents(controller.signal), fetchOdds(s, controller.signal)]);
+        const [ufcResult, oddsResult] = await Promise.all([
+          fetchUfcEvents(controller.signal),
+          fetchOdds(s, controller.signal),
+        ]);
+        if (controller.signal.aborted) return;
+        setUfcEvents(ufcResult.events);
+        setGames([]);
+        setOddsMap(oddsResult);
+        if (ufcResult.error) setError(ufcResult.error);
+        // Cache under the sport param, not state
+        sportCache.current[s] = { games: [], ufcEvents: ufcResult.events, oddsMap: oddsResult };
       } else {
-        const [{ data, error: fnError }] = await Promise.all([
+        const [{ data, error: fnError }, oddsResult] = await Promise.all([
           supabase.functions.invoke("games-schedule", {
             body: { sport: SPORT_MAP[s as Exclude<SportFilter, "ufc">] },
           }),
           fetchOdds(s, controller.signal),
         ]);
-        // If this request was superseded by a newer one, discard the result
         if (controller.signal.aborted) return;
         if (fnError) throw fnError;
-        if (data?.error) { setError(data.error); setGames([]); }
-        else setGames(Array.isArray(data) ? data : []);
+        const newGames = data?.error ? [] : (Array.isArray(data) ? data : []);
+        if (data?.error) setError(data.error);
+        setGames(newGames);
+        setOddsMap(oddsResult);
+        // Cache under the sport param, not state
+        sportCache.current[s] = { games: newGames, ufcEvents: [], oddsMap: oddsResult };
       }
     } catch (e: any) {
       if (controller.signal.aborted) return;
@@ -429,22 +439,13 @@ const GamesPage = () => {
         });
       }
 
-      if (signal?.aborted) return;
-      setUfcEvents(events);
-      setGames([]);
+      if (signal?.aborted) return { events: [], error: "" };
+      return { events, error: "" };
     } catch {
-      if (signal?.aborted) return;
-      setError("Failed to load UFC events");
-      setUfcEvents([]);
+      if (signal?.aborted) return { events: [], error: "" };
+      return { events: [], error: "Failed to load UFC events" };
     }
   };
-
-  // Cache current sport data whenever it changes
-  useEffect(() => {
-    if (!loading && !error) {
-      sportCache.current[sport] = { games, ufcEvents, oddsMap };
-    }
-  }, [games, ufcEvents, oddsMap, loading, error, sport]);
 
   useEffect(() => { fetchGames(sport); }, [sport]);
 
