@@ -1,27 +1,22 @@
 
 
-## Plan: Show Full Fighter Names on UFC Cards
+## Plan: Fix UFC Fighter Icons Not Loading
 
-### Problem
-Fighter names are truncated with `...` due to `truncate` class on the name spans (lines 843, 857).
+### Root Cause
+The fighter headshot URL uses ESPN's athlete headshot path (`/i/headshots/mma/players/full/${id}.png`), but the code extracts `competitors[0]?.id` (the **competitor/competition ID**) instead of `competitors[0]?.athlete?.id` (the **athlete ID**). These are different values — the headshot endpoint only works with athlete IDs.
 
 ### Fix (`src/pages/GamesPage.tsx`)
 
-**Two changes:**
+**Lines 427-428** — Extract the athlete ID instead of the competitor ID:
 
-1. **Line 843** — Remove `truncate` from fighter1 name, allow wrapping:
-   ```tsx
-   <span className="text-[11px] font-bold text-foreground block leading-tight">{fight.fighter1}</span>
-   ```
+```tsx
+fighter1Id: competitors[0]?.athlete?.id || competitors[0]?.id || undefined,
+fighter2Id: competitors[1]?.athlete?.id || competitors[1]?.id || undefined,
+```
 
-2. **Line 857** — Same for fighter2:
-   ```tsx
-   <span className="text-[11px] font-bold text-foreground block leading-tight">{fight.fighter2}</span>
-   ```
-
-Also remove `overflow-hidden` from the parent divs (lines 842, 856) so text can wrap freely.
+This prioritizes the athlete ID (which matches the headshot URL format) and falls back to the competitor ID if unavailable.
 
 ### Scope
-- Single file, 4 class changes
-- Names wrap to second line if needed instead of being cut off
+- Single file, two line changes
+- All fighter headshots should load correctly after this fix
 
