@@ -2054,7 +2054,7 @@ const NbaPropsPage = () => {
                     style={{ background: `radial-gradient(circle, ${results.minutes_trend.trend === "up" ? "hsl(158 64% 52%)" : results.minutes_trend.trend === "down" ? "hsl(0 72% 51%)" : "hsl(210 100% 60%)"}, transparent)` }} />
                   <div className="flex items-center gap-2.5 mb-3">
                     <Activity className="w-3.5 h-3.5 text-accent/40" />
-                    <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65">{sport === "nhl" ? "TOI Trend" : "Minutes Trend"}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65">{sport === "mlb" ? "At-Bats Trend" : sport === "nhl" ? "TOI Trend" : "Minutes Trend"}</span>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl font-extrabold relative overflow-hidden ${
@@ -2066,7 +2066,7 @@ const NbaPropsPage = () => {
                       {results.minutes_trend.trend === "up" ? "↑" : results.minutes_trend.trend === "down" ? "↓" : "→"}
                     </div>
                     <div>
-                      <p className="text-base font-bold text-foreground tabular-nums">{results.minutes_trend.avg_min} {sport === "nhl" ? "TOI avg" : "min avg"}</p>
+                      <p className="text-base font-bold text-foreground tabular-nums">{results.minutes_trend.avg_min} {sport === "mlb" ? "AB avg" : sport === "nhl" ? "TOI avg" : "min avg"}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-[10px] text-muted-foreground/35">Recent: <span className="text-foreground/60 font-semibold">{results.minutes_trend.recent_avg}</span></span>
                         <span className="text-[10px] text-muted-foreground/45">·</span>
