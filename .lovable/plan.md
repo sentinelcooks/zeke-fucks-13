@@ -1,18 +1,22 @@
 
 
-## Plan: Fix Logo Spacing & Soccer Text Wrapping
+## Plan: Improve Profit Tracker & Analytics Preview on Paywall
 
-### Changes in `src/pages/OnboardingPage.tsx`
+### Problem
+The current preview for "Profit Tracker & Analytics" is just a flat grid of colored squares — it doesn't represent the actual tracker which has stats, a P&L calendar with intensity-scaled cells, and performance metrics.
 
-**1. Logo too close to dynamic island (hero step)**
-The hero content area has no extra top padding, so the logo sits right under the safe area. Add `pt-4` to the hero `motion.div` (line 444) to push the logo down from the progress bar / dynamic island area.
+### Changes
 
-**2. Soccer text wrapping**
-The sport tiles use `w-11 h-11` for the logo container and `w-10 h-10` for the image inside. In a 2-column grid, this leaves too little room for the label "Soccer", causing it to wrap. Fix by:
-- Reducing sport logo container from `w-11 h-11` to `w-9 h-9` (line 152)
-- Reducing sport logo image from `w-10 h-10` to `w-8 h-8` (line 155)
-- Adding `whitespace-nowrap` to the label text (line 163) to prevent wrapping
+**`src/pages/PaywallPage.tsx`** — Replace the preview JSX for the "Profit Tracker & Analytics" feature (lines 155-163) with a more representative mini dashboard:
 
-### Files Modified
-- `src/pages/OnboardingPage.tsx` — 3 small edits
+1. **Mini stat row** at top: three small stat pills showing "Win Rate 67%", "Profit +$482", "ROI +12.3%" with appropriate green coloring
+2. **Improved calendar grid**: Keep the 7-column layout but make it look like a real P&L calendar — add day-of-week headers (S M T W T F S) in tiny muted text, use varying green/red intensities (opacity levels) to show different profit/loss magnitudes, and make cells slightly larger with rounded corners
+3. **Mini sparkline row** at bottom: a simple row of small bars (like a tiny bar chart) showing a 7-day profit trend, with green bars for wins and red for losses
+
+This creates a preview that mirrors the actual Profit Tracker's key elements: stats summary, P&L calendar, and trend visualization.
+
+### Technical Details
+- Only the `preview` ReactNode in the FEATURES array entry for "Profit Tracker & Analytics" changes
+- No new dependencies — all inline JSX with Tailwind classes
+- Keeps the same compact sizing as other feature previews
 
