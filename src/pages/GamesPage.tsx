@@ -429,13 +429,13 @@ const GamesPage = () => {
         });
       }
 
+      if (signal?.aborted) return;
       setUfcEvents(events);
       setGames([]);
     } catch {
+      if (signal?.aborted) return;
       setError("Failed to load UFC events");
       setUfcEvents([]);
-    } finally {
-      setLoading(false);
     }
   };
 
