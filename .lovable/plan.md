@@ -1,25 +1,27 @@
 
+Fix this in `src/pages/GamesPage.tsx` only.
 
-## Plan: Fix UFC Fighter Avatars Obscuring Bell Notification
+What’s happening:
+- The bell already has a higher z-index, but the UFC fighter row still starts too close to the top-right control area.
+- So this is now a layout-clearance issue as much as a stacking issue: the right fighter avatar is occupying the same visual/tap zone as the bell.
 
-### Problem
-The notification bell container at line 820 lacks a `z-index`, so the fighter avatars in the grid below can visually overlap and block taps on the bell.
+Plan:
+1. Keep the bell controls definitively on top
+- Retain `z-10` on the top-right notification container.
+- Add explicit `relative z-10 pointer-events-auto` to the bell button itself so the tap target is unquestionably above surrounding content.
 
-### Fix (`src/pages/GamesPage.tsx`)
+2. Keep fighter avatars below
+- Retain `relative z-[1]` on each `FighterAvatar` wrapper so avatars stay on a lower layer.
 
-**Two changes:**
+3. Create space so the bell is not physically overlapped
+- Add top spacing to the UFC fighter grid/container so the fighter row sits below the bell area instead of directly under it.
+- If needed, add a little right-side padding on that same row so the far-right avatar does not sit under the bell on narrow mobile widths.
 
-1. **Line 820** — Add `z-10` to the bell/badge container:
-   ```tsx
-   <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
-   ```
+4. Verify the fix against the current mobile layout
+- Check the UFC cards at the current 390px-wide viewport.
+- Confirm the bell is fully visible, not visually intersecting the right fighter headshot, and remains tappable on both main-event and standard fight cards.
 
-2. **Line 757** — Add `relative z-[1]` to each `FighterAvatar` wrapper to explicitly keep avatars below:
-   ```tsx
-   <div className="w-11 h-11 rounded-full bg-secondary/40 border border-border/20 overflow-hidden shrink-0 relative z-[1]">
-   ```
-
-### Scope
-- Single file, two class additions
-- Bell always tappable, fighter avatars render below it
-
+Scope:
+- Single file: `src/pages/GamesPage.tsx`
+- No changes to other pages or shared components
+- No changes to the bell behavior, only layering and spacing
