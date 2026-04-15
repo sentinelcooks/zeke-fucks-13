@@ -5,6 +5,7 @@ import { TrendingUp, TrendingDown, Zap, Clock, Search, Loader2, Link2, X, Chevro
 import { supabase } from "@/integrations/supabase/client";
 
 import { analyzeProp } from "@/services/api";
+import WrittenAnalysis from "@/components/WrittenAnalysis";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import OddsComparison from "@/components/OddsComparison";
 import { PlayerCard } from "@/components/mobile/PlayerCard";
@@ -518,6 +519,28 @@ const FreePropsPage = () => {
                     </div>
                   </motion.div>
                 )}
+
+                {/* AI Written Analysis */}
+                <WrittenAnalysis
+                  type="prop"
+                  verdict={results.verdict || ""}
+                  confidence={results.confidence ?? prop.confidence ?? 0}
+                  playerOrTeam={results.player?.name || prop.player_name}
+                  line={prop.line}
+                  propDisplay={prop.prop_type}
+                  overUnder={prop.direction}
+                  reasoning={results.reasoning}
+                  seasonHitRate={results.season_hit_rate}
+                  last10={results.last_10}
+                  last5={results.last_5}
+                  h2hAvg={results.h2h_avg}
+                  ev={results.ev}
+                  edge={results.edge}
+                  minutesTrend={results.minutes_trend?.trend}
+                  injuries={results.injuries}
+                  sport={prop.sport}
+                  withoutTeammatesData={results.without_teammates}
+                />
 
 
                 {/* Correlated Props */}
