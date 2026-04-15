@@ -11,6 +11,7 @@ import { Search, Loader2, Target, TrendingUp, TrendingDown, Crosshair, Shield, H
 import { searchPlayers, getTeams, analyzeProp, searchUfcFighters, analyzeUfcMatchup } from "@/services/api";
 import { supabase } from "@/integrations/supabase/client";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { AddToSlipSheet } from "@/components/AddToSlipSheet";
 
 import { motion, AnimatePresence } from "framer-motion";
 import { useParlaySlip } from "@/contexts/ParlaySlipContext";
@@ -410,6 +411,8 @@ const NbaPropsPage = () => {
   const [parlaySlip, setParlaySlip] = useState<Array<{ player: string; prop: string; team: string | null; hit_rate: number }>>([]);
   const [showSlip, setShowSlip] = useState(false);
   const [stakeAmount, setStakeAmount] = useState("10");
+  const [slipSheetOpen, setSlipSheetOpen] = useState(false);
+  const [slipSheetPick, setSlipSheetPick] = useState<import("@/components/AddToSlipSheet").SlipSheetPick | null>(null);
   const [oppQuery, setOppQuery] = useState("");
   const [showOppDropdown, setShowOppDropdown] = useState(false);
   const oppDropdownRef = useRef<HTMLDivElement>(null);
@@ -1797,7 +1800,7 @@ const NbaPropsPage = () => {
                       const existing = globalSlip.legs.find(l => l.player === player && l.propType === propType && l.line === line);
                       if (existing) globalSlip.removeLeg(existing.id);
                     } else {
-                      globalSlip.addLeg({
+                      setSlipSheetPick({
                         sport: sport === "mlb" ? "MLB" : sport === "nhl" ? "NHL" : "NBA",
                         player,
                         propType,
@@ -1807,6 +1810,7 @@ const NbaPropsPage = () => {
                         odds: -110,
                         confidence: typeof results.confidence === "number" ? results.confidence : results.confidence?.overall_confidence,
                       });
+                      setSlipSheetOpen(true);
                     }
                   }}
                   className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-[12px] font-bold tracking-wider transition-all ${
@@ -2256,6 +2260,7 @@ const NbaPropsPage = () => {
         isOpen={!!explainerProp}
         onClose={() => setExplainerProp(null)}
       />
+      <AddToSlipSheet open={slipSheetOpen} onOpenChange={setSlipSheetOpen} pick={slipSheetPick} />
     </div>
   );
 };
