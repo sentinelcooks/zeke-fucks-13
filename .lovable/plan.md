@@ -1,22 +1,17 @@
 
 
-## Plan: Improve Profit Tracker & Analytics Preview on Paywall
+## Plan: Increase Gray Text Brightness Globally
 
 ### Problem
-The current preview for "Profit Tracker & Analytics" is just a flat grid of colored squares — it doesn't represent the actual tracker which has stats, a P&L calendar with intensity-scaled cells, and performance metrics.
+Muted/gray text (`text-muted-foreground`) is too dim across the app, making it hard to read.
 
-### Changes
+### Change
 
-**`src/pages/PaywallPage.tsx`** — Replace the preview JSX for the "Profit Tracker & Analytics" feature (lines 155-163) with a more representative mini dashboard:
+**`src/index.css`** — Bump the lightness of `--muted-foreground` and `--secondary-foreground` CSS variables:
 
-1. **Mini stat row** at top: three small stat pills showing "Win Rate 67%", "Profit +$482", "ROI +12.3%" with appropriate green coloring
-2. **Improved calendar grid**: Keep the 7-column layout but make it look like a real P&L calendar — add day-of-week headers (S M T W T F S) in tiny muted text, use varying green/red intensities (opacity levels) to show different profit/loss magnitudes, and make cells slightly larger with rounded corners
-3. **Mini sparkline row** at bottom: a simple row of small bars (like a tiny bar chart) showing a 7-day profit trend, with green bars for wins and red for losses
+- `--muted-foreground`: `228 12% 75%` → `228 12% 82%` (line 28)
+- `--secondary-foreground`: `228 12% 80%` → `228 12% 86%` (line 25)
+- `--sidebar-foreground`: `228 10% 63%` → `228 10% 72%` (line 55)
 
-This creates a preview that mirrors the actual Profit Tracker's key elements: stats summary, P&L calendar, and trend visualization.
-
-### Technical Details
-- Only the `preview` ReactNode in the FEATURES array entry for "Profit Tracker & Analytics" changes
-- No new dependencies — all inline JSX with Tailwind classes
-- Keeps the same compact sizing as other feature previews
+This is a single-file, 3-line edit that affects every component using these tokens — no per-component changes needed.
 
