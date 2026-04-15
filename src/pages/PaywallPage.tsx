@@ -177,16 +177,6 @@ const FEATURES: Feature[] = [
             />
           ))}
         </div>
-        {/* Sparkline */}
-        <div className="flex items-end gap-[2px] h-5 px-1">
-          {[12,8,-5,15,6,-3,18,10,-7,14].map((v, i) => (
-            <div
-              key={i}
-              className={`flex-1 rounded-sm ${v > 0 ? "bg-green-500/50" : "bg-red-500/40"}`}
-              style={{ height: `${Math.abs(v) / 18 * 100}%` }}
-            />
-          ))}
-        </div>
       </div>
     ),
   },
