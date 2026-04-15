@@ -1,36 +1,36 @@
 
 
-## Plan: Fix Game Log Date Display to Show Full MM/DD/YYYY
+## Plan: Make AI Impact Analysis Sport-Aware
 
 ### Problem
-The game log table DATE column shows only partial dates (e.g., `/2025`) because `g.date?.slice(5)` doesn't handle all ESPN date formats correctly. ESPN's `gameDate` field can vary in format.
+The `analyzeInjuryImpact` function in `supabase/functions/nba-api/index.ts` uses generic/NBA-centric terminology like "at-bats/usage", "shot attempts", "floor time" regardless of sport. The screenshot shows "at-bats/usage" appearing for what should be sport-specific language.
 
-### Solution
-Replace `g.date?.slice(5)` with a robust date formatter that always shows `MM/DD/YY` (compact for the table). Create a small helper function and apply it in all three files.
+### Changes — `supabase/functions/nba-api/index.ts`
 
-### Helper (inline in each file or shared)
-```ts
-function fmtDate(raw: string) {
-  if (!raw) return "—";
-  const d = new Date(raw);
-  if (isNaN(d.getTime())) return raw;
-  return `${d.getMonth()+1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
-}
-```
+1. **Add `sport` parameter** to `analyzeInjuryImpact` function signature (line 946)
 
-### Changes
+2. **Replace generic line 968** with sport-specific usage text:
+   - NBA: `"Expect increased minutes/usage for {player}..."`
+   - MLB: `"Expect increased at-bats/usage for {player}..."`
+   - NHL: `"Expect increased ice time/TOI for {player}..."`
+   - NFL: `"Expect increased snaps/targets for {player}..."`
+   - UFC: `"Expect increased striking/grappling volume for {player}..."`
 
-**`src/pages/NbaPropsPage.tsx`**
-- Line 314: Replace `g.date?.slice(5)` → `fmtDate(g.date)`
-- Line 222-223 (chart labels): Also use the formatter for consistency
+3. **Make prop-type insights sport-aware** (lines 970-984):
+   - NBA props (points, 3-pointers, assists, rebounds): "More shot attempts", "handle ball more", "More floor time"
+   - MLB props (hits, total_bases, home_runs, rbi): "Lineup adjustment", "Batting order shift", "plate appearances"
+   - NHL props (goals, assists, shots_on_goal, points): "More ice time on PP", "increased SOG", "power play promotion"
+   - NFL props (passing_yards, rushing_yards, receptions): "More snaps", "increased targets", "routes run"
+   - UFC props: "More striking output expected", "grappling exchanges"
 
-**`src/pages/FreePropsPage.tsx`**
-- Line 138: Replace `g.date?.slice(5)` → `fmtDate(g.date)`
+4. **Update line 997** ("shift rotations") to be sport-specific:
+   - NBA: "shift rotations"
+   - MLB: "shift lineup/bullpen usage"
+   - NHL: "shift line combinations"
+   - NFL: "shift offensive scheme"
 
-**`src/components/ResultsPanel.tsx`**
-- Line 165: Replace `{g.date}` → `{fmtDate(g.date)}`
-- Line 89 (chart labels): Also format
+5. **Update call site** (line 2788-2791) to pass `sport` as 6th argument
 
 ### Scope
-- 3 frontend files, no backend changes
+- 1 edge function updated, no frontend changes
 
