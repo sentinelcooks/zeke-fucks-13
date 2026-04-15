@@ -817,7 +817,7 @@ const GamesPage = () => {
 
     return (
     <motion.div {...stagger(index)} className="vision-card p-4 relative overflow-hidden">
-      <div className="absolute top-3 right-3 flex items-center gap-1.5">
+      <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
         {fight.isMainEvent && (
           <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{
             background: 'hsla(250, 76%, 62%, 0.12)',
@@ -837,7 +837,7 @@ const GamesPage = () => {
           {isNotified ? <Bell className="w-3.5 h-3.5 text-accent" /> : <BellOff className="w-3.5 h-3.5 text-muted-foreground/40" />}
         </button>
       </div>
-      <div className="grid grid-cols-[auto_1fr_auto_1fr_auto] items-center gap-1.5">
+      <div className="grid grid-cols-[auto_1fr_auto_1fr_auto] items-center gap-1.5 mt-6">
         <FighterAvatar id={fight.fighter1Id} name={fight.fighter1} />
         <div className="min-w-0 overflow-hidden">
           <span className="text-[11px] font-bold text-foreground truncate block">{fight.fighter1}</span>
