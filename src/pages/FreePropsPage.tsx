@@ -103,9 +103,16 @@ function Section({ title, children, defaultOpen = true, icon }: { title: string;
   );
 }
 
+function fmtDate(raw: string) {
+  if (!raw) return "—";
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw;
+  return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
+}
+
 function GameChart({ data }: { data: any }) {
   const games = data.game_log || [];
-  const labels = games.map((g: any) => { const parts = g.date?.split("-") || []; return parts.length >= 2 ? `${parts[1]}/${parts[2]}` : g.date; });
+  const labels = games.map((g: any) => fmtDate(g.date));
   const values = games.map((g: any) => g.stat_value);
   const lineval = data.line;
   const colors = values.map((v: number) => data.over_under === "over" ? v > lineval ? "hsla(158, 64%, 52%, 0.8)" : "hsla(0, 72%, 51%, 0.35)" : v < lineval ? "hsla(158, 64%, 52%, 0.8)" : "hsla(0, 72%, 51%, 0.35)");
@@ -135,7 +142,7 @@ function GamesTable({ games, line, overUnder, propType }: { games: any[]; line: 
             const isHit = overUnder === "over" ? sv > line : sv < line;
             return (
               <tr key={i} className="border-b border-border/15 hover:bg-[hsla(228,20%,14%,0.4)] transition-colors">
-                <td className="text-center py-2.5 px-1 whitespace-nowrap text-muted-foreground/50">{g.date?.slice(5)}</td>
+                <td className="text-center py-2.5 px-1 whitespace-nowrap text-muted-foreground/50">{fmtDate(g.date)}</td>
                 <td className="text-center py-2.5 px-1 whitespace-nowrap font-medium text-foreground/80">{g.matchup?.replace(/.*(?:vs\.|@)\s*/, "")}</td>
                 <td className={`text-center py-2.5 px-1 font-bold ${g.result === "W" ? "text-nba-green" : "text-nba-red"}`}>{g.result}</td>
                 <td className="text-center py-2.5 px-1 text-muted-foreground/50">{g.MIN}</td>
