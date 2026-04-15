@@ -949,12 +949,27 @@ function analyzeInjuryImpact(
   teammateInjuries: any[],
   opponentInjuries: any[],
   propType: string,
+  sport: string = "nba",
 ) {
   const insights: string[] = [];
   const pos = playerPosition.toUpperCase();
   const sameGroupPositions = POSITION_GROUPS[pos] || [pos];
+  const s = (sport || "nba").toLowerCase();
 
-  // Teammate injuries — same position = more minutes/usage
+  // Sport-specific usage text
+  const usageText = s === "mlb" ? "at-bats/plate appearances"
+    : s === "nhl" ? "ice time/TOI"
+    : s === "nfl" ? "snaps/targets"
+    : s === "ufc" ? "striking/grappling volume"
+    : "minutes/usage";
+
+  // Sport-specific rotation text
+  const rotationText = s === "mlb" ? "shift lineup/bullpen usage"
+    : s === "nhl" ? "shift line combinations"
+    : s === "nfl" ? "shift offensive scheme"
+    : "shift rotations";
+
+  // Teammate injuries — same position = more usage
   const samePosSig = teammateInjuries.filter(i => {
     const iPos = (i.position || "").toUpperCase();
     const isSameGroup = sameGroupPositions.includes(iPos) || iPos === pos;
@@ -965,22 +980,60 @@ function analyzeInjuryImpact(
   if (samePosSig.length > 0) {
     const names = samePosSig.map(i => `${i.player_name} (${i.position})`).join(", ");
     insights.push(`🔺 ${names} — same position group as ${playerName} (${pos}) — OUT/Doubtful`);
-    insights.push(`📈 Expect increased at-bats/usage for ${playerName} with ${samePosSig.length === 1 ? "this player" : "these players"} sidelined`);
+    insights.push(`📈 Expect increased ${usageText} for ${playerName} with ${samePosSig.length === 1 ? "this player" : "these players"} sidelined`);
 
-    if (["points", "3-pointers", "pts+reb+ast"].includes(propType)) {
-      insights.push(`🎯 More shot attempts likely → boost to scoring props`);
+    // NBA-specific prop insights
+    if (s === "nba") {
+      if (["points", "3-pointers", "pts+reb+ast"].includes(propType)) {
+        insights.push(`🎯 More shot attempts likely → boost to scoring props`);
+      }
+      if (propType === "assists" && ["PG", "SG", "G"].includes(pos)) {
+        insights.push(`🎯 May handle ball more → potential assist increase`);
+      }
+      if (propType === "rebounds" && ["PF", "SF", "C", "F"].includes(pos)) {
+        insights.push(`🎯 More floor time at forward/center → rebounding boost`);
+      }
     }
-    if (["hits", "total_bases", "home_runs"].includes(propType)) {
-      insights.push(`🎯 Lineup adjustment likely → potential boost to at-bats and run production`);
+
+    // MLB-specific prop insights
+    if (s === "mlb") {
+      if (["hits", "total_bases", "home_runs"].includes(propType)) {
+        insights.push(`🎯 Lineup adjustment likely → potential boost to plate appearances and run production`);
+      }
+      if (propType === "rbi" && ["1B", "3B", "DH", "LF", "RF", "CF", "OF"].includes(pos)) {
+        insights.push(`🎯 Batting order shift possible → RBI opportunities may change`);
+      }
+      if (["strikeouts", "pitcher_strikeouts", "innings_pitched"].includes(propType)) {
+        insights.push(`🎯 Depleted bullpen may extend starter's innings pitched`);
+      }
     }
-    if (propType === "assists" && ["PG", "SG", "G"].includes(pos)) {
-      insights.push(`🎯 May handle ball more → potential assist increase`);
+
+    // NHL-specific prop insights
+    if (s === "nhl") {
+      if (["goals", "points", "shots_on_goal"].includes(propType)) {
+        insights.push(`🎯 More ice time on PP likely → increased SOG and scoring chances`);
+      }
+      if (propType === "assists") {
+        insights.push(`🎯 Power play promotion possible → assist opportunities increase`);
+      }
     }
-    if (propType === "rebounds" && ["PF", "SF", "C", "F"].includes(pos)) {
-      insights.push(`🎯 More floor time at forward/center → rebounding boost`);
+
+    // NFL-specific prop insights
+    if (s === "nfl") {
+      if (["passing_yards", "passing_touchdowns"].includes(propType)) {
+        insights.push(`🎯 More snaps under center → increased passing volume`);
+      }
+      if (["receptions", "receiving_yards"].includes(propType)) {
+        insights.push(`🎯 Increased targets and routes run with fewer pass-catchers`);
+      }
+      if (["rushing_yards", "rushing_touchdowns"].includes(propType)) {
+        insights.push(`🎯 More carries expected → red zone opportunities increase`);
+      }
     }
-    if (propType === "rbi" && ["1B", "3B", "DH", "LF", "RF", "CF", "OF"].includes(pos)) {
-      insights.push(`🎯 Batting order shift possible → RBI opportunities may change`);
+
+    // UFC-specific insights
+    if (s === "ufc") {
+      insights.push(`🎯 More striking output expected with opponent adjustments`);
     }
   }
 
@@ -994,7 +1047,7 @@ function analyzeInjuryImpact(
 
   if (otherSig.length > 0) {
     const names = otherSig.map(i => `${i.player_name} (${i.position})`).join(", ");
-    insights.push(`⚠️ Also OUT: ${names} — team short-handed, could shift rotations`);
+    insights.push(`⚠️ Also OUT: ${names} — team short-handed, could ${rotationText}`);
   }
 
   // Opponent injuries — if their defenders at our position are out
@@ -1007,8 +1060,17 @@ function analyzeInjuryImpact(
   if (oppSamePos.length > 0) {
     const names = oppSamePos.map(i => `${i.player_name} (${i.position})`).join(", ");
     insights.push(`✅ Opponent missing ${names} — weaker matchup defense for ${playerName}`);
-    if (["points", "3-pointers", "pts+reb+ast"].includes(propType)) {
+    if (s === "nba" && ["points", "3-pointers", "pts+reb+ast"].includes(propType)) {
       insights.push(`🎯 Easier scoring matchup with primary defender(s) out`);
+    }
+    if (s === "nhl" && ["goals", "shots_on_goal", "points"].includes(propType)) {
+      insights.push(`🎯 Weaker goaltending/defense → increased scoring opportunity`);
+    }
+    if (s === "mlb" && ["hits", "total_bases", "home_runs", "rbi"].includes(propType)) {
+      insights.push(`🎯 Weakened pitching staff → better plate appearance outcomes`);
+    }
+    if (s === "nfl" && ["passing_yards", "receiving_yards", "rushing_yards"].includes(propType)) {
+      insights.push(`🎯 Depleted secondary/front seven → easier matchup`);
     }
   }
 
@@ -2787,7 +2849,7 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
   // AI Injury Impact Analysis
   const injuryInsights = analyzeInjuryImpact(
     player.position, player.full_name,
-    teammateInjuries, opponentInjuries, propType
+    teammateInjuries, opponentInjuries, propType, sport
   );
 
   // Cross-reference: analyze player's performance in games without key injured teammates
