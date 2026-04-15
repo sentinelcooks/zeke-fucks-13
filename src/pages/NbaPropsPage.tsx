@@ -813,7 +813,7 @@ const NbaPropsPage = () => {
                 key={s.value}
                 onClick={() => setLinesSport(s.value as any)}
                 whileTap={{ scale: 0.96 }}
-                className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-[14px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden ${
+                className={`flex-1 flex items-center justify-center gap-1.5 py-3.5 rounded-xl text-[14px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden ${
                   active ? "text-white" : "text-muted-foreground/55 hover:text-muted-foreground/50"
                 }`}
                 style={active ? {
