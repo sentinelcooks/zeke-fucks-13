@@ -615,8 +615,9 @@ Deno.serve(async (req) => {
         if (isTimedOut()) { console.log("⏱️ Timeout approaching, stopping lineup scan"); break; }
         if (r.status !== "fulfilled" || r.value.lineup.length === 0) continue;
         const { game, lineup } = r.value;
-        const suggestions = await getLineupPropSuggestions(lineup, game.sport, LOVABLE_API_KEY);
+        const suggestions = await retryWithBackoff(() => getLineupPropSuggestions(lineup, game.sport, LOVABLE_API_KEY), 2, `lineup-${game.sport}`);
         propSuggestions.push(...suggestions.map(s => ({ ...s, sport: game.sport })));
+        await delay(2000); // Throttle between AI lineup calls
       }
 
       console.log(`Got ${propSuggestions.length} lineup-based prop suggestions (${Math.round((Date.now() - startTime) / 1000)}s elapsed)`);
