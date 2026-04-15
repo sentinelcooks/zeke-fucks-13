@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import { Drawer, DrawerContent } from "@/components/ui/drawer";
 import { useParlaySlip, type ParlaySlipLeg } from "@/contexts/ParlaySlipContext";
 import { americanToDecimal } from "@/utils/oddsFormat";
+import { fetchPlayerOdds } from "@/services/oddsApi";
+import { getSportsbookInfo } from "@/utils/sportsbookLogos";
 import { toast } from "@/hooks/use-toast";
-import { Layers } from "lucide-react";
+import { Layers, Loader2 } from "lucide-react";
 
 export interface SlipSheetPick {
   sport: ParlaySlipLeg["sport"];
@@ -25,17 +27,50 @@ interface Props {
 export function AddToSlipSheet({ open, onOpenChange, pick }: Props) {
   const { addLeg } = useParlaySlip();
   const [stake, setStake] = useState("");
+  const [liveOdds, setLiveOdds] = useState<number | null>(null);
+  const [bestBook, setBestBook] = useState<string | null>(null);
+  const [loadingOdds, setLoadingOdds] = useState(false);
 
   useEffect(() => {
-    if (open) setStake("");
+    if (open) {
+      setStake("");
+      setLiveOdds(null);
+      setBestBook(null);
+    }
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !pick) return;
+    let cancelled = false;
+    setLoadingOdds(true);
+
+    fetchPlayerOdds(pick.player, pick.propType, pick.overUnder, pick.sport?.toLowerCase())
+      .then((data) => {
+        if (cancelled) return;
+        const books: Array<{ book: string; odds: number; line: number }> = data?.books ?? [];
+        if (books.length > 0) {
+          // Best = highest odds (most favorable to bettor)
+          const best = books.reduce((a, b) => (b.odds > a.odds ? b : a), books[0]);
+          setLiveOdds(best.odds);
+          setBestBook(best.book);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingOdds(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [open, pick]);
 
   if (!pick) return null;
 
-  const decOdds = americanToDecimal(pick.odds);
+  const displayOdds = liveOdds ?? pick.odds;
+  const decOdds = americanToDecimal(displayOdds);
   const stakeNum = parseFloat(stake) || 0;
   const payout = (stakeNum * decOdds).toFixed(2);
-  const oddsLabel = pick.odds > 0 ? `+${pick.odds}` : `${pick.odds}`;
+  const oddsLabel = displayOdds > 0 ? `+${displayOdds}` : `${displayOdds}`;
+  const bookInfo = bestBook ? getSportsbookInfo(bestBook) : null;
 
   const handleConfirm = () => {
     addLeg({
@@ -45,7 +80,7 @@ export function AddToSlipSheet({ open, onOpenChange, pick }: Props) {
       line: pick.line,
       overUnder: pick.overUnder,
       opponent: pick.opponent,
-      odds: pick.odds,
+      odds: displayOdds,
       confidence: pick.confidence,
     });
     onOpenChange(false);
@@ -70,8 +105,26 @@ export function AddToSlipSheet({ open, onOpenChange, pick }: Props) {
               <span className="text-[11px] text-muted-foreground uppercase">{pick.propType}</span>
             </div>
             <div className="flex items-center gap-3 mt-2">
-              <span className="text-[11px] text-muted-foreground">Odds</span>
-              <span className="text-[13px] font-bold text-accent">{oddsLabel}</span>
+              <span className="text-[11px] text-muted-foreground">Best Odds</span>
+              {loadingOdds ? (
+                <Loader2 className="w-4 h-4 animate-spin text-accent" />
+              ) : (
+                <>
+                  <span className="text-[13px] font-bold text-accent">{oddsLabel}</span>
+                  {bookInfo && (
+                    <div className="flex items-center gap-1.5 ml-1">
+                      {bookInfo.logo ? (
+                        <img src={bookInfo.logo} alt={bookInfo.label} className="w-4 h-4 rounded-sm object-contain" />
+                      ) : (
+                        <span className="text-[9px] font-bold rounded px-1 py-0.5" style={{ background: bookInfo.color, color: "#fff" }}>
+                          {bookInfo.abbrev}
+                        </span>
+                      )}
+                      <span className="text-[11px] text-muted-foreground">{bookInfo.label}</span>
+                    </div>
+                  )}
+                </>
+              )}
               {pick.opponent && (
                 <>
                   <span className="text-[11px] text-muted-foreground">vs</span>
