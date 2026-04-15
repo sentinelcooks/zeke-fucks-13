@@ -249,7 +249,7 @@ function BetSection({ icon, title, predictions }: { icon: React.ReactNode; title
               <span className={`text-sm font-extrabold block mb-1 ${
                 p.confidence === "strong" ? "text-nba-green" : p.confidence === "lean" ? "text-[hsl(var(--nba-blue))]" : "text-muted-foreground"
               }`}>{p.bet}</span>
-              <p className="text-[10px] text-muted-foreground/50 leading-snug">{p.reasoning}</p>
+              <p className="text-[10px] text-white leading-snug">{p.reasoning}</p>
             </div>
           ))}
         </div>
@@ -389,7 +389,7 @@ function MatchupResults({ data }: { data: any }) {
                 ml_pick.confidence === "lean" ? "bg-[hsl(var(--nba-blue))] text-primary-foreground" :
                 "bg-[hsl(var(--nba-yellow))] text-accent-foreground"
               }`}>{ml_pick.confidence}</span>
-              <p className="text-[10px] text-foreground leading-snug">{ml_pick.reasoning}</p>
+              <p className="text-[10px] text-white leading-snug">{ml_pick.reasoning}</p>
             </div>
           )}
 
