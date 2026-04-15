@@ -223,6 +223,7 @@ interface GameRow {
   total_bases: number;
   walks: number;
   stolen_bases: number;
+  at_bats: number;
   // NHL stats
   goals: number;
   nhl_assists: number;
@@ -405,6 +406,7 @@ async function getGameLog(playerId: string, season?: number, config?: EspnConfig
         total_bases: tbVal,
         walks: bbIdx >= 0 ? parseStat(stats[bbIdx]) : 0,
         stolen_bases: sbIdx >= 0 ? parseStat(stats[sbIdx]) : 0,
+        at_bats: abIdx >= 0 ? parseStat(stats[abIdx]) : 0,
         // NHL stats
         goals: gIdx >= 0 ? parseStat(stats[gIdx]) : 0,
         nhl_assists: aIdx >= 0 ? parseStat(stats[aIdx]) : 0,
@@ -1431,18 +1433,18 @@ function avg(values: number[]): number {
   return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10;
 }
 
-function minutesTrend(games: GameRow[]) {
+function minutesTrend(games: GameRow[], sport?: string) {
   const recent = games.slice(-10);
-  const mins = recent.map(g => g.min);
-  if (mins.length < 4) {
-    const a = avg(mins);
+  const vals = recent.map(g => sport === "mlb" ? (g.at_bats || 0) : sport === "nhl" ? (g.toi || 0) : g.min);
+  if (vals.length < 4) {
+    const a = avg(vals);
     return { avg_min: a, trend: "insufficient_data", recent_avg: a, early_avg: a };
   }
-  const mid = Math.floor(mins.length / 2);
-  const earlyAvg = avg(mins.slice(0, mid));
-  const lateAvg = avg(mins.slice(mid));
+  const mid = Math.floor(vals.length / 2);
+  const earlyAvg = avg(vals.slice(0, mid));
+  const lateAvg = avg(vals.slice(mid));
   const diff = lateAvg - earlyAvg;
-  return { avg_min: avg(mins), trend: diff > 2 ? "up" : diff < -2 ? "down" : "stable", recent_avg: lateAvg, early_avg: earlyAvg };
+  return { avg_min: avg(vals), trend: diff > 2 ? "up" : diff < -2 ? "down" : "stable", recent_avg: lateAvg, early_avg: earlyAvg };
 }
 
 // ── MLB Park Factors (static reference data) ───────────────
@@ -2780,7 +2782,7 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
     oppAbbr ? getTeamRosterContext(oppAbbr, opponentInjuries, cfg) : Promise.resolve({ keyOut: [], keyPlaying: [] }),
   ]);
 
-  const minTrend = minutesTrend(games);
+  const minTrend = minutesTrend(games, sport);
 
   // AI Injury Impact Analysis
   const injuryInsights = analyzeInjuryImpact(
