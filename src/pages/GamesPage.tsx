@@ -298,6 +298,7 @@ const GamesPage = () => {
       if (fnError) throw fnError;
       if (data?.error) { setError(data.error); setGames([]); }
       else setGames(Array.isArray(data) ? data : []);
+      }
     } catch (e: any) {
       if (controller.signal.aborted) return;
       setError("Failed to load games");
@@ -307,7 +308,7 @@ const GamesPage = () => {
     }
   };
 
-  const fetchUfcEvents = async () => {
+  const fetchUfcEvents = async (signal?: AbortSignal) => {
     try {
       // ESPN UFC scoreboard requires exact dates — query today + next 4 weeks (Saturdays & surrounding days)
       const now = new Date();
