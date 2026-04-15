@@ -284,14 +284,14 @@ const GamesPage = () => {
     setError("");
     try {
       if (s === "ufc") {
-        await Promise.all([fetchUfcEvents(), fetchOdds(s)]);
-        return;
+        await Promise.all([fetchUfcEvents(controller.signal), fetchOdds(s, controller.signal)]);
+      } else {
       }
       const [{ data, error: fnError }] = await Promise.all([
         supabase.functions.invoke("games-schedule", {
           body: { sport: SPORT_MAP[s as Exclude<SportFilter, "ufc">] },
         }),
-        fetchOdds(s),
+        fetchOdds(s, controller.signal),
       ]);
       // If this request was superseded by a newer one, discard the result
       if (controller.signal.aborted) return;
