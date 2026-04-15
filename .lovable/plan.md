@@ -1,51 +1,31 @@
 
 
-## Plan: Fix Correlated Props Not Working
+## Plan: Add Rate-Limit Retry Logic to Daily Picks Generation
+
+### Problem
+The `daily-picks` edge function calls the AI gateway for each game analysis but hits rate limits immediately. All calls fail with `RateLimitError`, producing 0 picks. The function has no retry/backoff logic.
 
 ### Root Cause
-Two issues are preventing correlated props from returning results:
-
-1. **Frontend sends empty team**: The frontend extracts team via `data.team || data.player_info?.team` but the `analyzeProp` response stores it at `data.player.team_abbr`. So `team` is always `""`.
-
-2. **Edge function team detection fails**: When the correlated-props function receives an empty team, it tries ESPN search to detect the team, but the ESPN search response format (`searchData.items[0].team?.abbreviation`) doesn't match the actual response structure. The player's team comes nested differently.
-
-3. **No error surfaced**: When 0 correlations are found, the UI silently shows nothing instead of a helpful message.
+The function fires all game bet analyses in parallel batches. The AI gateway enforces per-trace rate limits (~5s cooldown). With 12+ games analyzed simultaneously, every call after the first few gets rate-limited.
 
 ### Changes
 
-**1. `src/pages/NbaPropsPage.tsx`** — Fix team extraction (2 locations)
+**1. `supabase/functions/daily-picks/index.ts`** — Add retry with exponential backoff
 
-Replace:
-```ts
-const playerTeam = data.team || data.player_info?.team || "";
-```
-With:
-```ts
-const playerTeam = data.team || data.player?.team_abbr || data.player?.team || data.player_info?.team || "";
-```
-At lines 585 and 726.
+- Create a `retryWithBackoff(fn, maxRetries=3)` wrapper that catches `RateLimitError` (or HTTP 429) and waits `retryAfterMs` (or 2^attempt seconds) before retrying
+- Apply it to `analyzeGameBets()` calls and `analyzePlayerProp()` calls
+- Reduce parallelism: process games in smaller sequential batches (3-4 at a time instead of all at once) with a small delay between batches to stay under rate limits
 
-Also add "Correlated props unavailable" fallback text when `corrProps.length === 0` and not loading (around line 2181), replacing the current empty state.
+**2. Add sequential throttling for AI gateway calls**
 
-**2. `src/pages/FreePropsPage.tsx`** — Same team extraction fix
+- Between each AI gateway fetch, add a ~1-2 second delay to avoid triggering the per-trace rate limit
+- This trades speed for reliability — the function may take longer but will actually produce picks
 
-Replace line 265:
-```ts
-const playerTeam = data.team || data.player_info?.team || prop.team || "";
-```
-With:
-```ts
-const playerTeam = data.team || data.player?.team_abbr || data.player?.team || data.player_info?.team || prop.team || "";
-```
+**3. Fallback: show latest available picks when today has none**
 
-**3. `supabase/functions/correlated-props/index.ts`** — Improve team detection fallback
-
-When ESPN search doesn't return a team abbreviation, fetch the athlete endpoint directly (`/athletes/{id}`) to get the team. Also add a `team.$ref` fallback. Add logging for better debugging.
-
-**4. UI fallback** — Show "Correlated props unavailable" message in both NbaPropsPage and FreePropsPage when the function returns empty or errors, instead of silently hiding the section.
+In `ModernHomeLayout.tsx`, if today's picks are empty after loading, fall back to showing the most recent picks from the last 3 days (with a "From [date]" label) so the carousel is never empty.
 
 ### Scope
-- 2 frontend files (team extraction + error UI)
-- 1 edge function (team detection fallback + logging)
-- Redeploy correlated-props
+- 1 edge function updated + redeployed
+- 1 frontend component updated (fallback display)
 
