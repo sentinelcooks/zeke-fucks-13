@@ -168,11 +168,11 @@ const FEATURES: Feature[] = [
           {["S","M","T","W","T","F","S"].map((d,i) => (
             <div key={i} className="text-[7px] text-muted-foreground/50 text-center font-medium">{d}</div>
           ))}
-          {[0,0,3,2,1,-1,2, 3,-2,1,0,2,-1,3, 1,2,-1,3,2,1,-2].map((v, i) => (
+          {[0,0,1,1,1,-1,1, 1,-1,1,0,1,-1,1, 1,1,-1,1,1,1,-1].map((v, i) => (
             <div
               key={i}
               className={`w-full aspect-square rounded-sm ${
-                v > 2 ? "bg-green-500/60" : v > 0 ? "bg-green-500/30" : v === 0 ? "bg-muted/20" : v > -2 ? "bg-red-500/30" : "bg-red-500/50"
+                v > 0 ? "bg-green-500/50" : v < 0 ? "bg-red-500/50" : "bg-muted/20"
               }`}
             />
           ))}
