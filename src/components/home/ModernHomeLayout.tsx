@@ -444,9 +444,19 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               <Flame className="w-4 h-4" style={{ color: 'hsl(250 76% 62%)', animation: 'pulse-fire 3s ease-in-out infinite' }} />
               <span className="text-xs font-bold tracking-[0.15em] uppercase" style={{ color: 'hsl(250 76% 62%)' }}>Today's Edge</span>
             </div>
-            <span className="text-[10px] text-muted-foreground/40">
-              Updated {minsAgo}m ago
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-muted-foreground/40">
+                Updated {Math.max(1, Math.round((Date.now() - lastRefreshed.getTime()) / 60000))}m ago
+              </span>
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="p-1 rounded-md hover:bg-secondary/30 transition-colors disabled:opacity-50"
+                title="Refresh picks"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-muted-foreground/60 ${refreshing ? "animate-spin" : ""}`} />
+              </button>
+            </div>
           </div>
 
           {picksLoading ? (
