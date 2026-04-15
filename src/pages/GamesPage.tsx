@@ -256,7 +256,18 @@ const GamesPage = () => {
     }
   };
 
-  const fetchGames = async (s: SportFilter, silent = false) => {
+  const fetchGames = async (s: SportFilter, silent = false, force = false) => {
+    // If cached and not forced, restore instantly
+    if (!force && !silent && sportCache.current[s]) {
+      const cached = sportCache.current[s]!;
+      setGames(cached.games);
+      setUfcEvents(cached.ufcEvents);
+      setOddsMap(cached.oddsMap);
+      setLoading(false);
+      setError("");
+      return;
+    }
+
     // Cancel any in-flight request so stale data from a previous sport never overwrites
     if (fetchAbort.current) fetchAbort.current.abort();
     const controller = new AbortController();
