@@ -1,33 +1,16 @@
 
+Update `src/pages/GamesPage.tsx` only.
 
-## Plan: Fix UFC Fighter Avatars Obscuring Bell Notification
+Change the UFC `FighterAvatar` wrapper from `w-11 h-11 rounded-full` to a 36px circle so both fighter avatars are smaller and no longer overlap the bell:
+- width: 36px
+- height: 36px
+- border-radius: 50% (keep `rounded-full`)
 
-### Problem
-The fighter avatars (44px circles) in the 5-column grid layout extend upward and overlap with the bell notification button positioned at `top-3 right-3`. The rightmost avatar (fighter 2) visually covers the bell, making it untappable.
+Implementation scope:
+- Edit the avatar container class in `FighterAvatar`
+- Do not change spacing, z-index, margins, bell position, image scaling, or anything else
 
-### Fix (single file: `src/pages/GamesPage.tsx`)
-
-**1. Add `z-10` to the bell/main-event container** (line 820)
-
-The `absolute top-3 right-3` div containing the bell and "Main Event" badge needs a higher z-index so it sits above the grid content.
-
-Change:
-```tsx
-<div className="absolute top-3 right-3 flex items-center gap-1.5">
-```
-To:
-```tsx
-<div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
-```
-
-**2. Add top padding to the grid to avoid visual overlap** (line 840)
-
-Add `mt-6` to the grid container so the fighter row sits below the bell area:
-```tsx
-<div className="grid grid-cols-[auto_1fr_auto_1fr_auto] items-center gap-1.5 mt-6">
-```
-
-### Scope
-- Single file, two small class additions
-- No layout or styling changes elsewhere
-
+Expected result:
+- Fighter 1 and Fighter 2 avatars render at 36×36
+- Bell remains fully tappable and unobscured
+- No other UI changes on the Games page
