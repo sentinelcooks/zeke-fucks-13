@@ -986,31 +986,17 @@ const GamesPage = () => {
       {loading ? (
         <div className="space-y-2 relative z-10">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="vision-card p-4 animate-pulse">
-              <div className="flex items-center justify-between mb-3">
-                <div className="h-3 w-16 rounded bg-muted/30" />
-                <div className="h-3 w-12 rounded bg-muted/30" />
-              </div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-muted/30" />
-                  <div className="h-4 w-24 rounded bg-muted/30" />
-                </div>
-                <div className="h-4 w-10 rounded bg-muted/30" />
-              </div>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-muted/30" />
-                  <div className="h-4 w-28 rounded bg-muted/30" />
-                </div>
-                <div className="h-4 w-10 rounded bg-muted/30" />
-              </div>
-              <div className="flex gap-2 mt-2">
-                <div className="h-6 flex-1 rounded bg-muted/20" />
-                <div className="h-6 flex-1 rounded bg-muted/20" />
-                <div className="h-6 flex-1 rounded bg-muted/20" />
-              </div>
-            </div>
+            <div
+              key={i}
+              style={{
+                background: "#1a1832",
+                border: "1px solid #252340",
+                borderRadius: "14px",
+                height: "120px",
+                width: "100%",
+                animation: "skeleton-pulse 1.5s ease-in-out infinite",
+              }}
+            />
           ))}
         </div>
       ) : error ? (
