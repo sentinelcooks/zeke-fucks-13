@@ -366,7 +366,7 @@ const ResultsPanel = ({ data }: ResultsPanelProps) => {
         {data.minutes_trend && data.minutes_trend.trend !== "insufficient_data" ? (
           <p className={`text-sm ${data.minutes_trend.trend === "up" ? "text-nba-green" : data.minutes_trend.trend === "down" ? "text-nba-red" : "text-muted-foreground"}`}>
             {data.minutes_trend.trend === "up" ? "↑" : data.minutes_trend.trend === "down" ? "↓" : "↔"}{" "}
-            Average: <strong>{data.minutes_trend.avg_min} {data.sport === "mlb" ? "AB" : data.sport === "nhl" ? "TOI" : "min"}</strong> | Recent: <strong>{data.minutes_trend.recent_avg} {data.sport === "mlb" ? "AB" : data.sport === "nhl" ? "TOI" : "min"}</strong> | Earlier: <strong>{data.minutes_trend.early_avg} {data.sport === "mlb" ? "AB" : data.sport === "nhl" ? "TOI" : "min"}</strong> | Trend: <strong>{data.minutes_trend.trend.toUpperCase()}</strong>
+            Average: <strong>{data.sport === "mlb" ? Math.round(data.minutes_trend.avg_min) : data.minutes_trend.avg_min} {data.sport === "mlb" ? "AB" : data.sport === "nhl" ? "TOI" : "min"}</strong> | Recent: <strong>{data.sport === "mlb" ? Math.round(data.minutes_trend.recent_avg) : data.minutes_trend.recent_avg} {data.sport === "mlb" ? "AB" : data.sport === "nhl" ? "TOI" : "min"}</strong> | Earlier: <strong>{data.sport === "mlb" ? Math.round(data.minutes_trend.early_avg) : data.minutes_trend.early_avg} {data.sport === "mlb" ? "AB" : data.sport === "nhl" ? "TOI" : "min"}</strong> | Trend: <strong>{data.minutes_trend.trend.toUpperCase()}</strong>
           </p>
         ) : <p className="text-sm text-muted-foreground">Not enough data for {data.sport === "mlb" ? "at-bats" : data.sport === "nhl" ? "TOI" : "minutes"} trend analysis</p>}
       </Section>

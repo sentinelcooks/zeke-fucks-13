@@ -2070,11 +2070,11 @@ const NbaPropsPage = () => {
                       {results.minutes_trend.trend === "up" ? "↑" : results.minutes_trend.trend === "down" ? "↓" : "→"}
                     </div>
                     <div>
-                      <p className="text-base font-bold text-foreground tabular-nums">{results.minutes_trend.avg_min} {sport === "mlb" ? "AB avg" : sport === "nhl" ? "TOI avg" : "min avg"}</p>
+                      <p className="text-base font-bold text-foreground tabular-nums">{sport === "mlb" ? Math.round(results.minutes_trend.avg_min) : results.minutes_trend.avg_min} {sport === "mlb" ? "AB avg" : sport === "nhl" ? "TOI avg" : "min avg"}</p>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] text-muted-foreground/35">Recent: <span className="text-foreground/60 font-semibold">{results.minutes_trend.recent_avg}</span></span>
+                        <span className="text-[10px] text-muted-foreground/35">Recent: <span className="text-foreground/60 font-semibold">{sport === "mlb" ? Math.round(results.minutes_trend.recent_avg) : results.minutes_trend.recent_avg}</span></span>
                         <span className="text-[10px] text-muted-foreground/45">·</span>
-                        <span className="text-[10px] text-muted-foreground/35">Earlier: <span className="text-foreground/60 font-semibold">{results.minutes_trend.early_avg}</span></span>
+                        <span className="text-[10px] text-muted-foreground/35">Earlier: <span className="text-foreground/60 font-semibold">{sport === "mlb" ? Math.round(results.minutes_trend.early_avg) : results.minutes_trend.early_avg}</span></span>
                       </div>
                     </div>
                   </div>
