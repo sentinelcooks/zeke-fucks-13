@@ -802,10 +802,10 @@ const NbaPropsPage = () => {
           backdropFilter: 'blur(12px)',
         }}>
           {[
-            { value: "nba", label: "NBA", color: "#1D428A", logo: nbaLogo, h: "h-6" },
-            { value: "mlb", label: "MLB", color: "#002D72", logo: mlbLogo, h: "h-5" },
-            { value: "nfl", label: "NFL", color: "#013369", logo: sportNflLogo, h: "h-6" },
-            { value: "nhl", label: "NHL", color: "#111111", logo: nhlLogo, h: "h-9" },
+            { value: "nba", label: "NBA", color: "#1D428A", logo: nbaLogo },
+            { value: "mlb", label: "MLB", color: "#002D72", logo: mlbLogo },
+            { value: "nfl", label: "NFL", color: "#013369", logo: sportNflLogo },
+            { value: "nhl", label: "NHL", color: "#111111", logo: nhlLogo },
           ].map((s) => {
             const active = linesSport === s.value;
             return (
@@ -821,7 +821,7 @@ const NbaPropsPage = () => {
                   boxShadow: `0 4px 16px -2px ${s.color}55`,
                 } : {}}
               >
-                <img src={s.logo} alt={s.label} className={`${s.h} w-auto object-contain ${active ? '' : 'opacity-70'}`} />
+                <img src={s.logo} alt={s.label} className={`h-5 w-5 object-contain ${active ? '' : 'opacity-70'}`} />
                 <span className="relative z-10">{s.label}</span>
               </motion.button>
             );
