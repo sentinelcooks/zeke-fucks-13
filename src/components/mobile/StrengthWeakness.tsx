@@ -117,20 +117,20 @@ export function StrengthWeakness({
       >
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Matchup Grade</h4>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{playerName} vs {opponentName}</p>
+            <h4 className="text-xs font-bold uppercase tracking-widest text-foreground">Matchup Grade</h4>
+            <p className="text-[10px] text-foreground/70 mt-0.5">{playerName} vs {opponentName}</p>
           </div>
           <div className="flex items-center gap-3">
             <div className="text-center">
-              <span className="block text-[9px] font-bold uppercase text-muted-foreground">{defLabel}</span>
+              <span className="block text-[9px] font-bold uppercase text-foreground/70">{defLabel}</span>
               <span className="block text-lg font-black text-nba-green tabular-nums">#{defRank}</span>
-              <span className="block text-[8px] text-muted-foreground">{defRankLabel}</span>
+              <span className="block text-[8px] text-foreground/60">{defRankLabel}</span>
             </div>
             <div className="w-px h-10 bg-border" />
             <div className="text-center">
-              <span className="block text-[9px] font-bold uppercase text-muted-foreground">{paceLabel}</span>
+              <span className="block text-[9px] font-bold uppercase text-foreground/70">{paceLabel}</span>
               <span className="block text-lg font-black text-nba-blue tabular-nums">#{paceRank}</span>
-              <span className="block text-[8px] text-muted-foreground">{defaults.paceLabel}</span>
+              <span className="block text-[8px] text-foreground/60">{defaults.paceLabel}</span>
             </div>
           </div>
         </div>
