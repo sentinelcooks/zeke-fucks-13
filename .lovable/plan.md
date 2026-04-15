@@ -1,21 +1,27 @@
 
 
-## Plan: Replace "ESPN DATA" with "ADVANCED REAL-TIME DATA"
+## Plan: Show Full Fighter Names on UFC Cards
 
-### Changes
+### Problem
+Fighter names are truncated with `...` due to `truncate` class on the name spans (lines 843, 857).
 
-**3 locations across 2 files:**
+### Fix (`src/pages/GamesPage.tsx`)
 
-**1. `src/pages/NbaPropsPage.tsx` (line ~1010)**
-- UFC results footer: Change `"ESPN Data"` → `"Advanced Real-Time Data"` in the array
+**Two changes:**
 
-**2. `src/pages/NbaPropsPage.tsx` (line ~1407)**
-- NBA/MLB/NHL results footer: Change `"ESPN Data"` → `"Advanced Real-Time Data"` in the array
+1. **Line 843** — Remove `truncate` from fighter1 name, allow wrapping:
+   ```tsx
+   <span className="text-[11px] font-bold text-foreground block leading-tight">{fight.fighter1}</span>
+   ```
 
-**3. `src/components/MoneyLineSection.tsx` (line ~1875)**
-- Moneyline footer: Change `"ESPN DATA"` → `"ADVANCED REAL-TIME DATA"` in the array
+2. **Line 857** — Same for fighter2:
+   ```tsx
+   <span className="text-[11px] font-bold text-foreground block leading-tight">{fight.fighter2}</span>
+   ```
+
+Also remove `overflow-hidden` from the parent divs (lines 842, 856) so text can wrap freely.
 
 ### Scope
-- Two files, three string replacements
-- Same style/position preserved
+- Single file, 4 class changes
+- Names wrap to second line if needed instead of being cut off
 
