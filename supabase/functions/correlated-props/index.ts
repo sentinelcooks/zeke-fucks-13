@@ -133,6 +133,7 @@ function getStatValue(stats: Record<string, number>, prop: string): number {
 interface Correlation {
   correlated_player: string;
   correlated_prop: string;
+  correlated_line: number;
   correlated_team: string;
   hit_rate: number;
   sample_size: number;
@@ -247,6 +248,7 @@ async function computeCorrelations(
           correlations.push({
             correlated_player: p.name,
             correlated_prop: prop,
+            correlated_line: line,
             correlated_team: p.team,
             hit_rate: hitRate,
             sample_size: coGames,
@@ -371,6 +373,7 @@ Deno.serve(async (req) => {
         source_prop: prop,
         correlated_player: c.correlated_player,
         correlated_prop: c.correlated_prop,
+        correlated_line: c.correlated_line,
         correlated_team: c.correlated_team,
         hit_rate: c.hit_rate,
         sample_size: c.sample_size,
