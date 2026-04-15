@@ -2151,7 +2151,7 @@ const NbaPropsPage = () => {
                         When {player.split(" ").pop()} {propType.toUpperCase()} hits, these also hit:
                       </p>
                       {corrProps.map((c, ci) => {
-                        const isInSlip = parlaySlip.some(s => s.player === c.correlated_player && s.prop === c.correlated_prop);
+                        const isInSlip = globalSlip.isInSlip(c.correlated_player, c.correlated_prop, "");
                         return (
                           <motion.div
                             key={ci}
