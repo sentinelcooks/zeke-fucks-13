@@ -23,7 +23,7 @@ function getTextColor(rate: number): string {
 }
 
 export function HitRateRing({ rate, hits, total, label, delay = 0 }: HitRateRingProps) {
-  const radius = 32;
+  const radius = 26;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (rate / 100) * circumference;
   const color = getRingColor(rate);
