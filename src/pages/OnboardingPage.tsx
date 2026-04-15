@@ -149,10 +149,10 @@ const Tile = ({ label, emoji, icon: Icon, sub, selected, onClick, idx, sportLogo
         ? "bg-primary/[0.12] border border-primary/40 shadow-[0_0_24px_hsla(250,76%,62%,0.12)]"
         : "bg-card/80 border border-border/60 hover:border-primary/25 hover:bg-card"}`}
   >
-    <div className={`${sportLogoSrc ? "w-11 h-11" : "w-10 h-10"} rounded-lg flex items-center justify-center shrink-0 transition-colors duration-300
+    <div className={`${sportLogoSrc ? "w-9 h-9" : "w-10 h-10"} rounded-lg flex items-center justify-center shrink-0 transition-colors duration-300
       ${selected ? "bg-primary/20 border border-primary/30" : "bg-secondary/80 border border-border/50"}`}>
       {sportLogoSrc
-        ? <img src={sportLogoSrc} alt={label} className="w-10 h-10 object-contain" />
+        ? <img src={sportLogoSrc} alt={label} className="w-8 h-8 object-contain" />
         : SportLogo
         ? <SportLogo className={`w-5 h-5 ${sportColor || "text-muted-foreground/80"}`} />
         : emoji
@@ -160,7 +160,7 @@ const Tile = ({ label, emoji, icon: Icon, sub, selected, onClick, idx, sportLogo
           : Icon ? <Icon className={`w-4.5 h-4.5 transition-colors ${selected ? "text-primary" : "text-muted-foreground/70"}`} /> : null}
     </div>
     <div className="flex-1 min-w-0">
-      <p className={`text-sm font-semibold transition-colors ${selected ? "text-foreground" : "text-foreground/80"}`}>{label}</p>
+      <p className={`text-sm font-semibold transition-colors whitespace-nowrap ${selected ? "text-foreground" : "text-foreground/80"}`}>{label}</p>
       {sub && <p className="text-[11px] text-muted-foreground/80 mt-0.5 truncate">{sub}</p>}
     </div>
     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-300
@@ -441,7 +441,7 @@ const OnboardingPage = () => {
             {/* ─── HERO (combined with bankroll graphs) ─── */}
             {current === "hero" && (
               <motion.div key="hero" custom={dir} variants={slideVariants} initial="enter" animate="center" exit="exit"
-                transition={pageTransition} className="flex flex-col items-center text-center">
+                transition={pageTransition} className="flex flex-col items-center text-center pt-4">
                 <motion.div className="relative mb-4"
                   initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                   transition={{ type: "spring", stiffness: 200, damping: 18 }}>
