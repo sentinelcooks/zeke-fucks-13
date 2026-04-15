@@ -339,7 +339,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
                             {section.title}
                           </h4>
                         )}
-                        <p className="text-[13px] leading-relaxed text-foreground/70">
+                        <p className="text-[13px] leading-relaxed text-foreground">
                           {section.content.replace(/\*\*/g, "").replace(/\*/g, "").trim()}
                         </p>
                       </div>
@@ -383,7 +383,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
                       </span>
                     </div>
                   </div>
-                  <p className="text-[13px] leading-relaxed text-foreground/70">
+                  <p className="text-[13px] leading-relaxed text-foreground">
                     {overallSummary.summary}
                   </p>
                 </motion.div>
