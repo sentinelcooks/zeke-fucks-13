@@ -130,6 +130,10 @@ const GamesPage = () => {
   const notifTimeouts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const fetchAbort = useRef<AbortController | null>(null);
 
+  // Per-sport cache to enable instant switching
+  const sportCache = useRef<Partial<Record<SportFilter, { games: Game[]; ufcEvents: UfcEvent[]; oddsMap: Record<string, RealOdds> }>>>({});
+
+
   // Sync notifiedGames to localStorage & schedule/clear notifications
   useEffect(() => {
     localStorage.setItem("sentinel_game_notifications", JSON.stringify([...notifiedGames]));
