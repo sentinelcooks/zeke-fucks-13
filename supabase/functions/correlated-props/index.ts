@@ -304,10 +304,31 @@ Deno.serve(async (req) => {
     let playerId = "";
     let detectedTeam = team || "";
 
-    if (searchData.items?.length > 0) {
-      const found = searchData.items[0];
+    const items = searchData.items || searchData.results || [];
+    if (items.length > 0) {
+      const found = items[0];
       playerId = found.id || found.$ref?.match(/athletes\/(\d+)/)?.[1] || "";
-      if (!detectedTeam && found.team?.abbreviation) detectedTeam = found.team.abbreviation;
+      if (!detectedTeam) {
+        // Try multiple paths where ESPN stores team abbreviation
+        detectedTeam = found.team?.abbreviation
+          || found.teamAbbreviation
+          || found.teamRelationships?.[0]?.core?.abbreviation
+          || "";
+      }
+    }
+
+    if (playerId && !detectedTeam) {
+      // Fallback: use the athlete common endpoint
+      try {
+        const athResp = await fetch(`https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${playerId}`);
+        const athData = await athResp.json();
+        detectedTeam = athData.athlete?.team?.abbreviation
+          || athData.teamRelationships?.[0]?.core?.abbreviation
+          || "";
+        console.log(`Athlete endpoint fallback team: ${detectedTeam}`);
+      } catch (e) {
+        console.error("Athlete endpoint fallback failed:", e);
+      }
     }
 
     if (!playerId) {

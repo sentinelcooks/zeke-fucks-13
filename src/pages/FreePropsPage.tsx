@@ -262,13 +262,14 @@ const FreePropsPage = () => {
         // Fetch correlated props for NBA
         if (prop.sport === "nba") {
           setCorrLoading(true);
-          const playerTeam = data.team || data.player_info?.team || prop.team || "";
+          const playerTeam = data.team || data.player?.team_abbr || data.player?.team || data.player_info?.team || prop.team || "";
           supabase.functions.invoke("correlated-props", {
             body: { player: prop.player_name, prop: prop.prop_type, line: prop.line, team: playerTeam },
           }).then(({ data: corrData, error: corrErr }) => {
             if (!corrErr && Array.isArray(corrData)) setCorrelations(corrData);
+            else setCorrelations([]);
             setCorrLoading(false);
-          }).catch(() => setCorrLoading(false));
+          }).catch(() => { setCorrelations([]); setCorrLoading(false); });
         }
       }
     } catch (e) { console.error(e); }
