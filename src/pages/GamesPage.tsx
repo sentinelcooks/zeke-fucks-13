@@ -164,11 +164,12 @@ const GamesPage = () => {
     if (tid) { clearTimeout(tid); notifTimeouts.current.delete(gameId); }
   }, []);
 
-  const fetchOdds = async (s: SportFilter) => {
+  const fetchOdds = async (s: SportFilter, signal?: AbortSignal) => {
     try {
       const sportKey = s === "ufc" ? "mma_mixed_martial_arts" : SPORT_MAP[s as Exclude<SportFilter, "ufc">];
       // Fetch h2h, spreads, totals in one call
       const data = await fetchNbaOdds(undefined, "h2h,spreads,totals", sportKey);
+      if (signal?.aborted) return;
       const events: any[] = data?.events || data || [];
       const map: Record<string, RealOdds> = {};
 
@@ -250,6 +251,7 @@ const GamesPage = () => {
           homeEV, awayEV, books,
         };
       }
+      if (signal?.aborted) return;
       setOddsMap(map);
     } catch (e) {
       console.warn("Failed to fetch odds:", e);
@@ -282,20 +284,20 @@ const GamesPage = () => {
     setError("");
     try {
       if (s === "ufc") {
-        await Promise.all([fetchUfcEvents(), fetchOdds(s)]);
-        return;
+        await Promise.all([fetchUfcEvents(controller.signal), fetchOdds(s, controller.signal)]);
+      } else {
+        const [{ data, error: fnError }] = await Promise.all([
+          supabase.functions.invoke("games-schedule", {
+            body: { sport: SPORT_MAP[s as Exclude<SportFilter, "ufc">] },
+          }),
+          fetchOdds(s, controller.signal),
+        ]);
+        // If this request was superseded by a newer one, discard the result
+        if (controller.signal.aborted) return;
+        if (fnError) throw fnError;
+        if (data?.error) { setError(data.error); setGames([]); }
+        else setGames(Array.isArray(data) ? data : []);
       }
-      const [{ data, error: fnError }] = await Promise.all([
-        supabase.functions.invoke("games-schedule", {
-          body: { sport: SPORT_MAP[s as Exclude<SportFilter, "ufc">] },
-        }),
-        fetchOdds(s),
-      ]);
-      // If this request was superseded by a newer one, discard the result
-      if (controller.signal.aborted) return;
-      if (fnError) throw fnError;
-      if (data?.error) { setError(data.error); setGames([]); }
-      else setGames(Array.isArray(data) ? data : []);
     } catch (e: any) {
       if (controller.signal.aborted) return;
       setError("Failed to load games");
@@ -305,7 +307,7 @@ const GamesPage = () => {
     }
   };
 
-  const fetchUfcEvents = async () => {
+  const fetchUfcEvents = async (signal?: AbortSignal) => {
     try {
       // ESPN UFC scoreboard requires exact dates — query today + next 4 weeks (Saturdays & surrounding days)
       const now = new Date();
@@ -427,13 +429,13 @@ const GamesPage = () => {
         });
       }
 
+      if (signal?.aborted) return;
       setUfcEvents(events);
       setGames([]);
     } catch {
+      if (signal?.aborted) return;
       setError("Failed to load UFC events");
       setUfcEvents([]);
-    } finally {
-      setLoading(false);
     }
   };
 
