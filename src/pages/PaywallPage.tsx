@@ -479,12 +479,6 @@ export default function PaywallPage() {
           Start Free Trial
         </motion.button>
 
-        <button
-          onClick={handleSkip}
-          className="w-full py-3 text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
-        >
-          Maybe later
-        </button>
 
         <p className="text-[11px] text-muted-foreground/60 text-center mt-4 leading-relaxed">
           {"After your 7-day free trial, you'll be charged " +
