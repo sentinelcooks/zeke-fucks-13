@@ -754,7 +754,7 @@ const GamesPage = () => {
   const FighterAvatar = ({ id, name }: { id?: string; name: string }) => {
     const src = fighterHeadshot(id);
     return (
-      <div className="w-11 h-11 rounded-full bg-secondary/40 border border-border/20 overflow-hidden shrink-0">
+      <div className="w-11 h-11 rounded-full bg-secondary/40 border border-border/20 overflow-hidden shrink-0 relative z-[1]">
         {src ? (
           <img src={src} alt={name} className="w-full h-full object-cover object-top scale-[1.35]" onError={(e) => {
             (e.target as HTMLImageElement).style.display = 'none';
@@ -817,7 +817,7 @@ const GamesPage = () => {
 
     return (
     <motion.div {...stagger(index)} className="vision-card p-4 relative overflow-hidden">
-      <div className="absolute top-3 right-3 flex items-center gap-1.5">
+      <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
         {fight.isMainEvent && (
           <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{
             background: 'hsla(250, 76%, 62%, 0.12)',
