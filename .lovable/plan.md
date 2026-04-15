@@ -1,33 +1,33 @@
 
 
-## Plan: Fix Broken Team Logos
+## Plan: Fix UFC Fighter Avatars Obscuring Bell Notification
 
-### Root Cause
-The `games-schedule` edge function already returns `home_logo` and `away_logo` fields directly from ESPN's API (reliable CDN URLs). But the `Game` interface in `GamesPage.tsx` doesn't include these fields, so the page falls back to `getTeamLogoUrl()` which does a name-based lookup that fails when team names don't match exactly.
+### Problem
+The fighter avatars (44px circles) in the 5-column grid layout extend upward and overlap with the bell notification button positioned at `top-3 right-3`. The rightmost avatar (fighter 2) visually covers the bell, making it untappable.
 
-### Changes
+### Fix (single file: `src/pages/GamesPage.tsx`)
 
-**1. `src/pages/GamesPage.tsx` — Use ESPN logos directly + add fallback**
+**1. Add `z-10` to the bell/main-event container** (line 820)
 
-- Add `home_logo?: string` and `away_logo?: string` to the `Game` interface
-- Replace `getTeamLogoUrl(game.away_team, ...)` with `game.away_logo` (and same for home), falling back to `getTeamLogoUrl()` if the field is missing
-- Wrap each `<img>` with an `onError` handler that hides the image and shows a colored circle with team initials instead
+The `absolute top-3 right-3` div containing the bell and "Main Event" badge needs a higher z-index so it sits above the grid content.
 
-**2. `src/utils/teamLogos.ts` — Keep as fallback, no changes needed**
-
-The existing function remains as a secondary fallback for pages where ESPN logo URLs aren't available.
-
-### Technical Details
-
-Logo rendering pattern (used for both home and away):
+Change:
 ```tsx
-const logoUrl = game.away_logo || getTeamLogoUrl(game.away_team, sport);
-// Render with onError fallback to initials circle
+<div className="absolute top-3 right-3 flex items-center gap-1.5">
+```
+To:
+```tsx
+<div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
 ```
 
-Initials fallback: extract first letter of each word from team name (e.g., "Boston Celtics" → "BC"), render in a 20×20 colored circle with `bg-white/10` and muted text.
+**2. Add top padding to the grid to avoid visual overlap** (line 840)
+
+Add `mt-6` to the grid container so the fighter row sits below the bell area:
+```tsx
+<div className="grid grid-cols-[auto_1fr_auto_1fr_auto] items-center gap-1.5 mt-6">
+```
 
 ### Scope
-- Single file change: `src/pages/GamesPage.tsx`
-- No new dependencies
+- Single file, two small class additions
+- No layout or styling changes elsewhere
 
