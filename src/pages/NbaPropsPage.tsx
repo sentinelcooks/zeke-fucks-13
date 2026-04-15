@@ -964,8 +964,17 @@ const NbaPropsPage = () => {
                       <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
                         onClick={() => { setFighter1(s.name); setShowUfcSug1(false); }}
                         className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-accent/6 border-b border-border/10 last:border-0">
-                        <span className="text-[13px] font-bold text-foreground">{s.name}</span>
-                        {s.record && <span className="text-[10px] text-muted-foreground/65">({s.record})</span>}
+                        {s.headshot ? (
+                          <img src={s.headshot} alt={s.name} className="w-8 h-8 rounded-full object-cover bg-input shrink-0" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-input shrink-0 flex items-center justify-center text-muted-foreground/40 text-[10px] font-bold">
+                            {s.name?.charAt(0)}
+                          </div>
+                        )}
+                        <div className="flex flex-col">
+                          <span className="text-[13px] font-bold text-foreground">{s.name}</span>
+                          {s.record && <span className="text-[10px] text-muted-foreground/65">{s.record}</span>}
+                        </div>
                       </motion.div>
                     ))}
                   </motion.div>
@@ -1024,8 +1033,17 @@ const NbaPropsPage = () => {
                       <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
                         onClick={() => { setFighter2(s.name); setShowUfcSug2(false); }}
                         className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-accent/6 border-b border-border/10 last:border-0">
-                        <span className="text-[13px] font-bold text-foreground">{s.name}</span>
-                        {s.record && <span className="text-[10px] text-muted-foreground/65">({s.record})</span>}
+                        {s.headshot ? (
+                          <img src={s.headshot} alt={s.name} className="w-8 h-8 rounded-full object-cover bg-input shrink-0" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-input shrink-0 flex items-center justify-center text-muted-foreground/40 text-[10px] font-bold">
+                            {s.name?.charAt(0)}
+                          </div>
+                        )}
+                        <div className="flex flex-col">
+                          <span className="text-[13px] font-bold text-foreground">{s.name}</span>
+                          {s.record && <span className="text-[10px] text-muted-foreground/65">{s.record}</span>}
+                        </div>
                       </motion.div>
                     ))}
                   </motion.div>
