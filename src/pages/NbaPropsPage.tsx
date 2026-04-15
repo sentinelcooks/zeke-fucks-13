@@ -582,13 +582,14 @@ const NbaPropsPage = () => {
             setResults(mergedData);
             if (s === "nba") {
               setCorrLoading(true);
-              const playerTeam = data.team || data.player_info?.team || "";
+              const playerTeam = data.team || data.player?.team_abbr || data.player?.team || data.player_info?.team || "";
               supabase.functions.invoke("correlated-props", {
                 body: { player: navState.player!, prop: nextPropType, line: navState.line || 0, team: playerTeam },
               }).then(({ data: corrData, error: corrErr }) => {
                 if (!corrErr && Array.isArray(corrData)) setCorrProps(corrData);
+                else setCorrProps([]);
                 setCorrLoading(false);
-              }).catch(() => setCorrLoading(false));
+              }).catch(() => { setCorrProps([]); setCorrLoading(false); });
             }
           }
         } catch {
@@ -723,13 +724,14 @@ const NbaPropsPage = () => {
         // Fetch correlated props for NBA
         if (sport === "nba") {
           setCorrLoading(true);
-          const playerTeam = data.team || data.player_info?.team || "";
+          const playerTeam = data.team || data.player?.team_abbr || data.player?.team || data.player_info?.team || "";
           supabase.functions.invoke("correlated-props", {
             body: { player, prop: propType, line: lineNum, team: playerTeam },
           }).then(({ data: corrData, error: corrErr }) => {
             if (!corrErr && Array.isArray(corrData)) setCorrProps(corrData);
+            else setCorrProps([]);
             setCorrLoading(false);
-          }).catch(() => setCorrLoading(false));
+          }).catch(() => { setCorrProps([]); setCorrLoading(false); });
         }
       }
     } catch { setError("Failed to analyze. Please try again."); }
