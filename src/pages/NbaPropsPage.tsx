@@ -410,7 +410,7 @@ const NbaPropsPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [results, setResults] = useState<any>(null);
-  const [corrProps, setCorrProps] = useState<Array<{ correlated_player: string; correlated_prop: string; correlated_team: string | null; hit_rate: number; sample_size: number; is_opponent?: boolean; reasoning?: string }>>([]);
+  const [corrProps, setCorrProps] = useState<Array<{ correlated_player: string; correlated_prop: string; correlated_line?: number; correlated_team: string | null; hit_rate: number; sample_size: number; is_opponent?: boolean; reasoning?: string }>>([]);
   const [corrLoading, setCorrLoading] = useState(false);
   const [parlaySlip, setParlaySlip] = useState<Array<{ player: string; prop: string; team: string | null; hit_rate: number }>>([]);
   const [showSlip, setShowSlip] = useState(false);
