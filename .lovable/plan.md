@@ -1,31 +1,41 @@
 
 
-## Plan: Fix Sport Switching Showing Wrong Data
+## Plan: Fix Stale Cache Bug on Sport Switching
 
 ### Root Cause
-Three race conditions in `GamesPage.tsx`:
 
-1. **`fetchOdds`** (line 167) calls `setOddsMap()` directly — no abort check, so odds from a previous sport can arrive late and overwrite current sport's odds.
-2. **`fetchUfcEvents`** (line 308) calls `setUfcEvents()` and `setGames([])` directly — same problem, no abort check.
-3. **UFC path** in `fetchGames` (line 284-286) returns early after dispatching async work, never checks `controller.signal.aborted`.
+The cache-syncing `useEffect` at line 443-447 stores `{ games, ufcEvents, oddsMap }` keyed by the current `sport` state. But state updates from async fetches can resolve *after* `sport` has already changed. For example:
+
+1. User is on NBA → games state has NBA data
+2. User switches to MLB → `sport` changes to `"mlb"`, fetch starts
+3. The cache-sync effect fires and stores NBA games under the `"mlb"` key (because `sport` is now `"mlb"` but `games` still holds NBA data)
+4. Next time user switches to MLB → cache hit → shows NBA games
 
 ### Fix (single file: `src/pages/GamesPage.tsx`)
 
-**1. Pass the AbortController's signal to `fetchOdds` and `fetchUfcEvents`**
+**1. Remove the cache-syncing `useEffect` entirely** (lines 443-447)
 
-Both functions will accept an `AbortSignal` parameter. Before calling any `set*` state function, check `signal.aborted` — if true, discard the result silently.
+This reactive approach is fundamentally broken because `sport` and `games` can be out of sync during state transitions.
 
-**2. Fix the UFC early return**
+**2. Write to cache imperatively inside `fetchGames`**
 
-The UFC branch currently does `await Promise.all([fetchUfcEvents(), fetchOdds(s)]); return;` which skips the abort check in the `finally` block. Move the abort check and `setLoading(false)` into both helper functions, or restructure so the UFC path flows through the same `finally` block.
+After successful fetch/state-set, store the data in `sportCache.current[s]` using the `s` parameter (the sport being fetched), not the `sport` state variable. This guarantees the cache key always matches the data.
 
-**3. Bind sport identity to each fetch cycle**
+- After cache restore (line 265-268): no change needed — data is already in cache
+- After fresh ESPN fetch (line 299): cache the fetched data under `s`
+- After UFC fetch: cache after both `fetchUfcEvents` and `fetchOdds` complete, using local variables for the results
 
-Capture the `sport` value at the start of `fetchGames` and compare it against `sport` state before setting data. Combined with the abort signal, this eliminates all race conditions.
+**3. Update `fetchOdds` and `fetchUfcEvents` to return their results**
 
-### Technical Details
-- `fetchOdds(s, signal)` — add `if (signal.aborted) return;` before `setOddsMap(map)`
-- `fetchUfcEvents(signal)` — add `if (signal.aborted) return;` before `setUfcEvents(events)` and `setGames([])`
-- Remove the early `return` on line 286; let UFC path fall through to the existing abort-check logic in `finally`
-- No new dependencies or files
+Instead of calling `setOddsMap`/`setUfcEvents` directly inside these functions, have them return the data. `fetchGames` will then call `set*` and write the cache in one place, ensuring sport-key consistency.
 
+**4. Skeleton cards styling update**
+
+Update the existing skeleton cards (lines 988-1012) to match the requested spec:
+- Background: `#1a1832`, border: `1px solid #252340`, border-radius: `14px`, height: `120px`
+- Replace Tailwind `animate-pulse` with inline style using the specified keyframes
+
+### No changes to
+- Any other file
+- Refresh button behavior
+- Cache structure or ref type
