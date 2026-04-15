@@ -1,22 +1,22 @@
 
 
-## Plan: Fix UFC Fighter Search Headshot Styling
+## Plan: Fix Stat Pills and Hit Rate Rings Layout on Mobile
 
 ### Problem
-The fighter headshot thumbnails in the search dropdown look bad — they're square with `rounded-xl` and use `object-top` positioning, which crops faces poorly. The reference image shows circular headshots with proper face centering.
+After removing MTD, the stat pills grid still uses `grid-cols-5` but only has 4 items, leaving an empty column and making the remaining items too narrow — causing text like "SEASON" to wrap awkwardly. The hit rate rings have a similar centering issue.
 
 ### Changes
 
-**`src/pages/NbaPropsPage.tsx`** — Update both Fighter 1 and Fighter 2 dropdown headshot containers (lines ~972 and ~1040):
+**`src/pages/NbaPropsPage.tsx`** — 2 locations:
 
-1. Change container from `w-11 h-11 rounded-xl` to `w-11 h-11 rounded-full` for circular shape
-2. Change image from `object-cover object-top` to `object-cover object-center` for better face centering
-3. Update the border style to match circular design (softer border)
-4. Same changes apply to the fallback initials container
+1. **Stat pills grid (line 1913)** — Change `grid-cols-5` to `grid-cols-4` so the 4 remaining pills (Season, L10, L5, vs OPP) fill the row evenly.
 
-Both Fighter 1 (around line 972) and Fighter 2 (around line 1040) dropdowns need identical updates.
+2. **Hit rate rings (line 1955)** — Change `flex justify-around` to `flex justify-center gap-4` so the 4 rings are properly centered with consistent spacing instead of spread across the full width.
+
+**`src/components/mobile/StatPill.tsx`** — Improve label text sizing:
+
+3. Change label from `text-[9px] tracking-widest` to `text-[8px] tracking-wider` to prevent long labels (like "SEASON") from wrapping in narrow columns.
 
 ### Scope
-- 1 file, 2 locations (~4 lines each)
-- Purely cosmetic CSS changes
+- 2 files, 3 small CSS changes
 
