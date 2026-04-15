@@ -1,30 +1,33 @@
 
 
-## Plan: Replace Minutes Trend with At-Bats for MLB
+## Plan: Add Refresh Button to Today's Edge
 
-### Problem
-For MLB players, the "Minutes Trend" section shows `0 min avg` because MLB has no minutes — it should show **At-Bats per game** instead.
+### What
+Add a refresh button next to "Updated Xm ago" in the Today's Edge section header. Tapping it calls the `daily-picks` edge function to regenerate picks, then re-fetches from the database.
 
-### Backend Changes (`supabase/functions/nba-api/index.ts`)
+### Changes — `src/components/home/ModernHomeLayout.tsx`
 
-1. **Add `at_bats` to `GameRow` interface** (line ~225, after `stolen_bases`)
-2. **Store `at_bats` in game push** (line ~407): `at_bats: abIdx >= 0 ? parseStat(stats[abIdx]) : 0`
-3. **Make `minutesTrend` sport-aware** — accept a `sport` param; when `"mlb"`, use `g.at_bats` instead of `g.min` for the trend calculation
-4. **Pass sport to `minutesTrend`** call (line ~2783)
+1. **Add `refreshing` state** (line ~225): `const [refreshing, setRefreshing] = useState(false)`
 
-### Frontend Changes
+2. **Extract `fetchPicks` so it's callable outside the effect** — move the fetch logic into a `useCallback` or define a `refreshPicks` function that re-runs the today query and updates state.
 
-**`src/pages/NbaPropsPage.tsx`** (line ~2057, 2069)
-- Change label: `sport === "mlb" ? "At-Bats Trend" : sport === "nhl" ? "TOI Trend" : "Minutes Trend"`
-- Change unit: `sport === "mlb" ? "AB avg" : sport === "nhl" ? "TOI avg" : "min avg"`
+3. **Add `handleRefresh` function**:
+   - Sets `refreshing = true`
+   - Invokes `supabase.functions.invoke("daily-picks")` to regenerate
+   - Re-fetches today's picks from the `daily_picks` table
+   - Sets `refreshing = false`
 
-**`src/components/ResultsPanel.tsx`** (line ~357-364)
-- Same label/unit changes for MLB
+4. **Add refresh button in header** (line ~438, next to "Updated Xm ago"):
+   ```tsx
+   <button onClick={handleRefresh} disabled={refreshing}>
+     <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
+   </button>
+   ```
+   Style: small icon button, muted color, spins while refreshing. Placed between the "Updated" text and the right edge.
 
-**`src/pages/FreePropsPage.tsx`** (line ~491-503)
-- Same label/unit changes for MLB
+5. **Update "Updated" text** to show real time after refresh instead of the random `minsAgo`.
 
 ### Scope
-- 1 edge function updated + redeployed
-- 3 frontend files updated (label/unit swaps)
+- 1 file edited: `ModernHomeLayout.tsx`
+- No backend changes — reuses existing `daily-picks` edge function
 
