@@ -1102,7 +1102,7 @@ const NbaPropsPage = () => {
             </div>
 
             {/* Analyze Button — Sticky */}
-            <div className="sticky bottom-20 z-30">
+            <div className="relative z-10 mt-2">
               <motion.button
                 onClick={handleAnalyze}
                 disabled={loading}
