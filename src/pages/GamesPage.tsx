@@ -828,7 +828,7 @@ const GamesPage = () => {
         )}
         <button
           onClick={(e) => { e.stopPropagation(); toggleNotification(fight.id, fightLabel, fight.time); }}
-          className="p-1.5 rounded-full transition-all"
+          className="p-1.5 rounded-full transition-all relative z-10 pointer-events-auto"
           style={{
             background: isNotified ? 'hsla(250, 76%, 62%, 0.15)' : 'transparent',
             border: isNotified ? '1px solid hsla(250, 76%, 62%, 0.3)' : '1px solid transparent',
@@ -837,7 +837,7 @@ const GamesPage = () => {
           {isNotified ? <Bell className="w-3.5 h-3.5 text-accent" /> : <BellOff className="w-3.5 h-3.5 text-muted-foreground/40" />}
         </button>
       </div>
-      <div className="grid grid-cols-[auto_1fr_auto_1fr_auto] items-center gap-1.5">
+      <div className="grid grid-cols-[auto_1fr_auto_1fr_auto] items-center gap-1.5 mt-5 pr-1">
         <FighterAvatar id={fight.fighter1Id} name={fight.fighter1} />
         <div className="min-w-0 overflow-hidden">
           <span className="text-[11px] font-bold text-foreground truncate block">{fight.fighter1}</span>
