@@ -1258,6 +1258,8 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
   useEffect(() => {
     setTeamsLoading(true);
     setTeams([]); setTeam1(""); setTeam2(""); setResults(null); setError("");
+    setTotalLine(""); setSpreadLine(""); setSpreadTeam("");
+    setOverUnder("over");
     callMoneylineApi("teams", { sport }).then(setTeams).catch(() => {}).finally(() => setTeamsLoading(false));
   }, [sport]);
 
