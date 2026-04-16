@@ -1,72 +1,79 @@
 
 
-## Plan: Improve In-Depth Analysis — Pace/Total Context, Grok AI, Recency Decay
+## Plan: Make Parlays Count in P&L, Stats, Charts, and Play List
 
-### What's changing
+### Problem
 
-Three improvements to make the analysis engine smarter and the written analysis richer.
+When a parlay is added via the tracker, it only appears in the "Parlays" tab. It is excluded from:
+1. **Plays tab list** — parlays don't show in the play feed
+2. **Play stats cards** (Profit, ROI, Record, Pending) — parlays not included
+3. **ProfitCharts** — only receives `plays`, not parlays
+4. **PnLCalendar** — same issue, only `plays` data
+5. **CSV export** — parlays excluded
 
----
+Additionally, when a parlay result is marked (win/loss), the `payout` field on `parlay_history` is never updated — it stays at `0` profit.
 
-### 1. Recency Decay on Hit Rates (Backend)
+### Solution
 
-**File: `supabase/functions/nba-api/index.ts`**
+Create a **unified play list** that merges `plays` and `parlays` into a single data stream for stats, charts, calendar, and the Plays tab list.
 
-The current `hitRate()` function treats all games equally. We'll add a `weightedHitRate()` function that applies exponential decay — recent games matter more.
+### Changes
 
-- Each game gets weight `e^(-λ * daysAgo)` where λ ≈ 0.03 (half-life ~23 days)
-- Weighted hit rate = sum of weights for hits / sum of all weights
-- Apply this alongside the existing flat hit rate — pass both to the confidence engine
-- Update `calculateConfidence()` to blend weighted hit rate (60%) with flat hit rate (40%) for the season factor
-- Add weighted averages for L10 and L5 as well (less impactful since they're already recency-biased)
-- The game log already has dates, so we can compute `daysAgo` from each game's date
+**File: `src/pages/ProfitTrackerPage.tsx`**
 
-### 2. Game Pace / Total Context (Backend + Frontend)
+1. **Create `allPlays` merged array** — a `useMemo` that converts each `SavedParlay` into a `Play`-compatible shape and concatenates with `plays`:
+   - `id` → parlay id
+   - `player_or_fighter` → "Parlay (N legs)"
+   - `bet_type` → "Parlay"
+   - `odds` → `parlay_odds`
+   - `stake` → parlay stake
+   - `payout` → on win: `potential_payout - stake`, on loss: `-stake`, on pending: `0`
+   - `result` → parlay result
+   - `created_at` → parlay created_at
+   - `sport` → first leg's sport or "parlay"
 
-**File: `supabase/functions/nba-api/index.ts`**
-- In `analyzeProp()`, after fetching the next game, fetch the ESPN team stats for both teams to extract pace rating and points per game
-- For NBA: use offensive/defensive rating and pace from ESPN team stats (already available via `getTeamStats()` in moneyline-api)
-- For MLB: extract runs per game from team stats
-- For NHL: extract goals per game from team stats
-- Pass `paceContext` object to the confidence engine and include in reasoning strings
-- Include pace data in the response payload so it reaches the frontend
+2. **Update `playStats`** to use `allPlays` instead of `plays`
 
-**File: `supabase/functions/ai-analysis/index.ts`**
-- Accept `paceContext` in the request body
-- Inject pace/total context into the prompt: "Game pace context: [team1] ranks #X in pace at Y possessions/game. Projected game total: Z."
-- Update sport-specific prompts to reference pace/total when available
+3. **Update `ProfitCharts`** to receive `allPlays` instead of `plays`
 
-**File: `src/components/WrittenAnalysis.tsx`**
-- Accept `paceContext` as a new optional prop
-- Display pace context in the overall summary when available
-- Include in the data sent to the ai-analysis edge function
+4. **Update `PnLCalendar`** (if rendered) to receive `allPlays`
 
-### 3. Grok AI for Writing Picks (Backend)
+5. **Update `filteredPlays`** to filter from `allPlays`
 
-**File: `supabase/functions/ai-analysis/index.ts`**
-- Add a Supabase secret `XAI_API_KEY` for the user's Grok/xAI API key
-- Check if `XAI_API_KEY` is available; if so, use `https://api.x.ai/v1/chat/completions` with model `grok-3` instead of the Lovable AI gateway
-- Fall back to Lovable AI gateway if the key is not set
-- Same prompt structure, just different endpoint and model
-- Handle xAI-specific error codes (429, 402)
+6. **Update `playsDates`** to derive from `allPlays`
 
-We'll need to use the `add_secret` tool to request the xAI API key from you.
+7. **Update `exportToCSV`** to include parlay entries
 
----
+8. **Fix `updateParlayResult`** — when marking win, set `profit` to `potential_payout - stake`; when loss, set `profit` to `-stake`. This ensures the merged view has correct payout values.
+
+9. **In the plays list rendering**, detect parlay items and show a "Parlay" badge. When clicking W/L on a parlay in the plays list, call `updateParlayResult` instead of `updatePlayResult`.
+
+### Technical Details
+
+```typescript
+// Merged plays array
+const allPlays = useMemo(() => {
+  const parlayAsPlays: Play[] = parlays.map(p => ({
+    id: p.id,
+    sport: (p.legs?.[0]?.sport || "parlay").toLowerCase(),
+    player_or_fighter: `Parlay (${p.legs?.length || 0} legs)`,
+    bet_type: "Parlay",
+    line: null,
+    odds: p.parlay_odds,
+    stake: p.stake,
+    result: p.result,
+    payout: p.result === "win" ? p.potential_payout - p.stake 
+          : p.result === "loss" ? -p.stake : 0,
+    notes: null,
+    created_at: p.created_at,
+  }));
+  return [...plays, ...parlayAsPlays];
+}, [plays, parlays]);
+```
 
 ### Files Modified
 
 | File | Change |
 |------|--------|
-| `supabase/functions/nba-api/index.ts` | Add `weightedHitRate()`, recency decay in confidence, pace context fetch |
-| `supabase/functions/ai-analysis/index.ts` | Grok model support, pace context in prompts |
-| `src/components/WrittenAnalysis.tsx` | Pass pace context to edge function |
-
-### Execution Order
-
-1. Request xAI API key secret from user
-2. Add recency decay to nba-api hit rate calculations
-3. Add pace/total context fetching to nba-api
-4. Update ai-analysis to use Grok + include pace in prompts
-5. Update WrittenAnalysis component to pass new data
+| `src/pages/ProfitTrackerPage.tsx` | Merge parlays into allPlays, update stats/charts/calendar/filters/export, fix parlay result payout |
 
