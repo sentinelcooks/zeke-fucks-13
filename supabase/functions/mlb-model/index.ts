@@ -894,8 +894,8 @@ Deno.serve(async (req) => {
             game_id: String(game_id),
             bet_type,
             prediction,
-            confidence: result.confidence,
-            verdict: result.verdict,
+            confidence: finalConfidence,
+            verdict: finalVerdict,
             prediction_date: new Date().toISOString().split("T")[0],
           });
         } catch (_) { /* cache miss is fine */ }
@@ -909,8 +909,8 @@ Deno.serve(async (req) => {
         prop_type: prop_type || null,
         line: typeof line === "string" ? parseFloat(line) : (line ?? null),
         direction: over_under || null,
-        confidence: result.confidence,
-        verdict: result.verdict,
+        confidence: finalConfidence,
+        verdict: finalVerdict,
         top_factors: (result.factorBreakdown || []).slice(0, 5),
       }).catch((err) => console.error("logSnapshot failed:", err));
 
