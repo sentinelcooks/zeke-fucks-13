@@ -224,7 +224,7 @@ async function analyzeGameBets(
   if (!modelEndpoint) return [];
 
   const picks: any[] = [];
-  const betTypes = game.sport === "nba" ? ["moneyline", "spread", "total"] : ["moneyline"];
+  const betTypes = ["moneyline", "spread", "total"];
 
   for (const betType of betTypes) {
     try {
@@ -395,11 +395,11 @@ async function getLineupPropSuggestions(
         messages: [
           {
             role: "system",
-            content: `You are an expert ${sport.toUpperCase()} betting analyst. Given the FULL active lineup for today's game, identify which 2-3 players across the ENTIRE roster have the best prop opportunities. Don't just pick star players — consider matchup advantages, recent form, role changes, backup players getting extra minutes, and platoon advantages. Available prop types: ${propTypes}.`
+            content: `You are an expert ${sport.toUpperCase()} betting analyst. Given the FULL active lineup for today's game, identify which 4-5 players across the ENTIRE roster have the best prop opportunities. Don't just pick star players — consider matchup advantages, recent form, role changes, backup players getting extra minutes, and platoon advantages. Available prop types: ${propTypes}.`
           },
           {
             role: "user",
-            content: `Today's ${sport.toUpperCase()} active lineup:\n${playerList}\n\nIdentify the 2-3 best prop opportunities across this roster. Include role players if they have a strong edge.`
+            content: `Today's ${sport.toUpperCase()} active lineup:\n${playerList}\n\nIdentify the 4-5 best prop opportunities across this roster. Include role players if they have a strong edge.`
           }
         ],
         tools: [{
@@ -552,7 +552,7 @@ Deno.serve(async (req) => {
 
   try {
     const startTime = Date.now();
-    const TIMEOUT_MS = 120_000; // 120s guard, 30s buffer before edge fn limit
+    const TIMEOUT_MS = 140_000; // 140s guard, 10s buffer before edge fn limit
     const isTimedOut = () => Date.now() - startTime > TIMEOUT_MS;
 
     console.log("🎯 Daily picks generator started — multi-sport, multi-bet-type");
@@ -598,14 +598,14 @@ Deno.serve(async (req) => {
         allPicks.push(...picks);
       } catch (e) { console.error(`Game bet error:`, e); }
       // Throttle between games to avoid rate limits on downstream model calls
-      if (gi < gamesForBets.length - 1) await delay(1500);
+      if (gi < gamesForBets.length - 1) await delay(1000);
     }
     console.log(`Phase 2 complete: ${allPicks.length} game-level picks (${Math.round((Date.now() - startTime) / 1000)}s elapsed)`);
 
     // ── Phase 3: Player props (lineup-based) — top 8 ranked ──
     if (!isTimedOut()) {
       console.log("Phase 3: Scanning lineups for prop opportunities (ranked by anticipation)...");
-      const gamesToScan = rankedGames.slice(0, 8);
+      const gamesToScan = rankedGames.slice(0, 12);
       const lineupResults = await Promise.allSettled(
         gamesToScan.map(game => getGameLineup(game.gameId, game.sport).then(lineup => ({ game, lineup })))
       );
@@ -624,7 +624,7 @@ Deno.serve(async (req) => {
       console.log(`Got ${propSuggestions.length} lineup-based prop suggestions (${Math.round((Date.now() - startTime) / 1000)}s elapsed)`);
 
       // Analyze props through model
-      for (let i = 0; i < propSuggestions.length && i < 12; i += 2) {
+      for (let i = 0; i < propSuggestions.length && i < 20; i += 2) {
         if (isTimedOut()) { console.log("⏱️ Timeout approaching, stopping prop analysis"); break; }
         const batch = propSuggestions.slice(i, i + 2);
         const results = await Promise.allSettled(
@@ -633,7 +633,7 @@ Deno.serve(async (req) => {
               .then(result => ({ pl, result }))
           )
         );
-        await delay(1500);
+        await delay(1000);
 
         for (const r of results) {
           if (r.status !== "fulfilled" || !r.value.result) {
@@ -718,7 +718,7 @@ Deno.serve(async (req) => {
 
           console.log(`Expansion: ${expansionSuggestions.length} prop suggestions (${Math.round((Date.now() - startTime) / 1000)}s elapsed)`);
 
-          for (let i = 0; i < expansionSuggestions.length && i < 12; i += 2) {
+          for (let i = 0; i < expansionSuggestions.length && i < 20; i += 2) {
             if (isTimedOut() || allPicks.length >= 20) break;
             const batch = expansionSuggestions.slice(i, i + 2);
             const results = await Promise.allSettled(
@@ -727,7 +727,7 @@ Deno.serve(async (req) => {
                   .then(result => ({ pl, result }))
               )
             );
-            await delay(1500);
+            await delay(1000);
 
             for (const r of results) {
               if (r.status !== "fulfilled" || !r.value.result) continue;
