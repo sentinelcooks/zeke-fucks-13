@@ -22,6 +22,8 @@ import {
   Target,
   Shield,
   Crown,
+  X,
+  Lightbulb,
 } from "lucide-react";
 import { Bar } from "react-chartjs-2";
 import {
@@ -1251,6 +1253,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
   const [results, setResults] = useState<any>(null);
   const [showBetInfo, setShowBetInfo] = useState<string | null>(null);
   const [didAutoAnalyze, setDidAutoAnalyze] = useState(false);
+  const [paceInfo, setPaceInfo] = useState<{ team: any; pace: any } | null>(null);
 
   useEffect(() => {
     setTeamsLoading(true);
@@ -1839,7 +1842,13 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
               <div className="vision-card p-3">
                 <h3 className="text-[8px] font-bold uppercase tracking-[0.15em] text-muted-foreground/45 mb-2">Pace</h3>
                 {[{ team: results.team1, pace: results.pace.team1 }, { team: results.team2, pace: results.pace.team2 }].map(({ team, pace }) => (
-                  <div key={team.abbr} className="py-1.5 border-b last:border-0" style={{ borderColor: 'hsla(228,18%,18%,0.3)' }}>
+                  <button
+                    key={team.abbr}
+                    type="button"
+                    onClick={() => setPaceInfo({ team, pace })}
+                    className="w-full text-left py-1.5 border-b last:border-0 hover:bg-white/5 transition-colors rounded-sm px-1 -mx-1"
+                    style={{ borderColor: 'hsla(228,18%,18%,0.3)' }}
+                  >
                     <div className="flex items-center gap-2">
                       {team.logo && <img src={team.logo} alt="" className="w-4 h-4 object-contain" />}
                       <span className="text-[11px] font-semibold text-foreground truncate">{team.shortName}</span>
@@ -1850,12 +1859,12 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                       )}
                     </div>
                     <div className="flex gap-2 text-[9px] text-muted-foreground/65 mt-0.5 pl-6">
-                      <span>{pace.recentPpg} PPG</span>
+                      <span>{pace.recentPpg} {results.sport === 'mlb' ? 'RPG' : results.sport === 'nhl' ? 'GPG' : 'PPG'}</span>
                       <span className={pace.recentPpg - pace.recentOppPpg > 0 ? "text-nba-green" : "text-nba-red"}>
                         {(pace.recentPpg - pace.recentOppPpg) > 0 ? "+" : ""}{(pace.recentPpg - pace.recentOppPpg).toFixed(1)} net
                       </span>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -1884,6 +1893,83 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
           </span>
         ))}
       </div>
+
+      {/* Pace / PPG explainer popup */}
+      <AnimatePresence>
+        {paceInfo && (() => {
+          const sportLbl = results?.sport === 'mlb' ? 'Runs Per Game (RPG)' : results?.sport === 'nhl' ? 'Goals Per Game (GPG)' : 'Points Per Game (PPG)';
+          const unitShort = results?.sport === 'mlb' ? 'RPG' : results?.sport === 'nhl' ? 'GPG' : 'PPG';
+          const paceLabel = results?.sport === 'mlb' ? 'run-scoring environment' : results?.sport === 'nhl' ? 'shot/goal context' : 'estimated possessions per game';
+          const net = paceInfo.pace.recentPpg - paceInfo.pace.recentOppPpg;
+          return (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+              onClick={() => setPaceInfo(null)}
+            >
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ type: "spring", damping: 25, stiffness: 350 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative w-full max-w-sm rounded-2xl overflow-hidden"
+                style={{
+                  background: "linear-gradient(145deg, hsla(228, 25%, 12%, 0.95), hsla(228, 25%, 8%, 0.98))",
+                  border: "1px solid hsla(250, 76%, 62%, 0.15)",
+                  boxShadow: "0 25px 50px -12px hsla(0, 0%, 0%, 0.5), 0 0 40px -10px hsla(250, 76%, 62%, 0.15)",
+                }}
+              >
+                <div className="absolute top-0 left-0 right-0 h-px" style={{ background: "linear-gradient(90deg, transparent, hsla(250,76%,62%,0.3), transparent)" }} />
+                <button
+                  onClick={() => setPaceInfo(null)}
+                  className="absolute top-3 right-3 p-1.5 rounded-lg text-muted-foreground/50 hover:text-foreground hover:bg-secondary/50 transition-all z-10"
+                  aria-label="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <div className="p-5 space-y-4">
+                  <div className="flex items-center gap-3">
+                    {paceInfo.team.logo && (
+                      <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 flex items-center justify-center bg-white/5" style={{ border: "1px solid hsla(250, 76%, 62%, 0.2)" }}>
+                        <img src={paceInfo.team.logo} alt="" className="w-7 h-7 object-contain" />
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="text-sm font-bold text-foreground">What is {unitShort}?</h3>
+                      <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Pace & Scoring Explained</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-xs text-foreground/80 leading-relaxed">
+                    <p><span className="font-semibold text-foreground">{sportLbl}</span> is how many points a team averages per game over their recent stretch.</p>
+                    <p><span className="font-semibold text-foreground">Net</span> = team's {unitShort} minus what opponents score on them. Positive = outscoring opponents.</p>
+                    <p><span className="font-semibold text-foreground">Pace</span> reflects the {paceLabel}. Higher = faster, higher-scoring style.</p>
+                  </div>
+                  <div
+                    className="rounded-xl p-3.5 space-y-1.5"
+                    style={{
+                      background: "linear-gradient(135deg, hsla(158, 64%, 52%, 0.08), hsla(158, 64%, 52%, 0.03))",
+                      border: "1px solid hsla(158, 64%, 52%, 0.12)",
+                    }}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Lightbulb className="w-3 h-3 text-emerald-400/80" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400/70">Example</span>
+                    </div>
+                    <p className="text-[11px] text-foreground/70 leading-relaxed">
+                      {paceInfo.team.shortName} average <span className="font-semibold text-foreground">{paceInfo.pace.recentPpg} {unitShort}</span> and allow <span className="font-semibold text-foreground">{paceInfo.pace.recentOppPpg}</span> over their last {paceInfo.pace.recentGames} games — a <span className={net >= 0 ? "text-nba-green font-semibold" : "text-nba-red font-semibold"}>{net >= 0 ? "+" : ""}{net.toFixed(1)} net rating</span>.
+                      {paceInfo.pace.pace > 0 ? <> Their pace number of <span className="font-semibold text-foreground">{paceInfo.pace.pace}</span> indicates a {paceInfo.pace.pace > 100 ? "fast" : "controlled"} tempo.</> : null}
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
     </div>
   );
 };

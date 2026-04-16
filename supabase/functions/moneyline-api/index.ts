@@ -191,7 +191,8 @@ function computeHomeAwaySplits(events: any[], teamId: string) {
 
   for (const ev of events) {
     const comp = ev.competitions?.[0];
-    if (!comp || comp.status?.type?.completed !== true) continue;
+    const isFinal = comp?.status?.type?.completed === true || comp?.status?.type?.name === "STATUS_FINAL";
+    if (!comp || !isFinal) continue;
     const competitors = comp.competitors || [];
     const team = competitors.find((c: any) => c.team?.id === teamId);
     const opp = competitors.find((c: any) => c.team?.id !== teamId);
@@ -271,7 +272,10 @@ function computePace(stats: Record<string, number>, events: any[], teamId: strin
   const pace = stats.pace || stats.possessions || 0;
   
   const completed = events
-    .filter(ev => ev.competitions?.[0]?.status?.type?.completed)
+    .filter(ev => {
+      const t = ev.competitions?.[0]?.status?.type;
+      return t?.completed === true || t?.name === "STATUS_FINAL";
+    })
     .slice(-10);
 
   let totalPF = 0, totalPA = 0, gameCount = 0;
@@ -333,7 +337,8 @@ function extractH2HFromEvents(events: any[], team1Id: string, team2Id: string, s
     const teams = comps.competitors || [];
     const isMatchup = teams.some((t: any) => t.team?.id === team2Id);
     if (!isMatchup) continue;
-    if (comps.status?.type?.completed !== true) continue;
+    const isFinalH2H = comps.status?.type?.completed === true || comps.status?.type?.name === "STATUS_FINAL";
+    if (!isFinalH2H) continue;
 
     const t1 = teams.find((t: any) => t.team?.id === team1Id);
     const t2 = teams.find((t: any) => t.team?.id === team2Id);
