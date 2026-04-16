@@ -272,7 +272,10 @@ function computePace(stats: Record<string, number>, events: any[], teamId: strin
   const pace = stats.pace || stats.possessions || 0;
   
   const completed = events
-    .filter(ev => ev.competitions?.[0]?.status?.type?.completed)
+    .filter(ev => {
+      const t = ev.competitions?.[0]?.status?.type;
+      return t?.completed === true || t?.name === "STATUS_FINAL";
+    })
     .slice(-10);
 
   let totalPF = 0, totalPA = 0, gameCount = 0;
