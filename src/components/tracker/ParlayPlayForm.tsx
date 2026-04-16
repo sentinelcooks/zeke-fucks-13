@@ -18,9 +18,24 @@ interface ParlayPlayFormProps {
   onCancel: () => void;
 }
 
-function decimalToAmerican(decimal: number): number {
-  if (decimal >= 2) return Math.round((decimal - 1) * 100);
-  return Math.round(-100 / (decimal - 1));
+const TEAM_MARKET_TYPES = [
+  "moneyline",
+  "ml",
+  "money line",
+  "winner",
+  "spread",
+  "run line",
+  "puck line",
+  "rl",
+  "pl",
+  "ats",
+  "handicap",
+  "line",
+];
+
+function isTeamMarket(betType: string) {
+  const normalized = betType.toLowerCase();
+  return TEAM_MARKET_TYPES.some((type) => normalized.includes(type));
 }
 
 export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
@@ -33,13 +48,31 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
   const [stake, setStake] = useState("");
 
   const updateLeg = (idx: number, field: keyof ParlayLeg, val: string) => {
-    setLegs(prev => prev.map((l, i) => i === idx ? { ...l, [field]: val } : l));
+    setLegs((prev) =>
+      prev.map((leg, i) => {
+        if (i !== idx) return leg;
+
+        if (field === "sport") {
+          return { ...leg, sport: val, player: "", betType: "" };
+        }
+
+        if (field === "betType") {
+          const modeChanged = isTeamMarket(leg.betType) !== isTeamMarket(val);
+          return {
+            ...leg,
+            betType: val,
+            player: modeChanged ? "" : leg.player,
+          };
+        }
+
+        return { ...leg, [field]: val };
+      })
+    );
   };
 
-  const addLeg = () => setLegs(prev => [...prev, { sport: "nba", player: "", betType: "", odds: defaultOdds }]);
-  const removeLeg = (idx: number) => { if (legs.length > 2) setLegs(prev => prev.filter((_, i) => i !== idx)); };
+  const addLeg = () => setLegs((prev) => [...prev, { sport: "nba", player: "", betType: "", odds: defaultOdds }]);
+  const removeLeg = (idx: number) => { if (legs.length > 2) setLegs((prev) => prev.filter((_, i) => i !== idx)); };
 
-  // Calculate combined odds
   const combinedDecimal = legs.reduce((acc, leg) => {
     const raw = parseFloat(leg.odds);
     if (isNaN(raw)) return acc;
@@ -53,8 +86,7 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
 
   const stakeNum = parseFloat(stake) || 0;
   const potentialPayout = stakeNum * combinedDecimal;
-
-  const canSave = legs.every(l => l.player && l.betType) && stakeNum > 0;
+  const canSave = legs.every((l) => l.player && l.betType) && stakeNum > 0;
 
   return (
     <div className="vision-card p-4 space-y-3">
@@ -102,7 +134,7 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
                   style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}
                   step={oddsFormat === "decimal" ? "0.01" : "1"} />
               </div>
-              <PlayerAutocomplete sport={leg.sport} value={leg.player} onChange={(v) => updateLeg(idx, "player", v)} />
+              <PlayerAutocomplete sport={leg.sport} value={leg.player} onChange={(v) => updateLeg(idx, "player", v)} betType={leg.betType} />
               <BetTypeDropdown sport={leg.sport} value={leg.betType} onChange={(v) => updateLeg(idx, "betType", v)} />
             </div>
           </motion.div>
@@ -115,7 +147,6 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
         <Plus className="w-3 h-3" /> Add Leg
       </button>
 
-      {/* Summary */}
       <div className="grid grid-cols-3 gap-2 rounded-xl p-2.5" style={{ background: 'hsla(228, 20%, 10%, 0.5)' }}>
         <div className="text-center">
           <span className="block text-[8px] uppercase tracking-wider text-muted-foreground/50">Combined</span>
@@ -136,8 +167,7 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
 
       <motion.button whileTap={{ scale: 0.95 }} onClick={() => {
         if (!canSave) return;
-        const americanOdds = combinedAmerican;
-        onSave(legs, stakeNum, americanOdds);
+        onSave(legs, stakeNum, combinedAmerican);
       }}
         className={`w-full py-3 rounded-xl text-[12px] font-bold tracking-wider text-accent-foreground transition-opacity ${!canSave ? 'opacity-40' : ''}`}
         style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))', boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.3)' }}
