@@ -15,6 +15,7 @@ const MoneyLinePage = () => {
       
       <div className="px-4 pt-4 pb-6 space-y-3 relative z-10">
         <MoneyLineSection
+          key={`${state?.home_team}-${state?.away_team}-${state?.sport}`}
           initialTeam1={state?.home_team}
           initialTeam2={state?.away_team}
           initialSport={state?.sport}
