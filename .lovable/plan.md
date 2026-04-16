@@ -1,53 +1,49 @@
 
 
-## Plan: Add Auth Trigger + Redeploy + Full Verification
+## Plan: Fix Home/Away Splits + Pace, Add PPG Explainer Popup
 
-### What's Being Done
+### Root Cause (Backend)
 
-1. **Migration** — `supabase/migrations/<ts>_add_auth_user_trigger.sql`:
-   ```sql
-   drop trigger if exists on_auth_user_created on auth.users;
-   create trigger on_auth_user_created
-     after insert on auth.users
-     for each row execute function public.handle_new_user();
-   ```
+In `supabase/functions/moneyline-api/index.ts`, the helpers `computeHomeAwaySplits` (line 194) and `computePace` (line 274) filter completed games using `comp.status?.type?.completed === true`. ESPN's `/teams/{id}/schedule` endpoint returns this `completed` boolean **inconsistently** — it's often missing or `false` on games that have actually finished. Every other model in this repo (`mlb-model`, `nhl-model`, `nba-api`) correctly uses `comp.status?.type?.name === "STATUS_FINAL"` instead.
 
-2. **Redeploy all 21 edge functions** in one batch so they bind to the new project's env:
-   `nba-api`, `mlb-model`, `nhl-model`, `ufc-api`, `moneyline-api`, `ai-analysis`, `daily-picks`, `nba-odds`, `log-outcome`, `admin-onboarding`, `correlated-props`, `free-props`, `games-schedule`, `grade-picks`, `key-admin`, `key-auth`, `prop-explainer`, `revenuecat-entitlements`, `session-cleanup`, `trends-api`, `personalize`
+That's why the screenshot shows Celtics 0-0 / 0-0 (0% PPG) and Hornets only 1-0 home — most completed games are being silently dropped from the count, so PPG/win% reads as zero.
 
-3. **Run live verification — paste all 6 outputs in the completion message:**
+This single helper feeds **NBA, MLB, NHL, NFL, NCAAB** in the Lines tab, so one fix covers every sport.
 
-   **A. Database + table count**
-   ```sql
-   select current_database(), count(*) as table_count
-   from information_schema.tables where table_schema='public';
-   ```
+### Changes
 
-   **B. Snapshot logging works** — call `nba-api/analyze` with a real player, wait, then:
-   ```sql
-   select sport, count(*), max(created_at) from prediction_snapshots group by sport;
-   ```
+**1. `supabase/functions/moneyline-api/index.ts`**
 
-   **C. Edge function deployment status** — paste deploy result for all 21.
+- `computeHomeAwaySplits` (line 194): replace
+  `if (!comp || comp.status?.type?.completed !== true) continue;`
+  with the union check used elsewhere:
+  `const isFinal = comp?.status?.type?.completed === true || comp?.status?.type?.name === "STATUS_FINAL"; if (!isFinal) continue;`
+- `computePace` (line 274): same union check on the `.filter(...)`.
+- `extractH2HFromEvents` (line 336): apply the same union check so head-to-head also picks up finals that ESPN flags only via `STATUS_FINAL`.
 
-   **D. Secrets present** — confirm all 8 user-managed secrets exist (no missing list).
+This is sport-agnostic — applies to NBA, MLB, NHL, NFL, NCAAB automatically.
 
-   **E. Trigger exists**
-   ```sql
-   select trigger_name, event_manipulation, event_object_table
-   from information_schema.triggers where trigger_name='on_auth_user_created';
-   ```
+**2. `src/components/MoneyLineSection.tsx` — Pace explainer popup**
 
-   **F. Trigger actually fires** — sign up a synthetic test user via `supabase.auth.admin.createUser` (invoked through a temporary admin call or directly via the REST `auth/v1/admin/users` endpoint using `SUPABASE_SERVICE_ROLE_KEY`), then:
-   ```sql
-   select id, email, created_at from public.profiles order by created_at desc limit 3;
-   ```
-   Confirm the new test user's row appears. If trigger fires but no profile row, inspect `handle_new_user()` body and report the bug.
+In the Pace card (lines 1838-1861), wrap each team row in a `<button>`. On click, open a small dialog (using existing `framer-motion` modal pattern already used elsewhere in this file at line 1443) that explains:
 
-   Test user will be cleaned up after verification (delete the test auth user + profile row).
+- **PPG** = Points Per Game (or Runs Per Game for MLB, Goals Per Game for NHL — sport-aware label based on `results.sport`)
+- **Net** = the team's recent PPG minus opponents' recent PPG
+- **Pace number** = estimated possessions per game (NBA) / runs context (MLB) / shots+goals context (NHL)
+- A concrete example using the team's actual numbers, e.g. *"Hornets average 127.0 PPG and allow 126.0, giving a +1.0 net rating over their last 10 games. Higher PPG = faster, higher-scoring style."*
+
+Single shared modal component at the bottom of the section, opened via `useState<{team, pace, sportLabel} | null>`, dismissed on backdrop click or X button. No new dependencies — reuses Vision UI styling and the dialog pattern already present in this file.
+
+### Verification (mandatory before marking complete)
+
+1. **Deploy** `moneyline-api` edge function.
+2. **Curl** the deployed function with an NBA matchup that has played games (e.g. Celtics vs Hornets) and grep the JSON response for `"splits"` — confirm `home.wins + home.losses > 0` and `home.ppg > 0`. Paste the relevant slice of the response in the completion message.
+3. **Repeat** the curl with an MLB matchup (e.g. Yankees vs Red Sox) and an NHL matchup to confirm splits/pace are now non-zero across sports. Paste both responses.
+4. **UI smoke**: load `/dashboard/analyze`, select Moneyline → Lines, run Celtics vs Hornets, expand "Home / Away Splits" → confirm non-zero values; tap a team in the Pace card → confirm the PPG explainer popup opens with the example sentence.
 
 ### Out of Scope
-- No new tables (all 21 exist)
-- No frontend changes
-- No data migration
+
+- No DB changes (no migrations needed).
+- No changes to MLB/NHL 20-factor model files — they already use `STATUS_FINAL` correctly and pass through the splits/pace from `moneyline-api`'s helpers.
+- No Pace card layout redesign — just adds tap-to-explain.
 
