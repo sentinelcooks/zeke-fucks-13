@@ -16,6 +16,10 @@ const SPORT_BET_TYPES: Record<string, { label: string; aliases: string[]; icon: 
     { label: "Pts + Reb", aliases: ["pr", "p+r", "points rebounds"], icon: Gauge },
     { label: "Pts + Ast", aliases: ["pa", "p+a", "points assists"], icon: Gauge },
     { label: "Turnovers", aliases: ["to", "tov", "tovs"], icon: Flame },
+    { label: "1Q Points", aliases: ["1q pts", "first quarter points", "1q scoring"], icon: Timer },
+    { label: "1Q Rebounds", aliases: ["1q reb", "first quarter rebounds", "1q boards"], icon: Timer },
+    { label: "1Q Assists", aliases: ["1q ast", "first quarter assists", "1q dimes"], icon: Timer },
+    { label: "1Q 3-Pointers", aliases: ["1q 3pt", "first quarter threes", "1q triples"], icon: Timer },
     { label: "Moneyline", aliases: ["ml", "money line", "winner"], icon: Trophy },
     { label: "Spread", aliases: ["ats", "against the spread", "handicap", "line"], icon: Star },
   ],
@@ -111,7 +115,7 @@ export function BetTypeDropdown({ sport, value, onChange }: BetTypeDropdownProps
         style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}
       />
       {open && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-xl overflow-hidden shadow-xl max-h-[200px] overflow-y-auto"
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-xl overflow-hidden shadow-xl max-h-[260px] overflow-y-auto pb-2"
           style={{ background: 'hsla(228, 18%, 12%, 0.98)', border: '1px solid hsla(228, 30%, 22%, 0.4)', backdropFilter: 'blur(20px)' }}>
           {filtered.length === 0 ? (
             <button className="w-full px-3 py-2 text-left text-[11px] text-muted-foreground/50 hover:bg-white/5"
