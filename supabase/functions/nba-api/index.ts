@@ -2092,9 +2092,13 @@ async function calculateMlbPropConfidence(data: any): Promise<{
   // Detect pitcher vs batter
   const position = (data.player?.position || "").toUpperCase();
   const isPitcher = ["SP", "RP", "CP", "CL", "P"].includes(position);
-  const weights = isPitcher ? MLB_PITCHER_WEIGHTS : MLB_BATTER_WEIGHTS;
+  const baseWeights = isPitcher ? MLB_PITCHER_WEIGHTS : MLB_BATTER_WEIGHTS;
+  // Apply prop-category specific weight overrides on top of base weights
+  const propCategory = detectMlbPropCategory(propType);
+  const categoryOverrides = MLB_PROP_WEIGHTS[propCategory] || {};
+  const weights: Record<string, number> = { ...baseWeights, ...categoryOverrides };
   const roleLabel = isPitcher ? "Pitcher" : "Batter";
-  reasoning.push(`⚾ MLB 20-Factor ${roleLabel} Model — ${data.player?.full_name || "Unknown"}`);
+  reasoning.push(`⚾ MLB 20-Factor ${roleLabel} Model [${propCategory}] — ${data.player?.full_name || "Unknown"}`);
   
   // Previous season blending
   const currentGames = data.current_season_games || [];
@@ -2431,38 +2435,11 @@ async function calculateMlbPropConfidence(data: any): Promise<{
     confidence = regressed;
   }
   
-  // ── HIT RATE CONSENSUS FLOOR ──
+  // ── HIT RATE CONSENSUS FLOOR REMOVED ──
+  // Raw model output now stands. Display caps applied at decision layer only.
   let consensusFloorApplied = false;
-  const seasonRate = data.season_hit_rate?.rate ?? null;
-  const l10Rate = l10?.rate ?? null;
-  const l5Rate = l5?.rate ?? null;
-  const h2hRate = h2h?.rate ?? null;
-  const allRates = [seasonRate, l10Rate, l5Rate, h2hRate].filter((r): r is number => r !== null);
-  const minRate = allRates.length > 0 ? Math.min(...allRates) : 0;
-  const avgRate = allRates.length > 0 ? allRates.reduce((a, b) => a + b, 0) / allRates.length : 0;
   const seasonAvgVal = data.season_hit_rate?.avg ?? null;
-  
-  if (allRates.length >= 2 && seasonAvgVal !== null) {
-    const avgOnCorrectSide = ou === "under" ? seasonAvgVal < line : seasonAvgVal > line;
-    const lineDistance = Math.abs(seasonAvgVal - line) / Math.max(line, 1);
-    
-    if (minRate >= 80 && avgOnCorrectSide) {
-      const floor = Math.min(Math.round(avgRate * 0.85), 90);
-      if (floor > confidence) {
-        reasoning.push(`🎯 Hit rate consensus: All ≥${minRate}%, avg on correct side → floor ${floor}%`);
-        confidence = floor;
-        consensusFloorApplied = true;
-      }
-    } else if (avgRate >= 70 && avgOnCorrectSide && lineDistance >= 0.15) {
-      const floor = Math.min(Math.round(avgRate * 0.78), 82);
-      if (floor > confidence) {
-        reasoning.push(`📊 Statistical lean: avg ${Math.round(avgRate)}% → floor ${floor}%`);
-        confidence = floor;
-        consensusFloorApplied = true;
-      }
-    }
-  }
-  
+
   // ── LOW-LINE RECALIBRATION ──
   if (line <= 0.5 && seasonAvgVal !== null) {
     const avgVsLine = seasonAvgVal / Math.max(line, 0.1);
@@ -2945,61 +2922,10 @@ function calculateConfidence(data: any) {
   let confidence = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 50;
   confidence = Math.max(0, Math.min(100, confidence));
 
-  // ── HIT RATE CONSENSUS FLOOR ───────────────────────────────
-  // When the majority of hit rate buckets strongly agree, the model should
-  // not output a confidence far below the actual hit rates.
+  // ── HIT RATE CONSENSUS FLOOR REMOVED ──
+  // Raw model output now stands. No artificial floors. Display caps belong in decision layer.
   let consensusFloorApplied = false;
   const seasonAvgVal = data.season_hit_rate?.avg ?? null;
-  const seasonRate = data.season_hit_rate?.rate ?? null;
-  const l10Rate = data.last_10?.rate ?? null;
-  const l5Rate = data.last_5?.rate ?? null;
-  const h2hRate = data.head_to_head?.rate ?? null;
-
-  const allRates = [seasonRate, l10Rate, l5Rate, h2hRate].filter((r): r is number => r !== null && r !== undefined);
-  const minRate = allRates.length > 0 ? Math.min(...allRates) : 0;
-  const avgRate = allRates.length > 0 ? allRates.reduce((a, b) => a + b, 0) / allRates.length : 0;
-
-  if (allRates.length >= 2 && seasonAvgVal !== null) {
-    const lineDistance = Math.abs(seasonAvgVal - line) / Math.max(line, 1);
-    const avgOnCorrectSide = ou === "under" ? seasonAvgVal < line : seasonAvgVal > line;
-
-    // Tier 1: ALL rates ≥90% AND line is far away — near-certainty
-    if (minRate >= 90 && lineDistance >= 0.4) {
-      const sanityFloor = Math.min(Math.round(avgRate * 0.95), 97);
-      if (sanityFloor > confidence) {
-        reasoning.push(`🎯 LINE SANITY: All hit rates ≥${minRate}% and line is ${Math.round(lineDistance * 100)}% from avg (${seasonAvgVal}) → floor ${sanityFloor}%`);
-        confidence = sanityFloor;
-        consensusFloorApplied = true;
-      }
-    }
-    // Tier 2: ALL rates ≥80% AND avg is on the correct side of the line
-    else if (minRate >= 80 && avgOnCorrectSide) {
-      const sanityFloor = Math.min(Math.round(avgRate * 0.88), 93);
-      if (sanityFloor > confidence) {
-        reasoning.push(`🎯 HIT RATE CONSENSUS: All rates ≥${minRate}%, avg (${seasonAvgVal}) ${ou === "under" ? "below" : "above"} line (${line}) → floor ${sanityFloor}%`);
-        confidence = sanityFloor;
-        consensusFloorApplied = true;
-      }
-    }
-    // Tier 3: AVG rate ≥75% AND avg clearly on correct side — moderate floor
-    else if (avgRate >= 75 && avgOnCorrectSide && lineDistance >= 0.15) {
-      const sanityFloor = Math.min(Math.round(avgRate * 0.82), 88);
-      if (sanityFloor > confidence) {
-        reasoning.push(`🎯 STATISTICAL LEAN: Avg hit rate ${Math.round(avgRate)}% with avg (${seasonAvgVal}) clearly ${ou === "under" ? "below" : "above"} line (${line}) → floor ${sanityFloor}%`);
-        confidence = sanityFloor;
-        consensusFloorApplied = true;
-      }
-    }
-    // Tier 4: AVG rate ≥65% AND avg on correct side — light floor  
-    else if (avgRate >= 65 && avgOnCorrectSide) {
-      const sanityFloor = Math.min(Math.round(avgRate * 0.75), 78);
-      if (sanityFloor > confidence) {
-        reasoning.push(`📊 RATE FLOOR: Avg hit rate ${Math.round(avgRate)}% supports this direction → floor ${sanityFloor}%`);
-        confidence = sanityFloor;
-        consensusFloorApplied = true;
-      }
-    }
-  }
 
   // ── MLB LOW-LINE RECALIBRATION ─────────────────────────────
   // For MLB props with low lines (≤0.5), hit-rate-based confidence is misleading.
@@ -3636,6 +3562,83 @@ serve(async (req) => {
         } catch (e: any) {
           console.error("NHL model supplementation failed:", e.message);
         }
+      }
+
+      // ─── Data quality validation + Prediction/Decision split ───
+      try {
+        const injuryWrapper = {
+          lastUpdated: result.team_roster_context?.lastUpdated || result.injuries_last_updated || null,
+        };
+        const gameWrapper = {
+          lineupStatus: result.lineup_status || result.next_game?.lineup_status || null,
+        };
+        const dq = validateDataQuality(result, injuryWrapper, gameWrapper);
+
+        const rawConfidence = Number(result.confidence) || 0;
+        const penalizedConfidence = Math.max(0, Math.min(100, rawConfidence - dq.confidencePenalty));
+
+        const factors: FactorBreakdown[] = (result.mlb_factors || result.factorBreakdown || []).map((f: any) => ({
+          name: f.name || f.label || "factor",
+          label: f.label,
+          score: Number(f.score) || 0,
+          weight: Number(f.weight) || 0,
+          detail: f.detail,
+        }));
+
+        const prediction: PredictionOutput = {
+          sport: reqSport || "nba",
+          market: bet_type || "player_prop",
+          confidence: penalizedConfidence,
+          factors,
+          variance: computeVariance(factors),
+          dataQuality: dq.quality,
+        };
+
+        const americanOdds: number | null =
+          typeof body.american_odds === "number" ? body.american_odds :
+          typeof body.odds === "number" ? body.odds :
+          null;
+        const decision = buildDecisionOutput(prediction, americanOdds);
+
+        const sampleSize =
+          result.current_season_games?.length ?? result.season_hit_rate?.sample ?? null;
+        const warnings = dataQualityWarnings(dq, sampleSize);
+        if (decision.juicePenaltyApplied > 0 && americanOdds !== null) {
+          warnings.push(`💰 Heavy juice (${americanOdds}) — adjusted display confidence -${decision.juicePenaltyApplied}%`);
+        }
+        if (warnings.length) {
+          result.reasoning = [...warnings, ...(result.reasoning || [])];
+        }
+
+        result.prediction = prediction;
+        result.decision = decision;
+        result.dataQuality = dq;
+        result.flags = dq.flags;
+
+        logSnapshot({
+          sport: prediction.sport,
+          market_type: prediction.market,
+          player_or_team: result.player?.full_name || player,
+          prop_type: prop_type || null,
+          line: typeof line === "string" ? parseFloat(line) : (line ?? null),
+          direction: over_under || null,
+          confidence: prediction.confidence,
+          ev_percent: decision.evPercent,
+          odds_at_time: americanOdds,
+          verdict: decision.verdict,
+          unit_size: decision.unitSize,
+          top_factors: factors.slice(0, 5),
+          data_quality: dq.quality,
+          variance_level: prediction.variance,
+          lineup_confirmed: dq.lineupConfirmed,
+          injury_flags: { flags: dq.flags, fresh: dq.injuryDataFresh },
+          game_environment: {
+            opponent: opponent || null,
+            sample_size: sampleSize,
+          },
+        }).catch(() => {});
+      } catch (e: any) {
+        console.error("Prediction/Decision layer failed:", e?.message);
       }
 
       return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
