@@ -1258,6 +1258,12 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
     callMoneylineApi("teams", { sport }).then(setTeams).catch(() => {}).finally(() => setTeamsLoading(false));
   }, [sport]);
 
+  // Clear stale results whenever teams change
+  useEffect(() => {
+    setResults(null);
+    setError("");
+  }, [team1, team2]);
+
   // Auto-fill teams and trigger analysis when navigated from Games
   useEffect(() => {
     if (!autoAnalyze || didAutoAnalyze || teams.length === 0 || !initialTeam1 || !initialTeam2) return;
