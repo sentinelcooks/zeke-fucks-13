@@ -763,11 +763,35 @@ Deno.serve(async (req) => {
       console.log(`Expansion complete: ${allPicks.length} total picks (${Math.round((Date.now() - startTime) / 1000)}s elapsed)`);
     }
 
-    // ── Phase 4: Insert all picks ──
-    // If still 0 picks after lowered thresholds, the allPicks array is empty.
-    // Log a clear message so we know it's a data issue, not a code issue.
+    // ── Phase 4: Best-available fallback ──
+    // If fewer than 5 picks passed thresholds, take the best available with >45% confidence
+    if (allPicks.length < 5) {
+      console.log(`⚠️ Only ${allPicks.length} picks passed thresholds — applying best-available fallback (>45%)`);
+      // allPicks already contains everything that passed; we need to also include
+      // sub-threshold game-level picks. Re-scan remaining ranked games at 45% threshold.
+      if (!isTimedOut()) {
+        const fallbackGames = rankedGames.slice(0, Math.min(rankedGames.length, 6));
+        for (const game of fallbackGames) {
+          if (isTimedOut() || allPicks.length >= 10) break;
+          try {
+            const picks = await retryWithBackoff(() => analyzeGameBets(game, supabaseUrl, serviceKey, 45), 1, `fallback-game`);
+            // Only add picks we don't already have (by player_name + prop_type)
+            const existingKeys = new Set(allPicks.map(p => `${p.player_name}|${p.prop_type}`));
+            for (const p of picks) {
+              if (!existingKeys.has(`${p.player_name}|${p.prop_type}`)) {
+                allPicks.push(p);
+                existingKeys.add(`${p.player_name}|${p.prop_type}`);
+              }
+            }
+          } catch (e) { console.error(`Fallback game error:`, e); }
+          await delay(1000);
+        }
+        console.log(`Fallback complete: ${allPicks.length} total picks`);
+      }
+    }
+
     if (allPicks.length === 0) {
-      console.log("⚠️ Zero picks generated even with lowered thresholds (60%/55%). All models returned sub-threshold confidence or no games today.");
+      console.log("⚠️ Zero picks generated even with fallback. All models returned sub-45% confidence or no games today.");
     }
     allPicks.sort((a, b) => b.hit_rate - a.hit_rate);
     const topPicks = allPicks.slice(0, 20);
