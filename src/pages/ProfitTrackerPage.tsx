@@ -491,7 +491,9 @@ const ProfitTrackerPage = () => {
                         <VisionInput label={`Odds (${oddsFormat === "decimal" ? "Decimal" : "American"})`} type="number" value={form.odds}
                           onChange={(e) => setForm({ ...form, odds: e.target.value })}
                           step={oddsFormat === "decimal" ? "0.01" : "1"} />
-                        <VisionInput label="Stake ($)" placeholder="10" type="number" value={form.stake} onChange={(e) => setForm({ ...form, stake: e.target.value })} />
+                        <div className="col-span-2">
+                          <VisionInput label="Stake ($)" placeholder="10" type="number" value={form.stake} onChange={(e) => setForm({ ...form, stake: e.target.value })} />
+                        </div>
                       </div>
                       <motion.button whileTap={{ scale: 0.95 }} onClick={addPlay}
                         className="w-full py-3 rounded-xl text-[12px] font-bold tracking-wider text-accent-foreground"
