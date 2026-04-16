@@ -12,6 +12,34 @@ function json(body: unknown, status = 200) {
   });
 }
 
+// ── Snapshot logging — fire and forget ──
+async function logSnapshot(payload: Record<string, any>): Promise<void> {
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceKey) {
+      console.error("logSnapshot: missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+      return;
+    }
+    const r = await fetch(`${supabaseUrl}/rest/v1/prediction_snapshots`, {
+      method: "POST",
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) {
+      const text = await r.text().catch(() => "");
+      console.error(`logSnapshot insert failed ${r.status}:`, text);
+    }
+  } catch (e) {
+    console.error("logSnapshot failed:", (e as Error).message);
+  }
+}
+
 // ── ESPN Helpers ──
 const ESPN_NHL = "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl";
 
