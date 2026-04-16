@@ -85,6 +85,7 @@ const HomePage = () => {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const [plays, setPlays] = useState<Play[]>([]);
+  const [parlays, setParlays] = useState<any[]>([]);
   const [picks, setPicks] = useState<Pick[]>([]);
   const [loading, setLoading] = useState(true);
   const [aiRecs, setAiRecs] = useState<AiRecommendations | null>(null);
@@ -103,12 +104,14 @@ const HomePage = () => {
   useEffect(() => {
     if (!user) return;
     const fetchData = async () => {
-      const [playsRes, picksRes, onboardingRes] = await Promise.all([
+      const [playsRes, picksRes, onboardingRes, parlayRes] = await Promise.all([
         supabase.from("plays").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
         supabase.from("daily_picks").select("id, player_name, pick_date").eq("pick_date", new Date().toISOString().split("T")[0]),
         supabase.from("onboarding_responses" as any).select("ai_recommendations").eq("user_id", user.id).single(),
+        supabase.from("parlay_history" as any).select("*").order("created_at", { ascending: false }),
       ]);
       setPlays((playsRes.data as Play[]) || []);
+      setParlays((parlayRes.data as any[]) || []);
       setPicks((picksRes.data as Pick[]) || []);
       if ((onboardingRes.data as any)?.ai_recommendations) {
         setAiRecs((onboardingRes.data as any).ai_recommendations as AiRecommendations);
@@ -118,13 +121,30 @@ const HomePage = () => {
     fetchData();
   }, [user]);
 
+  const allPlays = useMemo(() => {
+    const parlayAsPlays: Play[] = parlays.map((p: any) => {
+      const legs = Array.isArray(p.legs) ? p.legs : [];
+      const payout = p.result === "win" ? (p.potential_payout || 0) - (p.stake || 0) : p.result === "loss" ? -(p.stake || 0) : 0;
+      return {
+        id: p.id,
+        sport: (legs[0]?.sport || "parlay").toLowerCase(),
+        result: p.result,
+        stake: p.stake,
+        odds: p.parlay_odds,
+        payout,
+        created_at: p.created_at,
+      };
+    });
+    return [...plays, ...parlayAsPlays];
+  }, [plays, parlays]);
+
   const stats = useMemo(() => {
-    const wins = plays.filter(p => p.result === "win").length;
-    const losses = plays.filter(p => p.result === "loss").length;
+    const wins = allPlays.filter(p => p.result === "win").length;
+    const losses = allPlays.filter(p => p.result === "loss").length;
     const total = wins + losses;
     const hitRate = total > 0 ? Math.round((wins / total) * 100) : 0;
-    const profit = calcProfit(plays);
-    const last7 = plays.filter(p => {
+    const profit = calcProfit(allPlays);
+    const last7 = allPlays.filter(p => {
       const d = new Date(p.created_at);
       const week = new Date();
       week.setDate(week.getDate() - 7);
@@ -133,12 +153,12 @@ const HomePage = () => {
     const last7Wins = last7.filter(p => p.result === "win").length;
     const last7Losses = last7.filter(p => p.result === "loss").length;
     const last7Total = last7Wins + last7Losses;
-    const roi = total > 0 ? Math.round((profit / plays.reduce((s, p) => s + p.stake, 0)) * 100) : 0;
+    const roi = total > 0 ? Math.round((profit / allPlays.reduce((s, p) => s + p.stake, 0)) * 100) : 0;
     const sportCounts: Record<string, number> = {};
-    plays.forEach(p => { sportCounts[p.sport] = (sportCounts[p.sport] || 0) + 1; });
+    allPlays.forEach(p => { sportCounts[p.sport] = (sportCounts[p.sport] || 0) + 1; });
     const streak = (() => {
       let s = 0;
-      const sorted = [...plays].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      const sorted = [...allPlays].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       if (!sorted.length) return 0;
       const first = sorted[0].result;
       for (const p of sorted) {
@@ -149,7 +169,7 @@ const HomePage = () => {
     })();
     const bestDay = (() => {
       const dayMap: Record<string, number> = {};
-      plays.forEach(p => {
+      allPlays.forEach(p => {
         const day = p.created_at.split("T")[0];
         if (!dayMap[day]) dayMap[day] = 0;
         if (p.result === "win") dayMap[day] += (p.payout || 0);
@@ -161,11 +181,11 @@ const HomePage = () => {
     })();
 
     return { wins, losses, total, hitRate, profit, last7Wins, last7Losses, last7Total, roi, sportCounts, todayPicks: picks.length, streak, bestDay };
-  }, [plays, picks]);
+  }, [allPlays, picks]);
 
   // Modern layout — after all hooks
   if (homeTheme === "modern") {
-    return <ModernHomeLayout plays={plays} loading={loading} />;
+    return <ModernHomeLayout plays={allPlays} loading={loading} />;
   }
 
   const isNewUser = stats.total < 5;
@@ -361,7 +381,7 @@ const HomePage = () => {
       )}
 
       {/* ── PNL CALENDAR — Collapsed for new users ── */}
-      {!isNewUser && <PnLCalendar plays={plays} />}
+      {!isNewUser && <PnLCalendar plays={allPlays} />}
 
       {/* ── PERFORMANCE + SPORT BREAKDOWN ── */}
       <div className="grid grid-cols-2 gap-2.5">
