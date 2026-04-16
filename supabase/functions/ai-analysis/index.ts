@@ -92,6 +92,30 @@ function getWithoutTeammatesLabels(sport: string) {
   return { projLabel: "Projected minutes tonight", perLabel: "Per-36 projection" };
 }
 
+/* ── Build pace context string for prompts ── */
+function buildPaceContextString(paceContext: any, sport: string): string {
+  if (!paceContext) return "";
+  const t = paceContext.team;
+  const o = paceContext.opponent;
+  if (!t && !o) return "";
+  
+  let s = "\n\nGAME PACE / TOTAL CONTEXT:";
+  if (sport === "nba") {
+    if (t?.pace) s += `\n${t.team}: Pace ${t.pace}, ${t.ppg} PPG, OffRtg ${t.offRtg}, DefRtg ${t.defRtg}`;
+    if (o?.pace) s += `\n${o.team}: Pace ${o.pace}, ${o.ppg} PPG, OffRtg ${o.offRtg}, DefRtg ${o.defRtg}`;
+    if (t?.ppg && o?.ppg) s += `\nProjected game total: ~${Math.round(((t.ppg || 0) + (o.ppg || 0)) * 10) / 10}`;
+  } else if (sport === "nhl") {
+    if (t?.goalsFor) s += `\n${t.team}: ${t.goalsFor} GF/G, ${t.goalsAgainst} GA/G, ${t.shotsPerGame} SOG/G`;
+    if (o?.goalsFor) s += `\n${o.team}: ${o.goalsFor} GF/G, ${o.goalsAgainst} GA/G, ${o.shotsPerGame} SOG/G`;
+    if (t?.goalsFor && o?.goalsFor) s += `\nProjected game total: ~${Math.round(((t.goalsFor || 0) + (o.goalsFor || 0)) * 10) / 10}`;
+  } else if (sport === "mlb") {
+    if (t?.runsPerGame) s += `\n${t.team}: ${t.runsPerGame} R/G, ${t.battingAvg} AVG, ${t.ops} OPS`;
+    if (o?.runsPerGame) s += `\n${o.team}: ${o.runsPerGame} R/G, ${o.battingAvg} AVG, ${o.ops} OPS`;
+    if (t?.runsPerGame && o?.runsPerGame) s += `\nProjected game total: ~${Math.round(((t.runsPerGame || 0) + (o.runsPerGame || 0)) * 10) / 10} runs`;
+  }
+  return s;
+}
+
 /* ── Sport-specific prop prompts ── */
 function getPropPrompt(body: any, injurySection: string, teammatesSection: string): string {
   const { playerOrTeam, propDisplay, overUnder, line, verdict, confidence, sport } = body;
@@ -111,6 +135,9 @@ Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only 
         ? `The overall verdict is TAKE. Be assertive and confident. Recommend the bet clearly.`
         : `Your final verdict MUST ALIGN with "${verdict}".`;
 
+  // Build pace context string
+  const paceStr = buildPaceContextString(body.paceContext, s);
+
   if (s === "mlb") return `You are a sharp MLB betting analyst. Be concise and data-driven. Use baseball terminology throughout.
 
 Player: ${playerOrTeam}
@@ -119,14 +146,14 @@ Verdict: ${verdict}
 Model Confidence: ${confidence}%
 
 Data points:
-- ${dataPoints || "No additional data"}${injurySection}${teammatesSection}
+- ${dataPoints || "No additional data"}${paceStr}${injurySection}${teammatesSection}
 
 CRITICAL: ${ratingInstruction} The direction is ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the overall rating.
 
 ${formatRule}
 
 1. Statistical Edge — Season stats, L10 trends, platoon splits, K rate / ERA / WHIP / OPS.
-2. Matchup & Park Factor — Opposing pitcher/hitter matchup, park dimensions, weather, bullpen state.
+2. Matchup & Park Factor — Opposing pitcher/hitter matchup, park dimensions, weather, bullpen state.${paceStr ? " Factor in game pace/total context." : ""}
 3. Verdict & Risk — Final recommendation with unit sizing and key risk.`;
 
   if (s === "nhl") return `You are a sharp NHL betting analyst. Be concise and data-driven. Use hockey terminology throughout.
@@ -137,26 +164,17 @@ Verdict: ${verdict}
 Model Confidence: ${confidence}%
 
 Data points:
-- ${dataPoints || "No additional data"}${injurySection}${teammatesSection}
+- ${dataPoints || "No additional data"}${paceStr}${injurySection}${teammatesSection}
 
 CRITICAL: ${ratingInstruction} The direction is ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the overall rating.
 
 ${formatRule}
 
 1. Statistical Edge — SOG trends, shooting %, ice time, power-play involvement.
-2. Matchup & Lineup — Opposing goalie save %, line combinations, PP/PK time, fatigue.
+2. Matchup & Lineup — Opposing goalie save %, line combinations, PP/PK time, fatigue.${paceStr ? " Factor in game pace/total context." : ""}
 3. Verdict & Risk — Final recommendation with unit sizing and key risk.`;
 
   // NBA / default
-  const overallRating = body.overallRating || "";
-  const ratingInstruction = overallRating === "fade"
-    ? `The overall verdict is FADE. Do NOT recommend betting. Acknowledge the risks clearly. Your Verdict & Risk MUST say to pass or avoid this pick.`
-    : overallRating === "lean"
-      ? `The overall verdict is LEAN. Be cautiously optimistic. Mention it's a small-unit play with caveats.`
-      : overallRating === "take"
-        ? `The overall verdict is TAKE. Be assertive and confident. Recommend the bet clearly.`
-        : `Your final verdict MUST ALIGN with "${verdict}".`;
-
   return `You are a sharp sports betting analyst. Be concise, data-driven, and persuasive.
 
 Player: ${playerOrTeam}
@@ -166,14 +184,14 @@ Model Confidence: ${confidence}%
 Sport: ${sport || "nba"}
 
 Data points:
-- ${dataPoints || "No additional data"}${injurySection}${teammatesSection}
+- ${dataPoints || "No additional data"}${paceStr}${injurySection}${teammatesSection}
 
 CRITICAL: ${ratingInstruction} The direction is ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the overall rating.
 
 ${formatRule}
 
 1. Statistical Edge — Hit rates, averages, trends supporting the bet.
-2. Matchup & Injuries — Opponent matchup, pace, injuries affecting this prop.
+2. Matchup & Pace — Opponent matchup, pace of play, injuries affecting this prop.${paceStr ? " Use the game pace/total context provided." : ""}
 3. Verdict & Risk — Final recommendation with unit sizing and key risk.`;
 }
 
