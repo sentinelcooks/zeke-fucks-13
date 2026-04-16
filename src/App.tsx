@@ -47,6 +47,22 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function OnboardingGuard({ children }: { children: React.ReactNode }) {
+  const { profile, isAuthenticated, isLoading } = useAuth();
+  if (isLoading) return <LoadingSpinner />;
+  // Check local flag first (survives network failures), then server flag
+  const localComplete = localStorage.getItem("sentinel_onboarding_complete") === "true";
+  const serverComplete = profile?.onboarding_complete === true;
+  if (localComplete || serverComplete) {
+    // Sync local flag from server if missing
+    if (serverComplete && !localComplete) {
+      localStorage.setItem("sentinel_onboarding_complete", "true");
+    }
+    return <Navigate to={isAuthenticated ? "/dashboard" : "/auth"} replace />;
+  }
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -63,7 +79,9 @@ function AppRoutes() {
       } />
       <Route path="/onboarding" element={
         <Suspense fallback={<LoadingSpinner />}>
-          <OnboardingPage />
+          <OnboardingGuard>
+            <OnboardingPage />
+          </OnboardingGuard>
         </Suspense>
       } />
       <Route path="/paywall" element={
