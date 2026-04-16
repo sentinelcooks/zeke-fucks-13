@@ -9,6 +9,7 @@ interface Profile {
   timezone: string;
   notification_enabled: boolean;
   odds_format: "american" | "decimal";
+  onboarding_complete: boolean;
 }
 
 interface AuthContextType {
