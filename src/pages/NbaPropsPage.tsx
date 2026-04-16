@@ -2133,6 +2133,7 @@ const NbaPropsPage = () => {
                 injuries={results.teammate_injuries || results.injuries || []}
                 sport={sport}
                 withoutTeammatesData={results.without_teammates_analysis}
+                paceContext={results.pace_context}
               />
 
               {/* Correlated Props */}
