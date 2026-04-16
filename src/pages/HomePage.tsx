@@ -85,6 +85,7 @@ const HomePage = () => {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const [plays, setPlays] = useState<Play[]>([]);
+  const [parlays, setParlays] = useState<any[]>([]);
   const [picks, setPicks] = useState<Pick[]>([]);
   const [loading, setLoading] = useState(true);
   const [aiRecs, setAiRecs] = useState<AiRecommendations | null>(null);
@@ -103,12 +104,14 @@ const HomePage = () => {
   useEffect(() => {
     if (!user) return;
     const fetchData = async () => {
-      const [playsRes, picksRes, onboardingRes] = await Promise.all([
+      const [playsRes, picksRes, onboardingRes, parlayRes] = await Promise.all([
         supabase.from("plays").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
         supabase.from("daily_picks").select("id, player_name, pick_date").eq("pick_date", new Date().toISOString().split("T")[0]),
         supabase.from("onboarding_responses" as any).select("ai_recommendations").eq("user_id", user.id).single(),
+        supabase.from("parlay_history" as any).select("*").order("created_at", { ascending: false }),
       ]);
       setPlays((playsRes.data as Play[]) || []);
+      setParlays((parlayRes.data as any[]) || []);
       setPicks((picksRes.data as Pick[]) || []);
       if ((onboardingRes.data as any)?.ai_recommendations) {
         setAiRecs((onboardingRes.data as any).ai_recommendations as AiRecommendations);
