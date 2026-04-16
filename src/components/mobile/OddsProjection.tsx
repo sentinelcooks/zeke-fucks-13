@@ -397,25 +397,25 @@ export function OddsProjection({
 
             {/* Model vs Implied visual comparison */}
             <div className="grid grid-cols-3 gap-2 mb-4">
-              <div className="rounded-xl p-3 text-center" style={{ background: 'hsla(228, 20%, 10%, 0.7)' }}>
+              <div className="rounded-xl p-2.5 text-center min-w-0 overflow-hidden" style={{ background: 'hsla(228, 20%, 10%, 0.7)' }}>
                 <div className="flex items-center justify-center gap-1 mb-1.5">
                   <Zap className="w-3 h-3 text-accent" />
                   <span className="text-[8px] font-bold uppercase tracking-wider text-accent/60">Our Model</span>
                 </div>
-                <span className="block text-xl font-extrabold tabular-nums text-accent">{compositeModelRate.toFixed(1)}%</span>
+                <span className="block text-[16px] font-extrabold tabular-nums text-accent">{compositeModelRate.toFixed(1)}%</span>
                 <span className="block text-[8px] text-muted-foreground/55 mt-0.5">Hit Probability</span>
               </div>
-              <div className="rounded-xl p-3 text-center flex flex-col items-center justify-center" style={{ background: 'hsla(228, 20%, 10%, 0.7)' }}>
+              <div className="rounded-xl p-2.5 text-center flex flex-col items-center justify-center min-w-0 overflow-hidden" style={{ background: 'hsla(228, 20%, 10%, 0.7)' }}>
                 <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/65 mb-1">Implied</span>
-                <span className="block text-xl font-extrabold tabular-nums text-foreground/60">{bestImplied.toFixed(1)}%</span>
+                <span className="block text-[16px] font-extrabold tabular-nums text-foreground/60">{bestImplied.toFixed(1)}%</span>
                 <span className="block text-[8px] text-muted-foreground/55 mt-0.5">Best Book</span>
               </div>
-              <div className="rounded-xl p-3 text-center" style={{ background: 'hsla(228, 20%, 10%, 0.7)' }}>
+              <div className="rounded-xl p-2.5 text-center min-w-0 overflow-hidden" style={{ background: 'hsla(228, 20%, 10%, 0.7)' }}>
                 <div className="flex items-center justify-center gap-1 mb-1.5">
                   <Shield className="w-3 h-3 text-nba-cyan" />
                   <span className="text-[8px] font-bold uppercase tracking-wider text-[hsl(var(--nba-cyan))]/60">Edge</span>
                 </div>
-                <span className={`block text-xl font-extrabold tabular-nums ${getEVColor(bestEV.edge)}`}>
+                <span className={`block text-[16px] font-extrabold tabular-nums ${getEVColor(bestEV.edge)}`}>
                   {bestEV.edge > 0 ? "+" : ""}{bestEV.edge.toFixed(1)}%
                 </span>
                 <span className="block text-[8px] text-muted-foreground/55 mt-0.5">Model Edge</span>
