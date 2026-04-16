@@ -213,7 +213,7 @@ async function analyzeGameBets(
   game: GameInfo,
   supabaseUrl: string,
   serviceKey: string,
-  confidenceThreshold: number = 70
+  confidenceThreshold: number = 60
 ): Promise<Array<{
   bet_type: string; player_name: string; team: string; opponent: string;
   home_team: string; away_team: string; prop_type: string; line: number;
@@ -289,12 +289,11 @@ async function analyzeGameBets(
         playerName = `${game.away} @ ${game.home}`;
       }
 
-      // Fetch real market odds — skip pick if no real odds found
+      // Fetch real market odds — allow pick through with "N/A" if no odds found
       const oddsTeamOrPlayer = betType === "total" ? `${game.away} @ ${game.home}` : playerName;
-      const realOdds = data.odds || await fetchGameOdds(oddsTeamOrPlayer, pickBetType, game.sport, supabaseUrl, serviceKey);
-      if (!realOdds) {
-        console.log(`  ⚠️ No real odds for ${playerName} (${pickBetType}), skipping`);
-        continue;
+      const realOdds = data.odds || await fetchGameOdds(oddsTeamOrPlayer, pickBetType, game.sport, supabaseUrl, serviceKey) || "N/A";
+      if (realOdds === "N/A") {
+        console.log(`  ⚠️ No real odds for ${playerName} (${pickBetType}), using N/A`);
       }
 
       picks.push({
@@ -637,11 +636,15 @@ Deno.serve(async (req) => {
         await delay(1500);
 
         for (const r of results) {
-          if (r.status !== "fulfilled" || !r.value.result) continue;
+          if (r.status !== "fulfilled" || !r.value.result) {
+            if (r.status === "fulfilled") console.log(`  📊 Prop analysis returned null for batch item`);
+            continue;
+          }
           const { pl, result } = r.value;
-          if (result.confidence >= 70) {
-            const realOdds = await fetchRealOdds(pl.name, pl.prop_type, result.direction, pl.sport, supabaseUrl, serviceKey);
-            if (!realOdds) { console.log(`  ⚠️ No real odds for ${pl.name} ${pl.prop_type}, skipping`); continue; }
+          console.log(`  📊 ${pl.name} ${pl.prop_type}: confidence=${result.confidence}%`);
+          if (result.confidence >= 60) {
+            const realOdds = await fetchRealOdds(pl.name, pl.prop_type, result.direction, pl.sport, supabaseUrl, serviceKey) || "N/A";
+            if (realOdds === "N/A") console.log(`  ⚠️ No real odds for ${pl.name} ${pl.prop_type}, using N/A`);
             allPicks.push({
               bet_type: "prop",
               player_name: pl.name,
@@ -661,6 +664,8 @@ Deno.serve(async (req) => {
               sport: pl.sport,
             });
             console.log(`✅ ${pl.name} ${pl.prop_type}: ${result.confidence}% (odds: ${realOdds})`);
+          } else {
+            console.log(`  ⏭️ ${pl.name} ${pl.prop_type}: ${result.confidence}% below 60% threshold`);
           }
         }
 
@@ -670,10 +675,10 @@ Deno.serve(async (req) => {
       console.log("⏱️ Skipping Phase 3 — timeout approaching");
     }
 
-    // ── Phase 3.5: Expansion — if fewer than 3 picks at 70%+, scan ALL remaining games at 65% ──
-    const highConfPicks = allPicks.filter(p => p.hit_rate >= 70).length;
+    // ── Phase 3.5: Expansion — if fewer than 3 picks at 60%+, scan ALL remaining games at 55% ──
+    const highConfPicks = allPicks.filter(p => p.hit_rate >= 60).length;
     if (highConfPicks < 3 && !isTimedOut()) {
-      console.log(`⚠️ Only ${highConfPicks} high-confidence picks — expanding to ALL remaining games (65% threshold)`);
+      console.log(`⚠️ Only ${highConfPicks} picks at 60%+ — expanding to ALL remaining games (55% threshold)`);
 
       // Expand game-level bets to remaining games (indices 12+)
       const remainingGamesForBets = rankedGames.slice(12);
@@ -683,7 +688,7 @@ Deno.serve(async (req) => {
           const game = remainingGamesForBets[gi];
           if (isTimedOut() || allPicks.length >= 20) break;
           try {
-            const picks = await retryWithBackoff(() => analyzeGameBets(game, supabaseUrl, serviceKey, 65), 2, `exp-game`);
+            const picks = await retryWithBackoff(() => analyzeGameBets(game, supabaseUrl, serviceKey, 55), 2, `exp-game`);
             allPicks.push(...picks);
           } catch (e) { console.error(`Expansion game bet error:`, e); }
           if (gi < remainingGamesForBets.length - 1) await delay(1500);
@@ -727,9 +732,9 @@ Deno.serve(async (req) => {
             for (const r of results) {
               if (r.status !== "fulfilled" || !r.value.result) continue;
               const { pl, result } = r.value;
-              if (result.confidence >= 65) {
-                const realOdds = await fetchRealOdds(pl.name, pl.prop_type, result.direction, pl.sport, supabaseUrl, serviceKey);
-                if (!realOdds) { console.log(`  ⚠️ No real odds for ${pl.name} ${pl.prop_type}, skipping`); continue; }
+              console.log(`  📊 Expansion: ${pl.name} ${pl.prop_type}: confidence=${result.confidence}%`);
+              if (result.confidence >= 55) {
+                const realOdds = await fetchRealOdds(pl.name, pl.prop_type, result.direction, pl.sport, supabaseUrl, serviceKey) || "N/A";
                 allPicks.push({
                   bet_type: "prop",
                   player_name: pl.name,
