@@ -160,10 +160,11 @@ const ProfitTrackerPage = () => {
     const stake = parseFloat(form.stake) || 0;
     await supabase.from("plays").insert({
       user_id: user.id, license_key: user.id, sport: form.sport,
-      player_or_fighter: form.player_or_fighter, bet_type: form.bet_type,
+      player_or_fighter: form.player_or_fighter,
+      bet_type: isPlayerProp ? `${form.bet_type} (${form.direction.toUpperCase()})` : form.bet_type,
       line: form.line ? parseFloat(form.line) : null, odds, stake, result: "pending", payout: 0,
     });
-    setForm({ sport: "nba", player_or_fighter: "", bet_type: "", line: "", odds: defaultOdds, stake: "" });
+    setForm({ sport: "nba", player_or_fighter: "", bet_type: "", line: "", odds: defaultOdds, stake: "", direction: "over" });
     setShowForm(false); fetchPlays();
   };
 
