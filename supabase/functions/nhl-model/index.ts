@@ -817,6 +817,16 @@ Deno.serve(async (req) => {
         } catch (_) { /* cache miss is fine */ }
       }
 
+      // Snapshot logging — fire and forget
+      logSnapshot({
+        sport: "nhl",
+        market_type: bet_type,
+        player_or_team: player_name || `${team1_name || "team1"} vs ${team2_name || "team2"}`,
+        confidence: result.confidence,
+        verdict: result.verdict,
+        top_factors: (result.factorBreakdown || []).slice(0, 5),
+      }).catch((err) => console.error("logSnapshot failed:", err));
+
       return json(prediction);
     }
 
