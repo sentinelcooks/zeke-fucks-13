@@ -1124,6 +1124,22 @@ Deno.serve(async (req) => {
       const modelConf = bet_type === "moneyline" ? analysis.team1_pct : analysis.confidence;
       const odds = buildOddsPayload(oddsData, bet_type, modelConf, team1.name, team2.name, over_under);
 
+      // Snapshot logging — fire and forget (only generic path; mlb/nhl delegations log on their side)
+      logSnapshot({
+        sport,
+        market_type: bet_type,
+        player_or_team: `${team1.name} vs ${team2.name}`,
+        line: bet_type === "spread" ? (spread_line ? parseFloat(spread_line) : null)
+            : bet_type === "total" ? (total_line ? parseFloat(total_line) : null)
+            : null,
+        direction: over_under || null,
+        confidence: modelConf,
+        verdict: analysis.verdict || null,
+        odds_at_time: odds?.bestOdds?.american ?? null,
+        ev_percent: odds?.ev_percent ?? null,
+        top_factors: (analysis.factorBreakdown || []).slice(0, 5),
+      }).catch((err) => console.error("logSnapshot failed:", err));
+
       return json({
         bet_type,
         sport,
