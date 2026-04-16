@@ -673,10 +673,28 @@ Deno.serve(async (req) => {
       
       const homePitcher = pitchers.home || { era: 4.50, whip: 1.30, k9: 8.0 };
       const awayPitcher = pitchers.away || { era: 4.50, whip: 1.30, k9: 8.0 };
-      
+
+      // Determine actual home/away from game data, not input order (order-independent)
+      let team1IsHome = true;
+      if (eventData) {
+        const comp = eventData.competitions?.[0];
+        const homeComp = comp?.competitors?.find((c: any) => c.homeAway === "home");
+        const awayComp = comp?.competitors?.find((c: any) => c.homeAway === "away");
+        const homeId = String(homeComp?.team?.id || homeComp?.id || "");
+        const awayId = String(awayComp?.team?.id || awayComp?.id || "");
+        if (homeId && String(team1_id) === homeId) team1IsHome = true;
+        else if (awayId && String(team1_id) === awayId) team1IsHome = false;
+      }
+
       // Compute context
       const splits1 = computeHomeAwaySplits(schedule1, team1_id);
       const splits2 = computeHomeAwaySplits(schedule2, team2_id);
+
+      // Map each team to its actual pitcher and split based on real home/away role
+      const team1Pitcher = team1IsHome ? homePitcher : awayPitcher;
+      const team2Pitcher = team1IsHome ? awayPitcher : homePitcher;
+      const team1Split = team1IsHome ? splits1.home : splits1.away;
+      const team2Split = team1IsHome ? splits2.away : splits2.home;
       const last5_1 = computeLast5(schedule1, team1_id);
       const last5_2 = computeLast5(schedule2, team2_id);
       const rest1 = computeRestDays(schedule1);
