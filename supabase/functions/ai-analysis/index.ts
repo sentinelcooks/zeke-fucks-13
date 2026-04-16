@@ -102,6 +102,15 @@ function getPropPrompt(body: any, injurySection: string, teammatesSection: strin
 Format each as: **Section Title**: plain text analysis.
 Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.`;
 
+  const overallRating = body.overallRating || "";
+  const ratingInstruction = overallRating === "fade"
+    ? `The overall verdict is FADE. Do NOT recommend betting. Acknowledge the risks clearly. Your Verdict & Risk MUST say to pass or avoid.`
+    : overallRating === "lean"
+      ? `The overall verdict is LEAN. Be cautiously optimistic. Mention it's a small-unit play with caveats.`
+      : overallRating === "take"
+        ? `The overall verdict is TAKE. Be assertive and confident. Recommend the bet clearly.`
+        : `Your final verdict MUST ALIGN with "${verdict}".`;
+
   if (s === "mlb") return `You are a sharp MLB betting analyst. Be concise and data-driven. Use baseball terminology throughout.
 
 Player: ${playerOrTeam}
@@ -112,8 +121,7 @@ Model Confidence: ${confidence}%
 Data points:
 - ${dataPoints || "No additional data"}${injurySection}${teammatesSection}
 
-CRITICAL: Your final verdict MUST ALIGN with "${verdict}" and the direction "${overUnder || 'OVER'}" ${line || "N/A"}. If the model says ${overUnder || "OVER"} ${line || "N/A"}, your Verdict & Risk section MUST recommend ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the top-level recommendation or direction.
-If the verdict is "DO NOT BET" or "RISKY", do NOT recommend betting. If it's "STRONG PICK", be assertive.
+CRITICAL: ${ratingInstruction} The direction is ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the overall rating.
 
 ${formatRule}
 
@@ -131,8 +139,7 @@ Model Confidence: ${confidence}%
 Data points:
 - ${dataPoints || "No additional data"}${injurySection}${teammatesSection}
 
-CRITICAL: Your final verdict MUST ALIGN with "${verdict}" and the direction "${overUnder || 'OVER'}" ${line || "N/A"}. If the model says ${overUnder || "OVER"} ${line || "N/A"}, your Verdict & Risk section MUST recommend ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the top-level recommendation or direction.
-If the verdict is "DO NOT BET" or "RISKY", do NOT recommend betting. If it's "STRONG PICK", be assertive.
+CRITICAL: ${ratingInstruction} The direction is ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the overall rating.
 
 ${formatRule}
 
