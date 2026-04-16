@@ -115,7 +115,7 @@ export function BetTypeDropdown({ sport, value, onChange }: BetTypeDropdownProps
         style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}
       />
       {open && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-xl overflow-hidden shadow-xl max-h-[320px] overflow-y-auto pb-2"
+        <div className="absolute z-[80] top-full left-0 right-0 mt-1 rounded-xl overflow-hidden shadow-xl max-h-[360px] overflow-y-auto pb-3"
           style={{ background: 'hsla(228, 18%, 12%, 0.98)', border: '1px solid hsla(228, 30%, 22%, 0.4)', backdropFilter: 'blur(20px)' }}>
           {filtered.length === 0 ? (
             <button className="w-full px-3 py-2 text-left text-[11px] text-muted-foreground/50 hover:bg-white/5"
