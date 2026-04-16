@@ -141,6 +141,15 @@ ${formatRule}
 3. Verdict & Risk — Final recommendation with unit sizing and key risk.`;
 
   // NBA / default
+  const overallRating = body.overallRating || "";
+  const ratingInstruction = overallRating === "fade"
+    ? `The overall verdict is FADE. Do NOT recommend betting. Acknowledge the risks clearly. Your Verdict & Risk MUST say to pass or avoid this pick.`
+    : overallRating === "lean"
+      ? `The overall verdict is LEAN. Be cautiously optimistic. Mention it's a small-unit play with caveats.`
+      : overallRating === "take"
+        ? `The overall verdict is TAKE. Be assertive and confident. Recommend the bet clearly.`
+        : `Your final verdict MUST ALIGN with "${verdict}".`;
+
   return `You are a sharp sports betting analyst. Be concise, data-driven, and persuasive.
 
 Player: ${playerOrTeam}
@@ -152,8 +161,7 @@ Sport: ${sport || "nba"}
 Data points:
 - ${dataPoints || "No additional data"}${injurySection}${teammatesSection}
 
-CRITICAL: Your final verdict MUST ALIGN with "${verdict}" and the direction "${overUnder || 'OVER'}" ${line || "N/A"}. If the model says ${overUnder || "OVER"} ${line || "N/A"}, your Verdict & Risk section MUST recommend ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the top-level recommendation or direction.
-If the verdict is "DO NOT BET" or "RISKY", do NOT recommend betting. If it's "STRONG PICK", be assertive.
+CRITICAL: ${ratingInstruction} The direction is ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the overall rating.
 
 ${formatRule}
 
@@ -180,7 +188,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { type, verdict, confidence, playerOrTeam, line, propDisplay, overUnder, reasoning, factors, injuries, sport, withoutTeammatesData } = body;
+    const { type, verdict, confidence, playerOrTeam, line, propDisplay, overUnder, reasoning, factors, injuries, sport, withoutTeammatesData, overallRating, overallSummary: overallSummaryText } = body;
 
     const dataPoints = (reasoning || factors || []).join("\n- ");
     const sportLower = (sport || "nba").toLowerCase();
