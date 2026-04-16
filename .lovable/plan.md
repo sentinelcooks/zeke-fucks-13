@@ -1,45 +1,51 @@
 
 
-## Plan: Fix Wrong Team Resolution + Percentage Layout
+## Plan: Fix Correlated Props to Respect Over/Under Direction
 
-### Bug 1: Wrong Team (Kings instead of Spurs)
+### Problem
+The correlated props engine **always computes correlations for the "over" direction**, regardless of what the user selected. Two places hardcode `>` comparisons:
 
-**Root cause:** `resolveTeam()` in `moneyline-api/index.ts` (line 339) checks `t.name.toLowerCase().includes(q)` first. When the Spurs abbreviation `"SA"` is passed, `"sacramento kings".includes("sa")` matches **before** `"san antonio spurs"` because Sacramento appears earlier in ESPN's team list. The exact abbreviation check (`t.abbr.toLowerCase() === q`) runs last due to the `||` short-circuit.
+1. **Line 195** — Source player hit games: `getStatValue(g.stats, sourceProp) > sourceLine` (always "over")
+2. **Line 241** — Correlated player hits: `getStatValue(g.stats, prop) > line` (always "over")
 
-**Fix in `supabase/functions/moneyline-api/index.ts`** — Rewrite `resolveTeam` to prioritize exact abbreviation matches:
+When a user picks "under 1.5 3-Pointers", the function still finds games where the player went **over** the line, producing correlations that contradict the user's chosen direction.
+
+Additionally, the frontend callers never pass `over_under` to the function.
+
+### Fix
+
+**1. `supabase/functions/correlated-props/index.ts`** — Accept and use `over_under` parameter:
+
+- Parse `over_under` from the request body (default to `"over"` for backward compat)
+- Pass it into `computeCorrelations`
+- Source hit filter: use `< sourceLine` when direction is "under", `> sourceLine` when "over"
+- Correlated hit filter: same direction-aware comparison
+- Update reasoning text to reflect direction (e.g., "stays under" vs "exceeds")
 
 ```typescript
-function resolveTeam(teams: any[], input: string) {
-  const q = input.toLowerCase().trim();
-  // 1. Exact abbreviation match first
-  const exactAbbr = teams.find((t: any) => t.abbr.toLowerCase() === q);
-  if (exactAbbr) return exactAbbr;
-  // 2. Exact name/shortName match
-  const exactName = teams.find((t: any) => 
-    t.name.toLowerCase() === q || t.shortName.toLowerCase() === q
-  );
-  if (exactName) return exactName;
-  // 3. Fuzzy includes match (fallback)
-  return teams.find((t: any) =>
-    t.name.toLowerCase().includes(q) ||
-    t.shortName.toLowerCase().includes(q)
-  );
-}
+// Line 193-196: direction-aware source filtering
+const hitEventIds = new Set(
+  sourceLog.games
+    .filter(g => overUnder === "under" 
+      ? getStatValue(g.stats, sourceProp) < sourceLine
+      : getStatValue(g.stats, sourceProp) > sourceLine)
+    .map(g => g.eventId)
+);
+
+// Line 241: direction-aware correlated hit check
+if (overUnder === "under" 
+  ? getStatValue(g.stats, prop) < line
+  : getStatValue(g.stats, prop) > line) coHits++;
 ```
 
-### Bug 2: "%" Wrapping Below the Number
+**2. Frontend callers** — Pass `over_under` in all 3 invocation sites:
 
-**Root cause:** In the matchup hero card (line 1608), `{results.team1_pct}%` is rendered with `text-2xl font-black`. On a 390px screen, the middle column is 40% width (~156px). With two large numbers, the Swords icon, and flex gap, text can wrap.
+- `src/pages/NbaPropsPage.tsx` (2 call sites) — add `over_under: overUnder` or `over_under: navState.overUnder`
+- `src/pages/FreePropsPage.tsx` (1 call site) — add `over_under: prop.over_under || "over"`
 
-**Fix in `src/components/MoneyLineSection.tsx`** (line 1607-1611) — Add `whitespace-nowrap` to the percentage spans:
-
-```tsx
-<span className="text-2xl font-black text-nba-green whitespace-nowrap">{results.team1_pct}<span className="text-base">%</span></span>
-<Swords className="w-4 h-4 text-muted-foreground/55" />
-<span className="text-2xl font-black text-nba-red whitespace-nowrap">{results.team2_pct}<span className="text-base">%</span></span>
-```
+**3. Cache key** — Add `over_under` to the cache lookup/insert so "over" and "under" results are cached separately.
 
 ### Scope
-- `supabase/functions/moneyline-api/index.ts` — Fix team resolution priority
-- `src/components/MoneyLineSection.tsx` — Fix percentage layout wrapping
+- 3 files: edge function + 2 frontend pages
+- No database changes (the cache table doesn't need a new column — we can append direction to `source_prop` in the cache key)
 
