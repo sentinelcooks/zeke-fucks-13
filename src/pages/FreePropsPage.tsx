@@ -540,6 +540,7 @@ const FreePropsPage = () => {
                   injuries={results.injuries}
                   sport={prop.sport}
                   withoutTeammatesData={results.without_teammates}
+                  paceContext={results.pace_context}
                 />
 
 

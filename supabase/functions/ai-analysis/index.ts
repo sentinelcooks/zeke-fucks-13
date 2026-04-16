@@ -92,6 +92,30 @@ function getWithoutTeammatesLabels(sport: string) {
   return { projLabel: "Projected minutes tonight", perLabel: "Per-36 projection" };
 }
 
+/* ── Build pace context string for prompts ── */
+function buildPaceContextString(paceContext: any, sport: string): string {
+  if (!paceContext) return "";
+  const t = paceContext.team;
+  const o = paceContext.opponent;
+  if (!t && !o) return "";
+  
+  let s = "\n\nGAME PACE / TOTAL CONTEXT:";
+  if (sport === "nba") {
+    if (t?.pace) s += `\n${t.team}: Pace ${t.pace}, ${t.ppg} PPG, OffRtg ${t.offRtg}, DefRtg ${t.defRtg}`;
+    if (o?.pace) s += `\n${o.team}: Pace ${o.pace}, ${o.ppg} PPG, OffRtg ${o.offRtg}, DefRtg ${o.defRtg}`;
+    if (t?.ppg && o?.ppg) s += `\nProjected game total: ~${Math.round(((t.ppg || 0) + (o.ppg || 0)) * 10) / 10}`;
+  } else if (sport === "nhl") {
+    if (t?.goalsFor) s += `\n${t.team}: ${t.goalsFor} GF/G, ${t.goalsAgainst} GA/G, ${t.shotsPerGame} SOG/G`;
+    if (o?.goalsFor) s += `\n${o.team}: ${o.goalsFor} GF/G, ${o.goalsAgainst} GA/G, ${o.shotsPerGame} SOG/G`;
+    if (t?.goalsFor && o?.goalsFor) s += `\nProjected game total: ~${Math.round(((t.goalsFor || 0) + (o.goalsFor || 0)) * 10) / 10}`;
+  } else if (sport === "mlb") {
+    if (t?.runsPerGame) s += `\n${t.team}: ${t.runsPerGame} R/G, ${t.battingAvg} AVG, ${t.ops} OPS`;
+    if (o?.runsPerGame) s += `\n${o.team}: ${o.runsPerGame} R/G, ${o.battingAvg} AVG, ${o.ops} OPS`;
+    if (t?.runsPerGame && o?.runsPerGame) s += `\nProjected game total: ~${Math.round(((t.runsPerGame || 0) + (o.runsPerGame || 0)) * 10) / 10} runs`;
+  }
+  return s;
+}
+
 /* ── Sport-specific prop prompts ── */
 function getPropPrompt(body: any, injurySection: string, teammatesSection: string): string {
   const { playerOrTeam, propDisplay, overUnder, line, verdict, confidence, sport } = body;
@@ -111,6 +135,9 @@ Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only 
         ? `The overall verdict is TAKE. Be assertive and confident. Recommend the bet clearly.`
         : `Your final verdict MUST ALIGN with "${verdict}".`;
 
+  // Build pace context string
+  const paceStr = buildPaceContextString(body.paceContext, s);
+
   if (s === "mlb") return `You are a sharp MLB betting analyst. Be concise and data-driven. Use baseball terminology throughout.
 
 Player: ${playerOrTeam}
@@ -119,14 +146,14 @@ Verdict: ${verdict}
 Model Confidence: ${confidence}%
 
 Data points:
-- ${dataPoints || "No additional data"}${injurySection}${teammatesSection}
+- ${dataPoints || "No additional data"}${paceStr}${injurySection}${teammatesSection}
 
 CRITICAL: ${ratingInstruction} The direction is ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the overall rating.
 
 ${formatRule}
 
 1. Statistical Edge — Season stats, L10 trends, platoon splits, K rate / ERA / WHIP / OPS.
-2. Matchup & Park Factor — Opposing pitcher/hitter matchup, park dimensions, weather, bullpen state.
+2. Matchup & Park Factor — Opposing pitcher/hitter matchup, park dimensions, weather, bullpen state.${paceStr ? " Factor in game pace/total context." : ""}
 3. Verdict & Risk — Final recommendation with unit sizing and key risk.`;
 
   if (s === "nhl") return `You are a sharp NHL betting analyst. Be concise and data-driven. Use hockey terminology throughout.
@@ -137,26 +164,17 @@ Verdict: ${verdict}
 Model Confidence: ${confidence}%
 
 Data points:
-- ${dataPoints || "No additional data"}${injurySection}${teammatesSection}
+- ${dataPoints || "No additional data"}${paceStr}${injurySection}${teammatesSection}
 
 CRITICAL: ${ratingInstruction} The direction is ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the overall rating.
 
 ${formatRule}
 
 1. Statistical Edge — SOG trends, shooting %, ice time, power-play involvement.
-2. Matchup & Lineup — Opposing goalie save %, line combinations, PP/PK time, fatigue.
+2. Matchup & Lineup — Opposing goalie save %, line combinations, PP/PK time, fatigue.${paceStr ? " Factor in game pace/total context." : ""}
 3. Verdict & Risk — Final recommendation with unit sizing and key risk.`;
 
   // NBA / default
-  const overallRating = body.overallRating || "";
-  const ratingInstruction = overallRating === "fade"
-    ? `The overall verdict is FADE. Do NOT recommend betting. Acknowledge the risks clearly. Your Verdict & Risk MUST say to pass or avoid this pick.`
-    : overallRating === "lean"
-      ? `The overall verdict is LEAN. Be cautiously optimistic. Mention it's a small-unit play with caveats.`
-      : overallRating === "take"
-        ? `The overall verdict is TAKE. Be assertive and confident. Recommend the bet clearly.`
-        : `Your final verdict MUST ALIGN with "${verdict}".`;
-
   return `You are a sharp sports betting analyst. Be concise, data-driven, and persuasive.
 
 Player: ${playerOrTeam}
@@ -166,14 +184,14 @@ Model Confidence: ${confidence}%
 Sport: ${sport || "nba"}
 
 Data points:
-- ${dataPoints || "No additional data"}${injurySection}${teammatesSection}
+- ${dataPoints || "No additional data"}${paceStr}${injurySection}${teammatesSection}
 
 CRITICAL: ${ratingInstruction} The direction is ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the overall rating.
 
 ${formatRule}
 
 1. Statistical Edge — Hit rates, averages, trends supporting the bet.
-2. Matchup & Injuries — Opponent matchup, pace, injuries affecting this prop.
+2. Matchup & Pace — Opponent matchup, pace of play, injuries affecting this prop.${paceStr ? " Use the game pace/total context provided." : ""}
 3. Verdict & Risk — Final recommendation with unit sizing and key risk.`;
 }
 
@@ -257,6 +275,9 @@ serve(async (req) => {
 Format each as: **Section Title**: plain text analysis.
 Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.`;
 
+    // Build pace context for moneyline prompts too
+    const paceStr = buildPaceContextString(body.paceContext, sportLower);
+
     // ── NHL-specific moneyline/puckline/total prompt ──
     const nhlMoneylinePrompt = `You are a sharp NHL betting analyst. Be concise and data-driven. Use hockey terminology throughout.
 
@@ -265,14 +286,14 @@ Verdict: ${verdict}
 Model Confidence: ${confidence}%
 
 Key factors from our model:
-- ${dataPoints || "No additional data"}${injuryPromptSection}
+- ${dataPoints || "No additional data"}${paceStr}${injuryPromptSection}
 
 CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Your Verdict & Risk section must echo this exact recommendation — never contradict the top-level verdict. Support the model's pick decisively.
 
 ${formatRule}
 
 1. Goaltending Edge — Starting goalie matchup, save %, GAA, recent form.
-2. Special Teams & Matchup — PP/PK efficiency, pace, shot volume, fatigue, injuries.
+2. Special Teams & Matchup — PP/PK efficiency, pace, shot volume, fatigue, injuries.${paceStr ? " Reference game pace/total context." : ""}
 3. Verdict & Puck Line Value — Final recommendation with unit sizing and key risk.`;
 
     const ufcMoneylinePrompt = `You are a sharp MMA betting analyst. Be concise and data-driven. NEVER reference team sports concepts.
@@ -297,14 +318,14 @@ Verdict: ${verdict}
 Model Confidence: ${confidence}%
 
 Key factors from our model:
-- ${dataPoints || "No additional data"}${injuryPromptSection}
+- ${dataPoints || "No additional data"}${paceStr}${injuryPromptSection}
 
 CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Your Verdict & Risk section must echo this exact recommendation — never contradict the top-level verdict. Support the model's pick decisively.
 
 ${formatRule}
 
 1. Pitching Matchup — Starting pitcher ERA, WHIP, K/9, recent form, pitch mix.
-2. Lineup & Park Factor — Offensive splits, OPS, park dimensions, bullpen depth.
+2. Lineup & Park Factor — Offensive splits, OPS, park dimensions, bullpen depth.${paceStr ? " Reference game total context." : ""}
 3. Verdict & Run Line Value — Final recommendation with unit sizing and key risk.`;
 
     const genericMoneylinePrompt = `You are a sharp sports betting analyst writing a moneyline/spread/total breakdown. Be specific, data-driven, and concise.
@@ -315,13 +336,13 @@ Model Confidence: ${confidence}%
 Sport: ${sport || "nba"}
 
 Key factors from our model:
-- ${dataPoints || "No additional data"}${injuryPromptSection}${withoutTeammatesSection}
+- ${dataPoints || "No additional data"}${paceStr}${injuryPromptSection}${withoutTeammatesSection}
 
 CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Your Verdict & Risk section must echo this exact recommendation — never contradict the top-level verdict. Support the model's pick decisively.
 
 ${formatRule}
 
-1. Statistical Edge — Why the model favors this side, win probability vs implied odds.
+1. Statistical Edge — Why the model favors this side, win probability vs implied odds.${paceStr ? " Reference pace/total context." : ""}
 2. Injury & Lineup Reality — Current injuries and what they mean for each team.
 3. Verdict & Risk — Final recommendation with unit sizing. Match "${verdict}".`;
 
@@ -341,19 +362,36 @@ ${formatRule}
 
     const systemMessage = getSystemMessage(sportLower, type);
 
+    // Determine AI provider: prefer Grok (xAI) if key is set, fallback to Lovable AI Gateway
+    const XAI_API_KEY = Deno.env.get("XAI_API_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY not configured");
+    
+    let aiEndpoint: string;
+    let aiKey: string;
+    let aiModel: string;
+    
+    if (XAI_API_KEY) {
+      aiEndpoint = "https://api.x.ai/v1/chat/completions";
+      aiKey = XAI_API_KEY;
+      aiModel = "grok-3";
+      console.log("Using Grok (xAI) for analysis");
+    } else if (LOVABLE_API_KEY) {
+      aiEndpoint = "https://ai.gateway.lovable.dev/v1/chat/completions";
+      aiKey = LOVABLE_API_KEY;
+      aiModel = "google/gemini-2.5-flash";
+      console.log("Using Lovable AI Gateway for analysis");
+    } else {
+      throw new Error("No AI API key configured (XAI_API_KEY or LOVABLE_API_KEY)");
     }
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await fetch(aiEndpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+        "Authorization": `Bearer ${aiKey}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: aiModel,
         messages: [
           { role: "system", content: systemMessage },
           { role: "user", content: prompt },
