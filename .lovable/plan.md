@@ -1,32 +1,40 @@
 
 
-## Plan: Fix Stale Moneyline Results When Changing Teams
+## Plan: Add Feedback to Today's Edge Refresh Button
 
-### Root Cause
-
-When the user navigates from Games with autoAnalyze (e.g., Grizzlies vs Pelicans), results render. Then when they manually change the team dropdowns to 76ers vs Magic, the **old results stay visible** because results are only cleared on sport change or at the start of `handleAnalyze`. If the subsequent API call errors silently (the catch block on line 1300 sets an error message but only if `results` was already nulled — and it is, but the error message may not be prominent enough), the user sees confusing stale data.
-
-Additionally, there's a potential race condition: the `autoAnalyzeTriggered` ref and `didAutoAnalyze` state could cause the auto-analyze to fire with stale team values if the component doesn't fully remount.
+### Problem
+The refresh button works mechanically (calls `daily-picks` then reloads), but gives **no feedback** to the user about what happened. The `daily-picks` edge function is a heavy operation that can take 30-60+ seconds — it fetches ESPN games, analyzes props across multiple sports, and inserts picks. If it times out, errors, or returns 0 picks, the user sees nothing — just the spinner stopping and the same "No picks" state.
 
 ### Fix
 
-**`src/components/MoneyLineSection.tsx`** — Clear results immediately when either team selection changes:
-
-Add a `useEffect` that watches `team1` and `team2` and clears `results` and `error`:
+**`src/components/home/ModernHomeLayout.tsx`** — Add toast notifications to `handleRefresh`:
 
 ```typescript
-// Clear stale results whenever teams change
-useEffect(() => {
-  setResults(null);
-  setError("");
-}, [team1, team2]);
+const handleRefresh = useCallback(async () => {
+  setRefreshing(true);
+  try {
+    const { data, error } = await supabase.functions.invoke("daily-picks");
+    if (error) {
+      toast.error("Failed to refresh picks. Try again later.");
+    } else {
+      const count = data?.count || 0;
+      toast.success(count > 0 
+        ? `${count} picks generated!` 
+        : "No games available for picks right now.");
+    }
+    await fetchTodayPicks();
+  } catch {
+    toast.error("Failed to refresh picks. Try again later.");
+  } finally {
+    setRefreshing(false);
+  }
+}, [fetchTodayPicks]);
 ```
 
-This goes after the existing sport-change effect (around line 1259). It ensures:
-1. Old results disappear the moment the user changes either team dropdown
-2. No confusing mismatch between selected teams and displayed results
-3. If the API call fails, the user sees the error — not old data from a different matchup
+- Import `toast` from `sonner` (already used elsewhere in the app)
+- Show success with pick count, or a clear message when no picks are available
+- Show error toast on failure
 
 ### Scope
-- 1 file, ~3 lines added
+- 1 file, ~10 lines changed
 
