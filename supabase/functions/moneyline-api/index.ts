@@ -191,7 +191,8 @@ function computeHomeAwaySplits(events: any[], teamId: string) {
 
   for (const ev of events) {
     const comp = ev.competitions?.[0];
-    if (!comp || comp.status?.type?.completed !== true) continue;
+    const isFinal = comp?.status?.type?.completed === true || comp?.status?.type?.name === "STATUS_FINAL";
+    if (!comp || !isFinal) continue;
     const competitors = comp.competitors || [];
     const team = competitors.find((c: any) => c.team?.id === teamId);
     const opp = competitors.find((c: any) => c.team?.id !== teamId);
