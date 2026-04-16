@@ -13,6 +13,34 @@ function json(body: unknown, status = 200) {
   });
 }
 
+// ── Snapshot logging — fire and forget ──
+async function logSnapshot(payload: Record<string, any>): Promise<void> {
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceKey) {
+      console.error("logSnapshot: missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+      return;
+    }
+    const r = await fetch(`${supabaseUrl}/rest/v1/prediction_snapshots`, {
+      method: "POST",
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) {
+      const text = await r.text().catch(() => "");
+      console.error(`logSnapshot insert failed ${r.status}:`, text);
+    }
+  } catch (e) {
+    console.error("logSnapshot failed:", (e as Error).message);
+  }
+}
+
 // ── ESPN API helpers ──
 const ESPN_NBA = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba";
 const ESPN_NCAAB = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball";
@@ -1095,6 +1123,22 @@ Deno.serve(async (req) => {
       // Compute odds/EV for generic model
       const modelConf = bet_type === "moneyline" ? analysis.team1_pct : analysis.confidence;
       const odds = buildOddsPayload(oddsData, bet_type, modelConf, team1.name, team2.name, over_under);
+
+      // Snapshot logging — fire and forget (only generic path; mlb/nhl delegations log on their side)
+      logSnapshot({
+        sport,
+        market_type: bet_type,
+        player_or_team: `${team1.name} vs ${team2.name}`,
+        line: bet_type === "spread" ? (spread_line ? parseFloat(spread_line) : null)
+            : bet_type === "total" ? (total_line ? parseFloat(total_line) : null)
+            : null,
+        direction: over_under || null,
+        confidence: modelConf,
+        verdict: analysis.verdict || null,
+        odds_at_time: odds?.bestOdds?.american ?? null,
+        ev_percent: odds?.ev_percent ?? null,
+        top_factors: (analysis.factorBreakdown || []).slice(0, 5),
+      }).catch((err) => console.error("logSnapshot failed:", err));
 
       return json({
         bet_type,

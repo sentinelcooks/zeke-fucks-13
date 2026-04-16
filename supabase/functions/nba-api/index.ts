@@ -3636,7 +3636,7 @@ serve(async (req) => {
             opponent: opponent || null,
             sample_size: sampleSize,
           },
-        }).catch(() => {});
+        }).catch(err => console.error('logSnapshot failed:', err));
       } catch (e: any) {
         console.error("Prediction/Decision layer failed:", e?.message);
       }

@@ -8,6 +8,34 @@ const corsHeaders = {
 const ESPN_UFC_BASE = "https://site.api.espn.com/apis/site/v2/sports/mma/ufc";
 const ESPN_CORE = "https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc";
 
+// ── Snapshot logging — fire and forget ──
+async function logSnapshot(payload: Record<string, any>): Promise<void> {
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceKey) {
+      console.error("logSnapshot: missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+      return;
+    }
+    const r = await fetch(`${supabaseUrl}/rest/v1/prediction_snapshots`, {
+      method: "POST",
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) {
+      const text = await r.text().catch(() => "");
+      console.error(`logSnapshot insert failed ${r.status}:`, text);
+    }
+  } catch (e) {
+    console.error("logSnapshot failed:", (e as Error).message);
+  }
+}
+
 // ── ESPN Search ─────────────────────────────────────────────
 async function searchFighters(query: string) {
   const results: any[] = [];
@@ -1140,6 +1168,18 @@ serve(async (req) => {
       if ("error" in f2Data) return new Response(JSON.stringify({ error: f2Data.error }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
       const analysis = buildMatchupAnalysis(f1Data as FighterData, f2Data as FighterData);
+
+      // Snapshot logging — fire and forget
+      const mlConf = analysis?.recommendation?.probability ?? analysis?.moneyline?.confidence ?? 50;
+      logSnapshot({
+        sport: "ufc",
+        market_type: "moneyline",
+        player_or_team: `${(f1Data as FighterData).fighter?.name || fighter1} vs ${(f2Data as FighterData).fighter?.name || fighter2}`,
+        confidence: mlConf,
+        verdict: analysis?.recommendation?.confidence || null,
+        top_factors: null,
+      }).catch((err) => console.error("logSnapshot failed:", err));
+
       return new Response(JSON.stringify(analysis), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
