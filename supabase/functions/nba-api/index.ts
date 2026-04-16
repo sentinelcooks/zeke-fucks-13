@@ -1490,6 +1490,34 @@ function hitRate(values: number[], line: number, overUnder: string) {
   return { rate: Math.round((hits / values.length) * 1000) / 10, hits, total: values.length };
 }
 
+// ── Recency-Weighted Hit Rate (exponential decay) ──
+// λ ≈ 0.03 → half-life ~23 days. Recent games matter more.
+function weightedHitRate(
+  games: { date: string; value: number }[],
+  line: number,
+  overUnder: string,
+): { rate: number; weightedAvg: number } {
+  if (!games.length) return { rate: 0, weightedAvg: 0 };
+  const LAMBDA = 0.03;
+  const now = Date.now();
+  let hitWeightSum = 0;
+  let totalWeightSum = 0;
+  let valueWeightSum = 0;
+
+  for (const g of games) {
+    const daysAgo = Math.max(0, (now - new Date(g.date).getTime()) / 86400000);
+    const weight = Math.exp(-LAMBDA * daysAgo);
+    const isHit = overUnder === "over" ? g.value > line : g.value < line;
+    if (isHit) hitWeightSum += weight;
+    totalWeightSum += weight;
+    valueWeightSum += g.value * weight;
+  }
+
+  const rate = totalWeightSum > 0 ? Math.round((hitWeightSum / totalWeightSum) * 1000) / 10 : 0;
+  const weightedAvg = totalWeightSum > 0 ? Math.round((valueWeightSum / totalWeightSum) * 10) / 10 : 0;
+  return { rate, weightedAvg };
+}
+
 function avg(values: number[]): number {
   if (!values.length) return 0;
   return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10;
