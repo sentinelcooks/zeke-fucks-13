@@ -186,13 +186,17 @@ async function computeCorrelations(
   sourceProp: string,
   sourceLine: number,
   players: Array<{ id: string; name: string; isOpponent: boolean; team: string }>,
+  overUnder: string = "over",
 ): Promise<Correlation[]> {
   const sourceLog = await getPlayerGameLog(sourcePlayerId);
   if (sourceLog.games.length < 3) return [];
 
+  const isUnder = overUnder === "under";
   const hitEventIds = new Set(
     sourceLog.games
-      .filter(g => getStatValue(g.stats, sourceProp) > sourceLine)
+      .filter(g => isUnder
+        ? getStatValue(g.stats, sourceProp) < sourceLine
+        : getStatValue(g.stats, sourceProp) > sourceLine)
       .map(g => g.eventId)
   );
   console.log(`Source hit ${hitEventIds.size}/${sourceLog.games.length} games`);
@@ -238,7 +242,9 @@ async function computeCorrelations(
       for (const g of pData.games) {
         if (hitEventIds.has(g.eventId)) {
           coGames++;
-          if (getStatValue(g.stats, prop) > line) coHits++;
+          if (isUnder
+            ? getStatValue(g.stats, prop) < line
+            : getStatValue(g.stats, prop) > line) coHits++;
         }
       }
 
@@ -273,7 +279,9 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { player, prop, line, team } = await req.json();
+    const { player, prop, line, team, over_under } = await req.json();
+    const direction = over_under === "under" ? "under" : "over";
+    const cacheSourceProp = `${prop}_${direction}`;
 
     if (!player || !prop || line == null) {
       return new Response(JSON.stringify({ error: "player, prop, line required" }), {
@@ -289,7 +297,7 @@ Deno.serve(async (req) => {
       .select("*")
       .eq("prop_date", today)
       .eq("source_player", player)
-      .eq("source_prop", prop)
+      .eq("source_prop", cacheSourceProp)
       .order("hit_rate", { ascending: false });
 
     if (cached && cached.length > 0) {
@@ -357,7 +365,7 @@ Deno.serve(async (req) => {
     }
 
     const allPlayers = [...teammates.slice(0, 10), ...opponents];
-    const correlations = await computeCorrelations(playerId, player, prop, line, allPlayers);
+    const correlations = await computeCorrelations(playerId, player, prop, line, allPlayers, direction);
     console.log(`Found ${correlations.length} correlations for ${player} ${prop} ${line}`);
 
     // Cache results
@@ -366,11 +374,11 @@ Deno.serve(async (req) => {
         .delete()
         .eq("prop_date", today)
         .eq("source_player", player)
-        .eq("source_prop", prop);
+        .eq("source_prop", cacheSourceProp);
 
       const rows = correlations.map(c => ({
         source_player: player,
-        source_prop: prop,
+        source_prop: cacheSourceProp,
         correlated_player: c.correlated_player,
         correlated_prop: c.correlated_prop,
         correlated_line: c.correlated_line,

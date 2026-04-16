@@ -265,7 +265,7 @@ const FreePropsPage = () => {
           setCorrLoading(true);
           const playerTeam = data.team || data.player?.team_abbr || data.player?.team || data.player_info?.team || prop.team || "";
           supabase.functions.invoke("correlated-props", {
-            body: { player: prop.player_name, prop: prop.prop_type, line: prop.line, team: playerTeam },
+            body: { player: prop.player_name, prop: prop.prop_type, line: prop.line, team: playerTeam, over_under: prop.direction || "over" },
           }).then(({ data: corrData, error: corrErr }) => {
             if (!corrErr && Array.isArray(corrData)) setCorrelations(corrData);
             else setCorrelations([]);

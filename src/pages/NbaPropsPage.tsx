@@ -584,7 +584,7 @@ const NbaPropsPage = () => {
               setCorrLoading(true);
               const playerTeam = data.team || data.player?.team_abbr || data.player?.team || data.player_info?.team || "";
               supabase.functions.invoke("correlated-props", {
-                body: { player: navState.player!, prop: nextPropType, line: navState.line || 0, team: playerTeam },
+                body: { player: navState.player!, prop: nextPropType, line: navState.line || 0, team: playerTeam, over_under: navState.over_under || "over" },
               }).then(({ data: corrData, error: corrErr }) => {
                 if (!corrErr && Array.isArray(corrData)) setCorrProps(corrData);
                 else setCorrProps([]);
@@ -726,7 +726,7 @@ const NbaPropsPage = () => {
           setCorrLoading(true);
           const playerTeam = data.team || data.player?.team_abbr || data.player?.team || data.player_info?.team || "";
           supabase.functions.invoke("correlated-props", {
-            body: { player, prop: propType, line: lineNum, team: playerTeam },
+            body: { player, prop: propType, line: lineNum, team: playerTeam, over_under: overUnder },
           }).then(({ data: corrData, error: corrErr }) => {
             if (!corrErr && Array.isArray(corrData)) setCorrProps(corrData);
             else setCorrProps([]);
