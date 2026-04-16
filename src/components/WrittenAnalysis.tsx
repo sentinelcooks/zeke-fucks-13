@@ -241,6 +241,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
             injuries: props.injuries,
             sport: props.sport,
             withoutTeammatesData: props.withoutTeammatesData,
+            paceContext: props.paceContext,
             overallRating: overallSummary.rating,
             overallSummary: overallSummary.summary,
           },
