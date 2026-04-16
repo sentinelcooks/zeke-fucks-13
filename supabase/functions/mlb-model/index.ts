@@ -739,38 +739,38 @@ Deno.serve(async (req) => {
       // Log season blend
       console.log(`📊 Season blend: ${Math.round(seasonWeight * 100)}% 2025 (${Math.round(avgGamesPlayed)}G avg) / ${Math.round((1 - seasonWeight) * 100)}% historical`);
       
-      // Score all 20 factors for team1 (home)
+      // Score all 20 factors for team1 — pitcher/split assignment based on actual home/away role
       const team1Factors: Record<string, number> = {
-        sp_era: scorePitcherERA(homePitcher.era),
-        sp_whip: scorePitcherWHIP(homePitcher.whip),
-        sp_k9: scorePitcherK9(homePitcher.k9),
-        sp_last3_era: scorePitcherERA(homePitcher.last3Era || homePitcher.era * 0.95),
+        sp_era: scorePitcherERA(team1Pitcher.era),
+        sp_whip: scorePitcherWHIP(team1Pitcher.whip),
+        sp_k9: scorePitcherK9(team1Pitcher.k9),
+        sp_last3_era: scorePitcherERA(team1Pitcher.last3Era || team1Pitcher.era * 0.95),
         bullpen_era: scoreBullpenERA(stats1.reliefERA || stats1.bullpenERA || stats1.ERA || 4.00),
         team_ba: scoreTeamBA(seasonWeight > 0.5 ? l10ba1 : (stats1.battingAverage || stats1.avg || 0.248)),
         team_ops: scoreTeamOPS(stats1.OPS || stats1.ops || 0.710),
         runs_game: scoreRunsPerGame(stats1.runsPerGame || (stats1.runs / Math.max(stats1.gamesPlayed || 1, 1))),
-        lr_splits: scoreLRSplits(awayPitcher.throwingHand || "right", "mixed"),
+        lr_splits: scoreLRSplits(team2Pitcher.throwingHand || "right", "mixed"),
         team_k_rate: scoreTeamKRate(stats1.strikeoutRate || stats1.strikeouts || 22),
-        home_away: scoreHomeAway(splits1.home, true),
+        home_away: scoreHomeAway(team1Split, team1IsHome),
         rest_days: scoreRestDays(rest1),
         day_night: scoreDayNight(isDayGame),
         momentum: scoreMomentum(last5_1),
         run_diff: scoreRunDifferential(rd1.diff, rd1.games),
       };
       
-      // Score all 20 factors for team2 (away)
+      // Score all 20 factors for team2 — pitcher/split assignment based on actual home/away role
       const team2Factors: Record<string, number> = {
-        sp_era: scorePitcherERA(awayPitcher.era),
-        sp_whip: scorePitcherWHIP(awayPitcher.whip),
-        sp_k9: scorePitcherK9(awayPitcher.k9),
-        sp_last3_era: scorePitcherERA(awayPitcher.last3Era || awayPitcher.era * 0.95),
+        sp_era: scorePitcherERA(team2Pitcher.era),
+        sp_whip: scorePitcherWHIP(team2Pitcher.whip),
+        sp_k9: scorePitcherK9(team2Pitcher.k9),
+        sp_last3_era: scorePitcherERA(team2Pitcher.last3Era || team2Pitcher.era * 0.95),
         bullpen_era: scoreBullpenERA(stats2.reliefERA || stats2.bullpenERA || stats2.ERA || 4.00),
         team_ba: scoreTeamBA(seasonWeight > 0.5 ? l10ba2 : (stats2.battingAverage || stats2.avg || 0.248)),
         team_ops: scoreTeamOPS(stats2.OPS || stats2.ops || 0.710),
         runs_game: scoreRunsPerGame(stats2.runsPerGame || (stats2.runs / Math.max(stats2.gamesPlayed || 1, 1))),
-        lr_splits: scoreLRSplits(homePitcher.throwingHand || "right", "mixed"),
+        lr_splits: scoreLRSplits(team1Pitcher.throwingHand || "right", "mixed"),
         team_k_rate: scoreTeamKRate(stats2.strikeoutRate || stats2.strikeouts || 22),
-        home_away: scoreHomeAway(splits2.away, false),
+        home_away: scoreHomeAway(team2Split, !team1IsHome),
         rest_days: scoreRestDays(rest2),
         day_night: scoreDayNight(isDayGame),
         momentum: scoreMomentum(last5_2),
