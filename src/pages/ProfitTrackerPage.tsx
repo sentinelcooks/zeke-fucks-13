@@ -108,7 +108,7 @@ const ProfitTrackerPage = () => {
   const [showForm, setShowForm] = useState(false);
   const [showParlayForm, setShowParlayForm] = useState(false);
   const defaultOdds = oddsFormat === "decimal" ? "1.91" : "-110";
-  const [form, setForm] = useState({ sport: "nba", player_or_fighter: "", bet_type: "", line: "", odds: defaultOdds, stake: "" });
+  const [form, setForm] = useState({ sport: "nba", player_or_fighter: "", bet_type: "", line: "", odds: defaultOdds, stake: "", direction: "over" as "over" | "under" });
   const [playsResultFilter, setPlaysResultFilter] = useState<ResultFilter>("all");
   const [playsSportFilter, setPlaysSportFilter] = useState<SportFilter>("all");
   const [playsDateFilter, setPlaysDateFilter] = useState<string>("all");
