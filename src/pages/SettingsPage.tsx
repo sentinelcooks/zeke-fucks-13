@@ -166,6 +166,16 @@ const SettingsPage = () => {
     }
   }, [profile]);
 
+  // Auto-detect device timezone on first load
+  useEffect(() => {
+    if (!profile) return;
+    const deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const matchedTz = TIMEZONES.find((t) => t.value === deviceTz);
+    if (matchedTz && profile.timezone === "America/New_York" && deviceTz !== "America/New_York") {
+      handleTzChange(deviceTz);
+    }
+  }, [profile?.id]);
+
   const handleTzChange = async (tz: string) => {
     setSelectedTz(tz);
     setShowTzPicker(false);
