@@ -1,49 +1,45 @@
 
 
-## Plan: Auto-detect User's Timezone on Settings Page
+## Plan: Fix Wrong Team Resolution + Percentage Layout
 
-### Problem
-The timezone defaults to "America/New_York" regardless of the user's actual location. Users must manually find and select their timezone.
+### Bug 1: Wrong Team (Kings instead of Spurs)
 
-### Fix
+**Root cause:** `resolveTeam()` in `moneyline-api/index.ts` (line 339) checks `t.name.toLowerCase().includes(q)` first. When the Spurs abbreviation `"SA"` is passed, `"sacramento kings".includes("sa")` matches **before** `"san antonio spurs"` because Sacramento appears earlier in ESPN's team list. The exact abbreviation check (`t.abbr.toLowerCase() === q`) runs last due to the `||` short-circuit.
 
-**`src/pages/SettingsPage.tsx`** — Two changes:
-
-1. **On first load (no saved timezone):** Use `Intl.DateTimeFormat().resolvedOptions().timeZone` to detect the browser/device timezone. If it matches one of the `TIMEZONES` entries, use it as the default and save it to the profile.
-
-2. **Add an `useEffect` for auto-detection on mount:** When `profile?.timezone` is still the default `"America/New_York"` or missing, check the device timezone and auto-update the profile if it differs.
+**Fix in `supabase/functions/moneyline-api/index.ts`** — Rewrite `resolveTeam` to prioritize exact abbreviation matches:
 
 ```typescript
-// Inside SettingsPage component, after profile loads
-useEffect(() => {
-  if (!profile) return;
-  const deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const matchedTz = TIMEZONES.find((t) => t.value === deviceTz);
-  
-  // Auto-set if profile still has the default and device tz is different & supported
-  if (matchedTz && profile.timezone === "America/New_York" && deviceTz !== "America/New_York") {
-    handleTzChange(deviceTz);
-  }
-}, [profile?.id]); // Run once when profile first loads
+function resolveTeam(teams: any[], input: string) {
+  const q = input.toLowerCase().trim();
+  // 1. Exact abbreviation match first
+  const exactAbbr = teams.find((t: any) => t.abbr.toLowerCase() === q);
+  if (exactAbbr) return exactAbbr;
+  // 2. Exact name/shortName match
+  const exactName = teams.find((t: any) => 
+    t.name.toLowerCase() === q || t.shortName.toLowerCase() === q
+  );
+  if (exactName) return exactName;
+  // 3. Fuzzy includes match (fallback)
+  return teams.find((t: any) =>
+    t.name.toLowerCase().includes(q) ||
+    t.shortName.toLowerCase().includes(q)
+  );
+}
 ```
 
-**Also update the `AuthContext.tsx` profile creation fallback** — when creating a new profile (the upsert in `fetchProfile`), detect timezone there too:
+### Bug 2: "%" Wrapping Below the Number
 
-```typescript
-const deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-const { data: newProfile } = await supabase
-  .from("profiles")
-  .upsert({
-    id: userId,
-    email: currentUser.email,
-    display_name: displayName,
-    timezone: deviceTz || "America/New_York",
-  }, { onConflict: "id" })
-  .select()
-  .single();
+**Root cause:** In the matchup hero card (line 1608), `{results.team1_pct}%` is rendered with `text-2xl font-black`. On a 390px screen, the middle column is 40% width (~156px). With two large numbers, the Swords icon, and flex gap, text can wrap.
+
+**Fix in `src/components/MoneyLineSection.tsx`** (line 1607-1611) — Add `whitespace-nowrap` to the percentage spans:
+
+```tsx
+<span className="text-2xl font-black text-nba-green whitespace-nowrap">{results.team1_pct}<span className="text-base">%</span></span>
+<Swords className="w-4 h-4 text-muted-foreground/55" />
+<span className="text-2xl font-black text-nba-red whitespace-nowrap">{results.team2_pct}<span className="text-base">%</span></span>
 ```
 
 ### Scope
-- 2 files: `SettingsPage.tsx` (auto-detect on visit), `AuthContext.tsx` (set on signup)
-- No database changes needed — timezone column already exists
+- `supabase/functions/moneyline-api/index.ts` — Fix team resolution priority
+- `src/components/MoneyLineSection.tsx` — Fix percentage layout wrapping
 
