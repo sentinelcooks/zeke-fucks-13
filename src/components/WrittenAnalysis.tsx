@@ -240,6 +240,8 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
             injuries: props.injuries,
             sport: props.sport,
             withoutTeammatesData: props.withoutTeammatesData,
+            overallRating: overallSummary.rating,
+            overallSummary: overallSummary.summary,
           },
         });
 
@@ -259,7 +261,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
 
     fetchAnalysis();
     return () => { cancelled = true; };
-  }, [props.playerOrTeam, props.confidence, props.verdict, props.type]);
+  }, [props.playerOrTeam, props.confidence, props.verdict, props.type, overallSummary.rating]);
 
   const borderColor = props.confidence >= 70
     ? "border-nba-green/30"
