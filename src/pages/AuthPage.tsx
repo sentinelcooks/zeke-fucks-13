@@ -124,9 +124,13 @@ const AuthPage = () => {
         localStorage.removeItem("sentinel_onboarding_sports");
         localStorage.removeItem("sentinel_onboarding_style");
       }
+
+      // Mark onboarding complete — both locally and server-side
       localStorage.setItem("sentinel_onboarding_complete", "true");
+      await supabase.from("profiles").update({ onboarding_complete: true } as any).eq("id", userId);
     } catch (err) {
       console.error("Failed to save onboarding:", err);
+      // Still mark locally so we never re-show onboarding
       localStorage.setItem("sentinel_onboarding_complete", "true");
     }
   }, []);
