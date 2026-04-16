@@ -1605,9 +1605,9 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                 {betType === "moneyline" ? (
                   <>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-2xl font-black text-nba-green">{results.team1_pct}%</span>
+                      <span className="text-2xl font-black text-nba-green whitespace-nowrap">{results.team1_pct}<span className="text-base">%</span></span>
                       <Swords className="w-4 h-4 text-muted-foreground/55" />
-                      <span className="text-2xl font-black text-nba-red">{results.team2_pct}%</span>
+                      <span className="text-2xl font-black text-nba-red whitespace-nowrap">{results.team2_pct}<span className="text-base">%</span></span>
                     </div>
                     <span className="text-[10px] font-bold tracking-[2px] uppercase text-accent">{results.verdict}</span>
                   </>

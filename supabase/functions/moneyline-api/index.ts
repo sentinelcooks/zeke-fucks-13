@@ -338,11 +338,21 @@ function extractH2HFromEvents(events: any[], team1Id: string, team2Id: string, s
 
 function resolveTeam(teams: any[], input: string) {
   const q = input.toLowerCase().trim();
-  return teams.find(
-    (t: any) =>
-      t.name.toLowerCase().includes(q) ||
-      t.shortName.toLowerCase().includes(q) ||
-      t.abbr.toLowerCase() === q
+  // 1. Exact abbreviation match first (prevents "SA" matching Sacramento before San Antonio)
+  const exactAbbr = teams.find((t: any) => t.abbr.toLowerCase() === q);
+  if (exactAbbr) return exactAbbr;
+  // 2. Exact alias match
+  const aliasMatch = teams.find((t: any) => t.aliases?.some((a: string) => a.toLowerCase() === q));
+  if (aliasMatch) return aliasMatch;
+  // 3. Exact name/shortName match
+  const exactName = teams.find((t: any) =>
+    t.name.toLowerCase() === q || t.shortName.toLowerCase() === q
+  );
+  if (exactName) return exactName;
+  // 4. Fuzzy includes match (fallback)
+  return teams.find((t: any) =>
+    t.name.toLowerCase().includes(q) ||
+    t.shortName.toLowerCase().includes(q)
   );
 }
 
