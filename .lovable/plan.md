@@ -1,51 +1,21 @@
 
 
-## Plan: Fix Correlated Props to Respect Over/Under Direction
+## Plan: Fix Play Type Dropdown Scroll + Add 1Q Props
 
 ### Problem
-The correlated props engine **always computes correlations for the "over" direction**, regardless of what the user selected. Two places hardcode `>` comparisons:
+1. Dropdown `max-h-[200px]` clips last items — no bottom padding inside the scroll container
+2. NBA play types missing first-quarter props
 
-1. **Line 195** — Source player hit games: `getStatValue(g.stats, sourceProp) > sourceLine` (always "over")
-2. **Line 241** — Correlated player hits: `getStatValue(g.stats, prop) > line` (always "over")
+### Fix — `src/components/tracker/BetTypeDropdown.tsx`
 
-When a user picks "under 1.5 3-Pointers", the function still finds games where the player went **over** the line, producing correlations that contradict the user's chosen direction.
+**1. Fix scroll clipping:** Increase `max-h` to `260px` and add `pb-2` inside the dropdown so the last item isn't cut off by rounded corners.
 
-Additionally, the frontend callers never pass `over_under` to the function.
-
-### Fix
-
-**1. `supabase/functions/correlated-props/index.ts`** — Accept and use `over_under` parameter:
-
-- Parse `over_under` from the request body (default to `"over"` for backward compat)
-- Pass it into `computeCorrelations`
-- Source hit filter: use `< sourceLine` when direction is "under", `> sourceLine` when "over"
-- Correlated hit filter: same direction-aware comparison
-- Update reasoning text to reflect direction (e.g., "stays under" vs "exceeds")
-
-```typescript
-// Line 193-196: direction-aware source filtering
-const hitEventIds = new Set(
-  sourceLog.games
-    .filter(g => overUnder === "under" 
-      ? getStatValue(g.stats, sourceProp) < sourceLine
-      : getStatValue(g.stats, sourceProp) > sourceLine)
-    .map(g => g.eventId)
-);
-
-// Line 241: direction-aware correlated hit check
-if (overUnder === "under" 
-  ? getStatValue(g.stats, prop) < line
-  : getStatValue(g.stats, prop) > line) coHits++;
-```
-
-**2. Frontend callers** — Pass `over_under` in all 3 invocation sites:
-
-- `src/pages/NbaPropsPage.tsx` (2 call sites) — add `over_under: overUnder` or `over_under: navState.overUnder`
-- `src/pages/FreePropsPage.tsx` (1 call site) — add `over_under: prop.over_under || "over"`
-
-**3. Cache key** — Add `over_under` to the cache lookup/insert so "over" and "under" results are cached separately.
+**2. Add 1Q props to NBA list** (insert before Moneyline/Spread):
+- `1Q Points` — aliases: 1q pts, first quarter points, 1q scoring
+- `1Q Rebounds` — aliases: 1q reb, first quarter rebounds
+- `1Q Assists` — aliases: 1q ast, first quarter assists
+- `1Q 3-Pointers` — aliases: 1q 3pt, first quarter threes, 1q triples
 
 ### Scope
-- 3 files: edge function + 2 frontend pages
-- No database changes (the cache table doesn't need a new column — we can append direction to `source_prop` in the cache key)
+- 1 file changed, ~8 lines added/modified
 
