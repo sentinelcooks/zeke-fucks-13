@@ -45,9 +45,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (currentUser) {
         const displayName = currentUser.user_metadata?.display_name || null;
+        const deviceTz = typeof Intl !== "undefined"
+          ? Intl.DateTimeFormat().resolvedOptions().timeZone
+          : "America/New_York";
         const { data: newProfile } = await supabase
           .from("profiles")
-          .upsert({ id: userId, email: currentUser.email, display_name: displayName }, { onConflict: "id" })
+          .upsert({ id: userId, email: currentUser.email, display_name: displayName, timezone: deviceTz || "America/New_York" }, { onConflict: "id" })
           .select()
           .single();
         if (newProfile) setProfile(newProfile as unknown as Profile);
