@@ -821,7 +821,10 @@ Deno.serve(async (req) => {
       logSnapshot({
         sport: "nhl",
         market_type: bet_type,
-        player_or_team: player_name || `${team1_name || "team1"} vs ${team2_name || "team2"}`,
+        player_or_team: player_name || `${team1_id} vs ${team2_id}`,
+        prop_type: prop_type || null,
+        line: typeof line === "string" ? parseFloat(line) : (line ?? null),
+        direction: over_under || null,
         confidence: result.confidence,
         verdict: result.verdict,
         top_factors: (result.factorBreakdown || []).slice(0, 5),
