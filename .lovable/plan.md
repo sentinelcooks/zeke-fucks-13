@@ -1,90 +1,79 @@
 
 
-## Plan: Backend Refactor — Prediction/Decision Split + Snapshot Logging + Quality Flags
+## Diagnosis Summary
 
-### Scope
-Backend only. Modify `supabase/functions/nba-api/index.ts`, create 2 new tables, create 1 new edge function. No frontend changes.
+### 1. Does `logSnapshot()` exist?
+**Yes** — defined in `supabase/functions/nba-api/index.ts` at **line 293**. Uses `SUPABASE_SERVICE_ROLE_KEY` correctly (bypasses RLS).
 
-### 1. Database Migrations
+### 2. Is it called in every `/analyze` handler?
 
-**Migration A — `prediction_snapshots`**
-- Schema as specified, with RLS policy `auth.uid() = user_id`
-- Service role bypass policy (for edge function inserts when user_id is null/server-side)
-- Indexes: `(sport, market_type)`, `(created_at)`, `(user_id)`, `(verdict)`
+| File | Status | Line |
+|------|--------|------|
+| `supabase/functions/nba-api/index.ts` | ✅ Called | 3618 |
+| `supabase/functions/mlb-model/index.ts` | ❌ **Missing** | — |
+| `supabase/functions/nhl-model/index.ts` | ❌ **Missing** | — |
+| `supabase/functions/ufc-api/index.ts` | ❌ **Missing** | — |
+| `supabase/functions/moneyline-api/index.ts` | ❌ **Missing** | — |
 
-**Migration B — `outcomes`**
-- Schema as specified with FK to `prediction_snapshots`
-- RLS: user-scoped + service role
-- Indexes: `(sport)`, `(user_id)`, `(actual_result)`
+Search confirmed: zero matches for `logSnapshot` / `prediction_snapshots` in the other 4 files.
 
-Note: `auth.users` FK is allowed per spec but user_id will be nullable since edge functions may insert without an authenticated user context (analyzer can run server-side).
+### 3. Service role key usage
+The helper in `nba-api` reads `SUPABASE_SERVICE_ROLE_KEY` and uses REST API directly — correct, bypasses RLS. The other functions don't have a helper at all.
 
-### 2. `nba-api/index.ts` Refactor
+### 4. Silent catch
+Yes — `nba-api/index.ts` line 3639: `.catch(() => {})` swallows errors. Will fix to log.
 
-Add three new types and helpers near the top:
-- `PredictionOutput`, `DecisionOutput`, `DataQualityReport` interfaces
-- `validateDataQuality(playerData, injuryData, gameData)` → applies penalty to raw confidence
-- `buildDecisionOutput(prediction, americanOdds, stake=100)` → computes implied prob (vig-removed via 2-way), EV, EV%, verdict, unit size
-- `applyJuicePenalty(confidence, americanOdds)` → display-only adjustment inside decision layer
-- `detectMlbPropCategory(propType)` + `MLB_PROP_WEIGHTS` table
-- `logSnapshot(supabase, payload)` → fire-and-forget insert into `prediction_snapshots`
+### 5. Edge function logs
+Recent `nba-api` logs show only boots/shutdowns, no insert errors. No useful failure trace because it never ran for non-NBA paths.
 
-**Verdict thresholds** (decision layer):
-- `STRONG`: confidence ≥ 70 AND evPercent ≥ 5
-- `LEAN`: confidence ≥ 60 AND evPercent ≥ 2
-- `SLIGHT`: confidence ≥ 55 AND evPercent > 0
-- `PASS`: otherwise
+### 6. Database actual count
+`select count(*) from prediction_snapshots` returned **3 rows** (1 NBA, 2 NHL via nba-api). All three came through `nba-api/analyze` — confirming the helper works, but only that endpoint logs.
 
-**Unit sizing**:
-- 2u: STRONG + evPercent ≥ 8
-- 1.5u: STRONG or (LEAN + evPercent ≥ 5)
-- 1u: LEAN/SLIGHT
-- 0u: PASS
+**Why the user saw zero / few rows:** UFC matchups go to `ufc-api/matchup`, moneyline games go to `moneyline-api/analyze`, and the daily-picks generator hits `mlb-model`, `nhl-model`, `moneyline-api` directly — none of which log snapshots.
 
-**Variance** derived from factor agreement: stddev of factor scores → low (<10), medium (10-20), high (>20).
+---
 
-**Consensus floor removal**: search `calculateConfidence` and `calculateMlbPropConfidence` for any `Math.max(confidence, 80)` style floors and remove. Keep only natural [0,100] clamp.
+## Fix Plan
 
-**MLB prop-type weights**: in `calculateMlbPropConfidence`, call `detectMlbPropCategory(propType)` and select the matching weight set from `MLB_PROP_WEIGHTS`. Existing factor calculations stay; only the weight multipliers swap.
+### A. Add a shared `logSnapshot()` helper to each missing function
+Copy the same fire-and-forget REST helper (using `SUPABASE_SERVICE_ROLE_KEY`) into:
+- `supabase/functions/mlb-model/index.ts`
+- `supabase/functions/nhl-model/index.ts`
+- `supabase/functions/ufc-api/index.ts`
+- `supabase/functions/moneyline-api/index.ts`
 
-**Snapshot logging**: at the end of `/analyze` POST handler in nba-api, after building the response, call `logSnapshot(...)` without `await` (fire-and-forget). Same hook added at end of analysis paths in `mlb-model`, `nhl-model`, `ufc-api`, `moneyline-api` — minimal touch, just the logSnapshot call + DataQuality penalty + decision-layer build.
+### B. Wire `logSnapshot()` into each `/analyze` (and ufc `/matchup`) success path
+Insert minimal payloads right before the final `return json(prediction)`:
 
-**Reasoning warnings**: prepend quality flags to the reasoning string when present (lineup unconfirmed, small sample, stale injury, no historical data, juice penalty).
+- **mlb-model** (~line 836): log `sport=mlb`, `market_type=bet_type`, player or team names, confidence, verdict (PASS/LEAN/STRONG via threshold), top factors.
+- **nhl-model** (~line 820): same pattern, `sport=nhl`.
+- **moneyline-api** (`/analyze`): log `sport` from request, `market_type=moneyline|spread|total`, teams, confidence, odds if present.
+- **ufc-api** (`/matchup`): log `sport=ufc`, `market_type=moneyline`, fighter1 vs fighter2, model confidence.
 
-### 3. New Edge Function — `log-outcome`
+All calls fire-and-forget with `.catch(err => console.error('logSnapshot failed:', err))`.
 
-`supabase/functions/log-outcome/index.ts`:
-- POST `{ snapshot_id, actual_result, actual_value, profit_loss }`
-- Zod validation
-- Insert into `outcomes`
-- Update `prediction_snapshots` SET `actual_outcome=actual_result`, `outcome_logged_at=now()` WHERE id=snapshot_id
-- Compute and return stats:
-  - `overall_hit_rate` (HIT / (HIT+MISS), excluding PUSH)
-  - `by_sport: { nba, mlb, nhl, ufc }`
-  - `by_confidence_bucket: { "50-60", "60-70", "70-80", "80+" }` (joins outcomes → snapshots)
-- CORS headers, no JWT verify (matches existing pattern)
+### C. Fix the silent catch in nba-api
+Replace `.catch(() => {})` on line 3639 with `.catch(err => console.error('logSnapshot failed:', err))`.
 
-### 4. Touch List
+### D. Verify after deploy
+1. Note current count (3).
+2. Run an NBA prop analysis from the UI.
+3. Run an MLB or NHL game analysis.
+4. Wait 10s, query `select count(*), sport from prediction_snapshots group by sport`.
+5. Confirm new rows appeared for each sport hit; report count in completion message.
 
-| File | Action |
+### Files Modified
+
+| File | Change |
 |------|--------|
-| `supabase/migrations/<ts>_prediction_snapshots.sql` | Create |
-| `supabase/migrations/<ts>_outcomes.sql` | Create |
-| `supabase/functions/nba-api/index.ts` | Refactor: add types, validateDataQuality, buildDecisionOutput, applyJuicePenalty, MLB_PROP_WEIGHTS, snapshot logging, remove consensus floors |
-| `supabase/functions/mlb-model/index.ts` | Add buildDecisionOutput + snapshot log + remove floors |
-| `supabase/functions/nhl-model/index.ts` | Add buildDecisionOutput + snapshot log + remove floors |
-| `supabase/functions/ufc-api/index.ts` | Add buildDecisionOutput + snapshot log + remove 22-78% clamp |
-| `supabase/functions/moneyline-api/index.ts` | Add buildDecisionOutput + snapshot log + remove floors |
-| `supabase/functions/log-outcome/index.ts` | Create new function |
+| `supabase/functions/mlb-model/index.ts` | Add `logSnapshot` helper + call before final return |
+| `supabase/functions/nhl-model/index.ts` | Add `logSnapshot` helper + call before final return |
+| `supabase/functions/ufc-api/index.ts` | Add `logSnapshot` helper + call in `/matchup` return |
+| `supabase/functions/moneyline-api/index.ts` | Add `logSnapshot` helper + call in `/analyze` return |
+| `supabase/functions/nba-api/index.ts` | Replace silent catch with logged catch |
 
-### 5. Backwards Compatibility
-
-The existing response shape from `/analyze` is preserved. New fields `prediction`, `decision`, `dataQuality`, `flags` are **added** alongside existing `confidence`, `verdict`, `reasoning`, `factorBreakdown`. Frontend continues reading current fields; can opt into new fields later. No breaking changes.
-
-### 6. Out of Scope (Per User Constraints)
-
-- Calibration layer (isotonic/Platt) — needs historical data first
-- ML training pipeline — defer until snapshots accumulate
-- Frontend display of new fields — explicitly excluded
-- Closing line tracking — separate cron, not in this scope
+### Out of Scope
+- No frontend changes
+- No schema changes (tables already exist with correct RLS + service role bypass)
+- No changes to existing factor calculations
 
