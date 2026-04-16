@@ -226,8 +226,8 @@ const FreePicksPage = () => {
     fetchTrends();
   }, []);
 
-  // Apply filters — only show 70%+ confidence picks
-  let filtered = picks.filter(p => p.hit_rate >= 70);
+  // Apply filters — only show 50%+ confidence picks
+  let filtered = picks.filter(p => p.hit_rate >= 50);
   if (sportFilter !== "all") filtered = filtered.filter(p => p.sport === sportFilter);
   if (propFilter !== "all") filtered = filtered.filter(p => p.prop_type === propFilter);
   filtered = [...filtered].sort((a, b) =>

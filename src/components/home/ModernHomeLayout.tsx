@@ -250,7 +250,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       supabase.from("daily_picks").select("*").eq("pick_date", yesterday).order("created_at", { ascending: false }),
     ]);
 
-    let picks = ((todayRes.data as DailyPick[]) || []).filter(p => p.hit_rate >= 70);
+    let picks = ((todayRes.data as DailyPick[]) || []).filter(p => p.hit_rate >= 50);
 
     // Fallback: if no picks today, fetch most recent picks from the last 3 days
     if (picks.length === 0) {
@@ -263,7 +263,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
         .order("pick_date", { ascending: false })
         .order("hit_rate", { ascending: false })
         .limit(30);
-      picks = ((recentData as DailyPick[]) || []).filter(p => p.hit_rate >= 70);
+      picks = ((recentData as DailyPick[]) || []).filter(p => p.hit_rate >= 50);
     }
 
     if (userSports.length > 0) {
