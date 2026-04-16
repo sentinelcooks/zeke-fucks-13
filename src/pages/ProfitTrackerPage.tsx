@@ -451,7 +451,7 @@ const ProfitTrackerPage = () => {
               <AnimatePresence>
                 {showForm && (
                   <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }} className="overflow-hidden">
+                    transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }} className="overflow-visible">
                     <div className="vision-card p-4 space-y-3">
                       <div className="flex items-center gap-2.5 mb-1">
                         <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))', boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.25)' }}>
