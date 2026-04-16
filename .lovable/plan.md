@@ -1,49 +1,72 @@
 
 
-## Plan: Fix Home/Away Splits + Pace, Add PPG Explainer Popup
+## Plan: Make MLB O/U (Total) Order-Independent
 
-### Root Cause (Backend)
+### Root cause (exact lines, `supabase/functions/mlb-model/index.ts`)
 
-In `supabase/functions/moneyline-api/index.ts`, the helpers `computeHomeAwaySplits` (line 194) and `computePace` (line 274) filter completed games using `comp.status?.type?.completed === true`. ESPN's `/teams/{id}/schedule` endpoint returns this `completed` boolean **inconsistently** — it's often missing or `false` on games that have actually finished. Every other model in this repo (`mlb-model`, `nhl-model`, `nba-api`) correctly uses `comp.status?.type?.name === "STATUS_FINAL"` instead.
+**Primary asymmetry — `runModel` line 466:**
+```ts
+advantageScore = 50 + (safe1 - safe2) / 2;
+```
+This is a directional *advantage* formula. For totals (a single combined event), swapping team1/team2 flips the sign and produces `100 - confidence`. Park/weather/temp are correctly handled as shared (line 463-464), but every team factor is asymmetric.
 
-That's why the screenshot shows Celtics 0-0 / 0-0 (0% PPG) and Hornets only 1-0 home — most completed games are being silently dropped from the count, so PPG/win% reads as zero.
+**Secondary issues that also break symmetry for `total`:**
+- Lines 721-738 (`team1Factors`) hardcode `homePitcher`, `splits1.home`, `scoreHomeAway(...true)` — assumes team1 is home.
+- Lines 741-757 (`team2Factors`) hardcode `awayPitcher`, `splits2.away`, `scoreHomeAway(...false)` — assumes team2 is away.
+- If the user passes (Yankees=team1, RedSox=team2) but Red Sox are actually home, team1 gets the *home* pitcher's stats (Red Sox SP) under the Yankees' slot. Swap inputs → pitcher stats land in opposite slots. Combined with the directional `(safe1-safe2)` formula, output diverges.
+- Line 793 `adjustedProjection` is computed but never returned, so there is no `predicted_total` field at all today.
 
-This single helper feeds **NBA, MLB, NHL, NFL, NCAAB** in the Lines tab, so one fix covers every sport.
+### Fix (scoped strictly to `bet_type === "total"`)
 
-### Changes
+**1. New symmetric scoring path in `runModel`** (`index.ts` ~line 437-494)
 
-**1. `supabase/functions/moneyline-api/index.ts`**
+Add a branch: when `betType === "total"`, replace the advantage formula with a *combined* score:
+```ts
+if (betType === "total") {
+  advantageScore = sharedFactors[factor] ?? (safe1 + safe2) / 2;
+}
+```
+Park/weather/temp/line_movement/public_pct continue using `sharedFactors` (already symmetric). Every team factor uses the **average** of the two team scores — order-independent by construction. Moneyline and runline keep current `(safe1 - safe2)/2` behavior (out of scope per task).
 
-- `computeHomeAwaySplits` (line 194): replace
-  `if (!comp || comp.status?.type?.completed !== true) continue;`
-  with the union check used elsewhere:
-  `const isFinal = comp?.status?.type?.completed === true || comp?.status?.type?.name === "STATUS_FINAL"; if (!isFinal) continue;`
-- `computePace` (line 274): same union check on the `.filter(...)`.
-- `extractH2HFromEvents` (line 336): apply the same union check so head-to-head also picks up finals that ESPN flags only via `STATUS_FINAL`.
+**2. Determine actual home/away from game data, not input order** (~lines 670-757)
 
-This is sport-agnostic — applies to NBA, MLB, NHL, NFL, NCAAB automatically.
+Before building `team1Factors`/`team2Factors`, identify the real home/away team from `eventData.competitions[0].competitors[*].homeAway`. Map `team1_id`/`team2_id` to their true home/away role. Then:
+- Assign `homePitcher` / `awayPitcher` to whichever of team1/team2 is actually home/away.
+- Use `splits1.home` only if team1 is the actual home team; otherwise `splits1.away` (and same for team2).
+- For `scoreHomeAway`, pass the correct `isHome` boolean per team.
 
-**2. `src/components/MoneyLineSection.tsx` — Pace explainer popup**
+This makes pitcher/split assignment order-independent: regardless of input order, the home-team slot always carries the home pitcher.
 
-In the Pace card (lines 1838-1861), wrap each team row in a `<button>`. On click, open a small dialog (using existing `framer-motion` modal pattern already used elsewhere in this file at line 1443) that explains:
+**3. Symmetric `lr_splits`** (lines 731, 750)
 
-- **PPG** = Points Per Game (or Runs Per Game for MLB, Goals Per Game for NHL — sport-aware label based on `results.sport`)
-- **Net** = the team's recent PPG minus opponents' recent PPG
-- **Pace number** = estimated possessions per game (NBA) / runs context (MLB) / shots+goals context (NHL)
-- A concrete example using the team's actual numbers, e.g. *"Hornets average 127.0 PPG and allow 126.0, giving a +1.0 net rating over their last 10 games. Higher PPG = faster, higher-scoring style."*
+Currently team1 sees `awayPitcher.throwingHand`, team2 sees `homePitcher.throwingHand`. After fix #2, this becomes "each team scored vs the *opposing* pitcher's hand" — already symmetric in structure. Keep, but route via the corrected pitcher assignment.
 
-Single shared modal component at the bottom of the section, opened via `useState<{team, pace, sportLabel} | null>`, dismissed on backdrop click or X button. No new dependencies — reuses Vision UI styling and the dialog pattern already present in this file.
+**4. Add a real `predicted_total` field** (~line 786-795)
 
-### Verification (mandatory before marking complete)
+Move the `adjustedProjection` calculation out of the `if (game_id && eventData && odds)` nested block (it's currently dead code locked behind the odds branch) up to the totals block, and surface it on the `prediction` response as `predicted_total`. The formula `baseRuns * (avgERA / 4.20) * parkFactor * tempAdj * windAdj` already uses symmetric inputs (avg of both pitchers' ERA, shared park/weather), so it's order-independent.
 
-1. **Deploy** `moneyline-api` edge function.
-2. **Curl** the deployed function with an NBA matchup that has played games (e.g. Celtics vs Hornets) and grep the JSON response for `"splits"` — confirm `home.wins + home.losses > 0` and `home.ppg > 0`. Paste the relevant slice of the response in the completion message.
-3. **Repeat** the curl with an MLB matchup (e.g. Yankees vs Red Sox) and an NHL matchup to confirm splits/pace are now non-zero across sports. Paste both responses.
-4. **UI smoke**: load `/dashboard/analyze`, select Moneyline → Lines, run Celtics vs Hornets, expand "Home / Away Splits" → confirm non-zero values; tap a team in the Pace card → confirm the PPG explainer popup opens with the example sentence.
+**5. Verdict for totals based on `predicted_total` vs `line`**
 
-### Out of Scope
+When `bet_type === "total"` and a `line` is supplied: verdict = OVER if `predicted_total > line + 0.3`, UNDER if `< line - 0.3`, else PASS. Confidence = clamp(50 + |predicted_total - line| × 8, 50, 90). Both terms depend only on symmetric inputs.
 
-- No DB changes (no migrations needed).
-- No changes to MLB/NHL 20-factor model files — they already use `STATUS_FINAL` correctly and pass through the splits/pace from `moneyline-api`'s helpers.
-- No Pace card layout redesign — just adds tap-to-explain.
+### Verification (mandatory before completion)
+
+Deploy `mlb-model`, then via `supabase--curl_edge_functions` POST to `/mlb-model/analyze`:
+
+- **Test A**: `{ bet_type: "total", team1_id: <Yankees>, team2_id: <RedSox>, over_under: "over", line: 8.5 }`
+- **Test B**: same body with team1/team2 swapped.
+
+Paste both full response bodies in the completion message. Required to pass:
+- `confidence` identical
+- `verdict` identical
+- `predicted_total` identical
+- Each factor's `advantageScore` in `factorBreakdown` identical (team1Score/team2Score may swap labels — that's expected and fine, but the symmetric `advantageScore` must match)
+
+If any field differs, identify the still-asymmetric factor, patch, redeploy, retest, then complete.
+
+### Out of scope (untouched)
+- Moneyline, runline, player_prop code paths
+- Other sports (NBA, NHL, UFC)
+- Frontend
+- DB schema
 
