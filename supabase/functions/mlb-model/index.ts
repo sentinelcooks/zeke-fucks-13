@@ -462,6 +462,9 @@ function runModel(
     let advantageScore: number;
     if (["park_factor", "weather_wind", "temperature", "line_movement", "public_pct"].includes(factor)) {
       advantageScore = sharedFactors[factor] ?? 50;
+    } else if (betType === "total") {
+      // O/U is a single game-level event — combine both teams symmetrically (order-independent)
+      advantageScore = (safe1 + safe2) / 2;
     } else {
       advantageScore = 50 + (safe1 - safe2) / 2;
     }
