@@ -845,14 +845,29 @@ Deno.serve(async (req) => {
       
       // Run model
       const result = runModel(bet_type, adj1, adj2, sharedFactors);
-      
+
+      // Override verdict/confidence for totals using predicted_total vs line (order-independent)
+      let finalConfidence = result.confidence;
+      let finalVerdict = result.verdict;
+      if (bet_type === "total" && predicted_total != null && line != null) {
+        const lineNum = typeof line === "string" ? parseFloat(line) : line;
+        if (!isNaN(lineNum)) {
+          const diff = predicted_total - lineNum;
+          if (diff > 0.3) finalVerdict = "OVER";
+          else if (diff < -0.3) finalVerdict = "UNDER";
+          else finalVerdict = "PASS";
+          finalConfidence = Math.max(50, Math.min(90, Math.round(50 + Math.abs(diff) * 8)));
+        }
+      }
+
       // Generate AI writeup
-      const writeup = await generateWriteup({ ...result, warnings: [...warn1, ...warn2] }, bet_type);
+      const writeup = await generateWriteup({ ...result, confidence: finalConfidence, verdict: finalVerdict, warnings: [...warn1, ...warn2] }, bet_type);
       
       const prediction = {
         bet_type,
-        confidence: result.confidence,
-        verdict: result.verdict,
+        confidence: finalConfidence,
+        verdict: finalVerdict,
+        predicted_total,
         factorBreakdown: result.factorBreakdown,
         writeup,
         injuries: {
