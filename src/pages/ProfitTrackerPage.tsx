@@ -464,9 +464,11 @@ const ProfitTrackerPage = () => {
                           <option value="nba">NBA</option><option value="mlb">MLB</option><option value="nhl">NHL</option>
                           <option value="ufc">UFC</option><option value="other">Other</option>
                         </VisionSelect>
-                        <PlayerAutocomplete sport={form.sport} value={form.player_or_fighter} onChange={(v) => setForm({ ...form, player_or_fighter: v })} />
-                        <BetTypeDropdown sport={form.sport} value={form.bet_type} onChange={(v) => setForm({ ...form, bet_type: v })} />
-                        <VisionInput label="Line" placeholder={getLinePlaceholder(form.sport)} type="number" step="0.5" value={form.line} onChange={(e) => setForm({ ...form, line: e.target.value })} />
+                        <PlayerAutocomplete sport={form.sport} value={form.player_or_fighter} onChange={(v) => setForm({ ...form, player_or_fighter: v })} betType={form.bet_type} />
+                        <BetTypeDropdown sport={form.sport} value={form.bet_type} onChange={(v) => setForm({ ...form, bet_type: v, player_or_fighter: "" })} />
+                        {!["moneyline", "spread", "run line", "puck line"].some(t => form.bet_type.toLowerCase().includes(t)) && (
+                          <VisionInput label="Line" placeholder={getLinePlaceholder(form.sport)} type="number" step="0.5" value={form.line} onChange={(e) => setForm({ ...form, line: e.target.value })} />
+                        )}
                         <VisionInput label={`Odds (${oddsFormat === "decimal" ? "Decimal" : "American"})`} type="number" value={form.odds}
                           onChange={(e) => setForm({ ...form, odds: e.target.value })}
                           step={oddsFormat === "decimal" ? "0.01" : "1"} />
