@@ -1168,6 +1168,18 @@ serve(async (req) => {
       if ("error" in f2Data) return new Response(JSON.stringify({ error: f2Data.error }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
       const analysis = buildMatchupAnalysis(f1Data as FighterData, f2Data as FighterData);
+
+      // Snapshot logging — fire and forget
+      const mlConf = analysis?.recommendation?.probability ?? analysis?.moneyline?.confidence ?? 50;
+      logSnapshot({
+        sport: "ufc",
+        market_type: "moneyline",
+        player_or_team: `${(f1Data as FighterData).fighter?.name || fighter1} vs ${(f2Data as FighterData).fighter?.name || fighter2}`,
+        confidence: mlConf,
+        verdict: analysis?.recommendation?.confidence || null,
+        top_factors: null,
+      }).catch((err) => console.error("logSnapshot failed:", err));
+
       return new Response(JSON.stringify(analysis), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
