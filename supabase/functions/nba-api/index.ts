@@ -2987,6 +2987,8 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
     team_roster_context: teamRoster,
     opponent_roster_context: oppRoster,
     without_teammates_analysis: withoutTeammatesAnalysis,
+    recency_games: recencyGames,
+    pace_context: paceContext,
     // MLB-specific
     current_season_games: cfg.searchLeague === "mlb" ? games : undefined,
     prev_season_games: cfg.searchLeague === "mlb" ? prevSeasonGames : undefined,
