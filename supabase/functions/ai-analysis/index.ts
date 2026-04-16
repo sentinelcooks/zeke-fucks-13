@@ -359,19 +359,36 @@ ${formatRule}
 
     const systemMessage = getSystemMessage(sportLower, type);
 
+    // Determine AI provider: prefer Grok (xAI) if key is set, fallback to Lovable AI Gateway
+    const XAI_API_KEY = Deno.env.get("XAI_API_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY not configured");
+    
+    let aiEndpoint: string;
+    let aiKey: string;
+    let aiModel: string;
+    
+    if (XAI_API_KEY) {
+      aiEndpoint = "https://api.x.ai/v1/chat/completions";
+      aiKey = XAI_API_KEY;
+      aiModel = "grok-3";
+      console.log("Using Grok (xAI) for analysis");
+    } else if (LOVABLE_API_KEY) {
+      aiEndpoint = "https://ai.gateway.lovable.dev/v1/chat/completions";
+      aiKey = LOVABLE_API_KEY;
+      aiModel = "google/gemini-2.5-flash";
+      console.log("Using Lovable AI Gateway for analysis");
+    } else {
+      throw new Error("No AI API key configured (XAI_API_KEY or LOVABLE_API_KEY)");
     }
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await fetch(aiEndpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+        "Authorization": `Bearer ${aiKey}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: aiModel,
         messages: [
           { role: "system", content: systemMessage },
           { role: "user", content: prompt },
