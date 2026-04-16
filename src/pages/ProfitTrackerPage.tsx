@@ -232,19 +232,44 @@ const ProfitTrackerPage = () => {
   };
 
   const updateParlayResult = async (id: string, result: string) => {
-    await supabase.from("parlay_history" as any).update({ result } as any).eq("id", id);
-    setParlays((prev) => prev.map((p) => p.id === id ? { ...p, result } : p));
+    const parlay = parlays.find(p => p.id === id);
+    const profit = result === "win" ? (parlay?.potential_payout || 0) - (parlay?.stake || 0) : result === "loss" ? -(parlay?.stake || 0) : 0;
+    await supabase.from("parlay_history" as any).update({ result, profit } as any).eq("id", id);
+    setParlays((prev) => prev.map((p) => p.id === id ? { ...p, result, profit } : p));
   };
+
+  /* ── Merged plays (plays + parlays) ── */
+  const allPlays = useMemo(() => {
+    const parlayAsPlays: Play[] = parlays.map(p => {
+      const legs = Array.isArray(p.legs) ? p.legs : [];
+      const payout = p.result === "win" ? p.potential_payout - p.stake : p.result === "loss" ? -p.stake : 0;
+      return {
+        id: p.id,
+        sport: (legs[0]?.sport || "parlay").toLowerCase(),
+        player_or_fighter: `Parlay (${legs.length} legs)`,
+        bet_type: "Parlay",
+        line: null,
+        odds: p.parlay_odds,
+        stake: p.stake,
+        result: p.result,
+        payout,
+        notes: null,
+        created_at: p.created_at,
+        _isParlay: true,
+      };
+    });
+    return [...plays, ...parlayAsPlays] as (Play & { _isParlay?: boolean })[];
+  }, [plays, parlays]);
 
   /* ── Stats ── */
   const playStats = useMemo(() => {
-    const settled = plays.filter((p) => p.result !== "pending");
+    const settled = allPlays.filter((p) => p.result !== "pending");
     const wins = settled.filter((p) => p.result === "win").length;
     const totalProfit = settled.reduce((sum, p) => sum + (p.payout || 0), 0);
     const totalStaked = settled.reduce((sum, p) => sum + p.stake, 0);
     const roi = totalStaked > 0 ? (totalProfit / totalStaked) * 100 : 0;
-    return { wins, losses: settled.length - wins, totalProfit, roi, pending: plays.length - settled.length };
-  }, [plays]);
+    return { wins, losses: settled.length - wins, totalProfit, roi, pending: allPlays.length - settled.length };
+  }, [allPlays]);
 
   const pickStats = useMemo(() => {
     const wins = picks.filter((p) => p.result === "win").length;
@@ -275,18 +300,18 @@ const ProfitTrackerPage = () => {
 
   /* ── Filtered plays ── */
   const playsDates = useMemo(() => {
-    const dates = [...new Set(plays.map(p => new Date(p.created_at).toISOString().split("T")[0]))].sort((a, b) => b.localeCompare(a));
+    const dates = [...new Set(allPlays.map(p => new Date(p.created_at).toISOString().split("T")[0]))].sort((a, b) => b.localeCompare(a));
     return dates;
-  }, [plays]);
+  }, [allPlays]);
 
   const filteredPlays = useMemo(() => {
-    let result = [...plays];
+    let result = [...allPlays];
     if (playsResultFilter !== "all") result = result.filter(p => p.result === playsResultFilter);
     if (playsSportFilter !== "all") result = result.filter(p => p.sport === playsSportFilter);
     if (playsDateFilter !== "all") result = result.filter(p => new Date(p.created_at).toISOString().split("T")[0] === playsDateFilter);
     if (playsSearch) { const q = playsSearch.toLowerCase(); result = result.filter(p => p.player_or_fighter.toLowerCase().includes(q)); }
     return result;
-  }, [plays, playsResultFilter, playsSportFilter, playsDateFilter, playsSearch]);
+  }, [allPlays, playsResultFilter, playsSportFilter, playsDateFilter, playsSearch]);
 
   /* ── Filtered picks ── */
   const picksDates = useMemo(() => {
@@ -313,7 +338,7 @@ const ProfitTrackerPage = () => {
   const exportToCSV = () => {
     const headers = ["Date", "Sport", "Player", "Bet", "Odds", "Stake", "Result", "P/L"];
     const csvRows = [headers.join(",")];
-    for (const p of plays) {
+    for (const p of allPlays) {
       csvRows.push([new Date(p.created_at).toLocaleDateString(), p.sport.toUpperCase(),
         `"${p.player_or_fighter.replace(/"/g, '""')}"`, `"${p.bet_type}${p.line ? ` (${p.line})` : ""}"`,
         fmt(p.odds), p.stake, p.result, p.result === "pending" ? "" : (p.payout || 0).toFixed(2)].join(","));
@@ -382,7 +407,7 @@ const ProfitTrackerPage = () => {
                     icon: Trophy, label: "Record", value: `${playStats.wins}W – ${playStats.losses}L`,
                     gradient: "from-[hsl(250,76%,62%)] to-[hsl(280,70%,55%)]",
                     glow: "hsla(250,76%,62%,0.15)",
-                    sub: `${plays.length} total`,
+                    sub: `${allPlays.length} total`,
                   },
                   {
                     icon: Clock, label: "Pending", value: playStats.pending,
@@ -423,7 +448,7 @@ const ProfitTrackerPage = () => {
 
               {/* Charts */}
               <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                <ProfitCharts plays={plays} />
+                <ProfitCharts plays={allPlays} />
               </motion.div>
 
               {/* Action Buttons */}
@@ -577,6 +602,12 @@ const ProfitTrackerPage = () => {
                             style={{ background: 'hsla(228, 20%, 15%, 0.5)', border: '1px solid hsla(228, 20%, 22%, 0.3)' }}>
                             {p.sport.toUpperCase()}
                           </span>
+                          {(p as any)._isParlay && (
+                            <span className="text-[9px] font-bold uppercase tracking-[0.15em] px-1.5 py-0.5 rounded-md text-accent"
+                              style={{ background: 'hsla(250, 76%, 62%, 0.12)', border: '1px solid hsla(250, 76%, 62%, 0.25)' }}>
+                              PARLAY
+                            </span>
+                          )}
                           <span className="text-[9px] text-muted-foreground/55">{new Date(p.created_at).toLocaleDateString()}</span>
                         </div>
                         <p className="text-[13px] font-bold text-foreground truncate">{p.player_or_fighter}</p>
@@ -585,13 +616,15 @@ const ProfitTrackerPage = () => {
                       <div className="flex items-center gap-2 ml-3">
                         {p.result === "pending" ? (
                           <div className="flex gap-1">
-                            <motion.button whileTap={{ scale: 0.9 }} onClick={() => updatePlayResult(p.id, "win")}
+                            <motion.button whileTap={{ scale: 0.9 }} onClick={() => (p as any)._isParlay ? updateParlayResult(p.id, "win") : updatePlayResult(p.id, "win")}
                               className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white" style={{ background: 'hsl(145 60% 45%)' }}>W</motion.button>
-                            <motion.button whileTap={{ scale: 0.9 }} onClick={() => updatePlayResult(p.id, "loss")}
+                            <motion.button whileTap={{ scale: 0.9 }} onClick={() => (p as any)._isParlay ? updateParlayResult(p.id, "loss") : updatePlayResult(p.id, "loss")}
                               className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white" style={{ background: 'hsl(0 72% 51%)' }}>L</motion.button>
-                            <motion.button whileTap={{ scale: 0.9 }} onClick={() => updatePlayResult(p.id, "push")}
-                              className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-muted-foreground"
-                              style={{ background: 'hsla(228, 20%, 15%, 0.5)', border: '1px solid hsla(228, 20%, 22%, 0.3)' }}>P</motion.button>
+                            {!(p as any)._isParlay && (
+                              <motion.button whileTap={{ scale: 0.9 }} onClick={() => updatePlayResult(p.id, "push")}
+                                className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-muted-foreground"
+                                style={{ background: 'hsla(228, 20%, 15%, 0.5)', border: '1px solid hsla(228, 20%, 22%, 0.3)' }}>P</motion.button>
+                            )}
                           </div>
                         ) : (
                           <div className="text-right">
@@ -603,7 +636,7 @@ const ProfitTrackerPage = () => {
                             </span>
                           </div>
                         )}
-                        <motion.button whileTap={{ scale: 0.9 }} onClick={() => deletePlay(p.id)}
+                        <motion.button whileTap={{ scale: 0.9 }} onClick={() => (p as any)._isParlay ? removeParlay(p.id) : deletePlay(p.id)}
                           className="p-1.5 rounded-lg text-muted-foreground/45 hover:text-nba-red transition-colors">
                           <Trash2 className="w-3.5 h-3.5" />
                         </motion.button>
