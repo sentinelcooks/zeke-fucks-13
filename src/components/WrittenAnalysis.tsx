@@ -24,6 +24,7 @@ interface WrittenAnalysisProps {
   injuries?: any[];
   sport?: string;
   withoutTeammatesData?: any;
+  paceContext?: any;
 }
 
 interface AnalysisSection {

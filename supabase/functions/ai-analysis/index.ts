@@ -275,6 +275,9 @@ serve(async (req) => {
 Format each as: **Section Title**: plain text analysis.
 Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.`;
 
+    // Build pace context for moneyline prompts too
+    const paceStr = buildPaceContextString(body.paceContext, sportLower);
+
     // ── NHL-specific moneyline/puckline/total prompt ──
     const nhlMoneylinePrompt = `You are a sharp NHL betting analyst. Be concise and data-driven. Use hockey terminology throughout.
 
@@ -283,14 +286,14 @@ Verdict: ${verdict}
 Model Confidence: ${confidence}%
 
 Key factors from our model:
-- ${dataPoints || "No additional data"}${injuryPromptSection}
+- ${dataPoints || "No additional data"}${paceStr}${injuryPromptSection}
 
 CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Your Verdict & Risk section must echo this exact recommendation — never contradict the top-level verdict. Support the model's pick decisively.
 
 ${formatRule}
 
 1. Goaltending Edge — Starting goalie matchup, save %, GAA, recent form.
-2. Special Teams & Matchup — PP/PK efficiency, pace, shot volume, fatigue, injuries.
+2. Special Teams & Matchup — PP/PK efficiency, pace, shot volume, fatigue, injuries.${paceStr ? " Reference game pace/total context." : ""}
 3. Verdict & Puck Line Value — Final recommendation with unit sizing and key risk.`;
 
     const ufcMoneylinePrompt = `You are a sharp MMA betting analyst. Be concise and data-driven. NEVER reference team sports concepts.
@@ -315,14 +318,14 @@ Verdict: ${verdict}
 Model Confidence: ${confidence}%
 
 Key factors from our model:
-- ${dataPoints || "No additional data"}${injuryPromptSection}
+- ${dataPoints || "No additional data"}${paceStr}${injuryPromptSection}
 
 CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Your Verdict & Risk section must echo this exact recommendation — never contradict the top-level verdict. Support the model's pick decisively.
 
 ${formatRule}
 
 1. Pitching Matchup — Starting pitcher ERA, WHIP, K/9, recent form, pitch mix.
-2. Lineup & Park Factor — Offensive splits, OPS, park dimensions, bullpen depth.
+2. Lineup & Park Factor — Offensive splits, OPS, park dimensions, bullpen depth.${paceStr ? " Reference game total context." : ""}
 3. Verdict & Run Line Value — Final recommendation with unit sizing and key risk.`;
 
     const genericMoneylinePrompt = `You are a sharp sports betting analyst writing a moneyline/spread/total breakdown. Be specific, data-driven, and concise.
@@ -333,13 +336,13 @@ Model Confidence: ${confidence}%
 Sport: ${sport || "nba"}
 
 Key factors from our model:
-- ${dataPoints || "No additional data"}${injuryPromptSection}${withoutTeammatesSection}
+- ${dataPoints || "No additional data"}${paceStr}${injuryPromptSection}${withoutTeammatesSection}
 
 CRITICAL: Your final verdict MUST ALIGN with "${verdict}". Your Verdict & Risk section must echo this exact recommendation — never contradict the top-level verdict. Support the model's pick decisively.
 
 ${formatRule}
 
-1. Statistical Edge — Why the model favors this side, win probability vs implied odds.
+1. Statistical Edge — Why the model favors this side, win probability vs implied odds.${paceStr ? " Reference pace/total context." : ""}
 2. Injury & Lineup Reality — Current injuries and what they mean for each team.
 3. Verdict & Risk — Final recommendation with unit sizing. Match "${verdict}".`;
 
