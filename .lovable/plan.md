@@ -1,79 +1,46 @@
 
 
-## Plan: Make Parlays Count in P&L, Stats, Charts, and Play List
+## Plan: Fix Daily Picks Generation — Lower Thresholds, Add Fallbacks, Improve Logging
 
-### Problem
+### Root Cause
 
-When a parlay is added via the tracker, it only appears in the "Parlays" tab. It is excluded from:
-1. **Plays tab list** — parlays don't show in the play feed
-2. **Play stats cards** (Profit, ROI, Record, Pending) — parlays not included
-3. **ProfitCharts** — only receives `plays`, not parlays
-4. **PnLCalendar** — same issue, only `plays` data
-5. **CSV export** — parlays excluded
+The daily-picks function ran successfully but produced **0 picks** because:
 
-Additionally, when a parlay result is marked (win/loss), the `payout` field on `parlay_history` is never updated — it stays at `0` profit.
-
-### Solution
-
-Create a **unified play list** that merges `plays` and `parlays` into a single data stream for stats, charts, calendar, and the Plays tab list.
+1. **Game-level models (MLB/NHL)** returned confidences of 48-54% — all below both the 70% primary and 65% expansion thresholds
+2. **NBA is out of season** — no NBA games, so no NBA game-level or prop picks
+3. **Player props** — most prop analyses either returned null (API errors) or had confidence below 65%. The few that passed confidence were then blocked by `fetchRealOdds` returning null (no live odds available)
+4. **No fallback** — when all picks fail every filter, nothing gets inserted, leaving the carousel permanently empty
 
 ### Changes
 
-**File: `src/pages/ProfitTrackerPage.tsx`**
+**File: `supabase/functions/daily-picks/index.ts`**
 
-1. **Create `allPlays` merged array** — a `useMemo` that converts each `SavedParlay` into a `Play`-compatible shape and concatenates with `plays`:
-   - `id` → parlay id
-   - `player_or_fighter` → "Parlay (N legs)"
-   - `bet_type` → "Parlay"
-   - `odds` → `parlay_odds`
-   - `stake` → parlay stake
-   - `payout` → on win: `potential_payout - stake`, on loss: `-stake`, on pending: `0`
-   - `result` → parlay result
-   - `created_at` → parlay created_at
-   - `sport` → first leg's sport or "parlay"
+1. **Lower confidence thresholds** — Drop primary threshold from 70% to 60%, expansion threshold from 65% to 55%. The MLB/NHL models consistently output 48-54%, so the current thresholds guarantee zero picks during non-NBA months.
 
-2. **Update `playStats`** to use `allPlays` instead of `plays`
+2. **Add "best available" fallback** — If after all phases there are still 0 picks, take the top 10 picks from `allPicks` regardless of confidence (as long as confidence > 45%). This ensures the carousel always has something to show. Mark these as lower confidence visually but still useful.
 
-3. **Update `ProfitCharts`** to receive `allPlays` instead of `plays`
+3. **Relax real-odds requirement** — When `fetchRealOdds` returns null, instead of skipping the pick entirely, allow it through with `odds: "N/A"`. Real odds are nice-to-have but shouldn't block pick generation.
 
-4. **Update `PnLCalendar`** (if rendered) to receive `allPlays`
+4. **Add prop analysis logging** — Log each prop analysis result (confidence, player name) so we can debug why props fail. Currently there's zero visibility into what `analyzePlayerProp` returns.
 
-5. **Update `filteredPlays`** to filter from `allPlays`
-
-6. **Update `playsDates`** to derive from `allPlays`
-
-7. **Update `exportToCSV`** to include parlay entries
-
-8. **Fix `updateParlayResult`** — when marking win, set `profit` to `potential_payout - stake`; when loss, set `profit` to `-stake`. This ensures the merged view has correct payout values.
-
-9. **In the plays list rendering**, detect parlay items and show a "Parlay" badge. When clicking W/L on a parlay in the plays list, call `updateParlayResult` instead of `updatePlayResult`.
+5. **Collect all analyzed picks before filtering** — Currently, picks below threshold are silently discarded. Instead, collect ALL analyzed picks into a separate array, then filter. If the filtered set is empty, use the best from the unfiltered set.
 
 ### Technical Details
 
-```typescript
-// Merged plays array
-const allPlays = useMemo(() => {
-  const parlayAsPlays: Play[] = parlays.map(p => ({
-    id: p.id,
-    sport: (p.legs?.[0]?.sport || "parlay").toLowerCase(),
-    player_or_fighter: `Parlay (${p.legs?.length || 0} legs)`,
-    bet_type: "Parlay",
-    line: null,
-    odds: p.parlay_odds,
-    stake: p.stake,
-    result: p.result,
-    payout: p.result === "win" ? p.potential_payout - p.stake 
-          : p.result === "loss" ? -p.stake : 0,
-    notes: null,
-    created_at: p.created_at,
-  }));
-  return [...plays, ...parlayAsPlays];
-}, [plays, parlays]);
+```text
+Current flow:
+  Model returns 51% → discarded (threshold 70%) → 0 picks → empty carousel
+
+New flow:
+  Model returns 51% → collected in allAnalyzed[]
+  After all phases → filter allAnalyzed >= 60% → if empty, take top 10 by confidence
+  Real odds missing → allow pick with odds "N/A"
+  → Always generate some picks
 ```
 
 ### Files Modified
 
 | File | Change |
 |------|--------|
-| `src/pages/ProfitTrackerPage.tsx` | Merge parlays into allPlays, update stats/charts/calendar/filters/export, fix parlay result payout |
+| `supabase/functions/daily-picks/index.ts` | Lower thresholds, best-available fallback, relax odds requirement, add logging |
 
