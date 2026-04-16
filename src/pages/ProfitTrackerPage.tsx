@@ -150,6 +150,7 @@ const ProfitTrackerPage = () => {
   /* ── Play CRUD ── */
   const addPlay = async () => {
     if (!form.player_or_fighter || !form.bet_type || !form.stake || !user) return;
+    const isPlayerProp = !["moneyline", "spread", "run line", "puck line"].some(t => form.bet_type.toLowerCase().includes(t));
     let odds: number;
     if (oddsFormat === "decimal") {
       const dec = parseFloat(form.odds) || 1.91;
