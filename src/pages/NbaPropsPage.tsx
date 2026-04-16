@@ -1955,8 +1955,7 @@ const NbaPropsPage = () => {
                   <HitRateRing rate={results.season_hit_rate?.rate || 0} hits={results.season_hit_rate?.hits || 0} total={results.season_hit_rate?.total || 0} label="Season" delay={0} />
                   <HitRateRing rate={results.last_10?.rate || 0} hits={results.last_10?.hits || 0} total={results.last_10?.total || 0} label="L10" delay={0.1} />
                   <HitRateRing rate={results.last_5?.rate || 0} hits={results.last_5?.hits || 0} total={results.last_5?.total || 0} label="L5" delay={0.2} />
-                  <HitRateRing rate={results.home_away?.rate || 0} hits={results.home_away?.hits || 0} total={results.home_away?.total || 0} label={results.home_away?.location?.toUpperCase() || "HOME"} delay={0.3} />
-                  <HitRateRing rate={h2h.rate || 0} hits={h2h.hits || 0} total={h2h.total || 0} label={`vs ${h2h.opponent || results.next_game?.opponent_name || "OPP"}`} delay={0.4} />
+                  <HitRateRing rate={h2h.rate || 0} hits={h2h.hits || 0} total={h2h.total || 0} label={`vs ${h2h.opponent || results.next_game?.opponent_name || "OPP"}`} delay={0.3} />
                 </div>
               </Section>
 

@@ -370,7 +370,7 @@ const FreePropsPage = () => {
                     <HitRateRing rate={results.season_hit_rate?.rate || 0} hits={results.season_hit_rate?.hits || 0} total={results.season_hit_rate?.total || 0} label="Season" delay={0} />
                     <HitRateRing rate={results.last_10?.rate || 0} hits={results.last_10?.hits || 0} total={results.last_10?.total || 0} label="L10" delay={0.1} />
                     <HitRateRing rate={results.last_5?.rate || 0} hits={results.last_5?.hits || 0} total={results.last_5?.total || 0} label="L5" delay={0.2} />
-                    <HitRateRing rate={h2h.rate || 0} hits={h2h.hits || 0} total={h2h.total || 0} label="H2H" delay={0.3} />
+                    <HitRateRing rate={h2h.rate || 0} hits={h2h.hits || 0} total={h2h.total || 0} label={`vs ${h2h.opponent || prop.opponent || "OPP"}`} delay={0.3} />
                   </div>
                 </Section>
 
