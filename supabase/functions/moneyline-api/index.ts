@@ -123,10 +123,43 @@ async function getTeamsList(sport = "nba") {
   return teams;
 }
 
+function getSeasonForSport(sport: string, date = new Date()) {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+
+  if (sport === "mlb") return year;
+  if (sport === "nba" || sport === "nhl" || sport === "ncaab") {
+    return month >= 9 ? year + 1 : year;
+  }
+
+  return year;
+}
+
 async function getTeamSchedule(teamId: string, sport = "nba") {
   const base = getEspnBase(sport);
-  const data = await fetchJSON(`${base}/teams/${teamId}/schedule`);
-  return data.events || [];
+  const season = getSeasonForSport(sport);
+  const previousSeason = season - 1;
+  const urls = [
+    `${base}/teams/${teamId}/schedule?season=${season}&seasontype=2`,
+    `${base}/teams/${teamId}/schedule?season=${season}`,
+    `${base}/teams/${teamId}/schedule?season=${previousSeason}&seasontype=2`,
+    `${base}/teams/${teamId}/schedule?season=${previousSeason}`,
+    `${base}/teams/${teamId}/schedule`,
+  ];
+
+  let bestEvents: any[] = [];
+  for (const url of urls) {
+    try {
+      const data = await fetchJSON(url);
+      const events = data.events || [];
+      if (events.length > bestEvents.length) bestEvents = events;
+      if (events.length > 10) return events;
+    } catch {
+      // try next fallback URL
+    }
+  }
+
+  return bestEvents;
 }
 
 async function getTeamStats(teamId: string, sport = "nba") {
@@ -184,18 +217,28 @@ async function getTeamInjuries(teamId: string, sport = "nba") {
   }
 }
 
+function getCompetitorId(competitor: any) {
+  return String(competitor?.team?.id || competitor?.id || "");
+}
+
+function isFinalCompetition(comp: any) {
+  return comp?.status?.type?.completed === true || comp?.status?.type?.name === "STATUS_FINAL";
+}
+
 // ── Home/Away splits from schedule ──
 function computeHomeAwaySplits(events: any[], teamId: string) {
+  const teamIdStr = String(teamId);
   let homeW = 0, homeL = 0, awayW = 0, awayL = 0;
   let homePF = 0, homePA = 0, awayPF = 0, awayPA = 0;
 
   for (const ev of events) {
     const comp = ev.competitions?.[0];
-    const isFinal = comp?.status?.type?.completed === true || comp?.status?.type?.name === "STATUS_FINAL";
+    const isFinal = isFinalCompetition(comp);
     if (!comp || !isFinal) continue;
+
     const competitors = comp.competitors || [];
-    const team = competitors.find((c: any) => c.team?.id === teamId);
-    const opp = competitors.find((c: any) => c.team?.id !== teamId);
+    const team = competitors.find((c: any) => getCompetitorId(c) === teamIdStr);
+    const opp = competitors.find((c: any) => getCompetitorId(c) && getCompetitorId(c) !== teamIdStr);
     if (!team || !opp) continue;
 
     const teamScore = parseInt(team.score?.value ?? team.score) || 0;
@@ -269,20 +312,18 @@ function detectBackToBack(events: any[], teamId: string) {
 
 // ── Pace of play ──
 function computePace(stats: Record<string, number>, events: any[], teamId: string) {
+  const teamIdStr = String(teamId);
   const pace = stats.pace || stats.possessions || 0;
-  
+
   const completed = events
-    .filter(ev => {
-      const t = ev.competitions?.[0]?.status?.type;
-      return t?.completed === true || t?.name === "STATUS_FINAL";
-    })
+    .filter(ev => isFinalCompetition(ev.competitions?.[0]))
     .slice(-10);
 
   let totalPF = 0, totalPA = 0, gameCount = 0;
   for (const ev of completed) {
     const comp = ev.competitions?.[0];
-    const team = comp?.competitors?.find((c: any) => c.team?.id === teamId);
-    const opp = comp?.competitors?.find((c: any) => c.team?.id !== teamId);
+    const team = comp?.competitors?.find((c: any) => getCompetitorId(c) === teamIdStr);
+    const opp = comp?.competitors?.find((c: any) => getCompetitorId(c) && getCompetitorId(c) !== teamIdStr);
     if (!team || !opp) continue;
     const ts = parseInt(team.score?.value ?? team.score) || 0;
     const os = parseInt(opp.score?.value ?? opp.score) || 0;
@@ -313,9 +354,8 @@ async function getHeadToHead(team1Id: string, team2Id: string, sport = "nba") {
     if (h2h.length === 0) {
       try {
         const base = getEspnBase(sport);
-        const currentYear = new Date().getFullYear();
-        const prevSeason = currentYear - 1;
-        const prevData = await fetchJSON(`${base}/teams/${team1Id}/schedule?season=${prevSeason}`);
+        const prevSeason = getSeasonForSport(sport) - 1;
+        const prevData = await fetchJSON(`${base}/teams/${team1Id}/schedule?season=${prevSeason}&seasontype=2`);
         const prevEvents = prevData.events || [];
         const prevH2H = extractH2HFromEvents(prevEvents, team1Id, team2Id, sport);
         return prevH2H;
@@ -330,18 +370,23 @@ async function getHeadToHead(team1Id: string, team2Id: string, sport = "nba") {
 }
 
 function extractH2HFromEvents(events: any[], team1Id: string, team2Id: string, sport: string) {
+  const team1IdStr = String(team1Id);
+  const team2IdStr = String(team2Id);
   const h2h: any[] = [];
+
   for (const ev of events) {
     const comps = ev.competitions?.[0];
     if (!comps) continue;
+
     const teams = comps.competitors || [];
-    const isMatchup = teams.some((t: any) => t.team?.id === team2Id);
+    const isMatchup = teams.some((t: any) => getCompetitorId(t) === team2IdStr);
     if (!isMatchup) continue;
-    const isFinalH2H = comps.status?.type?.completed === true || comps.status?.type?.name === "STATUS_FINAL";
+
+    const isFinalH2H = isFinalCompetition(comps);
     if (!isFinalH2H) continue;
 
-    const t1 = teams.find((t: any) => t.team?.id === team1Id);
-    const t2 = teams.find((t: any) => t.team?.id === team2Id);
+    const t1 = teams.find((t: any) => getCompetitorId(t) === team1IdStr);
+    const t2 = teams.find((t: any) => getCompetitorId(t) === team2IdStr);
     if (!t1 || !t2) continue;
 
     const t1Score = parseInt(t1.score?.value ?? t1.score) || 0;
@@ -352,6 +397,7 @@ function extractH2HFromEvents(events: any[], team1Id: string, team2Id: string, s
     if (t1Score === 0 && t2Score === 0) {
       try {
         const base = getEspnBase(sport);
+        void base;
         // Synchronous fallback not possible here, skip detail fetch for extracted helper
       } catch {}
     }
@@ -366,6 +412,7 @@ function extractH2HFromEvents(events: any[], team1Id: string, team2Id: string, s
       venue: comps.venue?.fullName || "",
     });
   }
+
   return h2h;
 }
 
