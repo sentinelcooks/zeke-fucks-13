@@ -602,6 +602,12 @@ const ProfitTrackerPage = () => {
                             style={{ background: 'hsla(228, 20%, 15%, 0.5)', border: '1px solid hsla(228, 20%, 22%, 0.3)' }}>
                             {p.sport.toUpperCase()}
                           </span>
+                          {(p as any)._isParlay && (
+                            <span className="text-[9px] font-bold uppercase tracking-[0.15em] px-1.5 py-0.5 rounded-md text-accent"
+                              style={{ background: 'hsla(250, 76%, 62%, 0.12)', border: '1px solid hsla(250, 76%, 62%, 0.25)' }}>
+                              PARLAY
+                            </span>
+                          )}
                           <span className="text-[9px] text-muted-foreground/55">{new Date(p.created_at).toLocaleDateString()}</span>
                         </div>
                         <p className="text-[13px] font-bold text-foreground truncate">{p.player_or_fighter}</p>
@@ -610,13 +616,15 @@ const ProfitTrackerPage = () => {
                       <div className="flex items-center gap-2 ml-3">
                         {p.result === "pending" ? (
                           <div className="flex gap-1">
-                            <motion.button whileTap={{ scale: 0.9 }} onClick={() => updatePlayResult(p.id, "win")}
+                            <motion.button whileTap={{ scale: 0.9 }} onClick={() => (p as any)._isParlay ? updateParlayResult(p.id, "win") : updatePlayResult(p.id, "win")}
                               className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white" style={{ background: 'hsl(145 60% 45%)' }}>W</motion.button>
-                            <motion.button whileTap={{ scale: 0.9 }} onClick={() => updatePlayResult(p.id, "loss")}
+                            <motion.button whileTap={{ scale: 0.9 }} onClick={() => (p as any)._isParlay ? updateParlayResult(p.id, "loss") : updatePlayResult(p.id, "loss")}
                               className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white" style={{ background: 'hsl(0 72% 51%)' }}>L</motion.button>
-                            <motion.button whileTap={{ scale: 0.9 }} onClick={() => updatePlayResult(p.id, "push")}
-                              className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-muted-foreground"
-                              style={{ background: 'hsla(228, 20%, 15%, 0.5)', border: '1px solid hsla(228, 20%, 22%, 0.3)' }}>P</motion.button>
+                            {!(p as any)._isParlay && (
+                              <motion.button whileTap={{ scale: 0.9 }} onClick={() => updatePlayResult(p.id, "push")}
+                                className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-muted-foreground"
+                                style={{ background: 'hsla(228, 20%, 15%, 0.5)', border: '1px solid hsla(228, 20%, 22%, 0.3)' }}>P</motion.button>
+                            )}
                           </div>
                         ) : (
                           <div className="text-right">
@@ -628,7 +636,7 @@ const ProfitTrackerPage = () => {
                             </span>
                           </div>
                         )}
-                        <motion.button whileTap={{ scale: 0.9 }} onClick={() => deletePlay(p.id)}
+                        <motion.button whileTap={{ scale: 0.9 }} onClick={() => (p as any)._isParlay ? removeParlay(p.id) : deletePlay(p.id)}
                           className="p-1.5 rounded-lg text-muted-foreground/45 hover:text-nba-red transition-colors">
                           <Trash2 className="w-3.5 h-3.5" />
                         </motion.button>
