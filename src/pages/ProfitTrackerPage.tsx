@@ -108,7 +108,7 @@ const ProfitTrackerPage = () => {
   const [showForm, setShowForm] = useState(false);
   const [showParlayForm, setShowParlayForm] = useState(false);
   const defaultOdds = oddsFormat === "decimal" ? "1.91" : "-110";
-  const [form, setForm] = useState({ sport: "nba", player_or_fighter: "", bet_type: "", line: "", odds: defaultOdds, stake: "" });
+  const [form, setForm] = useState({ sport: "nba", player_or_fighter: "", bet_type: "", line: "", odds: defaultOdds, stake: "", direction: "over" as "over" | "under" });
   const [playsResultFilter, setPlaysResultFilter] = useState<ResultFilter>("all");
   const [playsSportFilter, setPlaysSportFilter] = useState<SportFilter>("all");
   const [playsDateFilter, setPlaysDateFilter] = useState<string>("all");
@@ -150,6 +150,7 @@ const ProfitTrackerPage = () => {
   /* ── Play CRUD ── */
   const addPlay = async () => {
     if (!form.player_or_fighter || !form.bet_type || !form.stake || !user) return;
+    const isPlayerProp = !["moneyline", "spread", "run line", "puck line"].some(t => form.bet_type.toLowerCase().includes(t));
     let odds: number;
     if (oddsFormat === "decimal") {
       const dec = parseFloat(form.odds) || 1.91;
@@ -160,10 +161,11 @@ const ProfitTrackerPage = () => {
     const stake = parseFloat(form.stake) || 0;
     await supabase.from("plays").insert({
       user_id: user.id, license_key: user.id, sport: form.sport,
-      player_or_fighter: form.player_or_fighter, bet_type: form.bet_type,
+      player_or_fighter: form.player_or_fighter,
+      bet_type: isPlayerProp ? `${form.bet_type} (${form.direction.toUpperCase()})` : form.bet_type,
       line: form.line ? parseFloat(form.line) : null, odds, stake, result: "pending", payout: 0,
     });
-    setForm({ sport: "nba", player_or_fighter: "", bet_type: "", line: "", odds: defaultOdds, stake: "" });
+    setForm({ sport: "nba", player_or_fighter: "", bet_type: "", line: "", odds: defaultOdds, stake: "", direction: "over" });
     setShowForm(false); fetchPlays();
   };
 
@@ -467,7 +469,24 @@ const ProfitTrackerPage = () => {
                         <PlayerAutocomplete sport={form.sport} value={form.player_or_fighter} onChange={(v) => setForm({ ...form, player_or_fighter: v })} betType={form.bet_type} />
                         <BetTypeDropdown sport={form.sport} value={form.bet_type} onChange={(v) => setForm({ ...form, bet_type: v, player_or_fighter: "" })} />
                         {!["moneyline", "spread", "run line", "puck line"].some(t => form.bet_type.toLowerCase().includes(t)) && (
-                          <VisionInput label="Line" placeholder={getLinePlaceholder(form.sport)} type="number" step="0.5" value={form.line} onChange={(e) => setForm({ ...form, line: e.target.value })} />
+                          <>
+                            <VisionInput label="Line" placeholder={getLinePlaceholder(form.sport)} type="number" step="0.5" value={form.line} onChange={(e) => setForm({ ...form, line: e.target.value })} />
+                            <div>
+                              <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Direction</label>
+                              <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+                                <button type="button" onClick={() => setForm({ ...form, direction: "over" })}
+                                  className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "over" ? "text-emerald-400" : "text-muted-foreground/50 hover:text-foreground/70"}`}
+                                  style={{ background: form.direction === "over" ? 'hsla(160, 84%, 39%, 0.12)' : 'hsla(228, 20%, 10%, 0.6)' }}>
+                                  OVER
+                                </button>
+                                <button type="button" onClick={() => setForm({ ...form, direction: "under" })}
+                                  className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "under" ? "text-red-400" : "text-muted-foreground/50 hover:text-foreground/70"}`}
+                                  style={{ background: form.direction === "under" ? 'hsla(0, 84%, 60%, 0.12)' : 'hsla(228, 20%, 10%, 0.6)' }}>
+                                  UNDER
+                                </button>
+                              </div>
+                            </div>
+                          </>
                         )}
                         <VisionInput label={`Odds (${oddsFormat === "decimal" ? "Decimal" : "American"})`} type="number" value={form.odds}
                           onChange={(e) => setForm({ ...form, odds: e.target.value })}
