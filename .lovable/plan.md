@@ -1,51 +1,90 @@
 
 
-## Plan: Fix Daily Picks to Generate More & Higher-Confidence Picks
+## Plan: Backend Refactor — Prediction/Decision Split + Snapshot Logging + Quality Flags
 
-### Root Cause
+### Scope
+Backend only. Modify `supabase/functions/nba-api/index.ts`, create 2 new tables, create 1 new edge function. No frontend changes.
 
-The daily-picks function produces too few picks because:
+### 1. Database Migrations
 
-1. **Game-level bets are moneyline-only for NHL/MLB** (line 227: `game.sport === "nba" ? ["moneyline", "spread", "total"] : ["moneyline"]`). This misses spread and total bets for NHL/MLB which could yield higher confidence.
+**Migration A — `prediction_snapshots`**
+- Schema as specified, with RLS policy `auth.uid() = user_id`
+- Service role bypass policy (for edge function inserts when user_id is null/server-side)
+- Indexes: `(sport, market_type)`, `(created_at)`, `(user_id)`, `(verdict)`
 
-2. **Player prop scanning is entirely AI-dependent** — the lineup scanner asks an LLM to guess which 2-3 players have good props. It often misses obvious plays (like Marchessault under 2.5 shots) because it lacks actual statistical data.
+**Migration B — `outcomes`**
+- Schema as specified with FK to `prediction_snapshots`
+- RLS: user-scoped + service role
+- Indexes: `(sport)`, `(user_id)`, `(actual_result)`
 
-3. **Only 12 props analyzed max** per phase (line 627), and each requires a full round-trip to `nba-api/analyze`. Many return null or sub-threshold.
+Note: `auth.users` FK is allowed per spec but user_id will be nullable since edge functions may insert without an authenticated user context (analyzer can run server-side).
 
-4. **120-second timeout** cuts off analysis before enough games are scanned.
+### 2. `nba-api/index.ts` Refactor
 
-### Changes
+Add three new types and helpers near the top:
+- `PredictionOutput`, `DecisionOutput`, `DataQualityReport` interfaces
+- `validateDataQuality(playerData, injuryData, gameData)` → applies penalty to raw confidence
+- `buildDecisionOutput(prediction, americanOdds, stake=100)` → computes implied prob (vig-removed via 2-way), EV, EV%, verdict, unit size
+- `applyJuicePenalty(confidence, americanOdds)` → display-only adjustment inside decision layer
+- `detectMlbPropCategory(propType)` + `MLB_PROP_WEIGHTS` table
+- `logSnapshot(supabase, payload)` → fire-and-forget insert into `prediction_snapshots`
 
-**File: `supabase/functions/daily-picks/index.ts`**
+**Verdict thresholds** (decision layer):
+- `STRONG`: confidence ≥ 70 AND evPercent ≥ 5
+- `LEAN`: confidence ≥ 60 AND evPercent ≥ 2
+- `SLIGHT`: confidence ≥ 55 AND evPercent > 0
+- `PASS`: otherwise
 
-1. **Enable spread and total bets for NHL and MLB** — Change line 227 from `game.sport === "nba" ? [...] : ["moneyline"]` to include all three bet types for all sports. The mlb-model and nhl-model already support these bet types.
+**Unit sizing**:
+- 2u: STRONG + evPercent ≥ 8
+- 1.5u: STRONG or (LEAN + evPercent ≥ 5)
+- 1u: LEAN/SLIGHT
+- 0u: PASS
 
-2. **Increase prop analysis cap** — Raise the 12-prop limit (lines 627, 721) to 20 per phase so more players get analyzed.
+**Variance** derived from factor agreement: stddev of factor scores → low (<10), medium (10-20), high (>20).
 
-3. **Scan more games for lineups** — Increase from top 8 to top 12 games for prop scanning (line 608), matching the game-level bet count.
+**Consensus floor removal**: search `calculateConfidence` and `calculateMlbPropConfidence` for any `Math.max(confidence, 80)` style floors and remove. Keep only natural [0,100] clamp.
 
-4. **Request more AI suggestions per game** — Change the AI prompt from "2-3 players" to "4-5 players" (line 398) to increase the pool of prop candidates.
+**MLB prop-type weights**: in `calculateMlbPropConfidence`, call `detectMlbPropCategory(propType)` and select the matching weight set from `MLB_PROP_WEIGHTS`. Existing factor calculations stay; only the weight multipliers swap.
 
-5. **Extend timeout** — Increase from 120s to 140s (line 555) to allow more analysis time before the edge function's 150s hard limit.
+**Snapshot logging**: at the end of `/analyze` POST handler in nba-api, after building the response, call `logSnapshot(...)` without `await` (fire-and-forget). Same hook added at end of analysis paths in `mlb-model`, `nhl-model`, `ufc-api`, `moneyline-api` — minimal touch, just the logSnapshot call + DataQuality penalty + decision-layer build.
 
-6. **Reduce throttle delays** — Lower inter-game delays from 1500ms to 1000ms and inter-prop delays from 1500ms to 1000ms to fit more analysis within the timeout.
+**Reasoning warnings**: prepend quality flags to the reasoning string when present (lineup unconfirmed, small sample, stale injury, no historical data, juice penalty).
 
-### Technical Details
+### 3. New Edge Function — `log-outcome`
 
-```text
-Current: 
-  NHL/MLB → moneyline only → 1 bet type → low chance of hitting 60%
-  Prop scan → 8 games → AI picks 2-3 per game → 12 max analyzed
+`supabase/functions/log-outcome/index.ts`:
+- POST `{ snapshot_id, actual_result, actual_value, profit_loss }`
+- Zod validation
+- Insert into `outcomes`
+- Update `prediction_snapshots` SET `actual_outcome=actual_result`, `outcome_logged_at=now()` WHERE id=snapshot_id
+- Compute and return stats:
+  - `overall_hit_rate` (HIT / (HIT+MISS), excluding PUSH)
+  - `by_sport: { nba, mlb, nhl, ufc }`
+  - `by_confidence_bucket: { "50-60", "60-70", "70-80", "80+" }` (joins outcomes → snapshots)
+- CORS headers, no JWT verify (matches existing pattern)
 
-Fixed:
-  NHL/MLB → moneyline + spread + total → 3x more chances to hit 60%+
-  Prop scan → 12 games → AI picks 4-5 per game → 20 max analyzed
-  Faster throttle → more fits in 140s window
-```
+### 4. Touch List
 
-### Files Modified
-
-| File | Change |
+| File | Action |
 |------|--------|
-| `supabase/functions/daily-picks/index.ts` | Enable all bet types for all sports, increase prop/game scan limits, faster throttling, extended timeout |
+| `supabase/migrations/<ts>_prediction_snapshots.sql` | Create |
+| `supabase/migrations/<ts>_outcomes.sql` | Create |
+| `supabase/functions/nba-api/index.ts` | Refactor: add types, validateDataQuality, buildDecisionOutput, applyJuicePenalty, MLB_PROP_WEIGHTS, snapshot logging, remove consensus floors |
+| `supabase/functions/mlb-model/index.ts` | Add buildDecisionOutput + snapshot log + remove floors |
+| `supabase/functions/nhl-model/index.ts` | Add buildDecisionOutput + snapshot log + remove floors |
+| `supabase/functions/ufc-api/index.ts` | Add buildDecisionOutput + snapshot log + remove 22-78% clamp |
+| `supabase/functions/moneyline-api/index.ts` | Add buildDecisionOutput + snapshot log + remove floors |
+| `supabase/functions/log-outcome/index.ts` | Create new function |
+
+### 5. Backwards Compatibility
+
+The existing response shape from `/analyze` is preserved. New fields `prediction`, `decision`, `dataQuality`, `flags` are **added** alongside existing `confidence`, `verdict`, `reasoning`, `factorBreakdown`. Frontend continues reading current fields; can opt into new fields later. No breaking changes.
+
+### 6. Out of Scope (Per User Constraints)
+
+- Calibration layer (isotonic/Platt) — needs historical data first
+- ML training pipeline — defer until snapshots accumulate
+- Frontend display of new fields — explicitly excluded
+- Closing line tracking — separate cron, not in this scope
 
