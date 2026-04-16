@@ -1,52 +1,55 @@
 
 
-## Plan: Reset O/U Total Line (and Spread inputs) on Sport Switch
+## Plan: Fix B2B Status Display + Add Explainer Popup
 
-### Root cause (`src/components/MoneyLineSection.tsx`, lines 1258-1262)
+### Current state
+- **Backend** (`moneyline-api/index.ts` line 282): `detectBackToBack` returns `{ isB2B, lastGameDate, nextGameDate }`. No starter-minutes data.
+- **Frontend** (`MoneyLineSection.tsx` lines 1825-1842): Shows a Moon "B2B" badge if `isB2B`, else a green ✓. Per the user's screenshot, both Hornets and Magic show ✅ — meaning neither is on a B2B, but the visual reads ambiguously and there's no explainer.
 
-The sport-change effect only clears teams/results:
+### User-requested semantics (the inversion)
+- ✅ checkmark = team **IS** on a back-to-back
+- ❌ X = team **IS NOT** on a back-to-back
+- Tap either icon → popup with team-specific explanation, including dynamic risk level (low/medium/high) when starter-minutes data is available, else default to "medium."
+
+### Changes
+
+**1. Backend — `supabase/functions/moneyline-api/index.ts`** (`detectBackToBack`, ~line 282)
+
+Extend the return object with a `b2bRisk` field. Compute it from previous-game starter minutes when available:
+- Find the team's most recent completed game (the day-before game when `isB2B`).
+- Pull the boxscore via ESPN's `/summary?event={id}` endpoint (already used elsewhere for splits).
+- Count starters with >35 min played: `>=3 → "high"`, `1-2 → "medium"`, `0 → "low"`.
+- If boxscore fetch fails or sport doesn't track minutes the same way (MLB/NHL), default to `"medium"` when `isB2B === true`, `null` when not on B2B.
+- Wrap in try/catch — must not break the analyze response if ESPN summary 404s.
+
+Return shape:
 ```ts
-useEffect(() => {
-  setTeamsLoading(true);
-  setTeams([]); setTeam1(""); setTeam2(""); setResults(null); setError("");
-  callMoneylineApi("teams", { sport }).then(setTeams)...
-}, [sport]);
+{ isB2B: boolean, lastGameDate: string|null, nextGameDate?: string, b2bRisk: "low"|"medium"|"high"|null }
 ```
 
-It does **not** clear `totalLine`, `spreadLine`, or `spreadTeam`. So a user who enters `215.5` for an NBA total, then switches to MLB, sees the input still holding `215.5` (only the placeholder changes from "215.5" to "8.5"). When they hit Analyze, the stale NBA-scale number gets POSTed to `moneyline-api` as the MLB total line — producing a wrong/invalid analysis.
+This applies automatically across NBA, MLB, NHL, NFL, NCAAB since `detectBackToBack` is sport-agnostic and called for all sports in the analyze flow (lines 1026-1027).
 
-The same stale-state bug applies to `spreadLine` (NBA spreads ~7.5 vs MLB run lines ~1.5 vs NHL puck lines ~1.5) and `spreadTeam` (which references an abbreviation that no longer exists in the new sport's team list).
+**2. Frontend — `src/components/MoneyLineSection.tsx`**
 
-### Fix (single, scoped frontend change)
+a. **Invert the icon semantics** (lines 1832-1838):
+   - `isB2B === true` → green ✅ checkmark (`Check` from lucide-react)
+   - `isB2B === false` → red ❌ X (`X` from lucide-react, already imported)
 
-In `src/components/MoneyLineSection.tsx`, extend the existing `useEffect` on `[sport]` (line 1258) to also reset the line inputs:
+b. **Wrap each row in a `<button>`** mirroring the Pace card pattern (lines 1847-1869). Add new state `b2bInfo` of type `{ team, b2b } | null`.
 
-```ts
-useEffect(() => {
-  setTeamsLoading(true);
-  setTeams([]); setTeam1(""); setTeam2(""); setResults(null); setError("");
-  setTotalLine(""); setSpreadLine(""); setSpreadTeam("");
-  setOverUnder("over");
-  callMoneylineApi("teams", { sport }).then(setTeams).catch(() => {}).finally(() => setTeamsLoading(false));
-}, [sport]);
-```
+c. **Add an explainer modal** at the bottom of the section, alongside the existing Pace modal. Reuse the same `framer-motion` AnimatePresence + Vision UI styling already used by the Pace popup. Content:
+   - **Not B2B:** *"{Team} is not playing on a back-to-back. No fatigue risk from travel or short rest — this is a neutral factor for this matchup."*
+   - **On B2B:** *"{Team} is playing on a back-to-back. They played a game yesterday and are on short rest today. Back-to-back games can impact performance — fatigue, reduced minutes for star players, and lower energy late in games are common. This adds {risk} risk to the play depending on how many key players logged heavy minutes last night."* — where `{risk}` comes from `b2b.b2bRisk` or defaults to `"medium"`.
+   - Dismiss on backdrop click + X button (same pattern as Pace modal).
 
-This guarantees that switching NBA → MLB → NHL → NFL → NCAAB starts each sport with empty line fields, so the placeholder (already sport-aware: `8.5` for MLB, `5.5` for NHL, `44.5` for NFL, `140.5` for NCAAB, `215.5` default NBA) is what the user sees and types over fresh.
-
-`betType` is intentionally preserved — if a user was on the Total tab in NBA and switches to MLB, they should stay on the Total tab; only the *value* needs to clear, not the tab choice.
-
-### Verification
-
-This is a frontend-only state fix — no backend, DB schema, or edge function changes. Verification is a UI smoke test:
-
-1. Open `/dashboard/analyze` → Moneyline → Lines.
-2. Sport = NBA, BetType = Total, type `215.5` in the total line field.
-3. Switch sport to MLB → confirm the total line field is **empty** and shows placeholder `8.5`.
-4. Switch to NHL → confirm field empty, placeholder `5.5`.
-5. Repeat for Spread tab: enter `7.5` on NBA, switch to MLB → spread field empty, placeholder reflects MLB run line.
+### Verification (mandatory before complete)
+1. Deploy `moneyline-api`.
+2. `supabase--curl_edge_functions` POST `/moneyline-api/analyze` for an NBA matchup where one team played yesterday → grep response for `back_to_back.team1.b2bRisk` and confirm field present with value `"low"|"medium"|"high"|null`. Paste the slice.
+3. Repeat for MLB and NHL matchups → confirm field present (likely `"medium"` default or `null`).
+4. UI smoke: load Analyze → Moneyline → Lines → run a matchup → tap each B2B row → confirm popup opens with correct text and dismisses on X / backdrop.
 
 ### Out of scope
-- Backend `moneyline-api` (no changes — already accepts sport-correct values).
-- Other tabs (Props, Slip, Games).
-- Other sports' models.
+- No DB/schema changes.
+- No changes to other tabs (Props, Slip, Games).
+- No changes to the B2B factor weight/scoring inside `runModel` — only the display + risk metadata.
 
