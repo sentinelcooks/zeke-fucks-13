@@ -804,17 +804,21 @@ Deno.serve(async (req) => {
             }
           }
 
-          // For totals: use pitcher-adjusted projection
-          if (bet_type === "total" && homePitcher.era && awayPitcher.era) {
-            const avgERA = (homePitcher.era + awayPitcher.era) / 2;
-            const baseRuns = 9.0; // ~4.5 per team
-            const projectedRuns = baseRuns * (avgERA / 4.20) * parkFactor;
-            const tempAdj = temp > 75 ? 1.03 : temp < 55 ? 0.97 : 1.0;
-            const windAdj = windDir?.toLowerCase().includes("out") ? 1 + windSpeed * 0.008 : windDir?.toLowerCase().includes("in") ? 1 - windSpeed * 0.005 : 1.0;
-            const adjustedProjection = projectedRuns * tempAdj * windAdj;
-            console.log(`⚾ Pitcher-adjusted total projection: ${adjustedProjection.toFixed(1)} runs (ERA avg ${avgERA.toFixed(2)}, PF ${parkFactor})`);
-          }
         }
+      }
+
+      // Compute predicted total for O/U (order-independent: uses symmetric inputs only)
+      let predicted_total: number | null = null;
+      if (bet_type === "total") {
+        const eraH = homePitcher.era || 4.50;
+        const eraA = awayPitcher.era || 4.50;
+        const avgERA = (eraH + eraA) / 2;
+        const baseRuns = 9.0;
+        const projectedRuns = baseRuns * (avgERA / 4.20) * parkFactor;
+        const tempAdj = temp > 75 ? 1.03 : temp < 55 ? 0.97 : 1.0;
+        const windAdj = windDir?.toLowerCase().includes("out") ? 1 + windSpeed * 0.008 : windDir?.toLowerCase().includes("in") ? 1 - windSpeed * 0.005 : 1.0;
+        predicted_total = Math.round(projectedRuns * tempAdj * windAdj * 10) / 10;
+        console.log(`⚾ Pitcher-adjusted total projection: ${predicted_total} runs (ERA avg ${avgERA.toFixed(2)}, PF ${parkFactor})`);
       }
       
       // Apply injury adjustments
