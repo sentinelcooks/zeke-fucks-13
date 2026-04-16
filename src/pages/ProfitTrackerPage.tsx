@@ -469,7 +469,24 @@ const ProfitTrackerPage = () => {
                         <PlayerAutocomplete sport={form.sport} value={form.player_or_fighter} onChange={(v) => setForm({ ...form, player_or_fighter: v })} betType={form.bet_type} />
                         <BetTypeDropdown sport={form.sport} value={form.bet_type} onChange={(v) => setForm({ ...form, bet_type: v, player_or_fighter: "" })} />
                         {!["moneyline", "spread", "run line", "puck line"].some(t => form.bet_type.toLowerCase().includes(t)) && (
-                          <VisionInput label="Line" placeholder={getLinePlaceholder(form.sport)} type="number" step="0.5" value={form.line} onChange={(e) => setForm({ ...form, line: e.target.value })} />
+                          <>
+                            <VisionInput label="Line" placeholder={getLinePlaceholder(form.sport)} type="number" step="0.5" value={form.line} onChange={(e) => setForm({ ...form, line: e.target.value })} />
+                            <div>
+                              <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Direction</label>
+                              <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+                                <button type="button" onClick={() => setForm({ ...form, direction: "over" })}
+                                  className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "over" ? "text-emerald-400" : "text-muted-foreground/50 hover:text-foreground/70"}`}
+                                  style={{ background: form.direction === "over" ? 'hsla(160, 84%, 39%, 0.12)' : 'hsla(228, 20%, 10%, 0.6)' }}>
+                                  OVER
+                                </button>
+                                <button type="button" onClick={() => setForm({ ...form, direction: "under" })}
+                                  className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "under" ? "text-red-400" : "text-muted-foreground/50 hover:text-foreground/70"}`}
+                                  style={{ background: form.direction === "under" ? 'hsla(0, 84%, 60%, 0.12)' : 'hsla(228, 20%, 10%, 0.6)' }}>
+                                  UNDER
+                                </button>
+                              </div>
+                            </div>
+                          </>
                         )}
                         <VisionInput label={`Odds (${oddsFormat === "decimal" ? "Decimal" : "American"})`} type="number" value={form.odds}
                           onChange={(e) => setForm({ ...form, odds: e.target.value })}
