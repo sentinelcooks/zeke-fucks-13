@@ -1,41 +1,32 @@
 
 
-## Plan: Unify AI Analysis and Overall Verdict to Prevent Contradictions
+## Plan: Fix Stale Moneyline Results When Changing Teams
 
 ### Root Cause
-`generateOverallSummary()` (client-side, lines 104-214) and the AI edge function (`ai-analysis`) compute verdicts independently. The overall summary uses multi-signal scoring + model verdict overrides, while the AI narrative gets raw injury context and often writes optimistically even when the model says "RISKY." They never share their conclusions.
+
+When the user navigates from Games with autoAnalyze (e.g., Grizzlies vs Pelicans), results render. Then when they manually change the team dropdowns to 76ers vs Magic, the **old results stay visible** because results are only cleared on sport change or at the start of `handleAnalyze`. If the subsequent API call errors silently (the catch block on line 1300 sets an error message but only if `results` was already nulled — and it is, but the error message may not be prominent enough), the user sees confusing stale data.
+
+Additionally, there's a potential race condition: the `autoAnalyzeTriggered` ref and `didAutoAnalyze` state could cause the auto-analyze to fire with stale team values if the component doesn't fully remount.
 
 ### Fix
-Compute the overall verdict **first**, then pass it into the AI edge function call so the narrative sections align with the final verdict shown to the user.
 
-**1. `src/components/WrittenAnalysis.tsx`**
+**`src/components/MoneyLineSection.tsx`** — Clear results immediately when either team selection changes:
 
-- Move `generateOverallSummary` call above the `useEffect` (it's already computed at render — just need to pass it)
-- Add `overallRating` to the edge function request body:
-  ```typescript
-  body: {
-    ...existing fields,
-    overallRating: overallSummary.rating,  // "take" | "lean" | "fade"
-    overallSummary: overallSummary.summary,
-  }
-  ```
-- Add `overallSummary.rating` to the `useEffect` dependency array
+Add a `useEffect` that watches `team1` and `team2` and clears `results` and `error`:
 
-**2. `supabase/functions/ai-analysis/index.ts`**
+```typescript
+// Clear stale results whenever teams change
+useEffect(() => {
+  setResults(null);
+  setError("");
+}, [team1, team2]);
+```
 
-- In `getPropPrompt()`, replace the current "CRITICAL" alignment instruction with one that uses `overallRating`:
-  ```
-  CRITICAL: The overall verdict for this pick is "${overallRating}".
-  - If "fade": Do NOT recommend betting. Acknowledge the risks clearly. Your Verdict & Risk MUST say to pass or avoid.
-  - If "lean": Be cautiously optimistic. Mention it's a small-unit play with caveats.
-  - If "take": Be assertive and confident. Recommend the bet clearly.
-  Never contradict the overall rating. The direction is ${overUnder} ${line}.
-  ```
-- This replaces the current logic that tries to align with the raw `verdict` string (which the AI often ignores due to conflicting injury instructions)
-
-### Result
-The "Verdict & Risk" section in the AI narrative will always match the "Overall Verdict" card below it, because both derive from the same `generateOverallSummary` rating.
+This goes after the existing sport-change effect (around line 1259). It ensures:
+1. Old results disappear the moment the user changes either team dropdown
+2. No confusing mismatch between selected teams and displayed results
+3. If the API call fails, the user sees the error — not old data from a different matchup
 
 ### Scope
-- 2 files: `WrittenAnalysis.tsx` (pass rating to API call), `ai-analysis/index.ts` (use rating in prompt)
+- 1 file, ~3 lines added
 
