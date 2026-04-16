@@ -764,6 +764,11 @@ Deno.serve(async (req) => {
     }
 
     // ── Phase 4: Insert all picks ──
+    // If still 0 picks after lowered thresholds, the allPicks array is empty.
+    // Log a clear message so we know it's a data issue, not a code issue.
+    if (allPicks.length === 0) {
+      console.log("⚠️ Zero picks generated even with lowered thresholds (60%/55%). All models returned sub-threshold confidence or no games today.");
+    }
     allPicks.sort((a, b) => b.hit_rate - a.hit_rate);
     const topPicks = allPicks.slice(0, 20);
     console.log(`Total: ${topPicks.length} picks (game-level + props)`);
