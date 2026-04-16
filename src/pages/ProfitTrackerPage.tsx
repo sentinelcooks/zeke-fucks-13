@@ -172,9 +172,11 @@ const ProfitTrackerPage = () => {
   const addParlayPlay = async (legs: any[], stake: number, combinedOdds: number) => {
     if (!user) return;
     const potential = stake * americanToDecimal(combinedOdds);
-    const legData = legs.map((l, i) => ({
+    const legData = legs.map((l: any) => ({
       sport: l.sport.toUpperCase(),
-      pick: `${l.player} - ${l.betType}`,
+      pick: l.line && l.direction
+        ? `${l.player} ${l.direction.toUpperCase()} ${l.line} ${l.betType}`
+        : `${l.player} - ${l.betType}`,
       confidence: 0,
       grade: "lean",
     }));

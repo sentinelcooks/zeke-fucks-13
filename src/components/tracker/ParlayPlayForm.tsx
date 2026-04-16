@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Plus, X, Layers } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { PlayerAutocomplete } from "./PlayerAutocomplete";
+import { PlayerAutocomplete, getLinePlaceholder } from "./PlayerAutocomplete";
 import { BetTypeDropdown } from "./BetTypeDropdown";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { americanToDecimal } from "@/utils/oddsFormat";
@@ -11,6 +11,8 @@ interface ParlayLeg {
   player: string;
   betType: string;
   odds: string;
+  line: string;
+  direction: "over" | "under";
 }
 
 interface ParlayPlayFormProps {
@@ -19,18 +21,8 @@ interface ParlayPlayFormProps {
 }
 
 const TEAM_MARKET_TYPES = [
-  "moneyline",
-  "ml",
-  "money line",
-  "winner",
-  "spread",
-  "run line",
-  "puck line",
-  "rl",
-  "pl",
-  "ats",
-  "handicap",
-  "line",
+  "moneyline", "ml", "money line", "winner",
+  "spread", "run line", "puck line", "rl", "pl", "ats", "handicap", "line",
 ];
 
 function isTeamMarket(betType: string) {
@@ -41,36 +33,25 @@ function isTeamMarket(betType: string) {
 export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
   const { oddsFormat } = useOddsFormat();
   const defaultOdds = oddsFormat === "decimal" ? "1.91" : "-110";
-  const [legs, setLegs] = useState<ParlayLeg[]>([
-    { sport: "nba", player: "", betType: "", odds: defaultOdds },
-    { sport: "nba", player: "", betType: "", odds: defaultOdds },
-  ]);
+  const emptyLeg = (): ParlayLeg => ({ sport: "nba", player: "", betType: "", odds: defaultOdds, line: "", direction: "over" });
+  const [legs, setLegs] = useState<ParlayLeg[]>([emptyLeg(), emptyLeg()]);
   const [stake, setStake] = useState("");
 
   const updateLeg = (idx: number, field: keyof ParlayLeg, val: string) => {
     setLegs((prev) =>
       prev.map((leg, i) => {
         if (i !== idx) return leg;
-
-        if (field === "sport") {
-          return { ...leg, sport: val, player: "", betType: "" };
-        }
-
+        if (field === "sport") return { ...emptyLeg(), sport: val, odds: leg.odds };
         if (field === "betType") {
           const modeChanged = isTeamMarket(leg.betType) !== isTeamMarket(val);
-          return {
-            ...leg,
-            betType: val,
-            player: modeChanged ? "" : leg.player,
-          };
+          return { ...leg, betType: val, player: modeChanged ? "" : leg.player, line: "", direction: "over" };
         }
-
         return { ...leg, [field]: val };
       })
     );
   };
 
-  const addLeg = () => setLegs((prev) => [...prev, { sport: "nba", player: "", betType: "", odds: defaultOdds }]);
+  const addLeg = () => setLegs((prev) => [...prev, emptyLeg()]);
   const removeLeg = (idx: number) => { if (legs.length > 2) setLegs((prev) => prev.filter((_, i) => i !== idx)); };
 
   const combinedDecimal = legs.reduce((acc, leg) => {
@@ -104,41 +85,72 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
       </div>
 
       <AnimatePresence>
-        {legs.map((leg, idx) => (
-          <motion.div key={idx} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
-            className="relative rounded-xl p-3 space-y-2" style={{ background: 'hsla(228, 20%, 10%, 0.4)', border: '1px solid hsla(228, 20%, 20%, 0.2)' }}>
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-accent/70">LEG {idx + 1}</span>
-              {legs.length > 2 && (
-                <button onClick={() => removeLeg(idx)} className="text-muted-foreground/40 hover:text-nba-red transition-colors">
-                  <X className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Sport</label>
-                <select value={leg.sport} onChange={(e) => updateLeg(idx, "sport", e.target.value)}
-                  className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground outline-none appearance-none"
-                  style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
-                  <option value="nba">NBA</option><option value="mlb">MLB</option><option value="nhl">NHL</option>
-                  <option value="ufc">UFC</option><option value="other">Other</option>
-                </select>
+        {legs.map((leg, idx) => {
+          const isProp = leg.betType && !isTeamMarket(leg.betType);
+          return (
+            <motion.div key={idx} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+              className="relative rounded-xl p-3 space-y-2" style={{ background: 'hsla(228, 20%, 10%, 0.4)', border: '1px solid hsla(228, 20%, 20%, 0.2)' }}>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-accent/70">LEG {idx + 1}</span>
+                {legs.length > 2 && (
+                  <button onClick={() => removeLeg(idx)} className="text-muted-foreground/40 hover:text-nba-red transition-colors">
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
               </div>
-              <div>
-                <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">
-                  Odds ({oddsFormat === "decimal" ? "Decimal" : "American"})
-                </label>
-                <input type="number" value={leg.odds} onChange={(e) => updateLeg(idx, "odds", e.target.value)}
-                  className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/55 outline-none"
-                  style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}
-                  step={oddsFormat === "decimal" ? "0.01" : "1"} />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Sport</label>
+                  <select value={leg.sport} onChange={(e) => updateLeg(idx, "sport", e.target.value)}
+                    className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground outline-none appearance-none"
+                    style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+                    <option value="nba">NBA</option><option value="mlb">MLB</option><option value="nhl">NHL</option>
+                    <option value="ufc">UFC</option><option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">
+                    Odds ({oddsFormat === "decimal" ? "Decimal" : "American"})
+                  </label>
+                  <input type="number" value={leg.odds} onChange={(e) => updateLeg(idx, "odds", e.target.value)}
+                    className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/55 outline-none"
+                    style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}
+                    step={oddsFormat === "decimal" ? "0.01" : "1"} />
+                </div>
+                <PlayerAutocomplete sport={leg.sport} value={leg.player} onChange={(v) => updateLeg(idx, "player", v)} betType={leg.betType} />
+                <BetTypeDropdown sport={leg.sport} value={leg.betType} onChange={(v) => updateLeg(idx, "betType", v)} />
+
+                {/* Line + Direction for player props */}
+                {isProp && (
+                  <>
+                    <div>
+                      <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Line</label>
+                      <input type="number" step="0.5" placeholder={getLinePlaceholder(leg.sport)} value={leg.line}
+                        onChange={(e) => updateLeg(idx, "line", e.target.value)}
+                        className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/55 outline-none"
+                        style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }} />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Direction</label>
+                      <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+                        <button type="button" onClick={() => updateLeg(idx, "direction", "over")}
+                          className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${leg.direction === "over" ? "text-emerald-400" : "text-muted-foreground/50 hover:text-foreground/70"}`}
+                          style={{ background: leg.direction === "over" ? 'hsla(160, 84%, 39%, 0.12)' : 'hsla(228, 20%, 10%, 0.6)' }}>
+                          OVER
+                        </button>
+                        <button type="button" onClick={() => updateLeg(idx, "direction", "under")}
+                          className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${leg.direction === "under" ? "text-red-400" : "text-muted-foreground/50 hover:text-foreground/70"}`}
+                          style={{ background: leg.direction === "under" ? 'hsla(0, 84%, 60%, 0.12)' : 'hsla(228, 20%, 10%, 0.6)' }}>
+                          UNDER
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
-              <PlayerAutocomplete sport={leg.sport} value={leg.player} onChange={(v) => updateLeg(idx, "player", v)} betType={leg.betType} />
-              <BetTypeDropdown sport={leg.sport} value={leg.betType} onChange={(v) => updateLeg(idx, "betType", v)} />
-            </div>
-          </motion.div>
-        ))}
+            </motion.div>
+          );
+        })}
       </AnimatePresence>
 
       <button onClick={addLeg}
