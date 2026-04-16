@@ -337,7 +337,8 @@ function extractH2HFromEvents(events: any[], team1Id: string, team2Id: string, s
     const teams = comps.competitors || [];
     const isMatchup = teams.some((t: any) => t.team?.id === team2Id);
     if (!isMatchup) continue;
-    if (comps.status?.type?.completed !== true) continue;
+    const isFinalH2H = comps.status?.type?.completed === true || comps.status?.type?.name === "STATUS_FINAL";
+    if (!isFinalH2H) continue;
 
     const t1 = teams.find((t: any) => t.team?.id === team1Id);
     const t2 = teams.find((t: any) => t.team?.id === team2Id);
