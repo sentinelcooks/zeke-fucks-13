@@ -341,12 +341,15 @@ function resolveTeam(teams: any[], input: string) {
   // 1. Exact abbreviation match first (prevents "SA" matching Sacramento before San Antonio)
   const exactAbbr = teams.find((t: any) => t.abbr.toLowerCase() === q);
   if (exactAbbr) return exactAbbr;
-  // 2. Exact name/shortName match
+  // 2. Exact alias match
+  const aliasMatch = teams.find((t: any) => t.aliases?.some((a: string) => a.toLowerCase() === q));
+  if (aliasMatch) return aliasMatch;
+  // 3. Exact name/shortName match
   const exactName = teams.find((t: any) =>
     t.name.toLowerCase() === q || t.shortName.toLowerCase() === q
   );
   if (exactName) return exactName;
-  // 3. Fuzzy includes match (fallback)
+  // 4. Fuzzy includes match (fallback)
   return teams.find((t: any) =>
     t.name.toLowerCase().includes(q) ||
     t.shortName.toLowerCase().includes(q)
