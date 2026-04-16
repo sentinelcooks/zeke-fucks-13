@@ -462,6 +462,9 @@ function runModel(
     let advantageScore: number;
     if (["park_factor", "weather_wind", "temperature", "line_movement", "public_pct"].includes(factor)) {
       advantageScore = sharedFactors[factor] ?? 50;
+    } else if (betType === "total") {
+      // O/U is a single game-level event — combine both teams symmetrically (order-independent)
+      advantageScore = (safe1 + safe2) / 2;
     } else {
       advantageScore = 50 + (safe1 - safe2) / 2;
     }
@@ -670,10 +673,28 @@ Deno.serve(async (req) => {
       
       const homePitcher = pitchers.home || { era: 4.50, whip: 1.30, k9: 8.0 };
       const awayPitcher = pitchers.away || { era: 4.50, whip: 1.30, k9: 8.0 };
-      
+
+      // Determine actual home/away from game data, not input order (order-independent)
+      let team1IsHome = true;
+      if (eventData) {
+        const comp = eventData.competitions?.[0];
+        const homeComp = comp?.competitors?.find((c: any) => c.homeAway === "home");
+        const awayComp = comp?.competitors?.find((c: any) => c.homeAway === "away");
+        const homeId = String(homeComp?.team?.id || homeComp?.id || "");
+        const awayId = String(awayComp?.team?.id || awayComp?.id || "");
+        if (homeId && String(team1_id) === homeId) team1IsHome = true;
+        else if (awayId && String(team1_id) === awayId) team1IsHome = false;
+      }
+
       // Compute context
       const splits1 = computeHomeAwaySplits(schedule1, team1_id);
       const splits2 = computeHomeAwaySplits(schedule2, team2_id);
+
+      // Map each team to its actual pitcher and split based on real home/away role
+      const team1Pitcher = team1IsHome ? homePitcher : awayPitcher;
+      const team2Pitcher = team1IsHome ? awayPitcher : homePitcher;
+      const team1Split = team1IsHome ? splits1.home : splits1.away;
+      const team2Split = team1IsHome ? splits2.away : splits2.home;
       const last5_1 = computeLast5(schedule1, team1_id);
       const last5_2 = computeLast5(schedule2, team2_id);
       const rest1 = computeRestDays(schedule1);
@@ -718,38 +739,38 @@ Deno.serve(async (req) => {
       // Log season blend
       console.log(`📊 Season blend: ${Math.round(seasonWeight * 100)}% 2025 (${Math.round(avgGamesPlayed)}G avg) / ${Math.round((1 - seasonWeight) * 100)}% historical`);
       
-      // Score all 20 factors for team1 (home)
+      // Score all 20 factors for team1 — pitcher/split assignment based on actual home/away role
       const team1Factors: Record<string, number> = {
-        sp_era: scorePitcherERA(homePitcher.era),
-        sp_whip: scorePitcherWHIP(homePitcher.whip),
-        sp_k9: scorePitcherK9(homePitcher.k9),
-        sp_last3_era: scorePitcherERA(homePitcher.last3Era || homePitcher.era * 0.95),
+        sp_era: scorePitcherERA(team1Pitcher.era),
+        sp_whip: scorePitcherWHIP(team1Pitcher.whip),
+        sp_k9: scorePitcherK9(team1Pitcher.k9),
+        sp_last3_era: scorePitcherERA(team1Pitcher.last3Era || team1Pitcher.era * 0.95),
         bullpen_era: scoreBullpenERA(stats1.reliefERA || stats1.bullpenERA || stats1.ERA || 4.00),
         team_ba: scoreTeamBA(seasonWeight > 0.5 ? l10ba1 : (stats1.battingAverage || stats1.avg || 0.248)),
         team_ops: scoreTeamOPS(stats1.OPS || stats1.ops || 0.710),
         runs_game: scoreRunsPerGame(stats1.runsPerGame || (stats1.runs / Math.max(stats1.gamesPlayed || 1, 1))),
-        lr_splits: scoreLRSplits(awayPitcher.throwingHand || "right", "mixed"),
+        lr_splits: scoreLRSplits(team2Pitcher.throwingHand || "right", "mixed"),
         team_k_rate: scoreTeamKRate(stats1.strikeoutRate || stats1.strikeouts || 22),
-        home_away: scoreHomeAway(splits1.home, true),
+        home_away: scoreHomeAway(team1Split, team1IsHome),
         rest_days: scoreRestDays(rest1),
         day_night: scoreDayNight(isDayGame),
         momentum: scoreMomentum(last5_1),
         run_diff: scoreRunDifferential(rd1.diff, rd1.games),
       };
       
-      // Score all 20 factors for team2 (away)
+      // Score all 20 factors for team2 — pitcher/split assignment based on actual home/away role
       const team2Factors: Record<string, number> = {
-        sp_era: scorePitcherERA(awayPitcher.era),
-        sp_whip: scorePitcherWHIP(awayPitcher.whip),
-        sp_k9: scorePitcherK9(awayPitcher.k9),
-        sp_last3_era: scorePitcherERA(awayPitcher.last3Era || awayPitcher.era * 0.95),
+        sp_era: scorePitcherERA(team2Pitcher.era),
+        sp_whip: scorePitcherWHIP(team2Pitcher.whip),
+        sp_k9: scorePitcherK9(team2Pitcher.k9),
+        sp_last3_era: scorePitcherERA(team2Pitcher.last3Era || team2Pitcher.era * 0.95),
         bullpen_era: scoreBullpenERA(stats2.reliefERA || stats2.bullpenERA || stats2.ERA || 4.00),
         team_ba: scoreTeamBA(seasonWeight > 0.5 ? l10ba2 : (stats2.battingAverage || stats2.avg || 0.248)),
         team_ops: scoreTeamOPS(stats2.OPS || stats2.ops || 0.710),
         runs_game: scoreRunsPerGame(stats2.runsPerGame || (stats2.runs / Math.max(stats2.gamesPlayed || 1, 1))),
-        lr_splits: scoreLRSplits(homePitcher.throwingHand || "right", "mixed"),
+        lr_splits: scoreLRSplits(team1Pitcher.throwingHand || "right", "mixed"),
         team_k_rate: scoreTeamKRate(stats2.strikeoutRate || stats2.strikeouts || 22),
-        home_away: scoreHomeAway(splits2.away, false),
+        home_away: scoreHomeAway(team2Split, !team1IsHome),
         rest_days: scoreRestDays(rest2),
         day_night: scoreDayNight(isDayGame),
         momentum: scoreMomentum(last5_2),
@@ -783,17 +804,21 @@ Deno.serve(async (req) => {
             }
           }
 
-          // For totals: use pitcher-adjusted projection
-          if (bet_type === "total" && homePitcher.era && awayPitcher.era) {
-            const avgERA = (homePitcher.era + awayPitcher.era) / 2;
-            const baseRuns = 9.0; // ~4.5 per team
-            const projectedRuns = baseRuns * (avgERA / 4.20) * parkFactor;
-            const tempAdj = temp > 75 ? 1.03 : temp < 55 ? 0.97 : 1.0;
-            const windAdj = windDir?.toLowerCase().includes("out") ? 1 + windSpeed * 0.008 : windDir?.toLowerCase().includes("in") ? 1 - windSpeed * 0.005 : 1.0;
-            const adjustedProjection = projectedRuns * tempAdj * windAdj;
-            console.log(`⚾ Pitcher-adjusted total projection: ${adjustedProjection.toFixed(1)} runs (ERA avg ${avgERA.toFixed(2)}, PF ${parkFactor})`);
-          }
         }
+      }
+
+      // Compute predicted total for O/U (order-independent: uses symmetric inputs only)
+      let predicted_total: number | null = null;
+      if (bet_type === "total") {
+        const eraH = homePitcher.era || 4.50;
+        const eraA = awayPitcher.era || 4.50;
+        const avgERA = (eraH + eraA) / 2;
+        const baseRuns = 9.0;
+        const projectedRuns = baseRuns * (avgERA / 4.20) * parkFactor;
+        const tempAdj = temp > 75 ? 1.03 : temp < 55 ? 0.97 : 1.0;
+        const windAdj = windDir?.toLowerCase().includes("out") ? 1 + windSpeed * 0.008 : windDir?.toLowerCase().includes("in") ? 1 - windSpeed * 0.005 : 1.0;
+        predicted_total = Math.round(projectedRuns * tempAdj * windAdj * 10) / 10;
+        console.log(`⚾ Pitcher-adjusted total projection: ${predicted_total} runs (ERA avg ${avgERA.toFixed(2)}, PF ${parkFactor})`);
       }
       
       // Apply injury adjustments
@@ -820,14 +845,29 @@ Deno.serve(async (req) => {
       
       // Run model
       const result = runModel(bet_type, adj1, adj2, sharedFactors);
-      
+
+      // Override verdict/confidence for totals using predicted_total vs line (order-independent)
+      let finalConfidence = result.confidence;
+      let finalVerdict = result.verdict;
+      if (bet_type === "total" && predicted_total != null && line != null) {
+        const lineNum = typeof line === "string" ? parseFloat(line) : line;
+        if (!isNaN(lineNum)) {
+          const diff = predicted_total - lineNum;
+          if (diff > 0.3) finalVerdict = "OVER";
+          else if (diff < -0.3) finalVerdict = "UNDER";
+          else finalVerdict = "PASS";
+          finalConfidence = Math.max(50, Math.min(90, Math.round(50 + Math.abs(diff) * 8)));
+        }
+      }
+
       // Generate AI writeup
-      const writeup = await generateWriteup({ ...result, warnings: [...warn1, ...warn2] }, bet_type);
+      const writeup = await generateWriteup({ ...result, confidence: finalConfidence, verdict: finalVerdict, warnings: [...warn1, ...warn2] }, bet_type);
       
       const prediction = {
         bet_type,
-        confidence: result.confidence,
-        verdict: result.verdict,
+        confidence: finalConfidence,
+        verdict: finalVerdict,
+        predicted_total,
         factorBreakdown: result.factorBreakdown,
         writeup,
         injuries: {
@@ -854,8 +894,8 @@ Deno.serve(async (req) => {
             game_id: String(game_id),
             bet_type,
             prediction,
-            confidence: result.confidence,
-            verdict: result.verdict,
+            confidence: finalConfidence,
+            verdict: finalVerdict,
             prediction_date: new Date().toISOString().split("T")[0],
           });
         } catch (_) { /* cache miss is fine */ }
@@ -869,8 +909,8 @@ Deno.serve(async (req) => {
         prop_type: prop_type || null,
         line: typeof line === "string" ? parseFloat(line) : (line ?? null),
         direction: over_under || null,
-        confidence: result.confidence,
-        verdict: result.verdict,
+        confidence: finalConfidence,
+        verdict: finalVerdict,
         top_factors: (result.factorBreakdown || []).slice(0, 5),
       }).catch((err) => console.error("logSnapshot failed:", err));
 
