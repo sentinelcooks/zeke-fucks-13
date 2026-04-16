@@ -1,17 +1,25 @@
 
 
-## Plan: Revert Hit Rates to 4 Rings (Season, L10, L5, VS)
+## Plan: Fix Moneyline Page Showing Stale Results on Re-navigation
 
-### Changes
+### Root Cause
 
-**`src/pages/NbaPropsPage.tsx`** (lines 1954-1960):
-- Remove the `home_away` ring (line 1958) — this is the "AWAY"/"HOME" ring causing 5 rings
-- Keep only: Season, L10, L5, and VS [opponent]
-- Update the VS ring delay from `0.4` to `0.3`
+When the user navigates from Games → Moneyline with `autoAnalyze: true` for one matchup (e.g., Pelicans vs Grizzlies), then goes back to Games and navigates again for a different matchup (Magic vs 76ers), React **reuses the same `MoneyLineSection` component instance**. The internal state (`didAutoAnalyze = true`, `autoAnalyzeTriggered.current = true`, and old `results`) persists, so the new `initialTeam1`/`initialTeam2` props are ignored and the old results keep showing.
 
-**`src/pages/FreePropsPage.tsx`** (lines 369-374):
-- Change the H2H ring label from `"H2H"` to `vs ${opponent}` format to match NbaPropsPage style
+### Fix
 
-### Result
-4 rings total on both pages: Season, L10, L5, VS [opponent] — matching the second screenshot.
+**`src/pages/MoneyLinePage.tsx`** — Add a `key` prop to `MoneyLineSection` that changes whenever the navigation state changes, forcing React to unmount and remount the component with fresh state:
+
+```tsx
+<MoneyLineSection
+  key={`${state?.home_team}-${state?.away_team}-${state?.sport}`}
+  initialTeam1={state?.home_team}
+  initialTeam2={state?.away_team}
+  initialSport={state?.sport}
+  autoAnalyze={state?.autoAnalyze}
+/>
+```
+
+### Scope
+- 1 file, 1 line changed — adds a `key` prop to force re-render on new matchup navigation.
 
