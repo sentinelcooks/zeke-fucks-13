@@ -2244,18 +2244,34 @@ function calculateConfidence(data: any) {
     (data.teammate_injuries || []).filter((i: any) => ["out","doubtful"].includes(i.status?.toLowerCase())).length
   );
 
-  // 1. Season hit rate — reduced weight when 3+ key players out and we have without-teammates data
+  // 1. Season hit rate — blended with recency-weighted hit rate (60% weighted, 40% flat)
   const season = data.season_hit_rate;
   const seasonWeight = (totalKeyOut >= 3 && hasWithoutData) ? 0.18 : 0.25;
   if (season?.total > 0) {
     const w = seasonWeight;
-    weightedSum += season.rate * w;
+    
+    // Compute recency-weighted hit rate from game data
+    const gamesWithDates = data.recency_games || [];
+    let blendedRate = season.rate;
+    let blendedAvg = season.avg || 0;
+    if (gamesWithDates.length > 0) {
+      const whr = weightedHitRate(gamesWithDates, line, ou);
+      if (whr.rate > 0 || gamesWithDates.length >= 5) {
+        blendedRate = Math.round((whr.rate * 0.6 + season.rate * 0.4) * 10) / 10;
+        blendedAvg = Math.round((whr.weightedAvg * 0.6 + (season.avg || 0) * 0.4) * 10) / 10;
+        if (Math.abs(whr.rate - season.rate) >= 8) {
+          reasoning.push(`📈 Recency-weighted hit rate: ${whr.rate}% (flat: ${season.rate}%) → blended: ${blendedRate}%`);
+        }
+      }
+    }
+    
+    weightedSum += blendedRate * w;
     totalWeight += w;
-    if (season.rate >= 65) reasoning.push(`Season hit rate is strong at ${season.rate}% (${season.hits}/${season.total} games)`);
-    else if (season.rate >= 50) reasoning.push(`Season hit rate is decent at ${season.rate}% (${season.hits}/${season.total} games)`);
-    else reasoning.push(`Season hit rate is LOW at ${season.rate}% (${season.hits}/${season.total} games)`);
+    if (blendedRate >= 65) reasoning.push(`Season hit rate is strong at ${season.rate}% (${season.hits}/${season.total} games)${blendedRate !== season.rate ? ` [recency-adjusted: ${blendedRate}%]` : ""}`);
+    else if (blendedRate >= 50) reasoning.push(`Season hit rate is decent at ${season.rate}% (${season.hits}/${season.total} games)${blendedRate !== season.rate ? ` [recency-adjusted: ${blendedRate}%]` : ""}`);
+    else reasoning.push(`Season hit rate is LOW at ${season.rate}% (${season.hits}/${season.total} games)${blendedRate !== season.rate ? ` [recency-adjusted: ${blendedRate}%]` : ""}`);
 
-    const a = season.avg || 0;
+    const a = blendedAvg;
     if (ou === "over") {
       if (a > line + 3) reasoning.push(`Season avg (${a}) is well above the line (${line})`);
       else if (a > line) reasoning.push(`Season avg (${a}) is above the line (${line})`);
@@ -2818,7 +2834,59 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
   const l5v = statValues.slice(-5);
   const last5 = { ...hitRate(l5v, line, overUnder), avg: avg(l5v) };
 
+  // Build recency games array for weighted hit rate
+  const recencyGames = analysisGames
+    .filter(g => g.date)
+    .map(g => ({ date: g.date, value: getStatValue(g, propType) }));
+
   const nextGame = await getNextGame(player.team_abbr, cfg);
+
+  // ── Fetch pace/total context for both teams ──
+  let paceContext: any = null;
+  try {
+    const oppAbbr2 = opponent?.toUpperCase() || nextGame?.opponent_abbr;
+    if (oppAbbr2) {
+      const espnBase = `https://site.api.espn.com/apis/site/v2/sports/${cfg.searchSport}/${cfg.searchLeague}`;
+      const [teamStatsResp, oppStatsResp] = await Promise.all([
+        fetch(`${espnBase}/teams/${player.team_abbr}/statistics`).catch(() => null),
+        fetch(`${espnBase}/teams/${oppAbbr2}/statistics`).catch(() => null),
+      ]);
+
+      const extractPaceStats = async (resp: Response | null, abbr: string) => {
+        if (!resp || !resp.ok) return null;
+        try {
+          const d = await resp.json();
+          const stats = d?.results?.stats?.categories || d?.statistics?.splits?.categories || [];
+          const getStatVal = (name: string) => {
+            for (const cat of stats) {
+              const stat = (cat.stats || []).find((s: any) => s.name === name || s.abbreviation === name);
+              if (stat) return parseFloat(stat.displayValue || stat.value) || 0;
+            }
+            return 0;
+          };
+          if (cfg.searchLeague === "nba") {
+            return { team: abbr, pace: getStatVal("pace") || getStatVal("possessions"), ppg: getStatVal("avgPoints"), offRtg: getStatVal("offensiveRating"), defRtg: getStatVal("defensiveRating") };
+          } else if (cfg.searchLeague === "nhl") {
+            return { team: abbr, goalsFor: getStatVal("goalsFor") || getStatVal("avgGoals"), goalsAgainst: getStatVal("goalsAgainst"), shotsPerGame: getStatVal("avgShotsPerGame") || getStatVal("shots") };
+          } else if (cfg.searchLeague === "mlb") {
+            return { team: abbr, runsPerGame: getStatVal("runsPerGame") || getStatVal("avgRuns"), battingAvg: getStatVal("battingAvg") || getStatVal("AVG"), ops: getStatVal("OPS") };
+          }
+        } catch { /* ignore */ }
+        return null;
+      };
+
+      const [teamPace, oppPace] = await Promise.all([
+        extractPaceStats(teamStatsResp, player.team_abbr),
+        extractPaceStats(oppStatsResp, oppAbbr2),
+      ]);
+
+      if (teamPace || oppPace) {
+        paceContext = { team: teamPace, opponent: oppPace, sport: cfg.searchLeague };
+      }
+    }
+  } catch (e) {
+    console.error("Pace context fetch error:", e);
+  }
 
   let homeAway: any = { location: "unknown", avg: 0, rate: 0, hits: 0, total: 0 };
   if (nextGame) {
