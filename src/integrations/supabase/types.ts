@@ -673,6 +673,7 @@ export type Database = {
           id: string
           notification_enabled: boolean | null
           odds_format: string
+          onboarding_complete: boolean
           timezone: string | null
         }
         Insert: {
@@ -682,6 +683,7 @@ export type Database = {
           id: string
           notification_enabled?: boolean | null
           odds_format?: string
+          onboarding_complete?: boolean
           timezone?: string | null
         }
         Update: {
@@ -691,6 +693,7 @@ export type Database = {
           id?: string
           notification_enabled?: boolean | null
           odds_format?: string
+          onboarding_complete?: boolean
           timezone?: string | null
         }
         Relationships: []

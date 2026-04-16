@@ -9,6 +9,7 @@ interface Profile {
   timezone: string;
   notification_enabled: boolean;
   odds_format: "american" | "decimal";
+  onboarding_complete: boolean;
 }
 
 interface AuthContextType {
@@ -40,6 +41,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .single();
     if (data) {
       setProfile(data as unknown as Profile);
+      // Sync onboarding_complete flag to local storage for offline resilience
+      if ((data as any).onboarding_complete) {
+        localStorage.setItem("sentinel_onboarding_complete", "true");
+      }
     } else {
       // Profile missing (e.g. trigger didn't fire) — create it from user metadata
       const { data: { user: currentUser } } = await supabase.auth.getUser();
