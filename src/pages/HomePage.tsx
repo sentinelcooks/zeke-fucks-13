@@ -381,7 +381,7 @@ const HomePage = () => {
       )}
 
       {/* ── PNL CALENDAR — Collapsed for new users ── */}
-      {!isNewUser && <PnLCalendar plays={plays} />}
+      {!isNewUser && <PnLCalendar plays={allPlays} />}
 
       {/* ── PERFORMANCE + SPORT BREAKDOWN ── */}
       <div className="grid grid-cols-2 gap-2.5">
