@@ -507,6 +507,62 @@ export type Database = {
         }
         Relationships: []
       }
+      outcomes: {
+        Row: {
+          actual_result: string
+          actual_value: number | null
+          created_at: string
+          direction: string | null
+          id: string
+          line: number | null
+          player_or_team: string
+          predicted_confidence: number | null
+          profit_loss: number | null
+          prop_type: string | null
+          snapshot_id: string | null
+          sport: string
+          user_id: string | null
+        }
+        Insert: {
+          actual_result: string
+          actual_value?: number | null
+          created_at?: string
+          direction?: string | null
+          id?: string
+          line?: number | null
+          player_or_team: string
+          predicted_confidence?: number | null
+          profit_loss?: number | null
+          prop_type?: string | null
+          snapshot_id?: string | null
+          sport: string
+          user_id?: string | null
+        }
+        Update: {
+          actual_result?: string
+          actual_value?: number | null
+          created_at?: string
+          direction?: string | null
+          id?: string
+          line?: number | null
+          player_or_team?: string
+          predicted_confidence?: number | null
+          profit_loss?: number | null
+          prop_type?: string | null
+          snapshot_id?: string | null
+          sport?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outcomes_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "prediction_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       parlay_history: {
         Row: {
           created_at: string
@@ -662,6 +718,84 @@ export type Database = {
           sport?: string
           stake?: number
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      prediction_snapshots: {
+        Row: {
+          actual_outcome: string | null
+          confidence: number
+          created_at: string
+          data_quality: string | null
+          direction: string | null
+          ev_percent: number | null
+          game_environment: Json | null
+          id: string
+          injury_flags: Json | null
+          line: number | null
+          lineup_confirmed: boolean | null
+          market_type: string
+          odds_at_time: number | null
+          outcome_logged_at: string | null
+          outcome_value: number | null
+          player_or_team: string
+          prop_type: string | null
+          sport: string
+          top_factors: Json | null
+          unit_size: number | null
+          user_id: string | null
+          variance_level: string | null
+          verdict: string | null
+        }
+        Insert: {
+          actual_outcome?: string | null
+          confidence: number
+          created_at?: string
+          data_quality?: string | null
+          direction?: string | null
+          ev_percent?: number | null
+          game_environment?: Json | null
+          id?: string
+          injury_flags?: Json | null
+          line?: number | null
+          lineup_confirmed?: boolean | null
+          market_type: string
+          odds_at_time?: number | null
+          outcome_logged_at?: string | null
+          outcome_value?: number | null
+          player_or_team: string
+          prop_type?: string | null
+          sport: string
+          top_factors?: Json | null
+          unit_size?: number | null
+          user_id?: string | null
+          variance_level?: string | null
+          verdict?: string | null
+        }
+        Update: {
+          actual_outcome?: string | null
+          confidence?: number
+          created_at?: string
+          data_quality?: string | null
+          direction?: string | null
+          ev_percent?: number | null
+          game_environment?: Json | null
+          id?: string
+          injury_flags?: Json | null
+          line?: number | null
+          lineup_confirmed?: boolean | null
+          market_type?: string
+          odds_at_time?: number | null
+          outcome_logged_at?: string | null
+          outcome_value?: number | null
+          player_or_team?: string
+          prop_type?: string | null
+          sport?: string
+          top_factors?: Json | null
+          unit_size?: number | null
+          user_id?: string | null
+          variance_level?: string | null
+          verdict?: string | null
         }
         Relationships: []
       }
