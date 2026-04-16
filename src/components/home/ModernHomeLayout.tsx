@@ -306,8 +306,16 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await supabase.functions.invoke("daily-picks");
+      const { data, error } = await supabase.functions.invoke("daily-picks");
+      if (error) {
+        toast.error("Failed to refresh picks. Try again later.");
+      } else {
+        const count = data?.count || 0;
+        toast.success(count > 0 ? `${count} picks generated!` : "No games available for picks right now.");
+      }
       await fetchTodayPicks();
+    } catch {
+      toast.error("Failed to refresh picks. Try again later.");
     } finally {
       setRefreshing(false);
     }
