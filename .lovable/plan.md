@@ -1,21 +1,28 @@
 
+## Plan: Raise and extend the Profit Tracker "Play Type" dropdown
 
-## Plan: Fix Play Type Dropdown Scroll + Add 1Q Props
+### What’s happening
+The dropdown itself is scrollable now, but it can still get visually covered by the next card ("Search player") because the form and the dropdown are competing with later siblings in the stacking order on mobile.
 
-### Problem
-1. Dropdown `max-h-[200px]` clips last items — no bottom padding inside the scroll container
-2. NBA play types missing first-quarter props
+### Changes to make
 
-### Fix — `src/components/tracker/BetTypeDropdown.tsx`
+**1. `src/components/tracker/BetTypeDropdown.tsx`**
+- Increase the dropdown height again so more items are visible at once on small screens.
+- Raise the dropdown stack level further (`z-[80]` or similar) so the menu sits above nearby cards.
+- Keep the internal bottom padding so the last option is fully readable.
+- If needed, slightly reduce vertical option padding so the last entries fit more comfortably on 390px screens.
 
-**1. Fix scroll clipping:** Increase `max-h` to `260px` and add `pb-2` inside the dropdown so the last item isn't cut off by rounded corners.
+**2. `src/pages/ProfitTrackerPage.tsx`**
+- Give the expanded “New Play” form its own stacking context and higher z-index while open (`relative z-20` or similar), so its dropdown can render above the filters card below.
+- Keep the form wrapper `overflow-visible`.
+- Add a little extra spacing beneath the form while it’s open so the dropdown has more room before it reaches the next card.
 
-**2. Add 1Q props to NBA list** (insert before Moneyline/Spread):
-- `1Q Points` — aliases: 1q pts, first quarter points, 1q scoring
-- `1Q Rebounds` — aliases: 1q reb, first quarter rebounds
-- `1Q Assists` — aliases: 1q ast, first quarter assists
-- `1Q 3-Pointers` — aliases: 1q 3pt, first quarter threes, 1q triples
+### Expected result
+- The Play Type menu opens taller.
+- You can scroll all the way to the bottom and read the final option completely.
+- The menu no longer gets covered by the “Search player” box in Profit Tracker.
 
 ### Scope
-- 1 file changed, ~8 lines added/modified
-
+- 2 files
+  - `src/components/tracker/BetTypeDropdown.tsx`
+  - `src/pages/ProfitTrackerPage.tsx`
