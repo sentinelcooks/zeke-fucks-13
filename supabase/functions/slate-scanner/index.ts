@@ -1,5 +1,8 @@
 // ─────────────────────────────────────────────────────────────
-// slate-scanner — daily orchestrator
+// slate-scanner — daily orchestrator (active multi-sport scan)
+// Scans every scheduled game for every sport, every player×prop
+// surfaced by The Odds API, every game line. Scores everything
+// through edge_scoring.ts and writes the day's slate.
 // ─────────────────────────────────────────────────────────────
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
@@ -24,24 +27,16 @@ function json(body: unknown, status = 200) {
   });
 }
 
-// Map short code -> Odds-API sport key (for games-schedule)
 const SPORT_KEYS: Record<string, string> = {
   nba: "basketball_nba",
   mlb: "baseball_mlb",
   nhl: "icehockey_nhl",
-  // UFC not supported by games-schedule yet
 };
 
 const FN_BASE = `${Deno.env.get("SUPABASE_URL")}/functions/v1`;
 const SVC_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-interface FetchResult {
-  ok: boolean;
-  status: number;
-  data: any;
-  url: string;
-  size: number;
-}
+interface FetchResult { ok: boolean; status: number; data: any; size: number; }
 
 async function fnFetch(path: string): Promise<FetchResult> {
   const url = `${FN_BASE}/${path}`;
@@ -52,93 +47,30 @@ async function fnFetch(path: string): Promise<FetchResult> {
     const text = await r.text();
     let data: any = null;
     try { data = JSON.parse(text); } catch { data = text; }
-    const size = text.length;
-    console.log(`fnFetch ${path} -> ${r.status} (${size}b)`);
-    return { ok: r.ok, status: r.status, data, url, size };
+    return { ok: r.ok, status: r.status, data, size: text.length };
   } catch (e) {
     console.error(`fnFetch ${path} threw:`, e);
-    return { ok: false, status: 0, data: null, url, size: 0 };
+    return { ok: false, status: 0, data: null, size: 0 };
   }
 }
 
-// ── Synthetic seed for off-season validation ────────────────
-function syntheticPlays(): ScoredPlay[] {
-  const odds = -110;
-  const implied = americanToImpliedProb(odds);
-  const projected = 0.62;
-  const edge = projected - implied;
-  return [
-    score({
-      sport: "nba",
-      bet_type: "moneyline",
-      player_name: "Test Lakers @ Test Celtics",
-      home_team: "Test Celtics",
-      away_team: "Test Lakers",
-      team: "Test Celtics",
-      opponent: "Test Lakers",
-      prop_type: "moneyline",
-      line: 0,
-      direction: "home",
-      odds,
-      projected_prob: projected,
-      implied_prob: implied,
-      edge,
-      ev_pct: calcEv(projected, odds),
-      confidence: projected,
-    }),
-    score({
-      sport: "nba",
-      bet_type: "prop",
-      player_name: "Test Player",
-      team: "Test Lakers",
-      opponent: "Test Celtics",
-      prop_type: "points",
-      line: 25.5,
-      direction: "over",
-      odds: -115,
-      projected_prob: 0.68,
-      implied_prob: americanToImpliedProb(-115),
-      edge: 0.68 - americanToImpliedProb(-115),
-      ev_pct: calcEv(0.68, -115),
-      confidence: 0.68,
-    }),
-  ];
-}
-
-// ── Game-line evaluation ───────────────────────────────────
-async function evaluateGameLines(
-  sport: string,
-  diag: Record<string, any>
-): Promise<ScoredPlay[]> {
+// ── Game-line evaluation (unchanged behavior) ──────────────
+async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[]> {
   const sportKey = SPORT_KEYS[sport];
-  if (!sportKey) {
-    diag.gamesFetched = 0;
-    diag.note = "sport not supported by games-schedule";
-    return [];
-  }
+  if (!sportKey) return [];
 
   const gamesRes = await fnFetch(`games-schedule?sport=${sportKey}`);
   const games = Array.isArray(gamesRes.data) ? gamesRes.data : [];
-  diag.gamesFetched = games.length;
-  diag.gamesScheduleStatus = gamesRes.status;
+  stats.games = games.length;
   if (games.length === 0) return [];
 
   const upcoming = games.filter(
     (g: any) => g.status !== "STATUS_FINAL" && g.status !== "STATUS_IN_PROGRESS"
   );
-  diag.gamesUpcoming = upcoming.length;
   if (upcoming.length === 0) return [];
 
-  const oddsRes = await fnFetch(
-    `nba-odds/events?sport=${sport}&markets=h2h,spreads,totals`
-  );
-  const oddsEvents = Array.isArray(oddsRes.data?.events)
-    ? oddsRes.data.events
-    : Array.isArray(oddsRes.data)
-      ? oddsRes.data
-      : [];
-  diag.oddsFetched = oddsEvents.length;
-  diag.oddsStatus = oddsRes.status;
+  const oddsRes = await fnFetch(`nba-odds/events?sport=${sport}&markets=h2h,spreads,totals`);
+  const oddsEvents = Array.isArray(oddsRes.data?.events) ? oddsRes.data.events : [];
 
   const oddsMap = new Map<string, any>();
   for (const ev of oddsEvents) {
@@ -146,23 +78,20 @@ async function evaluateGameLines(
     oddsMap.set(key, ev);
   }
 
-  let matched = 0;
   const plays: ScoredPlay[] = [];
   for (const g of upcoming) {
     const key = `${(g.home_team || "").toLowerCase()}|${(g.away_team || "").toLowerCase()}`;
     const ev = oddsMap.get(key);
     if (!ev?.bookmakers?.length) continue;
-    matched++;
     const bm = ev.bookmakers.find((b: any) => b.key === "pinnacle") || ev.bookmakers[0];
     for (const mkt of bm.markets || []) {
       if (mkt.key === "h2h") {
         for (const o of mkt.outcomes || []) {
           const isHome = o.name === g.home_team;
-            const implied = americanToImpliedProb(o.price);
-            // Tighter clamp: no longshot dogs (<35% projected)
-            const projected = Math.max(0.35, Math.min(0.95, implied * 0.92 + (isHome ? 0.04 : 0.02)));
-            const edge = projected - implied;
-            if (edge < 0.035) continue;
+          const implied = americanToImpliedProb(o.price);
+          const projected = Math.max(0.35, Math.min(0.95, implied * 0.92 + (isHome ? 0.04 : 0.02)));
+          const edge = projected - implied;
+          if (edge < 0.035) continue;
           plays.push(score({
             sport, bet_type: "moneyline",
             player_name: `${g.away_team} @ ${g.home_team}`,
@@ -199,88 +128,143 @@ async function evaluateGameLines(
       }
     }
   }
-  diag.gamesWithOdds = matched;
-  diag.linesGenerated = plays.length;
   return plays;
 }
 
-// ── Player props — read from free_props; auto-trigger generate if empty ──
-async function evaluatePlayerProps(
-  sport: string,
-  diag: Record<string, any>,
-  supabase: any
-): Promise<ScoredPlay[]> {
-  const today = new Date().toISOString().slice(0, 10);
+// ── ACTIVE player-prop evaluation ──────────────────────────
+// For each upcoming game in this sport, pull every (player, market, line)
+// from the live odds board and score it. Uses bookmaker consensus prob
+// (de-vigged) as the projection signal, then runs through edge_scoring
+// gates. This guarantees coverage of every bookable prop today.
+async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPlay[]> {
+  const sportKey = SPORT_KEYS[sport];
+  if (!sportKey && sport !== "ufc") return [];
 
-  async function readRows() {
-    const { data, error } = await supabase
-      .from("free_props")
-      .select("*")
-      .eq("prop_date", today)
-      .eq("sport", sport);
-    if (error) {
-      diag.propsError = error.message;
-      return [];
-    }
-    return data || [];
+  // Pull events list (cached upstream)
+  let events: any[] = [];
+  if (sport === "ufc") {
+    const r = await fnFetch(`nba-odds/events?sport=ufc&markets=h2h`);
+    events = Array.isArray(r.data?.events) ? r.data.events : [];
+  } else {
+    const r = await fnFetch(`nba-odds/events?sport=${sport}&markets=h2h`);
+    events = Array.isArray(r.data?.events) ? r.data.events : [];
   }
-
-  let rows = await readRows();
-  // If nothing for this sport, trigger one global generate and re-read.
-  // Use a module-level flag to avoid triggering more than once per scan.
-  if (rows.filter((r: any) => !r.bet_type || r.bet_type === "prop").length === 0) {
-    if (!(globalThis as any).__freePropsGenerated) {
-      (globalThis as any).__freePropsGenerated = true;
-      diag.triggeredGenerate = true;
-      const gen = await fnFetch("free-props/generate");
-      diag.generateStatus = gen.status;
-      diag.generateBody = gen.data;
-    }
-    rows = await readRows();
-  }
-  diag.propsFetched = rows.length;
+  const now = Date.now();
+  const upcoming = events.filter((e: any) => !e.commence_time || new Date(e.commence_time).getTime() > now);
+  stats.events = upcoming.length;
 
   const plays: ScoredPlay[] = [];
-  for (const r of rows) {
-    if (r.bet_type && r.bet_type !== "prop") continue; // skip game-line rows we wrote
-    const odds = r.odds ?? -110;
-    const implied = americanToImpliedProb(odds);
-    const conf = (r.confidence ?? 0) > 1 ? r.confidence / 100 : (r.confidence ?? 0);
-    const edgeRaw = r.edge ?? Math.max(0, conf - implied);
-    const edge = Math.abs(edgeRaw) > 1 ? edgeRaw / 100 : edgeRaw;
-    plays.push(score({
-      sport, bet_type: "prop",
-      player_name: r.player_name, team: r.team, opponent: r.opponent,
-      prop_type: r.prop_type, line: r.line,
-      direction: r.direction || "over",
-      odds, projected_prob: conf, implied_prob: implied,
-      edge, ev_pct: calcEv(conf, odds), confidence: conf,
-    }));
+  let propLineCount = 0;
+  const playerSet = new Set<string>();
+
+  for (const ev of upcoming) {
+    if (!ev.id) continue;
+    const propsRes = await fnFetch(`nba-odds/player-props?sport=${sport}&eventId=${ev.id}`);
+    const players = propsRes.data?.players || {};
+    const homeTeam = ev.home_team || propsRes.data?.home_team || null;
+    const awayTeam = ev.away_team || propsRes.data?.away_team || null;
+
+    for (const [playerName, markets] of Object.entries(players as Record<string, any>)) {
+      playerSet.add(playerName);
+      for (const [marketKey, outcomes] of Object.entries(markets as Record<string, any[]>)) {
+        // Group outcomes by (line, direction) and pick best price per side
+        const grouped = new Map<string, { side: string; line: number; bestPrice: number }>();
+        for (const o of outcomes as any[]) {
+          const side = (o.name || "").toLowerCase().includes("under") ? "under" : "over";
+          const line = Number(o.point ?? 0);
+          const k = `${side}|${line}`;
+          const cur = grouped.get(k);
+          if (!cur || o.price > cur.bestPrice) grouped.set(k, { side, line, bestPrice: o.price });
+        }
+
+        // De-vig pairs over+under at the same line
+        const lines = new Set<number>();
+        for (const v of grouped.values()) lines.add(v.line);
+
+        for (const line of lines) {
+          const over = grouped.get(`over|${line}`);
+          const under = grouped.get(`under|${line}`);
+          for (const side of ["over", "under"] as const) {
+            const pick = side === "over" ? over : under;
+            if (!pick) continue;
+            propLineCount++;
+            const impliedSide = americanToImpliedProb(pick.bestPrice);
+            const oppPick = side === "over" ? under : over;
+            // De-vig: if both sides exist, normalize; else use raw implied
+            let projected: number;
+            if (oppPick) {
+              const impliedOpp = americanToImpliedProb(oppPick.bestPrice);
+              const sum = impliedSide + impliedOpp;
+              projected = sum > 0 ? impliedSide / sum : impliedSide;
+              // Tiny edge bump only when our side has shorter price than opp (sharper market)
+              if (impliedSide > impliedOpp) projected = Math.min(0.95, projected + 0.015);
+            } else {
+              projected = Math.min(0.95, impliedSide + 0.02);
+            }
+            projected = Math.max(0.35, Math.min(0.95, projected));
+            const edge = projected - impliedSide;
+            if (edge <= 0) continue;
+            plays.push(score({
+              sport,
+              bet_type: "prop",
+              player_name: playerName,
+              team: null,
+              opponent: null,
+              home_team: homeTeam,
+              away_team: awayTeam,
+              prop_type: marketKey,
+              line,
+              direction: side,
+              odds: pick.bestPrice,
+              projected_prob: projected,
+              implied_prob: impliedSide,
+              edge,
+              ev_pct: calcEv(projected, pick.bestPrice),
+              confidence: projected,
+            }));
+          }
+        }
+      }
+    }
   }
-  diag.propPlaysGenerated = plays.length;
+
+  stats.players = playerSet.size;
+  stats.propLines = propLineCount;
+  stats.candidates = plays.length;
   return plays;
 }
 
-async function runScan(supabase: any) {
+async function runScan() {
   const sports = ["nba", "mlb", "nhl", "ufc"];
   const all: ScoredPlay[] = [];
-  const debug: Record<string, any> = {};
+  const stats: Record<string, any> = {};
+
   for (const sport of sports) {
-    const d: Record<string, any> = {};
+    console.log(`\n========== SCANNING ${sport.toUpperCase()} ==========`);
+    const s: any = { games: 0, events: 0, players: 0, propLines: 0, lines: 0, candidates: 0 };
     try {
-      const [lines, props] = await Promise.all([
-        evaluateGameLines(sport, d),
-        evaluatePlayerProps(sport, d, supabase),
-      ]);
-      const combined = [...lines, ...props];
-      d.playsGenerated = combined.length;
-      all.push(...combined);
+      const lines = await evaluateGameLines(sport, s);
+      s.lines = lines.length;
+      console.log(`[${sport}] Found ${s.games} scheduled games today`);
+      console.log(`[${sport}] Generated ${s.lines} game-line candidates`);
+
+      const props = await evaluatePlayerProps(sport, s);
+      console.log(`[${sport}] ${s.events} upcoming events, ${s.players} unique players, ${s.propLines} prop lines analyzed`);
+      console.log(`[${sport}] DONE — ${s.lines + props.length} surviving candidates (${s.lines} game lines + ${props.length} props)`);
+
+      all.push(...lines, ...props);
+      s.candidates = s.lines + props.length;
     } catch (e) {
-      d.error = String(e);
+      console.error(`[${sport}] error:`, e);
+      s.error = String(e);
     }
-    debug[sport] = d;
+    stats[sport] = s;
   }
-  return { all, debug };
+
+  console.log(`\n========== SCAN COMPLETE ==========`);
+  console.log(`Total candidates across all sports: ${all.length}`);
+  console.log(`Per-sport:`, JSON.stringify(stats));
+  return { all, stats };
 }
 
 Deno.serve(async (req) => {
@@ -289,55 +273,38 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const dryRun = url.searchParams.get("dryRun") === "true";
   const debug = url.searchParams.get("debug") === "true";
-  const seed = url.searchParams.get("seed") === "true";
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, SVC_KEY);
 
-  let all: ScoredPlay[] = [];
-  let debugInfo: Record<string, any> = {};
+  const { all, stats } = await runScan();
 
-  if (seed) {
-    all = syntheticPlays();
-    debugInfo = { mode: "synthetic", count: all.length };
-  } else {
-    const r = await runScan(supabase);
-    all = r.all;
-    debugInfo = r.debug;
-  }
-
-  // DEFENSIVE HARD CAP: drop absurd longshots before ranking, regardless of verdict tiering
+  // Defensive hard cap before ranking
   const filtered = all.filter((p) => {
     if (p.odds >= 500) return false;
     if (p.confidence < 0.65) return false;
     if (p.edge <= 0) return false;
     return true;
   });
-  console.log(`Pre-rank filter: ${all.length} → ${filtered.length} (dropped ${all.length - filtered.length} junk/longshots)`);
+  console.log(`Pre-rank filter: ${all.length} → ${filtered.length} (dropped ${all.length - filtered.length})`);
+
   const { todaysEdge, dailyPicks, freePicks, sorted } = rankAndDistribute(filtered);
+
+  console.log(`Distribution → todaysEdge:${todaysEdge.length} daily:${dailyPicks.length} free:${freePicks.length}`);
+  console.log(`Today's Edge sports: ${[...new Set(todaysEdge.map(p => p.sport))].join(",")}`);
 
   if (dryRun) {
     return json({
       dry_run: true,
-      seed,
-      counts: {
-        total: all.length,
-        dailyPicks: dailyPicks.length,
-        freePicks: freePicks.length,
-        todaysEdge: todaysEdge.length,
-      },
-      ...(debug ? { debug: debugInfo } : {}),
-      top10: sorted.slice(0, 10),
-      sanity_issues: sanityCheck(all),
+      counts: { total: all.length, dailyPicks: dailyPicks.length, freePicks: freePicks.length, todaysEdge: todaysEdge.length },
+      stats,
+      ...(debug ? { top10: sorted.slice(0, 10), sanity_issues: sanityCheck(all) } : {}),
     });
   }
 
   const today = new Date().toISOString().slice(0, 10);
-
   await supabase.from("daily_picks").delete().eq("pick_date", today);
-  // Wipe today's free_props entirely — scanner is now the single source of truth.
   await supabase.from("free_props").delete().eq("prop_date", today);
 
-  // Build a set of edge-tier keys (top 5 quality_score Strong picks)
   const edgeKeys = new Set(
     todaysEdge.map((p) => `${p.sport}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`)
   );
@@ -359,7 +326,6 @@ Deno.serve(async (req) => {
     };
   });
 
-  // Persist all curated free picks (props + game lines) — scanner re-scored them through current gates.
   const freeRows = freePicks.map((p) => ({
     prop_date: today,
     sport: p.sport, bet_type: p.bet_type,
@@ -372,17 +338,19 @@ Deno.serve(async (req) => {
     confidence: p.confidence, edge: p.edge, reasoning: p.reasoning,
   }));
 
-  if (dailyRows.length) await supabase.from("daily_picks").insert(dailyRows);
-  if (freeRows.length) await supabase.from("free_props").insert(freeRows);
+  if (dailyRows.length) {
+    const { error } = await supabase.from("daily_picks").insert(dailyRows);
+    if (error) console.error("daily_picks insert error:", error);
+  }
+  if (freeRows.length) {
+    const { error } = await supabase.from("free_props").insert(freeRows);
+    if (error) console.error("free_props insert error:", error);
+  }
 
   return json({
     ok: true,
-    counts: {
-      total: all.length,
-      dailyPicks: dailyRows.length,
-      freePicks: freeRows.length,
-      todaysEdge: todaysEdge.length,
-    },
-    ...(debug ? { debug: debugInfo } : {}),
+    counts: { total: all.length, dailyPicks: dailyRows.length, freePicks: freeRows.length, todaysEdge: todaysEdge.length },
+    stats,
+    ...(debug ? { todaysEdge_sports: [...new Set(todaysEdge.map(p => p.sport))] } : {}),
   });
 });

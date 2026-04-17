@@ -202,8 +202,24 @@ export function rankAndDistribute(plays: ScoredPlay[]) {
     if (isLow) lowRelCount++;
   }
 
-  // ── Today's Edge: top 5 globally, Strong only ──
-  const todaysEdge = sorted.filter((p) => p.verdict === "Strong").slice(0, TODAYS_EDGE_CAP);
+  // ── Today's Edge: top 5 Strong picks, max 2 per sport for diversity ──
+  const strongs = sorted.filter((p) => p.verdict === "Strong");
+  const todaysEdge: ScoredPlay[] = [];
+  const edgeSportCount: Record<string, number> = {};
+  for (const p of strongs) {
+    if (todaysEdge.length >= TODAYS_EDGE_CAP) break;
+    if ((edgeSportCount[p.sport] || 0) >= 2) continue;
+    todaysEdge.push(p);
+    edgeSportCount[p.sport] = (edgeSportCount[p.sport] || 0) + 1;
+  }
+  // Fallback: if cap left us short, fill with strongest remaining Strong picks
+  if (todaysEdge.length < TODAYS_EDGE_CAP) {
+    for (const p of strongs) {
+      if (todaysEdge.length >= TODAYS_EDGE_CAP) break;
+      if (todaysEdge.includes(p)) continue;
+      todaysEdge.push(p);
+    }
+  }
 
   // ── Daily Picks: top Strong + Lean up to cap ──
   const dailyPicks = sorted.slice(0, DAILY_PICKS_CAP);
