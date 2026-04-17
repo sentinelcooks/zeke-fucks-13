@@ -126,6 +126,7 @@ export type Database = {
           sport: string
           spread_line: number | null
           team: string | null
+          tier: string
           total_line: number | null
         }
         Insert: {
@@ -149,6 +150,7 @@ export type Database = {
           sport?: string
           spread_line?: number | null
           team?: string | null
+          tier?: string
           total_line?: number | null
         }
         Update: {
@@ -172,6 +174,7 @@ export type Database = {
           sport?: string
           spread_line?: number | null
           team?: string | null
+          tier?: string
           total_line?: number | null
         }
         Relationships: []
