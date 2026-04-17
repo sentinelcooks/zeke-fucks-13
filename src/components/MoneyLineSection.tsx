@@ -1254,6 +1254,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
   const [showBetInfo, setShowBetInfo] = useState<string | null>(null);
   const [didAutoAnalyze, setDidAutoAnalyze] = useState(false);
   const [paceInfo, setPaceInfo] = useState<{ team: any; pace: any } | null>(null);
+  const [b2bInfo, setB2bInfo] = useState<{ team: any; b2b: any } | null>(null);
 
   useEffect(() => {
     setTeamsLoading(true);
@@ -1826,17 +1827,25 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
               <div className="vision-card p-3">
                 <h3 className="text-[8px] font-bold uppercase tracking-[0.15em] text-muted-foreground/45 mb-2">B2B Status</h3>
                 {[{ team: results.team1, b2b: results.back_to_back.team1 }, { team: results.team2, b2b: results.back_to_back.team2 }].map(({ team, b2b }) => (
-                  <div key={team.abbr} className="flex items-center gap-2 py-1.5 border-b last:border-0" style={{ borderColor: 'hsla(228,18%,18%,0.3)' }}>
+                  <button
+                    key={team.abbr}
+                    type="button"
+                    onClick={() => setB2bInfo({ team, b2b })}
+                    className="w-full flex items-center gap-2 py-1.5 border-b last:border-0 hover:bg-white/5 transition-colors rounded-sm px-1 -mx-1 text-left"
+                    style={{ borderColor: 'hsla(228,18%,18%,0.3)' }}
+                  >
                     {team.logo && <img src={team.logo} alt="" className="w-4 h-4 object-contain" />}
                     <span className="text-[11px] font-semibold text-foreground truncate">{team.shortName}</span>
                     {b2b.isB2B ? (
-                      <span className="ml-auto flex items-center gap-1 text-[9px] font-bold text-nba-yellow">
-                        <Moon className="w-2.5 h-2.5" /> B2B
+                      <span className="ml-auto flex items-center justify-center w-5 h-5 rounded-full bg-nba-green/15 text-nba-green">
+                        <Check className="w-3 h-3" strokeWidth={3} />
                       </span>
                     ) : (
-                      <span className="ml-auto text-[9px] font-bold text-nba-green">✓</span>
+                      <span className="ml-auto flex items-center justify-center w-5 h-5 rounded-full bg-nba-red/15 text-nba-red">
+                        <X className="w-3 h-3" strokeWidth={3} />
+                      </span>
                     )}
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
