@@ -1040,6 +1040,11 @@ Deno.serve(async (req) => {
       if (!team1) return json({ error: `Team not found: ${t1Input}` }, 400);
       if (!team2) return json({ error: `Team not found: ${t2Input}` }, 400);
 
+      // Resolve real scheduled venue (which team is HOME tonight) — never guess
+      const venue = await resolveMatchupVenue(team1.id, team2.id, sport);
+      const team1HomeAway: "home" | "away" | null = venue ? (venue.team1IsHome ? "home" : "away") : null;
+      const team2HomeAway: "home" | "away" | null = venue ? (venue.team1IsHome ? "away" : "home") : null;
+
       const [h2h, team1Stats, team2Stats, injuries1, injuries2, schedule1, schedule2] = await Promise.all([
         getHeadToHead(team1.id, team2.id, sport),
         getTeamStats(team1.id, sport),
