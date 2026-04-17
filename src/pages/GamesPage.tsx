@@ -606,8 +606,8 @@ const GamesPage = () => {
             onClick={(e) => { e.stopPropagation(); toggleNotification(game.id, `${game.away_team} vs ${game.home_team}`, game.commence_time); }}
             className="absolute top-3 right-3 z-10 p-1.5 rounded-full transition-all"
             style={{
-              background: isNotified ? 'hsla(250, 76%, 62%, 0.15)' : 'transparent',
-              border: isNotified ? '1px solid hsla(250, 76%, 62%, 0.3)' : '1px solid transparent',
+              background: isNotified ? 'hsla(142, 100%, 50%, 0.15)' : 'transparent',
+              border: isNotified ? '1px solid hsla(142, 100%, 50%, 0.3)' : '1px solid transparent',
             }}
           >
             {isNotified ? <Bell className="w-3.5 h-3.5 text-accent" /> : <BellOff className="w-3.5 h-3.5 text-muted-foreground/40" />}
@@ -820,8 +820,8 @@ const GamesPage = () => {
       <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
         {fight.isMainEvent && (
           <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{
-            background: 'hsla(250, 76%, 62%, 0.12)',
-            border: '1px solid hsla(250, 76%, 62%, 0.2)',
+            background: 'hsla(142, 100%, 50%, 0.12)',
+            border: '1px solid hsla(142, 100%, 50%, 0.2)',
           }}>
             <span className="text-[8px] font-bold text-accent uppercase tracking-wider">Main Event</span>
           </div>
@@ -830,8 +830,8 @@ const GamesPage = () => {
           onClick={(e) => { e.stopPropagation(); toggleNotification(fight.id, fightLabel, fight.time); }}
           className="p-1.5 rounded-full transition-all relative z-10 pointer-events-auto"
           style={{
-            background: isNotified ? 'hsla(250, 76%, 62%, 0.15)' : 'transparent',
-            border: isNotified ? '1px solid hsla(250, 76%, 62%, 0.3)' : '1px solid transparent',
+            background: isNotified ? 'hsla(142, 100%, 50%, 0.15)' : 'transparent',
+            border: isNotified ? '1px solid hsla(142, 100%, 50%, 0.3)' : '1px solid transparent',
           }}
         >
           {isNotified ? <Bell className="w-3.5 h-3.5 text-accent" /> : <BellOff className="w-3.5 h-3.5 text-muted-foreground/40" />}
@@ -910,7 +910,7 @@ const GamesPage = () => {
           {/* Event Header */}
           <div className="vision-card p-4 relative overflow-hidden">
             <div className="absolute inset-0 opacity-[0.03]" style={{
-              background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(0 72% 51%))',
+              background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(0 72% 51%))',
             }} />
             <div className="relative">
               <h3 className="text-[14px] font-extrabold text-foreground">{event.name}</h3>
@@ -932,10 +932,10 @@ const GamesPage = () => {
                 <CollapsibleTrigger className="w-full">
                   <div className="flex items-center gap-2 mb-2 px-1 cursor-pointer group">
                     <div className="w-1.5 h-1.5 rounded-full" style={{
-                      background: section === "Main Card" ? 'hsl(250 76% 62%)' : section === "Prelims" ? 'hsl(210 100% 60%)' : 'hsl(228 20% 40%)',
+                      background: section === "Main Card" ? 'hsl(142 100% 50%)' : section === "Prelims" ? 'hsl(158 64% 52%)' : 'hsl(228 20% 40%)',
                     }} />
                     <span className="text-[10px] font-bold uppercase tracking-[0.15em]" style={{
-                      color: section === "Main Card" ? 'hsl(250 76% 62%)' : section === "Prelims" ? 'hsl(210 100% 60%)' : 'hsla(228, 20%, 60%, 0.5)',
+                      color: section === "Main Card" ? 'hsl(142 100% 50%)' : section === "Prelims" ? 'hsl(158 64% 52%)' : 'hsla(228, 20%, 60%, 0.5)',
                     }}>{section}</span>
                     <span className="text-[9px] text-muted-foreground/50">{groupedFights[section].length} fight{groupedFights[section].length !== 1 ? "s" : ""}</span>
                     <ChevronDown className="w-3 h-3 text-muted-foreground/65 ml-auto transition-transform duration-200 group-data-[state=open]:rotate-180" />
@@ -977,7 +977,7 @@ const GamesPage = () => {
           50% { opacity: 0.3; transform: scale(0.7); }
         }
       `}</style>
-      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(250 76% 62%)' }} />
+      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(142 100% 50%)' }} />
       <div className="vision-orb w-36 h-36 top-[500px] -left-12" style={{ background: 'hsl(43 96% 56%)', animationDelay: '-4s' }} />
 
       

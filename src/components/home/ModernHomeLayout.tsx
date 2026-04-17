@@ -399,10 +399,10 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const ringOffset = ringCircumference - (stats.hitRate / 100) * ringCircumference;
 
   const quickLinks = [
-    { label: "Analyze", icon: BarChart3, path: "/dashboard/analyze", gradient: "from-[hsl(250,76%,62%)] to-[hsl(210,100%,60%)]", desc: "Props & Lines" },
+    { label: "Analyze", icon: BarChart3, path: "/dashboard/analyze", gradient: "from-[hsl(142,100%,50%)] to-[hsl(158,64%,52%)]", desc: "Props & Lines" },
     { label: "Picks", icon: Sparkles, path: "/dashboard/picks", gradient: "from-[hsl(30,100%,50%)] to-[hsl(15,100%,55%)]", desc: "Today's picks" },
     { label: "Parlay", icon: Layers, path: "/dashboard/parlay", gradient: "from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)]", desc: "Build a slip" },
-    { label: "Lines", icon: Crosshair, path: "/dashboard/moneyline", gradient: "from-[hsl(190,90%,55%)] to-[hsl(210,100%,60%)]", desc: "Moneylines" },
+    { label: "Lines", icon: Crosshair, path: "/dashboard/moneyline", gradient: "from-[hsl(190,90%,55%)] to-[hsl(158,64%,52%)]", desc: "Moneylines" },
   ];
 
   return (
@@ -424,7 +424,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       
 
       <div className="w-full max-w-[430px] mx-auto px-5 pt-1 pb-6 space-y-6 relative">
-        <div className="vision-orb w-64 h-64 -top-20 -right-20" style={{ background: 'hsl(250 76% 62%)' }} />
+        <div className="vision-orb w-64 h-64 -top-20 -right-20" style={{ background: 'hsl(142 100% 50%)' }} />
         <div className="vision-orb w-48 h-48 top-[400px] -left-16" style={{ background: 'hsl(190 90% 55%)', animationDelay: '-3s' }} />
 
         <motion.div {...stagger(0)} className="relative z-10">
@@ -480,8 +480,8 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
         <motion.div {...stagger(1)} className="relative z-10">
           <div className="flex items-center justify-between border-b border-[hsl(250,20%,18%)]/40 pb-2 mb-3">
             <div className="flex items-center gap-2">
-              <Flame className="w-4 h-4" style={{ color: 'hsl(250 76% 62%)', animation: 'pulse-fire 3s ease-in-out infinite' }} />
-              <span className="text-xs font-bold tracking-[0.15em] uppercase" style={{ color: 'hsl(250 76% 62%)' }}>Today's Edge</span>
+              <Flame className="w-4 h-4" style={{ color: 'hsl(142 100% 50%)', animation: 'pulse-fire 3s ease-in-out infinite' }} />
+              <span className="text-xs font-bold tracking-[0.15em] uppercase" style={{ color: 'hsl(142 100% 50%)' }}>Today's Edge</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-muted-foreground/40">
@@ -547,7 +547,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                   >
 
                     <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full opacity-[0.06] pointer-events-none"
-                      style={{ background: `radial-gradient(circle, ${isGameBet ? 'hsl(190 90% 55%)' : 'hsl(250 76% 62%)'}, transparent)` }} />
+                      style={{ background: `radial-gradient(circle, ${isGameBet ? 'hsl(190 90% 55%)' : 'hsl(142 100% 50%)'}, transparent)` }} />
 
                     {/* HEADER ROW */}
                     <div className="relative z-10" style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
@@ -839,7 +839,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
         }}>
           <div className="absolute -bottom-6 -right-6 w-24 h-24 rounded-full opacity-[0.04] pointer-events-none"
             style={{ background: 'radial-gradient(circle, hsl(142 71% 45%), transparent)' }} />
-          <p className="text-[11px] font-bold tracking-[0.15em] uppercase mb-3" style={{ color: 'hsl(250 76% 62%)' }}>
+          <p className="text-[11px] font-bold tracking-[0.15em] uppercase mb-3" style={{ color: 'hsl(142 100% 50%)' }}>
             {yesterdayPending.length > 0 ? "Yesterday's Picks" : "Yesterday's Results"}
           </p>
           {hasYesterdayData ? (
@@ -933,8 +933,8 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
           padding: 16,
         }}>
           <div className="flex items-center gap-1.5 mb-2">
-            <Zap className="w-3.5 h-3.5" style={{ color: 'hsl(250 76% 62%)' }} />
-            <p className="text-[10px] tracking-[0.15em] uppercase font-bold" style={{ color: 'hsl(250 76% 62%)' }}>AI Daily Tip</p>
+            <Zap className="w-3.5 h-3.5" style={{ color: 'hsl(142 100% 50%)' }} />
+            <p className="text-[10px] tracking-[0.15em] uppercase font-bold" style={{ color: 'hsl(142 100% 50%)' }}>AI Daily Tip</p>
           </div>
           <p style={{ fontSize: 12, color: 'hsl(250 20% 62%)', lineHeight: 1.55 }}>
             Prime-time props with 65%+ hit rates are today's strongest edges. Check the Parlay Builder for correlated plays.
@@ -943,7 +943,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
 
         <div className="grid grid-cols-2 gap-3">
           <motion.div {...stagger(3)} className="vision-card p-3.5 flex flex-col items-center justify-center relative overflow-hidden min-w-0" style={{ borderRadius: 20 }}>
-            <div className="vision-orb w-20 h-20 top-0 left-0" style={{ background: 'hsl(250 76% 62%)', animationDelay: '-2s' }} />
+            <div className="vision-orb w-20 h-20 top-0 left-0" style={{ background: 'hsl(142 100% 50%)', animationDelay: '-2s' }} />
             <p className="text-[8px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-1 relative z-10">Performance</p>
             <div className="relative w-24 h-24 my-1">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
@@ -958,7 +958,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                 />
                 <defs>
                   <linearGradient id="ringGradientModern" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="hsl(250 76% 62%)" />
+                    <stop offset="0%" stopColor="hsl(142 100% 50%)" />
                     <stop offset="100%" stopColor="hsl(190 90% 55%)" />
                   </linearGradient>
                 </defs>
@@ -1005,7 +1005,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                         animate={{ width: `${(count / stats.total) * 100}%` }}
                         transition={{ duration: 0.6, delay: 0.2 + i * 0.08 }}
                         className="h-full rounded-full"
-                        style={{ background: 'linear-gradient(90deg, hsl(250 76% 62%), hsl(210 100% 60%))' }}
+                        style={{ background: 'linear-gradient(90deg, hsl(142 100% 50%), hsl(158 64% 52%))' }}
                       />
                     </div>
                   </div>

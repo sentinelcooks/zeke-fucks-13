@@ -80,7 +80,7 @@ const ContactUsSection = () => {
           onClick={() => setOpen(true)}
           className="w-full vision-card px-5 py-4 flex items-center gap-3 hover:bg-secondary/20 transition-colors"
         >
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))' }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))' }}>
             <MessageSquare className="w-4 h-4 text-white" />
           </div>
           <div className="text-left flex-1">
@@ -212,7 +212,7 @@ const SettingsPage = () => {
 
   return (
     <div className="px-4 pt-2 pb-4 space-y-4 relative">
-      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(250 76% 62%)' }} />
+      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(142 100% 50%)' }} />
 
       
 
@@ -222,7 +222,7 @@ const SettingsPage = () => {
           <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">Account</span>
         </div>
         <div className="px-5 py-4 flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))' }}>
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))' }}>
             <User className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
@@ -261,8 +261,8 @@ const SettingsPage = () => {
                     : "text-muted-foreground/65 hover:text-foreground/50"
                 }`}
                 style={oddsFormat === fmt.value ? {
-                  background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))',
-                  boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.3)',
+                  background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))',
+                  boxShadow: '0 4px 12px -2px hsla(142,100%,50%,0.3)',
                 } : {}}
               >
                 <span className="text-[11px] font-bold tracking-wider">{fmt.label}</span>
@@ -369,8 +369,8 @@ const SettingsPage = () => {
                     : "text-muted-foreground/65 hover:text-foreground/50"
                 }`}
                 style={homeTheme === t.value ? {
-                  background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))',
-                  boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.3)',
+                  background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))',
+                  boxShadow: '0 4px 12px -2px hsla(142,100%,50%,0.3)',
                 } : {}}
               >
                 <span className="text-[11px] font-bold tracking-wider">{t.label}</span>
@@ -390,7 +390,7 @@ const SettingsPage = () => {
           onClick={() => navigate("/dashboard/paywall")}
           className="w-full vision-card px-5 py-4 flex items-center gap-3 hover:bg-secondary/20 transition-colors"
         >
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))' }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))' }}>
             <CreditCard className="w-4 h-4 text-white" />
           </div>
           <div className="text-left flex-1">
@@ -418,7 +418,7 @@ const SettingsPage = () => {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="px-4 py-2 rounded-full text-[11px] font-bold text-accent-foreground flex items-center gap-2"
-            style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))' }}
+            style={{ background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))' }}
           >
             <Check className="w-3 h-3" /> Saved
           </motion.div>
