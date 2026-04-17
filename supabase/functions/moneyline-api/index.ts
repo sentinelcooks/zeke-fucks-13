@@ -139,16 +139,37 @@ async function getTeamSchedule(teamId: string, sport = "nba") {
   const base = getEspnBase(sport);
   const season = getSeasonForSport(sport);
   const previousSeason = season - 1;
-  const urls = [
+
+  // Always merge regular season + playoffs for the current season so post-season
+  // H2H meetings are never dropped. Dedupe by event id.
+  const currentSeasonUrls = [
     `${base}/teams/${teamId}/schedule?season=${season}&seasontype=2`,
+    `${base}/teams/${teamId}/schedule?season=${season}&seasontype=3`,
+  ];
+  const fallbackUrls = [
     `${base}/teams/${teamId}/schedule?season=${season}`,
     `${base}/teams/${teamId}/schedule?season=${previousSeason}&seasontype=2`,
     `${base}/teams/${teamId}/schedule?season=${previousSeason}`,
     `${base}/teams/${teamId}/schedule`,
   ];
 
-  let bestEvents: any[] = [];
-  for (const url of urls) {
+  const merged = new Map<string, any>();
+  for (const url of currentSeasonUrls) {
+    try {
+      const data = await fetchJSON(url);
+      for (const ev of data.events || []) {
+        const id = String(ev.id || ev.uid || `${ev.date}-${ev.name}`);
+        if (!merged.has(id)) merged.set(id, ev);
+      }
+    } catch {
+      // ignore — try next
+    }
+  }
+
+  if (merged.size > 10) return Array.from(merged.values());
+
+  let bestEvents: any[] = Array.from(merged.values());
+  for (const url of fallbackUrls) {
     try {
       const data = await fetchJSON(url);
       const events = data.events || [];
@@ -449,6 +470,9 @@ function extractH2HFromEvents(events: any[], team1Id: string, team2Id: string, s
       venue: comps.venue?.fullName || "",
     });
   }
+
+  // Newest-first: guarantee chronological descending order for all consumers.
+  h2h.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return h2h;
 }

@@ -599,6 +599,7 @@ function SpreadTeamSelector({
 /* ── H2H Table ── */
 function H2HTable({ h2h, team1, team2 }: { h2h: any[]; team1: Team; team2: Team }) {
   if (!h2h.length) return <p className="text-center text-muted-foreground text-sm">No games played</p>;
+  const sorted = [...h2h].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   return (
     <div className="overflow-x-auto -mx-1">
       <table className="w-full text-xs">
@@ -610,7 +611,7 @@ function H2HTable({ h2h, team1, team2 }: { h2h: any[]; team1: Team; team2: Team 
           </tr>
         </thead>
         <tbody>
-          {h2h.map((g, i) => {
+          {sorted.map((g, i) => {
             const margin = g.team1_score - g.team2_score;
             const total = g.team1_score + g.team2_score;
             const d = new Date(g.date);
@@ -628,6 +629,14 @@ function H2HTable({ h2h, team1, team2 }: { h2h: any[]; team1: Team; team2: Team 
       </table>
     </div>
   );
+}
+
+function getPastMeetingsLabel(sport?: string): string {
+  const s = (sport || "nba").toLowerCase();
+  if (s === "mlb") return "Past Meetings (2026 Season + Last Season)";
+  if (s === "nfl") return "Past Meetings (2025 Season + Last Season)";
+  // NBA / NHL / NCAAB: split-year season
+  return "Past Meetings (2025–26 Season + Last Season)";
 }
 
 /* ── Platform Odds (Real from Odds API) — OddsProjection-style design ── */
@@ -1774,7 +1783,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
             </Section>
           )}
 
-          <Section title="Past Meetings">
+          <Section title={getPastMeetingsLabel(results.sport || sport)}>
             <H2HTable h2h={results.head_to_head || []} team1={results.team1} team2={results.team2} />
           </Section>
 
