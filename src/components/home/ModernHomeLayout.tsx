@@ -522,9 +522,9 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               <p className="text-[11px] text-muted-foreground/55">No picks generated yet today. Check back soon!</p>
             </div>
           ) : (
-            <CarouselWrapper pickCount={todayPicks.length}>
+            <div className="-mx-5 px-5 overflow-x-auto hide-scrollbar snap-x snap-mandatory">
               <div className="flex gap-3 pb-2">
-                {todayPicks.map((pick, i) => {
+                {todayPicks.slice(0, 5).map((pick, i) => {
                   const isGameBet = pick.bet_type && pick.bet_type !== 'prop';
                   // Defensive: hit_rate may be decimal (0.76) or percent (76). Normalize to percent.
                   const rawHr = pick.hit_rate ?? 0;
