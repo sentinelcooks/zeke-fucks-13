@@ -294,7 +294,7 @@ export default function PaywallPage() {
                     </div>
                   )}
 
-                  <div className="absolute top-2 left-2 w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-[#00FF6A]' : 'border-white/30'}">
+                  <div className="absolute top-2 left-2">
                     <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-[#00FF6A]" : "border-white/30"}`}>
                       {isSelected && <div className="w-2 h-2 rounded-full bg-[#00FF6A]" />}
                     </div>
