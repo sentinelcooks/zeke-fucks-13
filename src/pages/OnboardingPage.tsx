@@ -7,6 +7,42 @@ import logoNba from "@/assets/logo-nba.png";
 import logoMlb from "@/assets/logo-mlb.png";
 import logoUfc from "@/assets/logo-ufc.png";
 import logoNhl from "@/assets/logo-nhl.png";
+import OnboardingHero from "@/components/onboarding/OnboardingHero";
+import { preloadGeneratedImage } from "@/hooks/useGeneratedImage";
+
+/* ───────── WaveSpeed hero prompts ───────── */
+const HERO_PROMPTS: Record<string, { key: string; prompt: string }> = {
+  welcome: {
+    key: "onboarding-welcome",
+    prompt:
+      "Cinematic dark stadium at night, glowing purple data overlays and neon analytics graphs floating above the field, predator-hunter mood, ultra-detailed, 4k, moody lighting, premium sports intelligence aesthetic",
+  },
+  edge: {
+    key: "onboarding-edge",
+    prompt:
+      "Split-screen visualization: chaotic red losing chart on the left vs glowing green ascending profit graph on the right, dark cinematic background, holographic data overlays, sharp focus, premium fintech mood",
+  },
+  odds: {
+    key: "onboarding-odds",
+    prompt:
+      "Glowing dice and floating odds numbers (-110, +150, 1.91) suspended in dark space, electric purple highlights, premium fintech aesthetic, cinematic lighting",
+  },
+  sports: {
+    key: "onboarding-sports",
+    prompt:
+      "Dark collage of NBA basketball, MLB baseball, NHL hockey, and UFC octagon — silhouetted athletes mid-action with purple and cyan rim lighting, predator vibe, cinematic 4k",
+  },
+  experience: {
+    key: "onboarding-experience",
+    prompt:
+      "Lone hooded figure analyzing a massive holographic data wall of sports analytics, dark room, deep purple glow, intense focus, cinematic ultra-detailed",
+  },
+  value: {
+    key: "onboarding-valueproof",
+    prompt:
+      "Glowing premium player card hovering above a dark surface, surrounded by floating heatmaps, shot charts and stat overlays, mint green confidence indicator, cinematic 4k",
+  },
+};
 
 /* ───────── Constants ───────── */
 const ease = [0.32, 0.72, 0, 1] as const;
