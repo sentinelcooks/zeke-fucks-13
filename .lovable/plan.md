@@ -1,50 +1,45 @@
 
-## Plan: Curate Free Picks — quality over quantity
+## Plan: Paywall contrast, hierarchy & glow polish
 
-Replace the current "any edge ≥ 2%" firehose with a tiered, market-aware quality filter so Free Picks only surfaces high-conviction, high-value plays.
-
-### Root cause
-Current thresholds in `_shared/edge_scoring.ts` + `slate-scanner` are too permissive:
-- Free Picks accepts confidence ≥ 0.65 with no edge floor and no market-reliability weighting.
-- Game-line generator accepts edge ≥ 0.02 with projected_prob clamp down to 0.05 → surfaces longshot home/away ML picks and under-totals with thin signal.
-- All prop markets treated equally — volatile markets (HRs, strikeouts, blocks, steals, threes) compete on the same threshold as stable ones (points, hits, rebounds, assists).
-- Final ranking uses `edge × confidence` only — no penalty for low hit rate or low-reliability markets.
+Apply the spec across `PaywallPage.tsx` and `CountdownBanner.tsx`. Pure visual changes — no logic, routing, or pricing touched.
 
 ### Changes
 
-**1. `_shared/edge_scoring.ts`** — introduce market reliability + composite quality score
-- Add `MARKET_RELIABILITY` map (0.4–1.0):
-  - High (1.0): NBA points/rebounds/assists, MLB hits, NHL SOG, moneyline (favorites only)
-  - Mid (0.75): NBA threes/PRA, MLB total bases, NHL points, spreads, totals
-  - Low (0.5): NBA steals/blocks, MLB HRs/strikeouts (under), longshot ML (+150+)
-- New `qualityScore = confidence × reliability × (1 + edge) × hitRateFactor`
-- Tier thresholds become market-aware:
-  - Strong: confidence ≥ 0.72 AND edge ≥ 0.04 AND reliability ≥ 0.75
-  - Lean: confidence ≥ 0.66 AND edge ≥ 0.03 AND reliability ≥ 0.6
-  - Reject everything else
-- Special rule: under-HR, under-K, longshot dog ML require confidence ≥ 0.78 AND edge ≥ 0.06
+**1. `PaywallPage.tsx` — color hierarchy**
+- Trial pills (Monthly hero + Weekly/Yearly): swap `bg-[#00FF6A]/20 text-[#00FF6A]` → `bg-[#1F1F1F] text-white` so green stops competing with itself.
+- Social proof "10,000+" already white — keep, but ensure surrounding text stays muted.
+- Unselected card prices: already white ✓. Selected stays `#00FF6A` ✓.
+- Yearly `BEST VALUE` badge: change from solid green block to `text-[#00FF6A]` on dark bg, smaller.
 
-**2. `slate-scanner/index.ts`** — apply curated filters
-- Game lines: raise edge floor to 0.035, drop projected_prob clamp floor to 0.35 (no longshot dogs), require qualityScore ≥ threshold.
-- Player props pulled from `free_props` table: re-score with new module, drop anything below new tier gates.
-- Cap Free Picks at top 20 by qualityScore (was 30), max 6 per sport, max 2 low-reliability picks total.
-- Today's Edge: top 5 globally by qualityScore (was per-sport).
+**2. `PaywallPage.tsx` — Weekly/Yearly card sizing & spacing**
+- Card padding: `px-3 py-3.5` → `px-4 py-4`.
+- Label: `text-[11px]` → `text-[14px]`, add `space-y-2` rhythm.
+- Trial pill: `text-[7px]` → `text-[9px]`.
+- Price: `text-[20px]` → `text-[24px]`.
+- perDay: `text-[9px]` → `text-[10px]`.
+- Saving: `text-[8px]` → `text-[10px]`.
 
-**3. `rankAndDistribute`** — sort by qualityScore (not raw score), enforce per-sport and per-reliability caps.
+**3. `PaywallPage.tsx` — Monthly hero price emphasis**
+- Bump `$39.99` from `text-[28px]` → `text-[34px]`.
+- Add struck-through anchor `$59.99` in muted gray above/beside savings line.
 
-**4. Verification (after default mode)**
-1. Deploy `slate-scanner` + `_shared/edge_scoring.ts`.
-2. `curl /slate-scanner?dryRun=true&debug=true&seed=true` — confirm seed plays still pass new gates with their new qualityScore field surfaced.
-3. `curl /slate-scanner?dryRun=true&debug=true` — paste counts per sport and top 5 with full math (confidence, edge, reliability, qualityScore).
-4. Run live (non-dry) scan, then:
-   ```sql
-   SELECT sport, prop_type, direction, confidence, edge,
-          ROUND((confidence*edge)::numeric, 4) AS legacy_score
-   FROM free_props WHERE prop_date = current_date
-   ORDER BY confidence DESC LIMIT 20;
-   ```
-   Confirm: zero `under home_runs` / `under strikeouts` unless conf ≥ 0.78, zero +200 ML dogs, total row count ≤ 20.
-5. Visual check at `/dashboard/free-picks`.
+**4. `PaywallPage.tsx` — badge collision fix**
+- Move `BEST VALUE` from `right-2` → top-CENTER (`left-1/2 -translate-x-1/2`), matching MOST POPULAR.
+- Move radio indicator from `top-3 right-3` → `top-2 left-2`.
+- Add `pl-9` to Weekly/Yearly card content to clear the radio.
+
+**5. `PaywallPage.tsx` — value-tiered glow**
+- Monthly selected: stronger pulse glow w/ new `card-pulse` keyframe (added to existing `<style>` block).
+- Yearly selected: medium glow.
+- Weekly: neutral border only.
+
+**6. `CountdownBanner.tsx` — breathing room**
+- Increase outer gap: `gap-3`, padding `px-4 py-3` (already there ✓ — verify and bump if needed).
+- Add `whitespace-nowrap` to LIMITED TIME / 7-DAY FREE TRIAL lines so they never wrap into the icon.
+- Slightly larger tag icon container.
 
 ### Out of scope
-Pulling in new model factors (rest days, lineup splits) — that's a separate model upgrade; this PR is purely curation gates over current model output.
+Pricing values, routing logic, features accordion, sticky footer CTA, sparklines, ESPN avatars, sport icons.
+
+### Verification
+- Visual check at `/paywall`: no green trial pills, BEST VALUE centered with no radio overlap, Monthly price visibly larger and pulsing, Weekly/Yearly cards no longer cramped, countdown banner reads cleanly.
