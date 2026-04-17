@@ -69,17 +69,27 @@ function ProgressDots({ current, total }: { current: number; total: number }) {
       <span className="text-xs font-bold text-white/60 tabular-nums">
         {current} / {total}
       </span>
-      <div className="flex gap-1.5 ml-1">
+      <div className="flex gap-1.5 ml-1 items-center">
         {Array.from({ length: total }).map((_, i) => {
-          const active = i < current;
+          const isActive = i === current - 1;
+          const isCompleted = i < current - 1;
           return (
             <motion.div
               key={i}
               animate={{
-                width: active ? 22 : 16,
-                backgroundColor: active ? "#00FF6A" : "#2A2A2A",
+                width: isActive ? 28 : 14,
+                backgroundColor: isActive
+                  ? "#00FF6A"
+                  : isCompleted
+                  ? "rgba(0,255,106,0.7)"
+                  : "#2A2A2A",
+                boxShadow: isActive
+                  ? "0 0 12px rgba(0,255,106,0.8), 0 0 24px rgba(0,255,106,0.45), 0 0 4px rgba(0,255,106,1)"
+                  : isCompleted
+                  ? "0 0 6px rgba(0,255,106,0.35)"
+                  : "0 0 0 rgba(0,0,0,0)",
               }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
               className="h-1.5 rounded-full"
             />
           );
@@ -129,20 +139,68 @@ function SectionContainer({ children }: { children: React.ReactNode }) {
 
 /* ─────────── Mini sparkline ─────────── */
 function Sparkline({ color = "#00FF6A", down = false, className = "" }: { color?: string; down?: boolean; className?: string }) {
-  const path = down
-    ? "M2,10 L12,18 L22,15 L32,28 L42,30 L52,38"
-    : "M2,38 L12,30 L22,32 L32,20 L42,22 L52,8";
+  const points = down
+    ? [[2, 10], [12, 18], [22, 15], [32, 28], [42, 30], [52, 38]]
+    : [[2, 38], [12, 30], [22, 32], [32, 20], [42, 22], [52, 8]];
+  const polyPts = points.map((p) => p.join(",")).join(" ");
+  const last = points[points.length - 1];
+  const fillPath = `M${points[0][0]},40 L${polyPts.split(" ").join(" L")} L${last[0]},40 Z`;
+  const gradId = `sg-${color.replace("#", "")}-${down ? "d" : "u"}`;
   return (
-    <svg viewBox="0 0 54 40" className={className} fill="none">
+    <svg viewBox="0 0 54 40" className={className} fill="none" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {/* Subtle grid */}
+      {[10, 20, 30].map((y) => (
+        <line key={y} x1="0" y1={y} x2="54" y2={y} stroke="#FFFFFF" strokeOpacity="0.04" strokeWidth="0.5" />
+      ))}
+      {/* Gradient fill under line */}
       <motion.path
-        d={path}
+        d={fillPath}
+        fill={`url(#${gradId})`}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6, delay: 0.3 }}
+      />
+      {/* Glowing polyline */}
+      <motion.polyline
+        points={polyPts}
         stroke={color}
-        strokeWidth={2}
+        strokeWidth={1.8}
         strokeLinecap="round"
         strokeLinejoin="round"
+        style={{ filter: `drop-shadow(0 0 4px ${color}) drop-shadow(0 0 8px ${color}80)` }}
         initial={{ pathLength: 0 }}
         animate={{ pathLength: 1 }}
         transition={{ duration: 1.1, ease: "easeOut" }}
+      />
+      {/* Dot nodes */}
+      {points.slice(0, -1).map(([x, y], i) => (
+        <motion.circle
+          key={i}
+          cx={x}
+          cy={y}
+          r={1.4}
+          fill={color}
+          initial={{ opacity: 0, scale: 0 }}
+          animate={{ opacity: 0.85, scale: 1 }}
+          transition={{ duration: 0.25, delay: 0.5 + i * 0.08 }}
+        />
+      ))}
+      {/* Bright endpoint */}
+      <motion.circle
+        cx={last[0]}
+        cy={last[1]}
+        r={2.4}
+        fill={color}
+        style={{ filter: `drop-shadow(0 0 4px ${color}) drop-shadow(0 0 10px ${color})` }}
+        initial={{ opacity: 0, scale: 0 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.35, delay: 1.0 }}
       />
     </svg>
   );
