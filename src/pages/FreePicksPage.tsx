@@ -20,10 +20,14 @@ interface Pick {
   sport: string;
   team: string | null;
   opponent: string | null;
+  home_team: string | null;
+  away_team: string | null;
   odds: string | null;
   reasoning: string | null;
   pick_date: string;
   avg_value: number | null;
+  bet_type: string | null;
+  tier: string | null;
 }
 
 interface TrendProp {
