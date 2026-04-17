@@ -471,6 +471,9 @@ function extractH2HFromEvents(events: any[], team1Id: string, team2Id: string, s
     });
   }
 
+  // Newest-first: guarantee chronological descending order for all consumers.
+  h2h.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
   return h2h;
 }
 
