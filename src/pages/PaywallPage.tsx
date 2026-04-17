@@ -18,7 +18,7 @@ interface Plan {
 const PLANS: Plan[] = [
   { id: "weekly",  label: "Weekly",  price: "$9.99",   subtext: "Good for trying it out" },
   { id: "monthly", label: "Monthly", price: "$39.99",  subtext: "$1.33/day", badge: "MOST POPULAR", saving: "Save 60% vs Weekly" },
-  { id: "yearly",  label: "Yearly",  price: "$219",    subtext: "$18.25/month", badge: "Best Long-Term Value", saving: "Save $260 vs weekly", extraLine: "2 months free" },
+  { id: "yearly",  label: "Yearly",  price: "$219.99", subtext: "$18.25/month", badge: "Best Long-Term Value", saving: "Save $260 vs weekly", extraLine: "2 months free" },
 ];
 
 interface Feature {
@@ -323,7 +323,7 @@ export default function PaywallPage() {
                   } ${isWeekly && !isSelected ? "opacity-70" : ""}`}
                 >
                   {plan.badge && (
-                    <div className="absolute -top-px left-1/2 -translate-x-1/2 bg-[#1F1F1F] text-white/70 text-[8px] font-black px-2 py-0.5 rounded-b-md tracking-wider uppercase border-x border-b border-[#2A2A2A] whitespace-nowrap">
+                    <div className="absolute -top-px left-1/2 -translate-x-1/2 bg-[#1F1F1F] text-amber-400 text-[8px] font-black px-2 py-0.5 rounded-b-md tracking-wider uppercase border-x border-b border-[#2A2A2A] whitespace-nowrap">
                       {plan.badge}
                     </div>
                   )}
@@ -339,7 +339,7 @@ export default function PaywallPage() {
                   </div>
 
                   <div>
-                    <div className={`text-[24px] font-extrabold tabular-nums leading-none ${isSelected ? "text-[#00FF6A]" : isWeekly ? "text-white/80" : "text-white"}`}>
+                    <div className={`text-[24px] font-extrabold tabular-nums leading-none ${isSelected ? "text-[#00FF6A]" : isWeekly ? "text-white/80" : "text-slate-50"}`}>
                       {plan.price}
                     </div>
                     <div className={`text-[10px] mt-1 ${isWeekly ? "text-white/50" : "text-white/60"}`}>{plan.subtext}</div>
