@@ -1,46 +1,29 @@
 
+## Plan
 
-## Goal
-Replace the locked "Advanced Analytics / Unlock Premium" footer on Screen 1 with a compact **AI Analysis preview** tailored to the Luka OVER 32.5 Points pick (mirrors the in-app Written Analysis style from screenshot 2).
+### 1. `supabase/functions/slate-scanner/index.ts` — active per-player analysis
+- Loop SPORTS = ['nba','mlb','nhl','ufc']
+- Per sport: fetch today's games (games-schedule), then for each game pull live `(player, market, line, odds)` tuples from `nba-odds/events`
+- Call sport analyzer (`nba-api`/`mlb-model`/`nhl-model`/`ufc-api`) per player×prop with chunked concurrency (5 at a time, small delay) to avoid Lovable AI 429s
+- Score each result via `_shared/edge_scoring.ts`, keep non-Pass
+- Keep existing game-line evaluation
+- Per-sport logging: `[sport] N games, M players, K props, X candidates`
+- Wipe + insert today's `daily_picks` and `free_props`
+- Return `{ stats: { nba:{games,players,props,candidates}, ... }, todays_edge, daily, free }`
 
-## Change — single file: `src/pages/OnboardingPage.tsx`
+### 2. `supabase/functions/_shared/edge_scoring.ts` — sport-diverse Today's Edge
+- In `rankAndDistribute`: enforce **max 2 per sport** in Today's Edge top 5, fall back to fill remaining slots if cap leaves <5
 
-Remove lines 287–292 (the locked footer) and insert a new "AI Analysis Preview" block in its place, still inside the same card. Keep the card, header, headshot, stats row, and CTA untouched.
+### 3. Verification (after deploy)
+- Deploy `slate-scanner` and `_shared/edge_scoring.ts`
+- `curl` `slate-scanner?debug=true`, paste full JSON response
+- Pull `slate-scanner` logs, paste per-sport headers
+- Run SQL `SELECT sport, tier, COUNT(*) FROM daily_picks WHERE pick_date=CURRENT_DATE GROUP BY sport, tier ORDER BY sport, tier` and paste
+- Confirm Today's Edge / Picks no longer empty
 
-### New block content (Luka-tailored, concise)
+### Out of scope
+Analyzer model logic, UI styling, onboarding/paywall, auth/routing, free-props cron.
 
-Header pill: green "IN-DEPTH ANALYSIS" tag (matches inspo).
-
-Three labeled mini-sections, each = colored icon + label + 2 short sentences:
-
-1. **STATISTICAL EDGE** (blue, BarChart icon)  
-   "Luka is averaging 34.1 PPG over his last 10 games, comfortably above the 32.5 line. Per-36 projection of 35.8 reinforces the over."
-
-2. **MATCHUP & PACE** (green, Swords icon)  
-   "Denver allows the 6th-most points to opposing guards. Projected pace of 101.4 favors volume scoring."
-
-3. **VERDICT & RISK** (purple/accent, TrendingUp icon)  
-   "Strong lean OVER 32.5. Wager 1.5 units with 64% model confidence. Key risk: early blowout limiting minutes."
-
-Bottom verdict box (mirrors "TAKE THIS PICK" panel from inspo):
-- Green check + bold "TAKE THIS PICK" + small "OVERALL VERDICT — ALL FACTORS COMBINED"
-- 1-line summary: "Strong play. Luka OVER 32.5 Points checks the boxes. L10 avg 34.1, +EV 7.2%. Recommended sizing: 1.5–2 units."
-- Footer line: "AI CONFIDENCE: 64%   POWERED BY SENTINEL AI"
-
-### Visual spec (match existing onboarding palette, not the in-app dark teal)
-- Use existing `#00FF6A` neon green for accents/checks (consistent with rest of onboarding screen).
-- Section labels: tiny uppercase tracking-wider; colors: blue `text-[#3B82F6]`, green `text-[#00FF6A]`, accent purple `text-[#A78BFA]`.
-- Body text: `text-[10px] text-white/70 leading-snug`.
-- Verdict box: subtle green tint background `bg-[#00FF6A]/8` with `border-[#00FF6A]/25` rounded-lg, padding 2.5.
-- Whole preview block sits inside the existing card; tighten spacing so total card height grows by ~140px max (still fits 1-screen mobile).
-
-### Imports to add
-`Sword as Swords` (already may exist), `BarChart3`, `TrendingUp`, `CheckCircle2` from `lucide-react` (Brain/BarChart3 already imported on this page).
-
-## Out of scope
-- No logic changes, no data fetch, no other onboarding screens, no in-app `WrittenAnalysis.tsx` edits.
-- Hardcoded preview content only — this is a marketing illustration, not a live AI call.
-
-## Files touched
-1. `src/pages/OnboardingPage.tsx` — replace lines 287–292 with the new AI Analysis preview block.
-
+### Files touched
+1. `supabase/functions/slate-scanner/index.ts`
+2. `supabase/functions/_shared/edge_scoring.ts`
