@@ -804,7 +804,6 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                   );
                 })}
               </div>
-              </div>
             </div>
           )}
         </motion.div>
