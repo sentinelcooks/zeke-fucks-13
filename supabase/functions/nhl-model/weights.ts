@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────
 // NHL Lines Model v2.0 — 26-factor weight tables
-// EVERY bet_type lists ALL 26 factor slots explicitly.
-// Factors set to 0 include a comment explaining why.
+// EVERY bet_type lists ALL 26 factor slots explicitly via row().
+// Factors set to 0 are excluded from that bet_type by design.
 // validateWeights() throws if any sum != 1.00 (±0.001).
 // ─────────────────────────────────────────────────────────────
 
@@ -43,7 +43,6 @@ export const ALL_FACTORS = [
 export type FactorName = typeof ALL_FACTORS[number];
 export type WeightsTable = Record<FactorName, number>;
 
-// Helper to make a fully-populated row (defaults all to 0)
 function row(overrides: Partial<Record<FactorName, number>>): WeightsTable {
   const out = {} as WeightsTable;
   for (const f of ALL_FACTORS) out[f] = overrides[f] ?? 0;
@@ -52,8 +51,9 @@ function row(overrides: Partial<Record<FactorName, number>>): WeightsTable {
 
 export const WEIGHTS_V2: Record<string, WeightsTable> = {
   // ── MONEYLINE (sum = 1.00) ─────────────────────────────────
-  // Excluded (=0): pace (totals only), pp_pct/pk_pct (replaced by st_diff),
-  // goals_l5/goalie_l5 (replaced by goals_blend/goalie_l10), public_pct (replaced by rlm)
+  // Excluded (=0): pace (totals only), goals_game/goals_allowed (subsumed by goals_blend / xg),
+  // pp_pct/pk_pct (replaced by st_diff), goals_l5/goalie_l5 (replaced by blends),
+  // public_pct (replaced by rlm), shooting_pct (de-emphasized for ML).
   moneyline: row({
     goalie_sv: 0.15,
     xg: 0.10,
@@ -73,13 +73,11 @@ export const WEIGHTS_V2: Record<string, WeightsTable> = {
     backup_goalie: 0.03,
     hd_chances: 0.02,
     blocks_hits: 0.02,
-    shooting_pct: 0.01,
-    // Explicit zeros (kept in row() default = 0):
-    // pace, goals_allowed, pp_pct, pk_pct, goals_l5, goalie_l5, public_pct, goals_game
   }),
 
   // ── PUCKLINE (sum = 1.00) ─────────────────────────────────
-  // Excluded: pace, pp_pct/pk_pct, goals_l5/goalie_l5, blocks_hits, public_pct
+  // Excluded: pace (totals), pp_pct/pk_pct (st_diff), goals_l5/goalie_l5,
+  // blocks_hits, public_pct, backup_goalie, goals_game, shots_against, pts_l10.
   puckline: row({
     cf_proxy: 0.12,
     st_diff: 0.10,
@@ -88,24 +86,22 @@ export const WEIGHTS_V2: Record<string, WeightsTable> = {
     goalie_sv: 0.07,
     goals_blend: 0.06,
     momentum: 0.05,
-    gaa: 0,                         // alias intentionally unset; goalie_gaa below
     goalie_gaa: 0.05,
     hd_chances: 0.04,
     arena: 0.04,
     rlm: 0.04,
     line_movement: 0.04,
     rest_days: 0.04,
-    home_away: 0.04,
     goalie_l10: 0.04,
     goalie_workload: 0.04,
-    shooting_pct: 0.04,
-    h2h: 0.04,
-    backup_goalie: 0.01,
-    // pace, pp_pct, pk_pct, goals_l5, goalie_l5, blocks_hits, public_pct, goals_game, shots_against = 0
-  } as Partial<Record<FactorName, number>>),
+    home_away: 0.03,
+    shooting_pct: 0.03,
+    h2h: 0.03,
+  }),
 
   // ── TOTAL (sum = 1.00) ────────────────────────────────────
-  // Excluded: home_away, h2h, momentum, backup, hd, blocks, pp/pk, goals_l5, goalie_l5, public_pct
+  // Excluded: home_away, h2h, momentum, backup, hd_chances, blocks_hits,
+  // pp_pct/pk_pct, goals_l5, goalie_l5, public_pct, goals_game, pts_l10, shots_against.
   total: row({
     pace: 0.14,
     xg: 0.12,
@@ -125,7 +121,8 @@ export const WEIGHTS_V2: Record<string, WeightsTable> = {
   }),
 
   // ── PLAYER PROP (sum = 1.00) ──────────────────────────────
-  // Player prop uses opponent goalie/pace context. Excluded: arena, blocks, hd, backup, public_pct, gaa
+  // Excluded: arena, blocks_hits, hd_chances, backup, public_pct, gaa, goals_allowed,
+  // goalie_l5, goals_l5, pk_pct, goalie_l10 (use opp_workload instead).
   player_prop: row({
     shooting_pct: 0.12,
     pace: 0.10,
@@ -158,10 +155,42 @@ export function validateWeights(table: Record<string, WeightsTable>): string[] {
   return errors;
 }
 
-// Throw at module load — fail fast in production.
+// Throw at module load — fail fast.
 const _validationErrors = validateWeights(WEIGHTS_V2);
 if (_validationErrors.length > 0) {
   throw new Error("NHL WEIGHTS_V2 validation failed:\n" + _validationErrors.join("\n"));
 }
 
 export const MODEL_VERSION = "v2.0";
+
+export const FACTOR_LABELS: Record<string, string> = {
+  goalie_sv: "Goalie Save %",
+  goalie_gaa: "Goalie GAA",
+  goalie_l5: "Goalie L5 SV%",
+  goalie_l10: "Goalie L10 SV% (weighted)",
+  backup_goalie: "Backup Goalie",
+  shots_against: "Shots Against/Game",
+  goals_game: "Goals/Game",
+  shooting_pct: "Shooting %",
+  pp_pct: "Power Play %",
+  pk_pct: "Penalty Kill %",
+  pts_l10: "Points/Game L10",
+  goals_l5: "Goals L5",
+  goals_blend: "Goals Blend (L5/L10/L20)",
+  blocks_hits: "Blocks + Hits/Game",
+  goals_allowed: "Goals Allowed/Game",
+  hd_chances: "HD Chances Against",
+  home_away: "Home/Away Record",
+  rest_days: "Rest Days",
+  momentum: "L5 Momentum",
+  h2h: "Head-to-Head",
+  line_movement: "Line Movement",
+  public_pct: "Public %",
+  xg: "Expected Goals (xG/60)",
+  goalie_workload: "Goalie Workload (Last 7d)",
+  st_diff: "Special Teams Differential",
+  cf_proxy: "Possession (CF% proxy)",
+  pace: "Pace (combined SAT/60)",
+  arena: "Arena Factor",
+  rlm: "Reverse Line Movement",
+};
