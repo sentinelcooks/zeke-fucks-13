@@ -85,8 +85,8 @@ export function BottomTabBar() {
                     layoutId="activeTab"
                     className="absolute -top-0.5 w-8 h-1 rounded-full"
                     style={{
-                      background: "linear-gradient(90deg, hsl(250, 76%, 62%), hsl(210, 100%, 60%))",
-                      boxShadow: "0 2px 12px -2px hsla(250, 76%, 62%, 0.4)",
+                      background: "hsl(142, 100%, 50%)",
+                      boxShadow: "0 2px 12px -2px hsla(142, 100%, 50%, 0.55)",
                     }}
                     transition={{ type: "spring", stiffness: 400, damping: 30 }}
                   />

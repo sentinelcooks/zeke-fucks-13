@@ -133,8 +133,8 @@ const STREAK_ICONS: Record<string, typeof Flame> = {
 };
 const STREAK_COLORS: Record<string, string> = {
   recent_form: "from-[hsl(30,100%,50%)] to-[hsl(15,100%,55%)]",
-  vs_opponent: "from-[hsl(250,76%,62%)] to-[hsl(280,70%,55%)]",
-  home_away: "from-[hsl(190,90%,55%)] to-[hsl(210,100%,60%)]",
+  vs_opponent: "from-[hsl(142,100%,50%)] to-[hsl(158,64%,52%)]",
+  home_away: "from-[hsl(190,90%,55%)] to-[hsl(158,64%,52%)]",
 };
 
 const stagger = (i: number) => ({
@@ -242,7 +242,7 @@ const FreePicksPage = () => {
   return (
     <div className="flex flex-col min-h-full relative">
       {/* Ambient orbs */}
-      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: "hsl(250 76% 62%)" }} />
+      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: "hsl(142 100% 50%)" }} />
       <div className="vision-orb w-36 h-36 top-[600px] -left-12" style={{ background: "hsl(30 100% 50%)", animationDelay: "-3s" }} />
 
       
@@ -267,7 +267,7 @@ const FreePicksPage = () => {
                     : "text-muted-foreground/50 hover:text-muted-foreground/70"
                 }`}
                 style={active
-                  ? { background: "linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))" }
+                  ? { background: "linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))" }
                   : { background: "hsla(228, 20%, 12%, 0.6)", border: "1px solid hsla(228, 20%, 18%, 0.3)" }
                 }
               >
@@ -472,11 +472,11 @@ const FreePicksPage = () => {
             <EmptyState message="No SGP combos available right now" />
           ) : (
             <div className="space-y-3">
-              <SectionHeader icon={Zap} gradient="from-[hsl(250,76%,62%)] to-[hsl(210,100%,60%)]" title="Same-Game Parlays" subtitle="High-confidence SGP combos" />
+              <SectionHeader icon={Zap} gradient="from-[hsl(142,100%,50%)] to-[hsl(158,64%,52%)]" title="Same-Game Parlays" subtitle="High-confidence SGP combos" />
               {sgps.map((sgp, si) => (
                 <motion.div key={`sgp-${si}`} {...stagger(si)} className="vision-card p-4 relative overflow-hidden">
                   <div className="absolute -top-6 -right-6 w-20 h-20 opacity-[0.05] pointer-events-none"
-                    style={{ background: "radial-gradient(circle, hsl(250 76% 62%), transparent)" }} />
+                    style={{ background: "radial-gradient(circle, hsl(142 100% 50%), transparent)" }} />
                   <div className="flex items-center justify-between mb-3 relative z-10">
                     <span className="text-[12px] font-extrabold text-foreground">{sgp.matchup}</span>
                     <span className="text-[11px] font-extrabold text-nba-green tabular-nums">{sgp.combined_hit_pct}%</span>
