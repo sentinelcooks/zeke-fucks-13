@@ -51,15 +51,25 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function OnboardingGuard({ children }: { children: React.ReactNode }) {
   const { profile, isAuthenticated, isLoading } = useAuth();
   if (isLoading) return <LoadingSpinner />;
-  // Check local flag first (survives network failures), then server flag
+
+  // Escape hatch: ?force=1 bypasses the guard so onboarding can always be re-entered for testing/QA.
+  const forceParam = new URLSearchParams(window.location.search).get("force");
+  if (forceParam === "1") {
+    localStorage.removeItem("sentinel_onboarding_complete");
+    return <>{children}</>;
+  }
+
+  // Only redirect away from onboarding for authenticated users who already completed it.
+  // Unauthenticated visitors should always be able to step through onboarding.
+  if (!isAuthenticated) return <>{children}</>;
+
   const localComplete = localStorage.getItem("sentinel_onboarding_complete") === "true";
   const serverComplete = profile?.onboarding_complete === true;
   if (localComplete || serverComplete) {
-    // Sync local flag from server if missing
     if (serverComplete && !localComplete) {
       localStorage.setItem("sentinel_onboarding_complete", "true");
     }
-    return <Navigate to={isAuthenticated ? "/dashboard" : "/auth"} replace />;
+    return <Navigate to="/dashboard" replace />;
   }
   return <>{children}</>;
 }
