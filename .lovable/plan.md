@@ -1,32 +1,31 @@
 
 
-## Root Cause
+## Plan: Scroll to top after correlated prop search
 
-In `src/pages/NbaPropsPage.tsx` lines 2183–2197, the search button on each correlated prop row updates state (`setPlayer`, `setPropType`, `setLine`) and then calls `handleAnalyze()` after a 150ms `setTimeout`.
+### Root cause
+In `src/pages/NbaPropsPage.tsx`, the correlated prop row's search button onClick calls `handleAnalyze({...})` but never scrolls. Since the correlated section sits well below the results area, the user stays at the bottom of the page even though new results have loaded above.
 
-The bug: **React state updates are asynchronous and batched**. `handleAnalyze()` reads from the closure's stale `player`/`propType`/`line` values (still the originally searched player), not the just-tapped correlated player. The 150ms timeout is unreliable — sometimes state has flushed, sometimes not, depending on render timing. Result: the analysis fires for the previously searched player while the form *displays* the new player, so the stats shown don't match.
+### Fix
 
-Other defects in the same handler:
-- `c.correlated_line` may be `0` or `undefined` → `parseFloat("")` → `NaN` → analyze silently aborted.
-- `parlaySlip.legs.find` for the remove button matches only on `player + propType` (no `line`), so removing the wrong leg is possible if the same player has multiple props in the slip.
-- Sport scope: only NBA renders Correlated Props (`sport === "nba"` guard at line 2139), so this fix is NBA-only by design — the user's "all sports" request is moot here because correlated props is currently NBA-exclusive.
+**1. `src/pages/NbaPropsPage.tsx`** — correlated prop tap handler
+- Right after the `handleAnalyze({ player, propType, line, overUnder })` call inside the correlated row's onClick, add a scroll-to-top.
+- The dashboard scroll container is the `<main>` element in `DashboardLayout.tsx` (not `window`), so `window.scrollTo` alone won't work reliably. Use the same pattern as elsewhere — scroll the closest scrollable ancestor:
+  ```ts
+  document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  ```
+- Place this immediately after the `handleAnalyze(...)` call so state updates and the fetch are already initiated.
 
-## Fix
+**2. Audit other "tap a related row to re-analyze" patterns**
+- Check `src/pages/MoneyLinePage.tsx`, `src/pages/UfcPage.tsx`, `src/components/MoneyLineSection.tsx`, `src/components/parlay/*` for similar "tap related item → re-run analysis" handlers. If found, apply the same scroll-to-top pattern.
+- Likely candidates: any "View matchup" / "Analyze this prop" buttons inside results panels.
 
-In `NbaPropsPage.tsx`, replace the search button's onClick with a direct, parameterized analyze call that does **not** rely on React state for the values it sends to the edge function:
+### Verification (default mode)
+1. NBA Props → search Devin Booker Points → scroll down to Correlated Props → tap any row's search button.
+2. Confirm the page smoothly scrolls back to the top and the new results header is visible without manual scrolling.
+3. Repeat on at least one other page where a similar pattern exists (if found in audit).
 
-1. Refactor `handleAnalyze` to accept optional override params (`{ player, propType, line, overUnder }`). When provided, use those values for both the API call and the slip/results display. When omitted, fall back to current state (preserves the main search bar behavior).
-2. The correlated-prop search button passes the row's `c.correlated_player`, `c.correlated_prop`, `c.correlated_line`, `"over"` directly. State setters still run for UI sync, but the fetch uses the override values — eliminating the stale-closure race.
-3. Guard against missing `correlated_line`: if no line is present on the row, skip the auto-analyze, only populate the form (so user can adjust and tap Analyze themselves).
-4. Tighten the slip remove match to include `line`.
-
-No edge-function or DB changes — the `correlated-props` function already returns the correct per-row player; the bug is purely client-side stale state in the tap handler.
-
-## Verification (post-approval, default mode)
-
-1. Search a player with multiple correlated props (e.g., Devin Booker → Points).
-2. Tap the search button on the **3rd** correlated row.
-3. Confirm: results header shows the 3rd row's player + prop, network tab shows the analyze call body containing that exact player/prop/line.
-4. Repeat tapping a different row twice in succession; confirm each navigation analyzes the tapped row, not the prior one.
-5. Add a row to the slip, then a different row for the same player; remove one — confirm only that specific line is removed.
+### Out of scope
+- No edge-function or DB changes — purely client-side scroll behavior.
+- No changes to the analyze logic itself (already fixed in prior task).
 
