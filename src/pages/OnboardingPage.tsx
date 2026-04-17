@@ -329,20 +329,13 @@ function ScreenValue({ onNext }: { onNext: () => void }) {
 
         {/* Picks rows */}
         <div className="space-y-1.5">
-          {[
-            { avatar: ASSETS.avatarTatum, name: "J. Tatum", pick: "OVER 28.5 PTS", conf: 62, ev: 6.1 },
-            { avatar: ASSETS.avatarMatthews, name: "A. Matthews", pick: "ML", conf: 59, ev: 4.3 },
-            { avatar: null as any, name: "Rockies", pick: "+1.5", conf: 57, ev: 5.7 },
-          ].map((p) => (
+          {SCREEN2_PICKS.map((p) => (
             <div key={p.name} className="flex items-center gap-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] px-2 py-1.5">
-              {p.avatar ? (
-                <WaveImage prompt={p.avatar.prompt} cacheKey={p.avatar.key} model={p.avatar.model} alt={p.name}
-                  rounded="full" className="w-7 h-7 flex-shrink-0" />
-              ) : (
-                <div className="w-7 h-7 rounded-full bg-[#1a1a1a] border border-[#2A2A2A] flex items-center justify-center text-[9px] font-black text-white/60 flex-shrink-0">
-                  COL
-                </div>
-              )}
+              <img
+                src={p.img}
+                alt={p.name}
+                className="w-7 h-7 rounded-full object-cover flex-shrink-0 bg-[#1a1a1a]"
+              />
               <div className="flex-1 min-w-0">
                 <div className="text-[11px] font-bold text-white truncate">{p.name}</div>
                 <div className="text-[9px] text-white/50">{p.pick}</div>
