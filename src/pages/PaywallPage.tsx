@@ -134,10 +134,31 @@ function ProgressDots({ current, total }: { current: number; total: number }) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs font-bold text-white/60 tabular-nums">{current} / {total}</span>
-      <div className="flex gap-1.5 ml-1">
-        {Array.from({ length: total }).map((_, i) => (
-          <div key={i} className={`h-1.5 rounded-full ${i < current ? "w-[22px] bg-[#00FF6A]" : "w-4 bg-[#2A2A2A]"}`} />
-        ))}
+      <div className="flex gap-1.5 ml-1 items-center">
+        {Array.from({ length: total }).map((_, i) => {
+          const isActive = i === current - 1;
+          const isCompleted = i < current - 1;
+          return (
+            <motion.div
+              key={i}
+              animate={{
+                width: isActive ? 28 : 14,
+                backgroundColor: isActive
+                  ? "#00FF6A"
+                  : isCompleted
+                  ? "rgba(0,255,106,0.7)"
+                  : "#2A2A2A",
+                boxShadow: isActive
+                  ? "0 0 12px rgba(0,255,106,0.8), 0 0 24px rgba(0,255,106,0.45), 0 0 4px rgba(0,255,106,1)"
+                  : isCompleted
+                  ? "0 0 6px rgba(0,255,106,0.35)"
+                  : "0 0 0 rgba(0,0,0,0)",
+              }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className="h-1.5 rounded-full"
+            />
+          );
+        })}
       </div>
     </div>
   );
