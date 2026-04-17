@@ -1,4 +1,4 @@
-// Unified scoring + verdict tiering for the daily slate engine.
+// Unified scoring + verdict tiering for the daily slate engine. v2-strict-longshot-cap
 // qualityScore = confidence * reliability * (1 + edge) * hitRateFactor
 // All probabilities are 0-1 scale.
 
