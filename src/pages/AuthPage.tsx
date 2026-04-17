@@ -431,7 +431,7 @@ const AuthPage = () => {
         <p className="relative text-[10.5px] leading-relaxed text-white/40 text-center mt-5 px-2">
           By continuing you agree to our{" "}
           <Link
-            to="/dashboard/legal"
+            to="/legal"
             state={{ section: "terms" }}
             className="underline underline-offset-2 hover:opacity-80 transition-opacity"
             style={{ color: ACCENT }}
@@ -440,7 +440,7 @@ const AuthPage = () => {
           </Link>
           {" "}and{" "}
           <Link
-            to="/dashboard/legal"
+            to="/legal"
             state={{ section: "privacy" }}
             className="underline underline-offset-2 hover:opacity-80 transition-opacity"
             style={{ color: ACCENT }}

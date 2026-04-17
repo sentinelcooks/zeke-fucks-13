@@ -100,6 +100,11 @@ function AppRoutes() {
           <PaywallPage />
         </Suspense>
       } />
+      <Route path="/legal" element={
+        <Suspense fallback={<LoadingSpinner />}>
+          <LegalPage />
+        </Suspense>
+      } />
       <Route path="/welcome" element={
         <Suspense fallback={<LoadingSpinner />}>
           <WelcomeConfirmationPage />
