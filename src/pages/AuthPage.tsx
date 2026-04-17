@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
-import { Eye, EyeOff, ArrowRight, ArrowLeft, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, ArrowRight, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
+import sentinelLogo from "@/assets/sentinel-lock.jpg";
 
-const ACCENT = "#00FF6A";
-const ACCENT_DEEP = "#00C853";
+// Sentinel purple brand
+const ACCENT = "#A855F7";       // primary purple
+const ACCENT_DEEP = "#7B2FFF";  // deeper purple for gradients
 
 // Generate stars once
 const STARS = Array.from({ length: 32 }, (_, i) => ({
@@ -90,6 +92,22 @@ const AuthPage = () => {
     }
   }, [isAuthenticated, navigate]);
 
+  // After OAuth redirect lands us back on this page already authenticated,
+  // capture the user and save onboarding. The useEffect above will then route to /dashboard.
+  useEffect(() => {
+    let mounted = true;
+    const sub = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
+        await saveOnboardingToDb(session.user.id);
+      }
+    });
+    return () => {
+      mounted = false;
+      sub.data.subscription.unsubscribe();
+    };
+  }, [saveOnboardingToDb]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -119,13 +137,19 @@ const AuthPage = () => {
     setOauthLoading(provider);
     try {
       const result = await lovable.auth.signInWithOAuth(provider, {
-        redirect_uri: window.location.origin + "/dashboard",
+        redirect_uri: window.location.origin + "/auth",
       });
       if (result.error) {
         setError(result.error.message || `${provider} sign-in failed`);
         setOauthLoading(null);
+        return;
       }
-      // If redirected, browser navigates away
+      if (result.redirected) {
+        // Browser navigates away to provider; nothing more to do.
+        return;
+      }
+      // Tokens received & session set — onAuthStateChange will save onboarding
+      // and the isAuthenticated effect will redirect to /dashboard.
     } catch (err) {
       setError(err instanceof Error ? err.message : `${provider} sign-in failed`);
       setOauthLoading(null);
@@ -149,10 +173,10 @@ const AuthPage = () => {
         />
       ))}
 
-      {/* Ambient orbs */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[120px] pointer-events-none" style={{ background: 'hsl(270 60% 40% / 0.18)' }} />
-      <div className="absolute bottom-0 right-0 w-[420px] h-[420px] rounded-full blur-[110px] pointer-events-none" style={{ background: `${ACCENT}14` }} />
-      <div className="absolute top-0 left-0 w-[320px] h-[320px] rounded-full blur-[90px] pointer-events-none" style={{ background: 'hsl(270 70% 50% / 0.10)' }} />
+      {/* Ambient purple orbs */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[120px] pointer-events-none" style={{ background: 'hsl(270 70% 45% / 0.22)' }} />
+      <div className="absolute bottom-0 right-0 w-[420px] h-[420px] rounded-full blur-[110px] pointer-events-none" style={{ background: `${ACCENT}1f` }} />
+      <div className="absolute top-0 left-0 w-[320px] h-[320px] rounded-full blur-[90px] pointer-events-none" style={{ background: 'hsl(265 80% 55% / 0.14)' }} />
 
       <motion.div
         initial={{ opacity: 0, y: 20, scale: 0.97 }}
@@ -160,26 +184,26 @@ const AuthPage = () => {
         transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
         className="w-full max-w-[440px] relative z-10 rounded-[28px] p-7 sm:p-8 border overflow-hidden"
         style={{
-          background: 'hsla(260, 20%, 10%, 0.7)',
+          background: 'hsla(265, 25%, 9%, 0.72)',
           borderColor: 'hsla(0, 0%, 100%, 0.06)',
           backdropFilter: 'blur(28px)',
           WebkitBackdropFilter: 'blur(28px)',
-          boxShadow: '0 20px 60px hsla(260, 40%, 4%, 0.6), inset 0 1px 0 hsla(0, 0%, 100%, 0.04)',
+          boxShadow: '0 20px 60px hsla(265, 50%, 4%, 0.65), inset 0 1px 0 hsla(0, 0%, 100%, 0.04)',
         }}
       >
         {/* Top inner light gradient */}
         <div className="absolute inset-x-0 top-0 h-px pointer-events-none" style={{ background: 'linear-gradient(90deg, transparent, hsla(0,0%,100%,0.12), transparent)' }} />
-        {/* Green corner glow */}
-        <div className="absolute -top-20 -right-20 w-[260px] h-[260px] rounded-full blur-[80px] pointer-events-none" style={{ background: `${ACCENT}26` }} />
+        {/* Purple corner glow */}
+        <div className="absolute -top-20 -right-20 w-[260px] h-[260px] rounded-full blur-[80px] pointer-events-none" style={{ background: `${ACCENT}33` }} />
 
         {/* Wordmark + progress */}
         <div className="relative flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT_DEEP})`, boxShadow: `0 0 16px ${ACCENT}55` }}
+              className="relative w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center"
+              style={{ boxShadow: `0 0 20px ${ACCENT}66, inset 0 0 0 1px ${ACCENT}55` }}
             >
-              <ShieldCheck className="w-4 h-4 text-black" strokeWidth={2.5} />
+              <img src={sentinelLogo} alt="Sentinel" className="w-full h-full object-cover" />
             </div>
             <span
               className="text-[13px] font-bold tracking-[0.22em]"
@@ -201,12 +225,12 @@ const AuthPage = () => {
             {isSignup ? (
               <>
                 Create your<br />
-                <span style={{ color: ACCENT, textShadow: `0 0 24px ${ACCENT}40` }}>free account</span>
+                <span style={{ color: ACCENT, textShadow: `0 0 24px ${ACCENT}55` }}>free account</span>
               </>
             ) : (
               <>
                 Welcome<br />
-                <span style={{ color: ACCENT, textShadow: `0 0 24px ${ACCENT}40` }}>back to Sentinel</span>
+                <span style={{ color: ACCENT, textShadow: `0 0 24px ${ACCENT}55` }}>back to Sentinel</span>
               </>
             )}
           </h1>
@@ -222,10 +246,10 @@ const AuthPage = () => {
               key={m}
               type="button"
               onClick={() => { setMode(m); setError(""); }}
-              className={`relative flex-1 py-2 text-[12px] font-semibold rounded-full transition-colors duration-200 ${mode === m ? "text-black" : "text-white/55 hover:text-white/75"}`}
+              className={`relative flex-1 py-2 text-[12px] font-semibold rounded-full transition-colors duration-200 ${mode === m ? "text-white" : "text-white/55 hover:text-white/75"}`}
               style={mode === m ? {
                 background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT_DEEP})`,
-                boxShadow: `0 4px 14px ${ACCENT}40`,
+                boxShadow: `0 4px 14px ${ACCENT}55`,
               } : {}}
             >
               {m === "login" ? "Sign In" : "Sign Up"}
@@ -256,7 +280,7 @@ const AuthPage = () => {
                     border: '1px solid hsla(0,0%,100%,0.06)',
                     boxShadow: 'inset 0 1px 2px hsla(0,0%,0%,0.25)',
                   }}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = `${ACCENT}66`; e.currentTarget.style.boxShadow = `inset 0 1px 2px hsla(0,0%,0%,0.25), 0 0 0 3px ${ACCENT}1A`; }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = `${ACCENT}66`; e.currentTarget.style.boxShadow = `inset 0 1px 2px hsla(0,0%,0%,0.25), 0 0 0 3px ${ACCENT}26`; }}
                   onBlur={(e) => { e.currentTarget.style.borderColor = 'hsla(0,0%,100%,0.06)'; e.currentTarget.style.boxShadow = 'inset 0 1px 2px hsla(0,0%,0%,0.25)'; }}
                 />
               </motion.div>
@@ -277,7 +301,7 @@ const AuthPage = () => {
                 border: '1px solid hsla(0,0%,100%,0.06)',
                 boxShadow: 'inset 0 1px 2px hsla(0,0%,0%,0.25)',
               }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = `${ACCENT}66`; e.currentTarget.style.boxShadow = `inset 0 1px 2px hsla(0,0%,0%,0.25), 0 0 0 3px ${ACCENT}1A`; }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = `${ACCENT}66`; e.currentTarget.style.boxShadow = `inset 0 1px 2px hsla(0,0%,0%,0.25), 0 0 0 3px ${ACCENT}26`; }}
               onBlur={(e) => { e.currentTarget.style.borderColor = 'hsla(0,0%,100%,0.06)'; e.currentTarget.style.boxShadow = 'inset 0 1px 2px hsla(0,0%,0%,0.25)'; }}
             />
           </div>
@@ -297,7 +321,7 @@ const AuthPage = () => {
                   border: '1px solid hsla(0,0%,100%,0.06)',
                   boxShadow: 'inset 0 1px 2px hsla(0,0%,0%,0.25)',
                 }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = `${ACCENT}66`; e.currentTarget.style.boxShadow = `inset 0 1px 2px hsla(0,0%,0%,0.25), 0 0 0 3px ${ACCENT}1A`; }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = `${ACCENT}66`; e.currentTarget.style.boxShadow = `inset 0 1px 2px hsla(0,0%,0%,0.25), 0 0 0 3px ${ACCENT}26`; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = 'hsla(0,0%,100%,0.06)'; e.currentTarget.style.boxShadow = 'inset 0 1px 2px hsla(0,0%,0%,0.25)'; }}
               />
               <button
@@ -338,14 +362,14 @@ const AuthPage = () => {
             disabled={loading}
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.985 }}
-            className="w-full py-3.5 rounded-full text-[14px] font-bold text-black flex items-center justify-center gap-2 transition-all disabled:opacity-50 group"
+            className="w-full py-3.5 rounded-full text-[14px] font-bold text-white flex items-center justify-center gap-2 transition-all disabled:opacity-50 group"
             style={{
               background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_DEEP})`,
-              boxShadow: `0 8px 32px ${ACCENT}59, inset 0 1px 0 hsla(0,0%,100%,0.3)`,
+              boxShadow: `0 8px 32px ${ACCENT}66, inset 0 1px 0 hsla(0,0%,100%,0.25)`,
             }}
           >
             {loading ? (
-              <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
               <>
                 {isSignup ? "Launch Sentinel" : "Sign In"}
@@ -409,9 +433,23 @@ const AuthPage = () => {
         {/* Legal microcopy */}
         <p className="relative text-[10.5px] leading-relaxed text-white/40 text-center mt-5 px-2">
           By continuing you agree to our{" "}
-          <Link to="/legal" className="underline underline-offset-2" style={{ color: ACCENT }}>Terms</Link>
+          <Link
+            to="/dashboard/legal"
+            state={{ section: "terms" }}
+            className="underline underline-offset-2 hover:opacity-80 transition-opacity"
+            style={{ color: ACCENT }}
+          >
+            Terms
+          </Link>
           {" "}and{" "}
-          <Link to="/legal" className="underline underline-offset-2" style={{ color: ACCENT }}>Privacy Policy</Link>.
+          <Link
+            to="/dashboard/legal"
+            state={{ section: "privacy" }}
+            className="underline underline-offset-2 hover:opacity-80 transition-opacity"
+            style={{ color: ACCENT }}
+          >
+            Privacy Policy
+          </Link>.
           Must be 18+. Gamble responsibly.
         </p>
 
