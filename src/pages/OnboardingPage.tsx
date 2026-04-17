@@ -115,9 +115,9 @@ function SectionContainer({ children }: { children: React.ReactNode }) {
       `}</style>
       {/* Atmospheric corner glows */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-[#7B2FFF]/10 blur-[120px]" />
-        <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-[#7B2FFF]/8 blur-[100px]" />
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[400px] rounded-full bg-[#00FF6A]/[0.04] blur-[120px]" />
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[520px] h-[420px] rounded-full bg-[#7B2FFF]/30 blur-[120px]" />
+        <div className="absolute -bottom-32 -left-32 w-[420px] h-[420px] rounded-full bg-[#641EDC]/20 blur-[120px]" />
+        <div className="absolute bottom-0 right-0 w-[360px] h-[320px] rounded-full bg-[#00FF6A]/[0.05] blur-[120px]" />
       </div>
       <div className="relative z-10 mx-auto max-w-md px-5 py-6 pb-12">
         {children}
@@ -156,12 +156,18 @@ function ScreenHero({ onNext }: { onNext: () => void }) {
     <SectionContainer>
       <ProgressDots current={1} total={5} />
 
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={pageT} className="flex flex-col items-center">
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={pageT} className="flex flex-col items-center text-center">
         <div className="relative mb-3">
-          <div className="absolute inset-0 rounded-2xl bg-[#00FF6A]/30 blur-2xl" />
-          <img src={logo} alt="Sentinel" className="relative w-14 h-14 rounded-2xl" />
+          <div className="absolute -inset-3 rounded-3xl bg-[#00FF6A]/40 blur-2xl" />
+          <div className="absolute -inset-1 rounded-2xl bg-[#00FF6A]/30 blur-xl" />
+          <img
+            src={logo}
+            alt="Sentinel"
+            className="relative w-16 h-16 rounded-2xl"
+            style={{ boxShadow: "0 0 32px 4px rgba(0,255,106,0.45), 0 0 64px 8px rgba(0,255,106,0.2)" }}
+          />
         </div>
-        <p className="text-[11px] font-bold tracking-[0.35em] text-white/60 mb-6">SENTINEL</p>
+        <p className="text-[11px] font-extrabold tracking-[0.4em] text-white/80 mb-6">SENTINEL</p>
 
         <h1 className="text-[34px] leading-[1.05] font-extrabold text-center tracking-tight">
           Stop guessing.<br />

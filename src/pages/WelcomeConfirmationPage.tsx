@@ -62,10 +62,22 @@ export default function WelcomeConfirmationPage() {
       <div className="relative z-10 flex flex-col items-center justify-center px-6 text-center" style={{ minHeight: "calc(100vh - 120px)" }}>
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="flex flex-col items-center">
           <div className="relative">
-            <div className="absolute inset-0 rounded-2xl bg-[#00FF6A]/30 blur-2xl" />
-            <img src={logo} alt="Sentinel" className="relative w-16 h-16 rounded-2xl" />
+            <div className="absolute -inset-4 rounded-3xl bg-[#00FF6A]/40 blur-3xl" />
+            <div className="absolute -inset-1 rounded-2xl bg-[#00FF6A]/30 blur-xl" />
+            <img
+              src={logo}
+              alt="Sentinel"
+              className="relative w-16 h-16 rounded-2xl"
+              style={{ boxShadow: "0 0 36px 6px rgba(0,255,106,0.5), 0 0 72px 12px rgba(0,255,106,0.22)" }}
+            />
           </div>
-          <p className="mt-3 text-[11px] font-bold tracking-[0.35em] text-white/70">SENTINEL</p>
+          <p className="mt-3 text-[11px] font-extrabold tracking-[0.4em] text-white/80">SENTINEL</p>
+
+          {/* Purple atmosphere */}
+          <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+            <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[520px] h-[420px] rounded-full bg-[#7B2FFF]/30 blur-[120px]" />
+            <div className="absolute -bottom-32 -left-32 w-[420px] h-[420px] rounded-full bg-[#641EDC]/20 blur-[120px]" />
+          </div>
 
           <h1 className="mt-6 text-[40px] leading-[1.05] font-extrabold">
             You're Ready.<br />
