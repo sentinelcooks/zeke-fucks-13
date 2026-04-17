@@ -1053,15 +1053,16 @@ Deno.serve(async (req) => {
       const team1HomeAway: "home" | "away" | null = venue ? (venue.team1IsHome ? "home" : "away") : null;
       const team2HomeAway: "home" | "away" | null = venue ? (venue.team1IsHome ? "away" : "home") : null;
 
-      const [h2h, team1Stats, team2Stats, injuries1, injuries2, schedule1, schedule2] = await Promise.all([
+      const [h2h, team1Stats, team2Stats, injuryReport, schedule1, schedule2] = await Promise.all([
         getHeadToHead(team1.id, team2.id, sport),
         getTeamStats(team1.id, sport),
         getTeamStats(team2.id, sport),
-        getTeamInjuries(team1.id, sport),
-        getTeamInjuries(team2.id, sport),
+        getMatchupInjuries(team1.id, team2.id, sport),
         getTeamSchedule(team1.id, sport),
         getTeamSchedule(team2.id, sport),
       ]);
+      const injuries1: NormalizedInjury[] = injuryReport.team1;
+      const injuries2: NormalizedInjury[] = injuryReport.team2;
 
       const splits1 = computeHomeAwaySplits(schedule1, team1.id);
       const splits2 = computeHomeAwaySplits(schedule2, team2.id);
