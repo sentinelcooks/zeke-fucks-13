@@ -1,7 +1,7 @@
 import { useState, useEffect, type JSX } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Lock, TrendingUp, Brain, BarChart3, Calendar, Check, X, Sparkles, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Lock, TrendingUp, Brain, BarChart3, Calendar, Check, X, Sparkles, ShieldCheck, Swords, CheckCircle2 } from "lucide-react";
 import logo from "@/assets/sentinel-lock.jpg";
 import { preloadGeneratedImage } from "@/hooks/useGeneratedImage";
 import type { WaveModel } from "@/utils/generateImage";
@@ -284,11 +284,63 @@ function ScreenHero({ onNext }: { onNext: () => void }) {
           <Sparkline className="w-14 h-10" />
         </div>
 
-        {/* Locked footer */}
-        <div className="mt-3 pt-3 border-t border-[#2A2A2A] flex items-center gap-2">
-          <Lock className="w-3 h-3 text-white/40" />
-          <span className="text-[10px] text-white/50">Advanced Analytics</span>
-          <span className="ml-auto text-[10px] font-bold text-[#00FF6A]">Unlock Premium</span>
+        {/* AI Analysis Preview */}
+        <div className="mt-3 pt-3 border-t border-[#2A2A2A] space-y-2.5">
+          <div className="flex items-center gap-1.5">
+            <span className="px-1.5 py-0.5 rounded-full bg-[#00FF6A]/15 text-[#00FF6A] text-[8px] font-black tracking-wider">
+              IN-DEPTH ANALYSIS
+            </span>
+            <span className="text-[8px] text-white/40 tracking-wider">SENTINEL AI</span>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <BarChart3 className="w-3 h-3 text-[#3B82F6] flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[9px] font-black tracking-wider text-[#3B82F6]">STATISTICAL EDGE</div>
+                <p className="text-[10px] text-white/70 leading-snug">
+                  Luka is averaging 34.1 PPG over his last 10 games, comfortably above the 32.5 line. Per-36 projection of 35.8 reinforces the over.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Swords className="w-3 h-3 text-[#00FF6A] flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[9px] font-black tracking-wider text-[#00FF6A]">MATCHUP & PACE</div>
+                <p className="text-[10px] text-white/70 leading-snug">
+                  Denver allows the 6th-most points to opposing guards. Projected pace of 101.4 favors volume scoring.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <TrendingUp className="w-3 h-3 text-[#A78BFA] flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[9px] font-black tracking-wider text-[#A78BFA]">VERDICT & RISK</div>
+                <p className="text-[10px] text-white/70 leading-snug">
+                  Strong lean OVER 32.5. Wager 1.5 units with 64% model confidence. Key risk: early blowout limiting minutes.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-[#00FF6A]/[0.08] border border-[#00FF6A]/25 p-2.5">
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-[#00FF6A]" />
+              <span className="text-[11px] font-black text-[#00FF6A] tracking-wide">TAKE THIS PICK</span>
+            </div>
+            <div className="text-[8px] text-white/40 tracking-wider mt-0.5 mb-1">
+              OVERALL VERDICT — ALL FACTORS COMBINED
+            </div>
+            <p className="text-[10px] text-white/80 leading-snug">
+              Strong play. Luka OVER 32.5 Points checks the boxes. L10 avg 34.1, +EV 7.2%. Recommended sizing: 1.5–2 units.
+            </p>
+            <div className="mt-2 pt-2 border-t border-[#00FF6A]/15 flex items-center justify-between">
+              <span className="text-[8px] font-bold tracking-wider text-[#00FF6A]">AI CONFIDENCE: 64%</span>
+              <span className="text-[8px] tracking-wider text-white/40">POWERED BY SENTINEL AI</span>
+            </div>
+          </div>
         </div>
       </motion.div>
 
