@@ -525,6 +525,11 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               <div className="flex gap-3 pb-2">
                 {todayPicks.map((pick, i) => {
                   const isGameBet = pick.bet_type && pick.bet_type !== 'prop';
+                  // Defensive: hit_rate may be decimal (0.76) or percent (76). Normalize to percent.
+                  const rawHr = pick.hit_rate ?? 0;
+                  const confPercent = rawHr > 1 ? Math.round(rawHr) : Math.round(rawHr * 100);
+                  // Hard skip: never render junk in Today's Edge
+                  if (confPercent < 55) return null;
                   return (
                   <motion.div
                     key={`${pick.id}-${i}`}
