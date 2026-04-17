@@ -187,7 +187,7 @@ export default function PaywallPage() {
         <div className="absolute bottom-0 right-0 w-[360px] h-[320px] rounded-full bg-[#00FF6A]/[0.05] blur-[120px]" />
       </div>
 
-      <div className="relative z-10 mx-auto max-w-md px-5 py-6 pb-32">
+      <div className="relative z-10 mx-auto max-w-md px-5 py-6 pb-36">
         <ProgressDots current={5} total={6} />
 
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
