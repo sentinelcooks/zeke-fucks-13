@@ -665,7 +665,28 @@ Deno.serve(async (req) => {
     console.log(`Phase B done: ${rawPicks.length} total candidates (${Math.round((Date.now() - startTime) / 1000)}s)`);
 
     // ── Phase C: Score, rank, gate strictly ──
-    const scoredPlays: ScoredPlay[] = rawPicks.map(p => {
+    // Sanity filter: drop any candidate where the model<>market gap is mathematically impossible
+    // (>40% probability gap usually means we stapled an alt-line price to a different graded line)
+    const sanePicks = rawPicks.filter(p => {
+      const oddsNum = parseOdds(p.odds);
+      // Hard cap: no +500 or longer in the candidate pool at all
+      if (oddsNum >= 500) return false;
+      const projectedProb = Math.max(0, Math.min(1, (p.hit_rate || 0) / 100));
+      const impliedProb = americanToImpliedProb(oddsNum);
+      if (Math.abs(projectedProb - impliedProb) > 0.40) return false;
+      return true;
+    });
+    // Per-(player, prop_type) dedupe: keep the strongest direction only
+    const bestByKey = new Map<string, any>();
+    for (const p of sanePicks) {
+      const k = `${p.sport}|${p.player_name}|${p.prop_type}`;
+      const prev = bestByKey.get(k);
+      if (!prev || (p.hit_rate || 0) > (prev.hit_rate || 0)) bestByKey.set(k, p);
+    }
+    const dedupedPicks = Array.from(bestByKey.values());
+    console.log(`Phase C: ${rawPicks.length} raw → ${sanePicks.length} sane → ${dedupedPicks.length} deduped`);
+
+    const scoredPlays: ScoredPlay[] = dedupedPicks.map(p => {
       const oddsNum = parseOdds(p.odds);
       const projectedProb = Math.max(0, Math.min(1, (p.hit_rate || 0) / 100));
       const impliedProb = americanToImpliedProb(oddsNum);

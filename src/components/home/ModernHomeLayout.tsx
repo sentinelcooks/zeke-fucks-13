@@ -289,8 +289,9 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     const edgeTier = allToday.filter(p => p.tier === "edge");
     const dailyTier = allToday.filter(p => p.tier !== "edge");
 
-    setTodayPicks(sortByPref(edgeTier.length > 0 ? edgeTier : allToday.slice(0, 5)));
-    setDailyTierPicks(sortByPref(edgeTier.length > 0 ? dailyTier : allToday.slice(5)));
+    // STRICT: Today's Edge only shows tier="edge". No fallback to ungraded picks.
+    setTodayPicks(sortByPref(edgeTier));
+    setDailyTierPicks(sortByPref(dailyTier));
     setYesterdayPicks((yesterdayRes.data as DailyPick[]) || []);
     setPicksLoading(false);
     setLastRefreshed(new Date());
