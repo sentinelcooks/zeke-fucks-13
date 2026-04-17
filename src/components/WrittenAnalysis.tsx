@@ -307,12 +307,47 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
   const [sections, setSections] = useState<AnalysisSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(true);
+  const [regenerating, setRegenerating] = useState(false);
+
+  // Sport-agnostic decision validator. Returns the offending section name if a contradiction is found.
+  const validateAgainstDecision = (sects: AnalysisSection[]): string | null => {
+    const decision = props.decision;
+    if (!decision || !decision.winning_team_name) return null;
+    if (props.type !== "moneyline") return null;
+
+    const winnerName = decision.winning_team_name.toLowerCase();
+    const loserName = (() => {
+      if (decision.winning_side === "team1") return (props.team2Name || "").toLowerCase();
+      if (decision.winning_side === "team2") return (props.team1Name || "").toLowerCase();
+      if (decision.winning_side === "over") return "under";
+      if (decision.winning_side === "under") return "over";
+      return "";
+    })();
+    if (!loserName || loserName === winnerName) return null;
+
+    // Match phrases like "bet on X", "take X", "lean X", "X moneyline", "X to cover", "I like X", "back X"
+    const escaped = loserName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(
+      `\\b(bet on|take|lean(?:ing)? toward|back|i like|i'd take|recommend|pick)\\s+(?:the\\s+)?${escaped}\\b|\\b${escaped}\\s+(moneyline|to cover|to win|are the play|is the play)\\b`,
+      "i"
+    );
+
+    for (const s of sects) {
+      if (re.test(s.content || "") || re.test(s.title || "")) {
+        return s.title || "section";
+      }
+    }
+    return null;
+  };
 
   useEffect(() => {
     let cancelled = false;
+    let attempts = 0;
+    const MAX_RETRIES = 2;
 
-    const fetchAnalysis = async () => {
-      setLoading(true);
+    const fetchAnalysis = async (): Promise<void> => {
+      if (attempts === 0) setLoading(true);
+      else setRegenerating(true);
       try {
         const { data, error } = await supabase.functions.invoke("ai-analysis", {
           body: {
@@ -331,26 +366,63 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
             paceContext: props.paceContext,
             overallRating: overallSummary.rating,
             overallSummary: overallSummary.summary,
+            decision: props.decision || null,
           },
         });
 
-        if (!cancelled) {
-          if (error || !data?.sections?.length) {
-            setSections(generateFallbackSections(props));
-          } else {
-            setSections(data.sections);
-          }
+        if (cancelled) return;
+
+        if (error || !data?.sections?.length) {
+          setSections(generateFallbackSections(props));
+          return;
         }
+
+        // ── Validation guardrail: detect contradictions vs the locked decision ──
+        const offendingSection = validateAgainstDecision(data.sections);
+        if (offendingSection && attempts < MAX_RETRIES) {
+          attempts++;
+          const detail = {
+            expected: props.decision?.winning_team_name,
+            section: offendingSection,
+            attempt: attempts,
+            sport: props.sport,
+            type: props.type,
+          };
+          // eslint-disable-next-line no-console
+          console.warn("[decision-mismatch] Retrying AI analysis", detail);
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("sentinel:decision-mismatch", { detail }));
+          }
+          // Auto-retry
+          await fetchAnalysis();
+          return;
+        }
+
+        if (offendingSection) {
+          // Exhausted retries — fall back to safe deterministic prose
+          // eslint-disable-next-line no-console
+          console.warn("[decision-mismatch] Max retries reached, using fallback", {
+            expected: props.decision?.winning_team_name,
+            section: offendingSection,
+          });
+          setSections(generateFallbackSections(props));
+          return;
+        }
+
+        setSections(data.sections);
       } catch {
         if (!cancelled) setSections(generateFallbackSections(props));
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setRegenerating(false);
+        }
       }
     };
 
     fetchAnalysis();
     return () => { cancelled = true; };
-  }, [props.playerOrTeam, props.confidence, props.verdict, props.type, overallSummary.rating]);
+  }, [props.playerOrTeam, props.confidence, props.verdict, props.type, overallSummary.rating, props.decision?.winning_team_name]);
 
   const borderColor = props.confidence >= 70
     ? "border-nba-green/30"
