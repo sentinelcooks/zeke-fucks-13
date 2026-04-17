@@ -217,10 +217,14 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
               const impliedOpp = americanToImpliedProb(oppPick.bestPrice);
               const sum = impliedSide + impliedOpp;
               projected = sum > 0 ? impliedSide / sum : impliedSide;
-              // Tiny edge bump only when our side has shorter price than opp (sharper market)
-              if (impliedSide > impliedOpp) projected = Math.min(0.95, projected + 0.015);
             } else {
-              projected = Math.min(0.95, impliedSide + 0.02);
+              projected = impliedSide;
+            }
+            // Confidence bump: short-priced sides (favored by market) carry stronger signal.
+            // -150 ≈ +5pp, -200 ≈ +8pp, -250 ≈ +10pp, +120 ≈ 0
+            if (pick.bestPrice < 0) {
+              const bump = Math.min(0.12, (Math.abs(pick.bestPrice) - 100) / 1500);
+              projected = Math.min(0.95, projected + bump);
             }
             projected = Math.max(0.35, Math.min(0.95, projected));
             const edge = projected - impliedSide;
