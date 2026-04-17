@@ -767,35 +767,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     {/* BUTTONS */}
                     <div className="relative z-10" style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                       <button
-                        onClick={() => {
-                          if (isGameBet) {
-                            navigate("/dashboard/moneyline", {
-                              state: {
-                                autoAnalyze: true,
-                                home_team: pick.home_team || pick.team,
-                                away_team: pick.away_team || pick.opponent,
-                                bet_type: pick.bet_type,
-                                sport: pick.sport || "nba",
-                              },
-                            });
-                          } else {
-                            navigate("/dashboard/analyze", {
-                              state: {
-                                autoAnalyze: true,
-                                player: pick.player_name,
-                                prop_type: pick.prop_type,
-                                line: pick.line,
-                                over_under: pick.direction as "over" | "under",
-                                opponent: pick.opponent || "",
-                                sport: pick.sport || "nba",
-                                pick_snapshot: {
-                                  confidence: pick.hit_rate,
-                                  reasoning: pick.reasoning || "",
-                                },
-                              },
-                            });
-                          }
-                        }}
+                        onClick={() => setSeeWhyPick(pick)}
                         className="flex items-center justify-center active:opacity-70"
                         style={{
                           flex: 1, height: 42, borderRadius: 10,
