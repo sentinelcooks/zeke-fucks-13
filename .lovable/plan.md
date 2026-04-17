@@ -1,42 +1,40 @@
 
-## Plan: Onboarding polish + paywall pricing correction
+## Plan: Replace AI-generated images with reliable CDN sources
 
 ### Scope
-Apply the previously-approved visual polish (purple glow orbs, Inter font, logo halo) but keep the **existing vertical 3-card pricing layout** with the **original pricing** ($9.99 / $39.99 / $219.99) — most of which is already in place. Only fix the countdown banner copy/icon and ensure all visual polish items land.
+Onboarding avatars/icons are blank because WaveSpeed calls aren't returning usable images for small assets. Switch all small assets (player headshots, team logos, social proof, testimonial, sport icons) to ESPN CDN / pravatar / inline SVGs. Reserve WaveSpeed for Screen 6 stadium background only.
 
 ### Changes
 
-**1. `index.html`** — add Inter Google Font preconnect + stylesheet link
+**1. `src/pages/OnboardingPage.tsx`**
+- Add constants:
+  - `ESPN_HEADSHOTS` (Luka, Tatum, Matthews) and `ESPN_TEAM_LOGOS` (Rockies)
+  - `SCREEN2_PICKS` data array with `img` field per pick
+  - `SPORT_ICONS` map of inline SVG components keyed by sport id (nba/mlb/nhl/ufc), each accepting a color prop
+- Screen 1: replace Luka `<WaveImage>` with `<img>` using ESPN headshot, 44px circular, `onError` hides
+- Screen 2:
+  - Replace 3 pick rows with mapped `SCREEN2_PICKS` using `<img>` tags (ESPN headshots + Rockies logo)
+  - Replace 3 social proof `<WaveImage>` with `pravatar.cc` `<img>` tags (img=11/12/13), `-space-x-2` overlap
+- Screen 3: replace 4 sport `<WaveImage>` tiles with inline `SPORT_ICONS[s.id](iconColor)` — green `#00FF6A` when selected, gray `#666666` otherwise
+- Screen 4: replace Mike R. `<WaveImage>` with pravatar `<img>` (img=11)
+- Reduce `ASSETS` to just `stadiumBg` (keep KREA model constant); preload only that
+- Remove unused imports: `WaveImage`, `WaveModel`, NANO/FAST constants, individual avatar/icon ASSET entries
 
-**2. `src/index.css`** — set `font-family: 'Inter', system-ui, sans-serif` as global default on `body`
+**2. `src/pages/WelcomeConfirmationPage.tsx`** — no changes (already uses `WaveImage` with KREA model and graceful fallback for stadium bg)
 
-**3. `src/pages/OnboardingPage.tsx`**
-- Center hero logo block on Screen 1 (logo + "SENTINEL" wordmark stacked, centered)
-- Add green box-shadow halo around hex logo
-- Add purple atmosphere orbs to root wrapper (top-center `#7B2FFF/30%`, bottom-left `#641EDC/20%`, blurred 120px)
-
-**4. `src/pages/PaywallPage.tsx`**
-- Add same purple atmosphere orbs to root wrapper
-- **Keep existing 3 vertical pricing cards as-is** — Weekly $9.99 / Monthly $39.99 (default, MOST POPULAR) / Yearly $219.99 (BEST VALUE) with current savings callouts. No pricing changes.
-- Keep features accordion, CTA, footer, security row unchanged
-
-**5. `src/components/onboarding/CountdownBanner.tsx`** — update banner copy/structure:
-- Left: keep yellow price tag icon (already `Tag` from lucide). Change two-line text to:
-  - Line 1: "LIMITED TIME" (yellow `#FFC93C`, bold uppercase)
-  - Line 2: "7 DAY FREE TRIAL" (yellow `#FFC93C`, bold uppercase)
-- Right: keep existing live `HH : MM : SS` countdown with HRS/MIN/SEC labels (already correct)
-- Keep dark card bg, 1px `#2A2A2A` border, rounded
-
-**6. `src/pages/WelcomeConfirmationPage.tsx`** — strengthen green box-shadow halo around hex logo; verify purple corner glows render
-
-### Out of scope
-- Pricing values (already correct in current code per the override spec)
-- Pricing card layout (already vertical stacked per spec)
-- Stripe/RevenueCat wiring
-- Logo image asset replacement
+**3. `supabase/functions/generate-image/index.ts`** — already correctly reads `WAVESPEED_API_KEY`, accepts `{ prompt, model }`, hits `https://api.wavespeed.ai/api/v3/${model}`, polls. No changes needed; will verify via curl after edits.
 
 ### Verification
-1. `/onboarding` Screens 1-4 → purple corner glows visible, Inter font applied, Screen 1 logo centered with green halo
-2. `/paywall` → 3 vertical pricing cards unchanged ($9.99/$39.99/$219.99), Monthly default selected with MOST POPULAR gold badge, Yearly has BEST VALUE green badge, countdown banner shows "LIMITED TIME / 7 DAY FREE TRIAL" with yellow tag icon and live timer
-3. `/welcome` → green halo around hex logo, stadium bg with purple atmosphere
-4. Run `tsc --noEmit` to confirm no type errors
+1. Reload `/onboarding` Screen 1 → Luka headshot visible in pick card
+2. Continue → Screen 2 → Tatum, Matthews headshots + Rockies logo visible; 3 overlapping social-proof avatars from pravatar render
+3. Continue → Screen 3 → 4 sport tiles show clean inline SVG icons; tapping turns icon + label green with checkmark
+4. Continue → Screen 4 → Mike R. pravatar shows in testimonial
+5. Continue → `/paywall` → unchanged
+6. Tap Start Free Trial → `/welcome` → stadium bg loads via WaveSpeed (or dark gradient fallback)
+7. Run `tsc --noEmit` to confirm no unused-import / type errors
+8. `curl` the generate-image edge function with a test prompt + KREA model to confirm it returns an `imageUrl`
+
+### Out of scope
+- Changes to WaveImage component, edge function, or WelcomeConfirmationPage
+- Replacing pravatar with project-hosted avatars
+- Real player/team data wiring (these are static onboarding mockups)
