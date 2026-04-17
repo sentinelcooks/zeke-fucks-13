@@ -273,45 +273,58 @@ export default function PaywallPage() {
                   key={plan.id}
                   onClick={() => setSelectedPlan(plan.id)}
                   whileTap={{ scale: 0.97 }}
-                  className={`relative rounded-2xl border-2 px-3 py-3.5 text-left transition-all overflow-hidden ${
+                  className={`relative rounded-2xl border-2 px-4 py-4 pl-9 text-left transition-all overflow-hidden space-y-2 ${
                     isSelected
-                      ? "border-[#00FF6A] bg-[#141414] shadow-[0_0_16px_rgba(0,255,106,0.15)]"
+                      ? "border-[#00FF6A] bg-[#141414]"
                       : "border-[#2A2A2A] bg-[#141414]"
                   }`}
+                  style={
+                    plan.id === "yearly"
+                      ? {
+                          boxShadow: isSelected
+                            ? "0 0 0 2px #00FF6A, 0 0 24px rgba(0,255,106,0.25)"
+                            : "0 0 16px rgba(0,255,106,0.08)",
+                        }
+                      : undefined
+                  }
                 >
                   {plan.badge && (
-                    <div className="absolute -top-px right-2 bg-[#00FF6A] text-black text-[8px] font-black px-2 py-0.5 rounded-b-md tracking-wider uppercase">
+                    <div className="absolute -top-px left-1/2 -translate-x-1/2 bg-[#1F1F1F] text-[#00FF6A] text-[9px] font-black px-2.5 py-0.5 rounded-b-md tracking-widest uppercase border-x border-b border-[#00FF6A]/40">
                       {plan.badge}
                     </div>
                   )}
 
-                  <div className="mt-2">
-                    <div className="text-[11px] font-extrabold text-white mb-1">{plan.label}</div>
+                  <div className="absolute top-2 left-2 w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-[#00FF6A]' : 'border-white/30'}">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-[#00FF6A]" : "border-white/30"}`}>
+                      {isSelected && <div className="w-2 h-2 rounded-full bg-[#00FF6A]" />}
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <div className="text-[14px] font-extrabold text-white mb-1.5">{plan.label}</div>
                     {plan.trialText && (
-                      <span className="px-1.5 py-0.5 rounded bg-[#00FF6A]/15 text-[#00FF6A] text-[7px] font-black tracking-wider">
+                      <span className="px-1.5 py-0.5 rounded bg-[#1F1F1F] text-white text-[9px] font-black tracking-wider">
                         {plan.trialText}
                       </span>
                     )}
                   </div>
 
-                  <div className={`text-[20px] font-extrabold tabular-nums leading-none mt-2 ${isSelected ? "text-[#00FF6A]" : "text-white"}`}>
-                    {plan.price}
+                  <div>
+                    <div className={`text-[24px] font-extrabold tabular-nums leading-none ${isSelected ? "text-[#00FF6A]" : "text-white"}`}>
+                      {plan.price}
+                    </div>
+                    <div className="text-[10px] text-white/50 mt-1">{plan.perDay}</div>
                   </div>
-                  <div className="text-[9px] text-white/50 mt-0.5">{plan.perDay}</div>
 
                   {plan.saving && (
-                    <div className="mt-1.5 flex items-start gap-0.5">
-                      <Check className="w-2.5 h-2.5 text-[#00FF6A] flex-shrink-0 mt-px" strokeWidth={3} />
-                      <span className="text-[8px] font-semibold text-[#00FF6A] leading-tight">{plan.saving}</span>
+                    <div className="flex items-start gap-1">
+                      <Check className="w-3 h-3 text-[#00FF6A] flex-shrink-0 mt-px" strokeWidth={3} />
+                      <span className="text-[10px] font-semibold text-[#00FF6A] leading-tight">{plan.saving}</span>
                     </div>
                   )}
                   {plan.perMonthText && (
-                    <div className="text-[8px] text-white/40 mt-0.5">{plan.perMonthText}</div>
+                    <div className="text-[10px] text-white/40">{plan.perMonthText}</div>
                   )}
-
-                  <div className={`absolute top-3 right-3 w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-[#00FF6A]" : "border-white/30"}`}>
-                    {isSelected && <div className="w-2 h-2 rounded-full bg-[#00FF6A]" />}
-                  </div>
                 </motion.button>
               );
             })}
