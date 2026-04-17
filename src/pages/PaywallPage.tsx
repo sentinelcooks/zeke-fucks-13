@@ -19,8 +19,8 @@ interface Plan {
 
 const PLANS: Plan[] = [
   { id: "weekly",  label: "Weekly",  price: "$9.99",   perDay: "$1.43/day",   trialText: "7-DAY FREE TRIAL" },
-  { id: "monthly", label: "Monthly", price: "$39.99",  perDay: "$39.99/mo",   trialText: "7-DAY FREE TRIAL", badge: "MOST POPULAR", saving: "Save vs Weekly" },
-  { id: "yearly",  label: "Yearly",  price: "$219.99", perDay: "$18.33/mo",   trialText: "7-DAY FREE TRIAL", badge: "BEST VALUE",   saving: "Save vs Monthly", perMonthText: "= $18.33/mo" },
+  { id: "monthly", label: "Monthly", price: "$39.99",  perDay: "$39.99/mo",   trialText: "7-DAY FREE TRIAL", badge: "MOST POPULAR", saving: "Save $19.97 vs Weekly" },
+  { id: "yearly",  label: "Yearly",  price: "$219.99", perDay: "$18.33/mo",   trialText: "7-DAY FREE TRIAL", badge: "BEST VALUE",   saving: "Save $339.49 vs Monthly", perMonthText: "= $18.33/mo" },
 ];
 
 interface Feature {
