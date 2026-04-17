@@ -213,11 +213,14 @@ export type Database = {
       }
       free_props: {
         Row: {
+          away_team: string | null
+          bet_type: string
           book: string | null
           confidence: number | null
           created_at: string
           direction: string
           edge: number | null
+          home_team: string | null
           id: string
           line: number
           odds: number | null
@@ -225,15 +228,21 @@ export type Database = {
           player_name: string
           prop_date: string
           prop_type: string
+          reasoning: string | null
           sport: string
+          spread_line: number | null
           team: string | null
+          total_line: number | null
         }
         Insert: {
+          away_team?: string | null
+          bet_type?: string
           book?: string | null
           confidence?: number | null
           created_at?: string
           direction?: string
           edge?: number | null
+          home_team?: string | null
           id?: string
           line: number
           odds?: number | null
@@ -241,15 +250,21 @@ export type Database = {
           player_name: string
           prop_date?: string
           prop_type: string
+          reasoning?: string | null
           sport?: string
+          spread_line?: number | null
           team?: string | null
+          total_line?: number | null
         }
         Update: {
+          away_team?: string | null
+          bet_type?: string
           book?: string | null
           confidence?: number | null
           created_at?: string
           direction?: string
           edge?: number | null
+          home_team?: string | null
           id?: string
           line?: number
           odds?: number | null
@@ -257,8 +272,11 @@ export type Database = {
           player_name?: string
           prop_date?: string
           prop_type?: string
+          reasoning?: string | null
           sport?: string
+          spread_line?: number | null
           team?: string | null
+          total_line?: number | null
         }
         Relationships: []
       }
