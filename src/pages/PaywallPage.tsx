@@ -201,7 +201,7 @@ export default function PaywallPage() {
         </motion.div>
 
         {/* Pricing cards */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mt-5 space-y-3">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mt-5 grid grid-cols-3 gap-2">
           {PLANS.map((plan) => {
             const isSelected = selectedPlan === plan.id;
             const isMonthly = plan.id === "monthly";
@@ -209,16 +209,18 @@ export default function PaywallPage() {
               <motion.button
                 key={plan.id}
                 onClick={() => setSelectedPlan(plan.id)}
-                whileTap={{ scale: 0.98 }}
-                className={`relative w-full rounded-2xl border-2 px-4 py-3.5 text-left transition-all overflow-hidden ${
+                whileTap={{ scale: 0.97 }}
+                className={`relative rounded-2xl border-2 px-2 pt-4 pb-2.5 text-center transition-all flex flex-col items-center ${
                   isSelected
-                    ? "border-[#00FF6A] bg-[#141414] shadow-[0_0_24px_rgba(0,255,106,0.18)]"
+                    ? isMonthly
+                      ? "border-[#00FF6A] bg-[#141414] shadow-[0_0_0_3px_rgba(0,255,106,0.15),0_0_24px_rgba(0,255,106,0.25)]"
+                      : "border-[#00FF6A] bg-[#141414] shadow-[0_0_18px_rgba(0,255,106,0.18)]"
                     : "border-[#2A2A2A] bg-[#141414]"
                 }`}
               >
                 {plan.badge && (
                   <div
-                    className={`absolute -top-px right-3 text-[9px] font-black px-2 py-0.5 rounded-b-md uppercase tracking-wider ${
+                    className={`absolute -top-2 left-1/2 -translate-x-1/2 text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider whitespace-nowrap ${
                       plan.badge === "MOST POPULAR" ? "bg-[#FFC93C] text-black" : "bg-[#00FF6A] text-black"
                     }`}
                   >
@@ -226,39 +228,37 @@ export default function PaywallPage() {
                   </div>
                 )}
 
-                <div className="flex items-center gap-3">
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                    isSelected ? "border-[#00FF6A]" : "border-white/30"
-                  }`}>
-                    {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-[#00FF6A]" />}
-                  </div>
+                <span className="text-[10px] font-bold text-white/80 uppercase tracking-wider">{plan.label}</span>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-bold text-white">{plan.label}</span>
-                      {plan.trialText && (
-                        <span className="px-1.5 py-0.5 rounded bg-[#00FF6A]/20 text-[#00FF6A] text-[9px] font-black tracking-wider">
-                          {plan.trialText}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-white/50 mt-0.5">{plan.perDay}</p>
-                  </div>
-
-                  <div className="text-right flex-shrink-0">
-                    <div className={`text-lg font-extrabold ${isMonthly ? "text-[#00FF6A]" : "text-white"} tabular-nums`}>
-                      {plan.price}
-                    </div>
-                    {plan.perMonthText && <div className="text-[9px] text-white/50">{plan.perMonthText}</div>}
-                  </div>
-                </div>
-
-                {plan.saving && (
-                  <div className="mt-2 ml-8 flex items-center gap-1">
-                    <Check className="w-3 h-3 text-[#00FF6A]" strokeWidth={3} />
-                    <span className="text-[10px] font-semibold text-[#00FF6A]">{plan.saving}</span>
-                  </div>
+                {plan.trialText && (
+                  <span className="mt-1 px-1.5 py-0.5 rounded bg-[#00FF6A]/20 text-[#00FF6A] text-[8px] font-black tracking-wider whitespace-nowrap">
+                    7-DAY TRIAL
+                  </span>
                 )}
+
+                <div className={`mt-2 text-base font-extrabold tabular-nums leading-none ${isMonthly ? "text-[#00FF6A]" : "text-white"}`}>
+                  {plan.price}
+                </div>
+                <div className="text-[9px] text-white/50 mt-0.5">{plan.perDay}</div>
+
+                {plan.saving ? (
+                  <div className="mt-1 flex items-center gap-0.5 justify-center">
+                    <Check className="w-2.5 h-2.5 text-[#00FF6A]" strokeWidth={3} />
+                    <span className="text-[8px] font-semibold text-[#00FF6A] leading-tight">{plan.saving}</span>
+                  </div>
+                ) : (
+                  <div className="mt-1 h-3" />
+                )}
+
+                <div
+                  className={`mt-2 w-full py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                    isSelected
+                      ? "bg-[#00FF6A] text-black"
+                      : "bg-white/10 text-white"
+                  }`}
+                >
+                  {isMonthly ? "Try Free" : "Subscribe"}
+                </div>
               </motion.button>
             );
           })}
