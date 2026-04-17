@@ -374,9 +374,13 @@ function ScreenValue({ onNext }: { onNext: () => void }) {
         className="mt-4 rounded-2xl border border-[#2A2A2A] bg-[#141414] p-3 flex items-center gap-3"
       >
         <div className="flex -space-x-2">
-          {[ASSETS.social1, ASSETS.social2, ASSETS.social3].map((a) => (
-            <WaveImage key={a.key} prompt={a.prompt} cacheKey={a.key} model={a.model} alt="user"
-              rounded="full" className="w-8 h-8 border-2 border-[#141414]" />
+          {[11, 12, 13].map((i) => (
+            <img
+              key={i}
+              src={`https://i.pravatar.cc/80?img=${i}`}
+              alt="user"
+              className="w-8 h-8 rounded-full border-2 border-[#141414] object-cover bg-[#1a1a1a]"
+            />
           ))}
         </div>
         <div className="flex-1 min-w-0">
