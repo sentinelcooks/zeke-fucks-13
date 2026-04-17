@@ -985,27 +985,33 @@ const GamesPage = () => {
           50% { opacity: 0.3; transform: scale(0.7); }
         }
       `}</style>
-      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(142 100% 50%)' }} />
+      <div className="vision-orb w-48 h-48 -top-10 -right-10 transition-all duration-500" style={{ background: SPORT_COLOR[sport] }} />
       <div className="vision-orb w-36 h-36 top-[500px] -left-12" style={{ background: 'hsl(43 96% 56%)', animationDelay: '-4s' }} />
 
       
 
       {/* Sport toggle */}
       <div className="flex p-1 rounded-xl relative z-10" style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
-        {(["nba", "mlb", "nhl", "nfl", "ufc"] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setSport(s)}
-            className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
-              sport === s
-                ? "bg-accent text-accent-foreground shadow-lg"
-                : "text-muted-foreground/65 hover:text-muted-foreground/60"
-            }`}
-          >
-            <img src={SPORT_LOGO[s]} alt={s} className={`${SPORT_LOGO_SIZE[s]} object-contain shrink-0`} />
-            {s.toUpperCase()}
-          </button>
-        ))}
+        {(["nba", "mlb", "nhl", "nfl", "ufc"] as const).map((s) => {
+          const isActive = sport === s;
+          const color = SPORT_COLOR[s];
+          return (
+            <button
+              key={s}
+              onClick={() => setSport(s)}
+              className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
+                isActive ? "text-white shadow-lg" : "text-muted-foreground/65 hover:text-muted-foreground/60"
+              }`}
+              style={isActive ? {
+                background: `linear-gradient(135deg, ${color}, ${color}dd)`,
+                boxShadow: `0 4px 16px -2px ${color}55`,
+              } : undefined}
+            >
+              <img src={SPORT_LOGO[s]} alt={s} className={`${SPORT_LOGO_SIZE[s]} object-contain shrink-0`} />
+              {s.toUpperCase()}
+            </button>
+          );
+        })}
       </div>
 
       {/* Timezone info */}
