@@ -3,6 +3,16 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FileText, Brain, TrendingUp, Swords, BarChart3, AlertTriangle, Loader2, ChevronDown, ChevronUp, CheckCircle, XCircle, MinusCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
+export interface Decision {
+  winning_side: "team1" | "team2" | "over" | "under" | null;
+  winning_team_name: string | null;
+  win_probability: number;
+  edge: number | null;
+  conviction_tier: "noBet" | "low" | "medium" | "high" | "veryHigh";
+  recommended_units: 0 | 0.5 | 1 | 2 | 3;
+  verdict_text: string;
+}
+
 interface WrittenAnalysisProps {
   verdict: string;
   confidence: number;
@@ -26,6 +36,11 @@ interface WrittenAnalysisProps {
   withoutTeammatesData?: any;
   paceContext?: any;
   factorBreakdown?: Array<{ name: string; team1Score?: number; team2Score?: number; weight?: number }>;
+  // Single source of truth from backend (moneyline-api). When present, overrides local recompute.
+  decision?: Decision | null;
+  // Names of the two teams — used for the validation guardrail
+  team1Name?: string;
+  team2Name?: string;
 }
 
 interface AnalysisSection {
