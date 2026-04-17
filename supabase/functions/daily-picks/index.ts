@@ -540,6 +540,23 @@ async function rankGamesByAnticipation(
   }
 }
 
+// ── Supported prop types per sport (deterministic, both directions graded) ──
+const SPORT_PROP_TYPES: Record<string, string[]> = {
+  nba: ["points", "rebounds", "assists", "3-pointers", "steals", "blocks", "turnovers"],
+  mlb: ["strikeouts", "hits", "home_runs", "total_bases", "rbi", "runs"],
+  nhl: ["goals", "assists", "points", "shots_on_goal"],
+};
+
+const PLAYERS_PER_GAME_CAP = 12;
+
+function parseOdds(odds: string | null | undefined): number {
+  if (!odds || odds === "N/A") return -110;
+  const n = parseInt(String(odds).replace("+", ""));
+  return Number.isFinite(n) ? n : -110;
+}
+
+import { score, rankAndDistribute, americanToImpliedProb, calcEv, type ScoredPlay } from "../_shared/edge_scoring.ts";
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -547,23 +564,16 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   const supabase = createClient(supabaseUrl, serviceKey);
 
   try {
     const startTime = Date.now();
-    const TIMEOUT_MS = 140_000; // 140s guard, 10s buffer before edge fn limit
+    const TIMEOUT_MS = 140_000;
     const isTimedOut = () => Date.now() - startTime > TIMEOUT_MS;
 
-    console.log("🎯 Daily picks generator started — multi-sport, multi-bet-type");
+    console.log("🎯 Daily picks generator — DETERMINISTIC FULL-SLATE SCAN");
 
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // ── Phase 1: Fetch games across all sports ──
+    // ── Phase 1: Fetch all games across all sports ──
     const allGamesResults = await Promise.allSettled(
       Object.keys(ESPN_SPORTS).map(sport => getGamesForSport(sport))
     );
@@ -578,273 +588,192 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    console.log(`Found ${allGames.length} games across ${Object.keys(ESPN_SPORTS).length} sports`);
+    console.log(`📋 Slate: ${allGames.length} games across ${Object.keys(ESPN_SPORTS).length} sports`);
 
-    // ── Rank games by anticipation using AI ──
-    console.log("Ranking games by anticipation...");
-    const rankedGames = await retryWithBackoff(() => rankGamesByAnticipation(allGames, LOVABLE_API_KEY), 3, "ranking");
-    console.log(`⏱️ Ranking took ${Math.round((Date.now() - startTime) / 1000)}s`);
+    const rawPicks: any[] = [];
 
-    const allPicks: any[] = [];
-
-    // ── Phase 2: Game-level bets (Moneylines, Spreads, O/U) — top 12 ranked ──
-    console.log("Phase 2: Analyzing game-level bets (ranked by anticipation)...");
-    const gamesForBets = rankedGames.slice(0, 12);
-    for (let gi = 0; gi < gamesForBets.length; gi++) {
-      const game = gamesForBets[gi];
-      if (isTimedOut()) { console.log("⏱️ Timeout approaching, stopping game bets"); break; }
+    // ── Phase A: Grade all game-level markets for every game ──
+    console.log(`Phase A: scanning ${allGames.length} games`);
+    for (let gi = 0; gi < allGames.length; gi++) {
+      const game = allGames[gi];
+      if (isTimedOut()) { console.log("⏱️ Timeout — stopping Phase A"); break; }
       try {
-        const picks = await retryWithBackoff(() => analyzeGameBets(game, supabaseUrl, serviceKey), 2, `game-${game.away}@${game.home}`);
-        allPicks.push(...picks);
-      } catch (e) { console.error(`Game bet error:`, e); }
-      // Throttle between games to avoid rate limits on downstream model calls
-      if (gi < gamesForBets.length - 1) await delay(1000);
-    }
-    console.log(`Phase 2 complete: ${allPicks.length} game-level picks (${Math.round((Date.now() - startTime) / 1000)}s elapsed)`);
-
-    // ── Phase 3: Player props (lineup-based) — top 8 ranked ──
-    if (!isTimedOut()) {
-      console.log("Phase 3: Scanning lineups for prop opportunities (ranked by anticipation)...");
-      const gamesToScan = rankedGames.slice(0, 12);
-      const lineupResults = await Promise.allSettled(
-        gamesToScan.map(game => getGameLineup(game.gameId, game.sport).then(lineup => ({ game, lineup })))
-      );
-
-      const propSuggestions: Array<{ name: string; team: string; opponent: string; prop_type: string; line: number; direction: string; sport: string }> = [];
-
-      for (const r of lineupResults) {
-        if (isTimedOut()) { console.log("⏱️ Timeout approaching, stopping lineup scan"); break; }
-        if (r.status !== "fulfilled" || r.value.lineup.length === 0) continue;
-        const { game, lineup } = r.value;
-        const suggestions = await retryWithBackoff(() => getLineupPropSuggestions(lineup, game.sport, LOVABLE_API_KEY), 2, `lineup-${game.sport}`);
-        propSuggestions.push(...suggestions.map(s => ({ ...s, sport: game.sport })));
-        await delay(2000); // Throttle between AI lineup calls
-      }
-
-      console.log(`Got ${propSuggestions.length} lineup-based prop suggestions (${Math.round((Date.now() - startTime) / 1000)}s elapsed)`);
-
-      // Analyze props through model
-      for (let i = 0; i < propSuggestions.length && i < 20; i += 2) {
-        if (isTimedOut()) { console.log("⏱️ Timeout approaching, stopping prop analysis"); break; }
-        const batch = propSuggestions.slice(i, i + 2);
-        const results = await Promise.allSettled(
-          batch.map(pl =>
-            retryWithBackoff(() => analyzePlayerProp(pl.name, pl.prop_type, pl.line, pl.direction, pl.opponent, pl.sport, supabaseUrl, serviceKey), 2, `prop-${pl.name}`)
-              .then(result => ({ pl, result }))
-          )
+        const picks = await retryWithBackoff(
+          () => analyzeGameBets(game, supabaseUrl, serviceKey, 0),
+          2, `game-${game.away}@${game.home}`
         );
-        await delay(1000);
-
-        for (const r of results) {
-          if (r.status !== "fulfilled" || !r.value.result) {
-            if (r.status === "fulfilled") console.log(`  📊 Prop analysis returned null for batch item`);
-            continue;
-          }
-          const { pl, result } = r.value;
-          console.log(`  📊 ${pl.name} ${pl.prop_type}: confidence=${result.confidence}%`);
-          if (result.confidence >= 60) {
-            const realOdds = await fetchRealOdds(pl.name, pl.prop_type, result.direction, pl.sport, supabaseUrl, serviceKey) || "N/A";
-            if (realOdds === "N/A") console.log(`  ⚠️ No real odds for ${pl.name} ${pl.prop_type}, using N/A`);
-            allPicks.push({
-              bet_type: "prop",
-              player_name: pl.name,
-              team: pl.team,
-              opponent: pl.opponent,
-              home_team: null,
-              away_team: null,
-              prop_type: pl.prop_type,
-              line: result.line,
-              direction: result.direction,
-              hit_rate: result.confidence,
-              avg_value: result.avg_value,
-              reasoning: result.reasoning,
-              odds: realOdds,
-              spread_line: null,
-              total_line: null,
-              sport: pl.sport,
-            });
-            console.log(`✅ ${pl.name} ${pl.prop_type}: ${result.confidence}% (odds: ${realOdds})`);
-          } else {
-            console.log(`  ⏭️ ${pl.name} ${pl.prop_type}: ${result.confidence}% below 60% threshold`);
-          }
-        }
-
-        if (allPicks.length >= 20) break;
-      }
-    } else {
-      console.log("⏱️ Skipping Phase 3 — timeout approaching");
+        rawPicks.push(...picks);
+      } catch (e) { console.error(`Phase A error:`, e); }
+      if (gi < allGames.length - 1) await delay(700);
     }
+    console.log(`Phase A done: ${rawPicks.length} game candidates (${Math.round((Date.now() - startTime) / 1000)}s)`);
 
-    // ── Phase 3.5: Expansion — if fewer than 3 picks at 60%+, scan ALL remaining games at 55% ──
-    const highConfPicks = allPicks.filter(p => p.hit_rate >= 60).length;
-    if (highConfPicks < 3 && !isTimedOut()) {
-      console.log(`⚠️ Only ${highConfPicks} picks at 60%+ — expanding to ALL remaining games (55% threshold)`);
+    // ── Phase B: Grade all active players, both directions ──
+    console.log("Phase B: scanning lineups for player props");
+    const lineupResults = await Promise.allSettled(
+      allGames.map(game => getGameLineup(game.gameId, game.sport).then(lineup => ({ game, lineup })))
+    );
 
-      // Expand game-level bets to remaining games (indices 12+)
-      const remainingGamesForBets = rankedGames.slice(12);
-      if (remainingGamesForBets.length > 0) {
-        console.log(`Expansion: analyzing ${remainingGamesForBets.length} additional games for game-level bets`);
-        for (let gi = 0; gi < remainingGamesForBets.length; gi++) {
-          const game = remainingGamesForBets[gi];
-          if (isTimedOut() || allPicks.length >= 20) break;
-          try {
-            const picks = await retryWithBackoff(() => analyzeGameBets(game, supabaseUrl, serviceKey, 55), 2, `exp-game`);
-            allPicks.push(...picks);
-          } catch (e) { console.error(`Expansion game bet error:`, e); }
-          if (gi < remainingGamesForBets.length - 1) await delay(1500);
-        }
-        console.log(`Expansion game bets done: ${allPicks.length} total picks (${Math.round((Date.now() - startTime) / 1000)}s elapsed)`);
-      }
+    for (const r of lineupResults) {
+      if (isTimedOut()) { console.log("⏱️ Timeout — stopping Phase B"); break; }
+      if (r.status !== "fulfilled" || r.value.lineup.length === 0) continue;
+      const { game, lineup } = r.value;
+      const propTypes = SPORT_PROP_TYPES[game.sport] || [];
+      if (propTypes.length === 0) continue;
 
-      // Expand prop scanning to remaining games (indices 8+)
-      if (!isTimedOut() && allPicks.length < 20) {
-        const remainingGamesForProps = rankedGames.slice(8);
-        if (remainingGamesForProps.length > 0) {
-          console.log(`Expansion: scanning ${remainingGamesForProps.length} additional games for player props`);
-          const expansionLineups = await Promise.allSettled(
-            remainingGamesForProps.map(game => getGameLineup(game.gameId, game.sport).then(lineup => ({ game, lineup })))
-          );
+      const players = lineup.slice(0, PLAYERS_PER_GAME_CAP);
 
-          const expansionSuggestions: Array<{ name: string; team: string; opponent: string; prop_type: string; line: number; direction: string; sport: string }> = [];
-
-          for (const r of expansionLineups) {
+      for (const player of players) {
+        if (isTimedOut()) break;
+        for (const propType of propTypes) {
+          if (isTimedOut()) break;
+          for (const direction of ["over", "under"] as const) {
             if (isTimedOut()) break;
-            if (r.status !== "fulfilled" || r.value.lineup.length === 0) continue;
-            const { game, lineup } = r.value;
-            const suggestions = await retryWithBackoff(() => getLineupPropSuggestions(lineup, game.sport, LOVABLE_API_KEY), 2, `exp-lineup`);
-            expansionSuggestions.push(...suggestions.map(s => ({ ...s, sport: game.sport })));
-            await delay(2000);
-          }
-
-          console.log(`Expansion: ${expansionSuggestions.length} prop suggestions (${Math.round((Date.now() - startTime) / 1000)}s elapsed)`);
-
-          for (let i = 0; i < expansionSuggestions.length && i < 20; i += 2) {
-            if (isTimedOut() || allPicks.length >= 20) break;
-            const batch = expansionSuggestions.slice(i, i + 2);
-            const results = await Promise.allSettled(
-              batch.map(pl =>
-                retryWithBackoff(() => analyzePlayerProp(pl.name, pl.prop_type, pl.line, pl.direction, pl.opponent, pl.sport, supabaseUrl, serviceKey), 2, `exp-prop-${pl.name}`)
-                  .then(result => ({ pl, result }))
-              )
-            );
-            await delay(1000);
-
-            for (const r of results) {
-              if (r.status !== "fulfilled" || !r.value.result) continue;
-              const { pl, result } = r.value;
-              console.log(`  📊 Expansion: ${pl.name} ${pl.prop_type}: confidence=${result.confidence}%`);
-              if (result.confidence >= 55) {
-                const realOdds = await fetchRealOdds(pl.name, pl.prop_type, result.direction, pl.sport, supabaseUrl, serviceKey) || "N/A";
-                allPicks.push({
-                  bet_type: "prop",
-                  player_name: pl.name,
-                  team: pl.team,
-                  opponent: pl.opponent,
-                  home_team: null,
-                  away_team: null,
-                  prop_type: pl.prop_type,
-                  line: result.line,
-                  direction: result.direction,
-                  hit_rate: result.confidence,
-                  avg_value: result.avg_value,
-                  reasoning: result.reasoning,
-                  odds: realOdds,
-                  spread_line: null,
-                  total_line: null,
-                  sport: pl.sport,
-                });
-                console.log(`✅ Expansion: ${pl.name} ${pl.prop_type}: ${result.confidence}% (odds: ${realOdds})`);
-              }
+            try {
+              const result = await analyzePlayerProp(
+                player.name, propType, 0, direction, player.opponent, game.sport, supabaseUrl, serviceKey
+              );
+              if (!result || !result.line || result.line <= 0) continue;
+              const realOdds = await fetchRealOdds(player.name, propType, result.direction, game.sport, supabaseUrl, serviceKey);
+              if (!realOdds) continue;
+              rawPicks.push({
+                bet_type: "prop",
+                player_name: player.name,
+                team: player.team,
+                opponent: player.opponent,
+                home_team: null,
+                away_team: null,
+                prop_type: propType,
+                line: result.line,
+                direction: result.direction,
+                hit_rate: result.confidence,
+                avg_value: result.avg_value,
+                reasoning: result.reasoning,
+                odds: realOdds,
+                spread_line: null,
+                total_line: null,
+                sport: game.sport,
+              });
+            } catch (e) {
+              console.error(`prop err ${player.name}/${propType}/${direction}:`, e);
             }
+            await delay(120);
           }
         }
       }
-
-      console.log(`Expansion complete: ${allPicks.length} total picks (${Math.round((Date.now() - startTime) / 1000)}s elapsed)`);
     }
+    console.log(`Phase B done: ${rawPicks.length} total candidates (${Math.round((Date.now() - startTime) / 1000)}s)`);
 
-    // ── Phase 4: Best-available fallback ──
-    // If fewer than 5 picks passed thresholds, take the best available with >45% confidence
-    if (allPicks.length < 5) {
-      console.log(`⚠️ Only ${allPicks.length} picks passed thresholds — applying best-available fallback (>45%)`);
-      // allPicks already contains everything that passed; we need to also include
-      // sub-threshold game-level picks. Re-scan remaining ranked games at 45% threshold.
-      if (!isTimedOut()) {
-        const fallbackGames = rankedGames.slice(0, Math.min(rankedGames.length, 6));
-        for (const game of fallbackGames) {
-          if (isTimedOut() || allPicks.length >= 10) break;
-          try {
-            const picks = await retryWithBackoff(() => analyzeGameBets(game, supabaseUrl, serviceKey, 45), 1, `fallback-game`);
-            // Only add picks we don't already have (by player_name + prop_type)
-            const existingKeys = new Set(allPicks.map(p => `${p.player_name}|${p.prop_type}`));
-            for (const p of picks) {
-              if (!existingKeys.has(`${p.player_name}|${p.prop_type}`)) {
-                allPicks.push(p);
-                existingKeys.add(`${p.player_name}|${p.prop_type}`);
-              }
-            }
-          } catch (e) { console.error(`Fallback game error:`, e); }
-          await delay(1000);
-        }
-        console.log(`Fallback complete: ${allPicks.length} total picks`);
-      }
-    }
+    // ── Phase C: Score, rank, gate strictly ──
+    const scoredPlays: ScoredPlay[] = rawPicks.map(p => {
+      const oddsNum = parseOdds(p.odds);
+      const projectedProb = Math.max(0, Math.min(1, (p.hit_rate || 0) / 100));
+      const impliedProb = americanToImpliedProb(oddsNum);
+      const edge = projectedProb - impliedProb;
+      const evPct = calcEv(projectedProb, oddsNum);
+      return score({
+        sport: p.sport,
+        bet_type: (p.bet_type === "over_under" ? "total" : p.bet_type) as any,
+        player_name: p.player_name,
+        team: p.team,
+        opponent: p.opponent,
+        home_team: p.home_team,
+        away_team: p.away_team,
+        prop_type: p.prop_type,
+        line: p.line,
+        spread_line: p.spread_line,
+        total_line: p.total_line,
+        direction: p.direction,
+        odds: oddsNum,
+        projected_prob: projectedProb,
+        implied_prob: impliedProb,
+        edge,
+        ev_pct: evPct,
+        confidence: projectedProb,
+      });
+    });
 
-    if (allPicks.length === 0) {
-      console.log("⚠️ Zero picks generated even with fallback. All models returned sub-45% confidence or no games today.");
-    }
-    allPicks.sort((a, b) => b.hit_rate - a.hit_rate);
-    const topPicks = allPicks.slice(0, 20);
-    console.log(`Total: ${topPicks.length} picks (game-level + props)`);
+    const { todaysEdge, dailyPicks: dailyRanked, freePicks } = rankAndDistribute(scoredPlays);
+    console.log(`✅ Gated: ${todaysEdge.length} edge, ${dailyRanked.length} daily, ${freePicks.length} free`);
 
-    if (topPicks.length > 0) {
-      const today = new Date().toISOString().split("T")[0];
-
-      // Delete today's existing picks across all sports
-      await supabase.from("daily_picks").delete().eq("pick_date", today);
-
-      const { error: insertErr } = await supabase.from("daily_picks").insert(
-        topPicks.map(p => ({
-          pick_date: today,
-          sport: p.sport,
-          player_name: p.player_name,
-          team: p.team,
-          opponent: p.opponent,
-          prop_type: p.prop_type,
-          line: p.line,
-          direction: p.direction,
-          hit_rate: p.hit_rate,
-          last_n_games: 10,
-          avg_value: p.avg_value,
-          reasoning: p.reasoning,
-          odds: p.odds,
-          result: "pending",
-          bet_type: p.bet_type,
-          spread_line: p.spread_line,
-          total_line: p.total_line,
-          home_team: p.home_team,
-          away_team: p.away_team,
-        }))
+    // ── Phase D: Persist ──
+    const today = new Date().toISOString().slice(0, 10);
+    const edgeKeySet = new Set(
+      todaysEdge.map(p => `${p.sport}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`)
+    );
+    const findRaw = (sp: ScoredPlay) =>
+      rawPicks.find(rp =>
+        rp.sport === sp.sport &&
+        rp.player_name === sp.player_name &&
+        rp.prop_type === sp.prop_type &&
+        rp.direction === sp.direction &&
+        Number(rp.line) === Number(sp.line)
       );
-      if (insertErr) { console.error("Insert error:", insertErr); throw insertErr; }
 
-      // Sync prop picks to free_props
-      const propPicks = topPicks.filter(p => p.bet_type === "prop");
-      if (propPicks.length > 0) {
-        await supabase.from("free_props").delete().eq("prop_date", today);
-        await supabase.from("free_props").insert(
-          propPicks.map(p => ({
-            player_name: p.player_name, team: p.team, opponent: p.opponent,
-            prop_type: p.prop_type, line: p.line, direction: p.direction,
-            odds: parseInt(p.odds) || null, edge: 0, confidence: p.hit_rate,
-            sport: p.sport, book: "model", prop_date: today,
-          }))
-        );
+    if (dailyRanked.length > 0) {
+      await supabase.from("daily_picks").delete().eq("pick_date", today);
+      const rows = dailyRanked.map(sp => {
+        const raw = findRaw(sp);
+        const key = `${sp.sport}|${sp.player_name}|${sp.prop_type}|${sp.direction}|${sp.line}`;
+        return {
+          pick_date: today,
+          sport: sp.sport,
+          player_name: sp.player_name,
+          team: sp.team || null,
+          opponent: sp.opponent || null,
+          prop_type: sp.prop_type,
+          line: sp.line,
+          direction: sp.direction,
+          hit_rate: Math.round(sp.confidence * 100),
+          last_n_games: 10,
+          avg_value: raw?.avg_value ?? sp.line,
+          reasoning: raw?.reasoning || sp.reasoning,
+          odds: raw?.odds ?? (sp.odds > 0 ? `+${sp.odds}` : `${sp.odds}`),
+          result: "pending",
+          bet_type: sp.bet_type === "total" ? "over_under" : sp.bet_type,
+          spread_line: sp.spread_line ?? null,
+          total_line: sp.total_line ?? null,
+          home_team: sp.home_team ?? null,
+          away_team: sp.away_team ?? null,
+          tier: edgeKeySet.has(key) ? "edge" : "daily",
+        };
+      });
+      const { error: insertErr } = await supabase.from("daily_picks").insert(rows);
+      if (insertErr) console.error("daily_picks insert error:", insertErr);
+    }
+
+    if (freePicks.length > 0) {
+      await supabase.from("free_props").delete().eq("prop_date", today);
+      const propRows = freePicks
+        .filter(sp => sp.bet_type === "prop")
+        .map(sp => ({
+          player_name: sp.player_name,
+          team: sp.team || null,
+          opponent: sp.opponent || null,
+          prop_type: sp.prop_type,
+          line: sp.line,
+          direction: sp.direction,
+          odds: Math.round(sp.odds),
+          edge: Math.round(sp.edge * 1000) / 10,
+          confidence: Math.round(sp.confidence * 1000) / 1000,
+          sport: sp.sport,
+          book: "model",
+          prop_date: today,
+        }));
+      if (propRows.length > 0) {
+        await supabase.from("free_props").insert(propRows);
       }
     }
 
     return new Response(
-      JSON.stringify({ message: "Picks generated — multi-sport", count: topPicks.length, picks: topPicks }),
+      JSON.stringify({
+        message: "Picks generated — full-slate deterministic scan",
+        count: dailyRanked.length,
+        todays_edge: todaysEdge.length,
+        free_picks: freePicks.length,
+        scanned_games: allGames.length,
+        raw_candidates: rawPicks.length,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
