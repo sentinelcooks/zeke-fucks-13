@@ -1,4 +1,15 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { WEIGHTS_V2, FACTOR_LABELS, MODEL_VERSION } from "./weights.ts";
+import {
+  computeXGProxy, scoreXG,
+  computeCFProxy, scoreCFProxy,
+  computePace, scorePace,
+} from "../_shared/advanced_stats.ts";
+import {
+  pullOddsHistory, computeLineMovement, scoreLineMovement19,
+  computeRLM, scoreRLM20, sharpBookDivergence,
+} from "../_shared/odds_intelligence.ts";
+import { nhlInjuryAdjustments, type NHLInjuryWarning } from "../_shared/injuries.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -313,7 +324,54 @@ function scorePublicPercent(lineMovementMagnitude: number): number {
   return Math.max(0, Math.min(100, 50 + lineMovementMagnitude * 2));
 }
 
-// ── Weight Tables ──
+// ── v2.0 NEW SCORERS (factors 21-26 + improved blends) ───
+function scoreGoalieWorkload(startsLast7Days: number): number {
+  if (startsLast7Days >= 4) return 42; // fatigue
+  if (startsLast7Days === 0) return 46; // rust
+  return 50; // 1-3 starts = neutral
+}
+
+function scoreSpecialTeamsDiff(ppPct: number, oppPkPct: number): number {
+  const diff = ppPct - (100 - oppPkPct); // higher diff = bigger ST advantage
+  return Math.max(0, Math.min(100, 50 + diff * 4));
+}
+
+function scoreArena(arenaFactor: number): number {
+  // 1.10→75, 1.03→50, 0.95→35
+  return Math.max(0, Math.min(100, 50 + (arenaFactor - 1.03) * 357));
+}
+
+function scoreGoalsBlend(l5: number, l10: number, l20: number): number {
+  // Each is total goals over the window; normalize per-game to 3.1 baseline
+  const avgL5 = l5 / 5;
+  const avgL10 = l10 / 10;
+  const avgL20 = l20 > 0 ? l20 / 20 : avgL10;
+  const blended = avgL5 * 0.5 + avgL10 * 0.3 + avgL20 * 0.2;
+  return Math.max(0, Math.min(100, 50 + (blended - 3.1) * 18));
+}
+
+function scoreGoalieL10Weighted(svPctL10: number[]): number {
+  // Most recent start weighted 1.5x
+  if (svPctL10.length === 0) return 50;
+  let weighted = 0;
+  let totalW = 0;
+  for (let i = 0; i < svPctL10.length; i++) {
+    const recencyW = 1 + (i / svPctL10.length) * 0.5; // newest entries assumed at end
+    weighted += svPctL10[i] * recencyW;
+    totalW += recencyW;
+  }
+  const avg = weighted / totalW;
+  const diff = avg - 0.908;
+  return Math.max(0, Math.min(100, 50 + diff * 900));
+}
+
+function scoreRestDaysV2(daysSinceLastGame: number, isB2BRoad: boolean): number {
+  let s = scoreRestDays(daysSinceLastGame);
+  if (daysSinceLastGame === 0 && isB2BRoad) s -= 5;
+  return Math.max(0, Math.min(100, s));
+}
+
+// ── Legacy WEIGHTS table kept for backward compatibility (unused by v2 path) ──
 const WEIGHTS: Record<string, Record<string, number>> = {
   moneyline: {
     goalie_sv: 0.18, goalie_gaa: 0.10, goalie_l5: 0.08, backup_goalie: 0.02,
@@ -321,27 +379,6 @@ const WEIGHTS: Record<string, Record<string, number>> = {
     pts_l10: 0.03, goals_l5: 0.07, pk_pct: 0.04, blocks_hits: 0.02,
     goals_allowed: 0.03, hd_chances: 0.02, home_away: 0.08, rest_days: 0.03,
     momentum: 0.07, h2h: 0.04, line_movement: 0.02, public_pct: 0.02,
-  },
-  puckline: {
-    goalie_sv: 0.10, goalie_gaa: 0.06, goalie_l5: 0.05, backup_goalie: 0.02,
-    shots_against: 0.05, goals_game: 0.06, shooting_pct: 0.04, pp_pct: 0.08,
-    pts_l10: 0.04, goals_l5: 0.05, pk_pct: 0.08, blocks_hits: 0.04,
-    goals_allowed: 0.08, hd_chances: 0.04, home_away: 0.05, rest_days: 0.03,
-    momentum: 0.05, h2h: 0.04, line_movement: 0.03, public_pct: 0.01,
-  },
-  total: {
-    goalie_sv: 0.12, goalie_gaa: 0.12, goalie_l5: 0.08, backup_goalie: 0.03,
-    shots_against: 0.05, goals_game: 0.10, shooting_pct: 0.08, pp_pct: 0.04,
-    pts_l10: 0.03, goals_l5: 0.05, pk_pct: 0.04, blocks_hits: 0.02,
-    goals_allowed: 0.08, hd_chances: 0.03, home_away: 0.02, rest_days: 0.05,
-    momentum: 0.02, h2h: 0.02, line_movement: 0.02, public_pct: 0.02,
-  },
-  player_prop: {
-    goalie_sv: 0.05, goalie_gaa: 0.05, goalie_l5: 0.03, backup_goalie: 0.02,
-    shots_against: 0.08, goals_game: 0.05, shooting_pct: 0.12, pp_pct: 0.12,
-    pts_l10: 0.05, goals_l5: 0.08, pk_pct: 0.03, blocks_hits: 0.05,
-    goals_allowed: 0.05, hd_chances: 0.05, home_away: 0.05, rest_days: 0.05,
-    momentum: 0.03, h2h: 0.02, line_movement: 0.01, public_pct: 0.01,
   },
 };
 
@@ -463,30 +500,29 @@ function adjustForInjuries(injuries: any[], factors: Record<string, number>): { 
   return { adjustedFactors: adjusted, warnings };
 }
 
-// ── Main Analysis Engine (identical structure to MLB) ──
-function runModel(
+// ── v2.0 Main Analysis Engine — uses WEIGHTS_V2 ──
+function runModelV2(
   betType: string,
   team1Factors: Record<string, number>,
   team2Factors: Record<string, number>,
   sharedFactors: Record<string, number>,
-): { confidence: number; verdict: string; factorBreakdown: any[] } {
-  const weights = WEIGHTS[betType] || WEIGHTS.moneyline;
+): { confidence: number; verdict: string; tier: string; factorBreakdown: any[] } {
+  const weights = WEIGHTS_V2[betType] || WEIGHTS_V2.moneyline;
 
   const factorBreakdown: any[] = [];
   let weightedSum = 0;
   let totalWeight = 0;
 
   for (const [factor, weight] of Object.entries(weights)) {
-    if (weight === 0) continue;
+    if (weight === 0) continue; // explicit zeros excluded by design
 
     const t1Score = team1Factors[factor] ?? sharedFactors[factor] ?? 50;
     const t2Score = team2Factors[factor] ?? 50;
-
     const safe1 = isNaN(t1Score) ? 50 : t1Score;
     const safe2 = isNaN(t2Score) ? 50 : t2Score;
 
     let advantageScore: number;
-    if (["line_movement", "public_pct"].includes(factor)) {
+    if (["line_movement", "public_pct", "rlm", "arena", "pace"].includes(factor)) {
       advantageScore = sharedFactors[factor] ?? 50;
     } else {
       advantageScore = 50 + (safe1 - safe2) / 2;
@@ -496,12 +532,12 @@ function runModel(
 
     factorBreakdown.push({
       factor,
-      label: formatFactorLabel(factor),
-      weight: Math.round(weight * 100),
+      label: FACTOR_LABELS[factor] || factor,
+      weight: Math.round(weight * 1000) / 10,
       team1Score: Math.round(safe1),
       team2Score: Math.round(safe2),
       advantageScore: Math.round(advantageScore),
-      contribution: Math.round(advantageScore * weight),
+      contribution: Math.round(advantageScore * weight * 10) / 10,
     });
 
     weightedSum += advantageScore * weight;
@@ -509,14 +545,13 @@ function runModel(
   }
 
   const confidence = Math.round(totalWeight > 0 ? weightedSum / totalWeight : 50);
+  let verdict: string, tier: string;
+  if (confidence >= 75) { verdict = "STRONG PICK"; tier = "S"; }
+  else if (confidence >= 65) { verdict = "LEAN"; tier = "A"; }
+  else if (confidence >= 55) { verdict = "RISKY"; tier = "B"; }
+  else { verdict = "FADE"; tier = "C"; }
 
-  let verdict: string;
-  if (confidence >= 75) verdict = "STRONG PICK";
-  else if (confidence >= 62) verdict = "LEAN";
-  else if (confidence >= 42) verdict = "RISKY";
-  else verdict = "FADE";
-
-  return { confidence, verdict, factorBreakdown };
+  return { confidence, verdict, tier, factorBreakdown };
 }
 
 function formatFactorLabel(factor: string): string {
@@ -712,149 +747,203 @@ Deno.serve(async (req) => {
       const ptsL10_1 = computePtsPerGameL10(schedule1, team1_id);
       const ptsL10_2 = computePtsPerGameL10(schedule2, team2_id);
 
-      // Score all 20 factors for team1 (home)
+      // ── v2.0 advanced stats ──
+      const xg1 = computeXGProxy(schedule1, team1_id);
+      const xg2 = computeXGProxy(schedule2, team2_id);
+      const cf1 = computeCFProxy(schedule1, team1_id);
+      const cf2 = computeCFProxy(schedule2, team2_id);
+      const paceCombined = computePace(schedule1, team1_id, schedule2, team2_id);
+
+      const ppPct1 = stats1.powerPlayPct || stats1.powerPlayPercentage || 21;
+      const ppPct2 = stats2.powerPlayPct || stats2.powerPlayPercentage || 21;
+      const pkPct1 = stats1.penaltyKillPct || stats1.penaltyKillPercentage || 79;
+      const pkPct2 = stats2.penaltyKillPct || stats2.penaltyKillPercentage || 79;
+
+      // Goalie starts in last 7 days from schedule (best-effort)
+      const startsIn7d = (events: any[]) => {
+        const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        return events.filter((e) => {
+          const st = e.competitions?.[0]?.status?.type;
+          return (st?.completed || st?.name === "STATUS_FINAL") && new Date(e.date).getTime() >= cutoff;
+        }).length;
+      };
+      const workload1 = startsIn7d(schedule1);
+      const workload2 = startsIn7d(schedule2);
+
       const team1Factors: Record<string, number> = {
         goalie_sv: scoreGoalieSvPct(homeGoalie.savePct),
         goalie_gaa: scoreGoalieGAA(homeGoalie.gaa),
         goalie_l5: scoreGoalieL5SvPct(homeGoalie.savePct),
-        backup_goalie: scoreBackupGoalie(0.900), // Default backup
+        goalie_l10: scoreGoalieL10Weighted([homeGoalie.savePct]),
+        backup_goalie: scoreBackupGoalie(0.900),
         shots_against: scoreShotsAgainst(stats1.shotsAgainstPerGame || stats1.shotsAgainst || 30),
         goals_game: scoreGoalsPerGame(stats1.goalsPerGame || stats1.goalsFor / Math.max(stats1.gamesPlayed || 1, 1) || 3.1),
         shooting_pct: scoreShootingPct(stats1.shootingPctg || stats1.shootingPct || 10),
-        pp_pct: scorePPPct(stats1.powerPlayPct || stats1.powerPlayPercentage || 21),
+        pp_pct: scorePPPct(ppPct1),
+        pk_pct: scorePKPct(pkPct1),
         pts_l10: scorePtsL10(ptsL10_1),
         goals_l5: scoreGoalsL5(goalsL5_1),
-        pk_pct: scorePKPct(stats1.penaltyKillPct || stats1.penaltyKillPercentage || 79),
+        goals_blend: scoreGoalsBlend(goalsL5_1, goalsL5_1 * 2, goalsL5_1 * 4),
         blocks_hits: scoreBlocksHits((stats1.blockedShots || 15) + (stats1.hits || 25)),
         goals_allowed: scoreGoalsAllowed(stats1.goalsAgainstPerGame || stats1.goalsAgainst / Math.max(stats1.gamesPlayed || 1, 1) || 3.0),
         hd_chances: scoreHDChancesAgainst(stats1.shotsAgainstPerGame ? stats1.shotsAgainstPerGame * 0.35 : 10),
         home_away: scoreHomeAway(splits1.home, true),
-        rest_days: scoreRestDays(rest1),
+        rest_days: scoreRestDaysV2(rest1, false),
         momentum: scoreMomentum(last5_1),
         h2h: scoreH2H(h2h.wins, h2h.total),
+        xg: scoreXG(xg1.xG60),
+        goalie_workload: scoreGoalieWorkload(workload1),
+        st_diff: scoreSpecialTeamsDiff(ppPct1, pkPct2),
+        cf_proxy: scoreCFProxy(cf1.cfPct),
       };
 
-      // Score all 20 factors for team2 (away)
       const team2Factors: Record<string, number> = {
         goalie_sv: scoreGoalieSvPct(awayGoalie.savePct),
         goalie_gaa: scoreGoalieGAA(awayGoalie.gaa),
         goalie_l5: scoreGoalieL5SvPct(awayGoalie.savePct),
+        goalie_l10: scoreGoalieL10Weighted([awayGoalie.savePct]),
         backup_goalie: scoreBackupGoalie(0.900),
         shots_against: scoreShotsAgainst(stats2.shotsAgainstPerGame || stats2.shotsAgainst || 30),
         goals_game: scoreGoalsPerGame(stats2.goalsPerGame || stats2.goalsFor / Math.max(stats2.gamesPlayed || 1, 1) || 3.1),
         shooting_pct: scoreShootingPct(stats2.shootingPctg || stats2.shootingPct || 10),
-        pp_pct: scorePPPct(stats2.powerPlayPct || stats2.powerPlayPercentage || 21),
+        pp_pct: scorePPPct(ppPct2),
+        pk_pct: scorePKPct(pkPct2),
         pts_l10: scorePtsL10(ptsL10_2),
         goals_l5: scoreGoalsL5(goalsL5_2),
-        pk_pct: scorePKPct(stats2.penaltyKillPct || stats2.penaltyKillPercentage || 79),
+        goals_blend: scoreGoalsBlend(goalsL5_2, goalsL5_2 * 2, goalsL5_2 * 4),
         blocks_hits: scoreBlocksHits((stats2.blockedShots || 15) + (stats2.hits || 25)),
         goals_allowed: scoreGoalsAllowed(stats2.goalsAgainstPerGame || stats2.goalsAgainst / Math.max(stats2.gamesPlayed || 1, 1) || 3.0),
         hd_chances: scoreHDChancesAgainst(stats2.shotsAgainstPerGame ? stats2.shotsAgainstPerGame * 0.35 : 10),
         home_away: scoreHomeAway(splits2.away, false),
-        rest_days: scoreRestDays(rest2),
+        rest_days: scoreRestDaysV2(rest2, false),
         momentum: scoreMomentum(last5_2),
         h2h: scoreH2H(h2h.total - h2h.wins, h2h.total),
+        xg: scoreXG(xg2.xG60),
+        goalie_workload: scoreGoalieWorkload(workload2),
+        st_diff: scoreSpecialTeamsDiff(ppPct2, pkPct1),
+        cf_proxy: scoreCFProxy(cf2.cfPct),
       };
 
-      // Shared/environmental factors
+      // ── Shared factors (line movement / RLM / arena / pace) ──
       const sharedFactors: Record<string, number> = {
-        line_movement: 50,
-        public_pct: 50,
+        line_movement: 50, public_pct: 50, rlm: 50,
+        arena: scoreArena(arenaFactor),
+        pace: scorePace(paceCombined),
       };
 
-      // Try to get odds data
+      let lineMovementSide: "home" | "away" | "neutral" = "neutral";
+      let sharpMoneyTriggered = false;
       if (game_id && eventData) {
-        const odds = await getOddsForGame(supabase, {
-          home: eventData.competitions?.[0]?.competitors?.find((c: any) => c.homeAway === "home")?.team?.displayName || "",
-          away: eventData.competitions?.[0]?.competitors?.find((c: any) => c.homeAway === "away")?.team?.displayName || "",
-        });
-        if (odds) {
-          const h2hOdds = odds.h2h || [];
-          if (h2hOdds.length > 1) {
-            const prices = h2hOdds.map((o: any) => o.price || 0);
-            const spread = Math.max(...prices) - Math.min(...prices);
-            sharedFactors.line_movement = Math.min(100, 50 + spread * 0.2);
-            sharedFactors.public_pct = scorePublicPercent(spread * 0.1);
+        try {
+          const odds = await getOddsForGame(supabase, {
+            home: eventData.competitions?.[0]?.competitors?.find((c: any) => c.homeAway === "home")?.team?.displayName || "",
+            away: eventData.competitions?.[0]?.competitors?.find((c: any) => c.homeAway === "away")?.team?.displayName || "",
+          });
+          const history = await pullOddsHistory(supabase, String(game_id), "h2h");
+          if (odds?.h2h) {
+            const current = (odds.h2h || []).map((o: any) => ({
+              book: o.book || "unknown", price: o.price || 0, market: "h2h",
+            }));
+            const lm = computeLineMovement(history, current);
+            sharedFactors.line_movement = scoreLineMovement19(lm);
+            lineMovementSide = lm.side;
+            const rlm = computeRLM(history, null, current, "h2h");
+            sharedFactors.rlm = scoreRLM20(rlm);
+            sharpMoneyTriggered = rlm.triggered || sharpBookDivergence(current).diverges;
           }
-        }
+        } catch (e) { console.error("odds intel error:", (e as Error).message); }
       }
 
-      // Apply injury adjustments
-      const { adjustedFactors: adj1, warnings: warn1 } = adjustForInjuries(injuries1, team1Factors);
-      const { adjustedFactors: adj2, warnings: warn2 } = adjustForInjuries(injuries2, team2Factors);
+      // ── v2 injury adjustments ──
+      const inj1 = await nhlInjuryAdjustments(team1_id, injuries1, team1Factors, homeGoalie?.name, 0.905);
+      const inj2 = await nhlInjuryAdjustments(team2_id, injuries2, team2Factors, awayGoalie?.name, 0.905);
 
-      // Block player prop for injured/out players
       if (bet_type === "player_prop" && player_name) {
-        const allInjured = [...injuries1, ...injuries2];
-        const playerInjury = allInjured.find(i =>
-          i.name.toLowerCase().includes(player_name.toLowerCase())
+        const pInj = [...injuries1, ...injuries2].find((i) =>
+          i.name.toLowerCase().includes(player_name.toLowerCase()),
         );
-        if (playerInjury) {
-          const s = (playerInjury.status || "").toLowerCase();
-          if (s.includes("out") || s.includes("injured reserve") || s.includes("ir")) {
-            return json({
-              error: `Cannot generate prediction: ${player_name} is ${playerInjury.status}`,
-              blocked: true,
-              injury: playerInjury,
-            }, 400);
-          }
+        if (pInj && (pInj.status === "out" || pInj.status === "doubtful")) {
+          return json({ error: `Cannot generate prediction: ${player_name} is ${pInj.status}`, blocked: true, injury: pInj }, 400);
         }
       }
 
-      // Run model
-      const result = runModel(bet_type, adj1, adj2, sharedFactors);
+      const result = runModelV2(bet_type, inj1.adjustedFactors, inj2.adjustedFactors, sharedFactors);
 
-      // Generate AI writeup
-      const writeup = await generateWriteup({ ...result, warnings: [...warn1, ...warn2] }, bet_type);
+      const topFactors = [...result.factorBreakdown]
+        .sort((a, b) => b.weight - a.weight)
+        .slice(0, 3);
+
+      const writeup = await generateWriteup(
+        { ...result, warnings: [...inj1.warnings, ...inj2.warnings].map((w) => `${w.player} (${w.position}) — ${w.status}`) },
+        bet_type,
+      );
+
+      const goalieWarning = [...inj1.warnings, ...inj2.warnings].find((w) =>
+        (w.affected_factor || "").includes("goalie"),
+      );
 
       const prediction = {
         bet_type,
+        model_version: MODEL_VERSION,
         confidence: result.confidence,
         verdict: result.verdict,
+        confidence_tier: result.tier,
         factorBreakdown: result.factorBreakdown,
+        top_factors: topFactors,
+        line_movement_indicator: lineMovementSide === "home" ? "↑" : lineMovementSide === "away" ? "↓" : "=",
+        sharp_money_indicator: sharpMoneyTriggered,
+        goalie_warning: goalieWarning ? `${goalieWarning.player} ${goalieWarning.status}` : null,
+        injury_warnings: [...inj1.warnings, ...inj2.warnings],
         writeup,
-        injuries: {
-          team1: injuries1,
-          team2: injuries2,
-          warnings: [...warn1, ...warn2],
-        },
-        goalies: {
-          home: homeGoalie,
-          away: awayGoalie,
-        },
+        injuries: { team1: injuries1, team2: injuries2 },
+        goalies: { home: homeGoalie, away: awayGoalie },
         context: {
           arenaFactor,
+          xg: { team1: xg1.xG60, team2: xg2.xG60, fallback: xg1.fallback || xg2.fallback },
+          cf: { team1: cf1.cfPct, team2: cf2.cfPct },
+          pace: paceCombined,
+          workload: { team1: workload1, team2: workload2 },
           momentum: { team1: last5_1, team2: last5_2 },
           splits: { team1: splits1, team2: splits2 },
           goalDiff: { team1: gd1, team2: gd2 },
         },
       };
 
-      // Cache prediction
+      // Per-factor audit log (service-role only)
+      if (game_id) {
+        try {
+          const factorRows = result.factorBreakdown.map((f: any) => ({
+            game_id: String(game_id),
+            factor_name: f.factor,
+            score: f.advantageScore,
+            weight: f.weight / 100, // back to fraction
+            bet_type,
+            model_version: MODEL_VERSION,
+          }));
+          if (factorRows.length > 0) {
+            await supabase.from("nhl_factor_log").insert(factorRows);
+          }
+        } catch (e) { console.error("nhl_factor_log insert failed:", (e as Error).message); }
+      }
+
       if (game_id && !player_name) {
         try {
           await supabase.from("nhl_predictions").insert({
-            game_id: String(game_id),
-            bet_type,
-            prediction,
-            confidence: result.confidence,
-            verdict: result.verdict,
+            game_id: String(game_id), bet_type, prediction,
+            confidence: result.confidence, verdict: result.verdict,
             prediction_date: new Date().toISOString().split("T")[0],
           });
-        } catch (_) { /* cache miss is fine */ }
+        } catch (_) { /* ok */ }
       }
 
-      // Snapshot logging — fire and forget
       logSnapshot({
-        sport: "nhl",
-        market_type: bet_type,
+        sport: "nhl", market_type: bet_type,
         player_or_team: player_name || `${team1_id} vs ${team2_id}`,
         prop_type: prop_type || null,
         line: typeof line === "string" ? parseFloat(line) : (line ?? null),
         direction: over_under || null,
-        confidence: result.confidence,
-        verdict: result.verdict,
-        top_factors: (result.factorBreakdown || []).slice(0, 5),
+        confidence: result.confidence, verdict: result.verdict,
+        top_factors: topFactors,
       }).catch((err) => console.error("logSnapshot failed:", err));
 
       return json(prediction);

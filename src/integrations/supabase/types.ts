@@ -402,6 +402,39 @@ export type Database = {
         }
         Relationships: []
       }
+      nhl_factor_log: {
+        Row: {
+          bet_type: string
+          created_at: string
+          factor_name: string
+          game_id: string
+          id: string
+          model_version: string
+          score: number
+          weight: number
+        }
+        Insert: {
+          bet_type: string
+          created_at?: string
+          factor_name: string
+          game_id: string
+          id?: string
+          model_version?: string
+          score: number
+          weight: number
+        }
+        Update: {
+          bet_type?: string
+          created_at?: string
+          factor_name?: string
+          game_id?: string
+          id?: string
+          model_version?: string
+          score?: number
+          weight?: number
+        }
+        Relationships: []
+      }
       nhl_predictions: {
         Row: {
           bet_type: string
@@ -471,6 +504,78 @@ export type Database = {
           last_used_at?: string | null
           requests_remaining?: number | null
           requests_used?: number | null
+        }
+        Relationships: []
+      }
+      odds_api_usage: {
+        Row: {
+          books_count: number | null
+          called_at: string
+          credit_cost: number | null
+          endpoint: string | null
+          id: string
+          key_id: string | null
+          markets: string[] | null
+          regions: string[] | null
+          requests_remaining: number | null
+          requests_used: number | null
+          sport: string | null
+        }
+        Insert: {
+          books_count?: number | null
+          called_at?: string
+          credit_cost?: number | null
+          endpoint?: string | null
+          id?: string
+          key_id?: string | null
+          markets?: string[] | null
+          regions?: string[] | null
+          requests_remaining?: number | null
+          requests_used?: number | null
+          sport?: string | null
+        }
+        Update: {
+          books_count?: number | null
+          called_at?: string
+          credit_cost?: number | null
+          endpoint?: string | null
+          id?: string
+          key_id?: string | null
+          markets?: string[] | null
+          regions?: string[] | null
+          requests_remaining?: number | null
+          requests_used?: number | null
+          sport?: string | null
+        }
+        Relationships: []
+      }
+      odds_history: {
+        Row: {
+          book: string
+          game_id: string
+          line: number | null
+          market: string
+          price: number | null
+          snapshot_at: string
+          sport: string
+        }
+        Insert: {
+          book: string
+          game_id: string
+          line?: number | null
+          market: string
+          price?: number | null
+          snapshot_at?: string
+          sport: string
+        }
+        Update: {
+          book?: string
+          game_id?: string
+          line?: number | null
+          market?: string
+          price?: number | null
+          snapshot_at?: string
+          sport?: string
         }
         Relationships: []
       }
