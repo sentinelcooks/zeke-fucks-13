@@ -239,7 +239,7 @@ export default function PaywallPage() {
                       {monthly.price}
                     </div>
                     {monthly.saving && (
-                      <div className="flex items-center gap-1 mt-1 justify-end">
+                      <div className="flex items-center gap-0.5 mt-1 justify-end">
                         <Check className="w-3 h-3 text-[#00FF6A]" strokeWidth={3} />
                         <span className="text-[10px] font-semibold text-[#00FF6A]">{monthly.saving}</span>
                       </div>
