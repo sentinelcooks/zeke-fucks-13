@@ -1782,6 +1782,11 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
           {results.injuries && (results.injuries.team1?.length > 0 || results.injuries.team2?.length > 0) && (
             <Section title="Injury Report">
               <div className="space-y-4">
+                {results.injuries.fetchedAt && (
+                  <p className="text-[10px] text-muted-foreground -mt-2">
+                    As of {new Date(results.injuries.fetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ESPN
+                  </p>
+                )}
                 {[{ team: results.team1, injuries: results.injuries.team1 }, { team: results.team2, injuries: results.injuries.team2 }].map(({ team, injuries }) => (
                   <div key={team.abbr}>
                     <div className="flex items-center gap-2 mb-2">
@@ -1792,12 +1797,21 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                     {injuries.length > 0 && (
                       <div className="space-y-1">
                         {injuries.map((inj: any, i: number) => {
-                          const sc = inj.status?.toLowerCase() === "out" ? "text-nba-red" : inj.status?.toLowerCase() === "doubtful" || inj.status?.toLowerCase() === "questionable" ? "text-nba-yellow" : "text-muted-foreground";
+                          // Strict normalized enum: "out" | "doubtful" | "questionable" | "day-to-day" | "probable"
+                          const status = String(inj.status || "").toLowerCase();
+                          const sc =
+                            status === "out" ? "text-nba-red" :
+                            status === "doubtful" || status === "questionable" ? "text-nba-yellow" :
+                            status === "day-to-day" ? "text-nba-yellow" :
+                            "text-muted-foreground";
+                          const label =
+                            status === "day-to-day" ? "Day-To-Day" :
+                            status.charAt(0).toUpperCase() + status.slice(1);
                           return (
                             <div key={i} className="flex items-center gap-2 py-1 border-b border-border/20 last:border-0">
                               <AlertTriangle className={`w-2.5 h-2.5 shrink-0 ${sc}`} />
                               <span className="text-[11px] font-medium text-foreground">{inj.name}</span>
-                              <span className={`text-[9px] font-bold uppercase tracking-wider ml-auto ${sc}`}>{inj.status}</span>
+                              <span className={`text-[9px] font-bold uppercase tracking-wider ml-auto ${sc}`}>{label}</span>
                             </div>
                           );
                         })}
