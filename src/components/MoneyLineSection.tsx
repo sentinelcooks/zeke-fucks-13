@@ -23,6 +23,7 @@ import {
   Shield,
   Crown,
   X,
+  Check,
   Lightbulb,
 } from "lucide-react";
 import { Bar } from "react-chartjs-2";
@@ -1975,6 +1976,85 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                       {paceInfo.pace.pace > 0 ? <> Their pace number of <span className="font-semibold text-foreground">{paceInfo.pace.pace}</span> indicates a {paceInfo.pace.pace > 100 ? "fast" : "controlled"} tempo.</> : null}
                     </p>
                   </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* B2B explainer popup */}
+      <AnimatePresence>
+        {b2bInfo && (() => {
+          const { team, b2b } = b2bInfo;
+          const risk = (b2b?.b2bRisk as "low" | "medium" | "high" | null) || "medium";
+          const riskColor = risk === "high" ? "text-nba-red" : risk === "low" ? "text-nba-green" : "text-nba-yellow";
+          return (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+              onClick={() => setB2bInfo(null)}
+            >
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ type: "spring", damping: 25, stiffness: 350 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative w-full max-w-sm rounded-2xl overflow-hidden"
+                style={{
+                  background: "linear-gradient(145deg, hsla(228, 25%, 12%, 0.95), hsla(228, 25%, 8%, 0.98))",
+                  border: "1px solid hsla(250, 76%, 62%, 0.15)",
+                  boxShadow: "0 25px 50px -12px hsla(0, 0%, 0%, 0.5), 0 0 40px -10px hsla(250, 76%, 62%, 0.15)",
+                }}
+              >
+                <div className="absolute top-0 left-0 right-0 h-px" style={{ background: "linear-gradient(90deg, transparent, hsla(250,76%,62%,0.3), transparent)" }} />
+                <button
+                  onClick={() => setB2bInfo(null)}
+                  className="absolute top-3 right-3 p-1.5 rounded-lg text-muted-foreground/50 hover:text-foreground hover:bg-secondary/50 transition-all z-10"
+                  aria-label="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <div className="p-5 space-y-4">
+                  <div className="flex items-center gap-3">
+                    {team.logo && (
+                      <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 flex items-center justify-center bg-white/5" style={{ border: "1px solid hsla(250, 76%, 62%, 0.2)" }}>
+                        <img src={team.logo} alt="" className="w-7 h-7 object-contain" />
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="text-sm font-bold text-foreground">Back-to-Back Status</h3>
+                      <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Fatigue & Rest Explained</p>
+                    </div>
+                  </div>
+                  {b2b?.isB2B ? (
+                    <>
+                      <p className="text-xs text-foreground/80 leading-relaxed">
+                        <span className="font-semibold text-foreground">{team.shortName}</span> is playing on a back-to-back. They played a game yesterday and are on short rest today. Back-to-back games can impact performance — fatigue, reduced minutes for star players, and lower energy late in games are common. This adds <span className={`font-bold ${riskColor}`}>{risk}</span> risk to the play depending on how many key players logged heavy minutes last night.
+                      </p>
+                      <div
+                        className="rounded-xl p-3.5 space-y-1.5"
+                        style={{
+                          background: "linear-gradient(135deg, hsla(45, 93%, 58%, 0.08), hsla(45, 93%, 58%, 0.03))",
+                          border: "1px solid hsla(45, 93%, 58%, 0.12)",
+                        }}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <Lightbulb className="w-3 h-3 text-nba-yellow/80" />
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-nba-yellow/70">Risk Level</span>
+                        </div>
+                        <p className={`text-[11px] font-semibold uppercase tracking-wider ${riskColor}`}>{risk} risk</p>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-xs text-foreground/80 leading-relaxed">
+                      <span className="font-semibold text-foreground">{team.shortName}</span> is not playing on a back-to-back. No fatigue risk from travel or short rest — this is a neutral factor for this matchup.
+                    </p>
+                  )}
                 </div>
               </motion.div>
             </motion.div>
