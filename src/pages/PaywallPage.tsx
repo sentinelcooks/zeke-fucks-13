@@ -187,7 +187,7 @@ export default function PaywallPage() {
         <div className="absolute bottom-0 right-0 w-[360px] h-[320px] rounded-full bg-[#00FF6A]/[0.05] blur-[120px]" />
       </div>
 
-      <div className="relative z-10 mx-auto max-w-md px-5 py-6 pb-12">
+      <div className="relative z-10 mx-auto max-w-md px-5 py-6 pb-32">
         <ProgressDots current={5} total={6} />
 
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
@@ -301,25 +301,30 @@ export default function PaywallPage() {
             );
           })}
         </motion.div>
+      </div>
 
-        {/* CTA */}
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={handleSubscribe}
-          style={{ animation: "pulse-cta 2.5s ease-in-out infinite" }}
-          className="mt-6 w-full py-4 rounded-full bg-[#00FF6A] text-black font-extrabold text-base shadow-lg shadow-[#00FF6A]/20"
-        >
-          Start Free Trial
-        </motion.button>
-
-        <p className="text-center text-[11px] text-white/50 mt-3">Cancel anytime. No hidden fees.</p>
-        <p className="text-center text-[12px] text-white/60 mt-1">
-          <button onClick={handleSkip} className="underline">Maybe later</button>
-        </p>
-
-        <div className="mt-4 flex items-center justify-between text-[10px] text-white/40">
-          <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Secure & Encrypted</span>
-          <span>18+ Bet Responsibly</span>
+      {/* Sticky bottom CTA footer */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-50 pt-8 pb-5 px-5"
+        style={{ background: "linear-gradient(to top, #0A0A0A 60%, rgba(10,10,10,0.85) 85%, transparent)" }}
+      >
+        <div className="mx-auto max-w-md">
+          <div className="mb-2 flex items-center justify-between text-[10px] text-white/40">
+            <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Secure & Encrypted</span>
+            <span>18+ Bet Responsibly</span>
+          </div>
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={handleSubscribe}
+            style={{ animation: "pulse-cta 2.5s ease-in-out infinite" }}
+            className="w-full py-4 rounded-full bg-[#00FF6A] text-black font-extrabold text-base shadow-lg shadow-[#00FF6A]/20"
+          >
+            Start Free Trial
+          </motion.button>
+          <p className="text-center text-[11px] text-white/50 mt-2">Cancel anytime. No hidden fees.</p>
+          <p className="text-center text-[12px] text-white/60 mt-1">
+            <button onClick={handleSkip} className="underline">Maybe later</button>
+          </p>
         </div>
       </div>
     </div>
