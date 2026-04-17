@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import MoneyLineSection from "@/components/MoneyLineSection";
-import sportNflLogo from "@/assets/logo-nfl.png";
+
 import sportNcaabLogo from "@/assets/sport-ncaab.png";
 import nbaLogo from "@/assets/nba-logo.png";
 import mlbLogo from "@/assets/mlb-logo.png";
