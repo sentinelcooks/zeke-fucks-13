@@ -1411,6 +1411,16 @@ Deno.serve(async (req) => {
         top_factors: (analysis.factorBreakdown || []).slice(0, 5),
       }).catch((err) => console.error("logSnapshot failed:", err));
 
+      const decision = buildDecision({
+        team1, team2,
+        team1_pct: bet_type === "moneyline" ? analysis.team1_pct : analysis.confidence,
+        verdict: analysis.verdict,
+        factorBreakdown: analysis.factorBreakdown,
+        oddsAmerican: odds?.bestOdds?.american ?? null,
+        betType: bet_type,
+        overUnder: over_under,
+      });
+
       return json({
         bet_type,
         sport,
@@ -1424,6 +1434,7 @@ Deno.serve(async (req) => {
         back_to_back: { team1: b2b1, team2: b2b2 },
         pace: { team1: pace1, team2: pace2 },
         odds,
+        decision,
         ...analysis,
       });
     }
