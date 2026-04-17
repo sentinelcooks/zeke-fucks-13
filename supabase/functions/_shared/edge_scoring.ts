@@ -112,16 +112,21 @@ export function tierVerdict(
   const key = (propType || "").toLowerCase().replace(/\s+/g, "_");
   const isUnder = (direction || "").toLowerCase() === "under";
 
-  // Special hard gate: highly volatile markets need elite numbers
+  // Hard gate: longshots (any market with +250 or longer odds) require elite numbers
+  const isLongshot = odds >= 250;
+  // Hard gate: volatile-market unders need stricter numbers
   const isVolatileUnder = isUnder && LOW_RELIABILITY_PROPS.has(key);
-  const isLongshotDog = betType === "moneyline" && odds >= 200;
-  if (isVolatileUnder || isLongshotDog) {
-    if (confidence >= 0.68 && edge >= 0.05) return "Strong";
+  if (isLongshot) {
+    if (confidence >= 0.72 && edge >= 0.06 && reliability >= 0.65) return "Strong";
+    return "Pass";
+  }
+  if (isVolatileUnder) {
+    if (confidence >= 0.70 && edge >= 0.06) return "Strong";
     return "Pass";
   }
 
-  if (confidence >= 0.62 && edge >= 0.03 && reliability >= 0.75) return "Strong";
-  if (confidence >= 0.56 && edge >= 0.02 && reliability >= 0.6) return "Lean";
+  if (confidence >= 0.65 && edge >= 0.03 && reliability >= 0.70) return "Strong";
+  if (confidence >= 0.60 && edge >= 0.025 && reliability >= 0.65) return "Lean";
   return "Pass";
 }
 
@@ -164,15 +169,19 @@ export function score(
 
 // ── Ranking + distribution with quality caps ──────────────
 const PER_SPORT_CAP = 8;
-const MAX_LOW_RELIABILITY_TOTAL = 2;
+const MAX_LOW_RELIABILITY_TOTAL = 1;
 const FREE_PICKS_CAP = 20;
 const TODAYS_EDGE_CAP = 5;
 const DAILY_PICKS_CAP = 20;
 
 export function rankAndDistribute(plays: ScoredPlay[]) {
-  // 1. Reject anything that fails verdict tiering
-  const passing = plays.filter((p) => p.verdict !== "Pass");
-  // 2. Sort by quality_score desc
+  // 1. Hard floor: drop anything that fails the absolute minimums
+  const floorOk = plays.filter(
+    (p) => p.confidence >= 0.65 && p.reliability >= 0.70 && p.edge > 0
+  );
+  // 2. Reject anything that fails verdict tiering
+  const passing = floorOk.filter((p) => p.verdict !== "Pass");
+  // 3. Sort by quality_score desc
   const sorted = [...passing].sort((a, b) => b.quality_score - a.quality_score);
 
   // ── Free Picks: per-sport + low-reliability caps ──
