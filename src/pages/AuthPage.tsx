@@ -135,20 +135,18 @@ const AuthPage = () => {
     setError("");
     setOauthLoading(provider);
     try {
-      const result = await lovable.auth.signInWithOAuth(provider, {
-        redirect_uri: window.location.origin + "/auth",
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: window.location.origin + "/auth",
+        },
       });
-      if (result.error) {
-        setError(result.error.message || `${provider} sign-in failed`);
+      if (oauthError) {
+        setError(oauthError.message || `${provider} sign-in failed`);
         setOauthLoading(null);
         return;
       }
-      if (result.redirected) {
-        // Browser navigates away to provider; nothing more to do.
-        return;
-      }
-      // Tokens received & session set — onAuthStateChange will save onboarding
-      // and the isAuthenticated effect will redirect to /dashboard.
+      // Browser navigates away to provider; onAuthStateChange handles return.
     } catch (err) {
       setError(err instanceof Error ? err.message : `${provider} sign-in failed`);
       setOauthLoading(null);
