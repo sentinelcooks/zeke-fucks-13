@@ -97,17 +97,16 @@ async function getTeamSchedule(teamId: string): Promise<any[]> {
   } catch { return []; }
 }
 
+// Single source of truth — see _shared/injuries.ts
+import { fetchTeamInjuries } from "../_shared/injuries.ts";
+
 async function getTeamInjuries(teamId: string): Promise<any[]> {
-  try {
-    const data = await fetchJSON(`${ESPN_MLB}/teams/${teamId}/injuries`);
-    return (data.items || []).map((item: any) => ({
-      name: item.athlete?.displayName || "Unknown",
-      position: item.athlete?.position?.abbreviation || "",
-      status: item.status || "Unknown",
-      detail: item.longComment || item.shortComment || "",
-      isStarter: ["SP", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"].includes(item.athlete?.position?.abbreviation || ""),
-    }));
-  } catch { return []; }
+  const list = await fetchTeamInjuries("mlb", { id: teamId });
+  // Add isStarter flag for mlb-model's injury impact heuristics
+  return list.map((i) => ({
+    ...i,
+    isStarter: ["SP", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"].includes(i.position || ""),
+  }));
 }
 
 async function getStartingPitcherStats(event: any): Promise<{ home: any; away: any }> {
