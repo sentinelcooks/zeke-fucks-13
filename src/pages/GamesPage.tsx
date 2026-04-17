@@ -61,6 +61,14 @@ const SPORT_MAP: Record<Exclude<SportFilter, "ufc">, string> = {
   nfl: "americanfootball_nfl",
 };
 
+const SPORT_COLOR: Record<SportFilter, string> = {
+  nba: "#1D428A",
+  mlb: "#002D72",
+  nhl: "#111111",
+  nfl: "#013369",
+  ufc: "#3a1518",
+};
+
 const SPORT_LOGO: Record<SportFilter, string> = {
   nba: logoNba,
   mlb: logoMlb,
