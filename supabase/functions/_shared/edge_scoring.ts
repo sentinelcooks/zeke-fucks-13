@@ -1,4 +1,4 @@
-// Unified scoring + verdict tiering for the daily slate engine.
+// Unified scoring + verdict tiering for the daily slate engine. v2-strict-longshot-cap
 // qualityScore = confidence * reliability * (1 + edge) * hitRateFactor
 // All probabilities are 0-1 scale.
 
@@ -112,7 +112,10 @@ export function tierVerdict(
   const key = (propType || "").toLowerCase().replace(/\s+/g, "_");
   const isUnder = (direction || "").toLowerCase() === "under";
 
-  // Hard gate: longshots (any market with +250 or longer odds) require elite numbers
+  // ABSOLUTE CAP: never surface anything at +500 or longer regardless of model confidence
+  if (odds >= 500) return "Pass";
+
+  // Hard gate: mid-longshots (+250 to +499) require elite numbers
   const isLongshot = odds >= 250;
   // Hard gate: volatile-market unders need stricter numbers
   const isVolatileUnder = isUnder && LOW_RELIABILITY_PROPS.has(key);
@@ -169,7 +172,7 @@ export function score(
 
 // ── Ranking + distribution with quality caps ──────────────
 const PER_SPORT_CAP = 8;
-const MAX_LOW_RELIABILITY_TOTAL = 1;
+const MAX_LOW_RELIABILITY_TOTAL = 0;
 const FREE_PICKS_CAP = 20;
 const TODAYS_EDGE_CAP = 5;
 const DAILY_PICKS_CAP = 20;

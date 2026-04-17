@@ -665,7 +665,28 @@ Deno.serve(async (req) => {
     console.log(`Phase B done: ${rawPicks.length} total candidates (${Math.round((Date.now() - startTime) / 1000)}s)`);
 
     // ── Phase C: Score, rank, gate strictly ──
-    const scoredPlays: ScoredPlay[] = rawPicks.map(p => {
+    // Sanity filter: drop any candidate where the model<>market gap is mathematically impossible
+    // (>40% probability gap usually means we stapled an alt-line price to a different graded line)
+    const sanePicks = rawPicks.filter(p => {
+      const oddsNum = parseOdds(p.odds);
+      // Hard cap: no +500 or longer in the candidate pool at all
+      if (oddsNum >= 500) return false;
+      const projectedProb = Math.max(0, Math.min(1, (p.hit_rate || 0) / 100));
+      const impliedProb = americanToImpliedProb(oddsNum);
+      if (Math.abs(projectedProb - impliedProb) > 0.40) return false;
+      return true;
+    });
+    // Per-(player, prop_type) dedupe: keep the strongest direction only
+    const bestByKey = new Map<string, any>();
+    for (const p of sanePicks) {
+      const k = `${p.sport}|${p.player_name}|${p.prop_type}`;
+      const prev = bestByKey.get(k);
+      if (!prev || (p.hit_rate || 0) > (prev.hit_rate || 0)) bestByKey.set(k, p);
+    }
+    const dedupedPicks = Array.from(bestByKey.values());
+    console.log(`Phase C: ${rawPicks.length} raw → ${sanePicks.length} sane → ${dedupedPicks.length} deduped`);
+
+    const scoredPlays: ScoredPlay[] = dedupedPicks.map(p => {
       const oddsNum = parseOdds(p.odds);
       const projectedProb = Math.max(0, Math.min(1, (p.hit_rate || 0) / 100));
       const impliedProb = americanToImpliedProb(oddsNum);
@@ -710,11 +731,17 @@ Deno.serve(async (req) => {
         Number(rp.line) === Number(sp.line)
       );
 
+    // ALWAYS wipe today's rows first — never let stale picks survive
+    await supabase.from("daily_picks").delete().eq("pick_date", today);
+    await supabase.from("free_props").delete().eq("prop_date", today);
+
     if (dailyRanked.length > 0) {
-      await supabase.from("daily_picks").delete().eq("pick_date", today);
       const rows = dailyRanked.map(sp => {
         const raw = findRaw(sp);
         const key = `${sp.sport}|${sp.player_name}|${sp.prop_type}|${sp.direction}|${sp.line}`;
+        const tier = edgeKeySet.has(key) ? "edge" : "daily";
+        // Per-pick survival log for audit
+        console.log(`✓ persist [${tier}] ${sp.sport}/${sp.player_name}/${sp.prop_type} ${sp.direction} ${sp.line} | conf=${sp.confidence.toFixed(3)} rel=${sp.reliability.toFixed(2)} edge=${sp.edge.toFixed(3)} odds=${sp.odds} verdict=${sp.verdict}`);
         return {
           pick_date: today,
           sport: sp.sport,
@@ -735,7 +762,7 @@ Deno.serve(async (req) => {
           total_line: sp.total_line ?? null,
           home_team: sp.home_team ?? null,
           away_team: sp.away_team ?? null,
-          tier: edgeKeySet.has(key) ? "edge" : "daily",
+          tier,
         };
       });
       const { error: insertErr } = await supabase.from("daily_picks").insert(rows);
@@ -743,7 +770,6 @@ Deno.serve(async (req) => {
     }
 
     if (freePicks.length > 0) {
-      await supabase.from("free_props").delete().eq("prop_date", today);
       const propRows = freePicks
         .filter(sp => sp.bet_type === "prop")
         .map(sp => ({
