@@ -273,24 +273,48 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
       const playerName = rosterPool.length ? resolveFullName(rawPlayerName, rosterPool) : rawPlayerName;
       playerSet.add(playerName);
       for (const [rawMarketKey, outcomes] of Object.entries(markets as Record<string, any[]>)) {
+        // Skip alternate markets entirely — only score the standard line
+        if (/_alternate$/.test(rawMarketKey)) continue;
         // Normalize Odds API market keys (e.g. "player_points" → "points") so reliability map works.
         const marketKey = rawMarketKey
           .replace(/^(player|batter|pitcher)_/, "")
           .replace(/_alternate$/, "")
           .replace(/^(?:nba_|mlb_|nhl_)/, "");
-        // Group outcomes by (line, direction) and pick best price per side
+        // Count bookmaker offerings per line, track best price per (side,line), and avg juice per line
         const grouped = new Map<string, { side: string; line: number; bestPrice: number }>();
+        const lineBookCount = new Map<number, number>();
+        const lineJuiceSum = new Map<number, { sum: number; n: number }>();
         for (const o of outcomes as any[]) {
           const side = (o.name || "").toLowerCase().includes("under") ? "under" : "over";
           const line = Number(o.point ?? 0);
           const k = `${side}|${line}`;
           const cur = grouped.get(k);
           if (!cur || o.price > cur.bestPrice) grouped.set(k, { side, line, bestPrice: o.price });
+          lineBookCount.set(line, (lineBookCount.get(line) || 0) + 1);
+          const j = lineJuiceSum.get(line) || { sum: 0, n: 0 };
+          j.sum += Math.abs((o.price ?? -110) - (-110));
+          j.n += 1;
+          lineJuiceSum.set(line, j);
         }
 
-        // De-vig pairs over+under at the same line
-        const lines = new Set<number>();
-        for (const v of grouped.values()) lines.add(v.line);
+        // Determine the consensus / standard line: most bookmakers, tiebreak by closest avg juice to -110
+        if (lineBookCount.size === 0) continue;
+        let standardLine: number | null = null;
+        let bestCount = -1;
+        let bestJuice = Infinity;
+        for (const [ln, count] of lineBookCount.entries()) {
+          const j = lineJuiceSum.get(ln)!;
+          const avgJuice = j.sum / j.n;
+          if (count > bestCount || (count === bestCount && avgJuice < bestJuice)) {
+            standardLine = ln;
+            bestCount = count;
+            bestJuice = avgJuice;
+          }
+        }
+        // Require at least 3 bookmakers offering the line to qualify as "standard"
+        if (standardLine === null || bestCount < 3) continue;
+
+        const lines = new Set<number>([standardLine]);
 
         for (const line of lines) {
           const over = grouped.get(`over|${line}`);
