@@ -162,9 +162,28 @@ function computeMoneylineTier(props: WrittenAnalysisProps): { tier: Tier; favorT
 }
 
 function generateOverallSummary(props: WrittenAnalysisProps): { rating: "take" | "lean" | "fade"; summary: string; unitSize: string | null } {
-  const { confidence, playerOrTeam, line, propDisplay, overUnder, seasonHitRate, last10, last5, h2hAvg, ev, edge, minutesTrend, injuries, sport, type, verdict } = props;
+  const { confidence, playerOrTeam, line, propDisplay, overUnder, seasonHitRate, last10, last5, h2hAvg, ev, edge, minutesTrend, injuries, sport, type, verdict, decision } = props;
   const direction = overUnder?.toUpperCase() || "OVER";
   const pickLabel = line != null ? `${playerOrTeam} ${direction} ${line} ${propDisplay || ""}`.trim() : playerOrTeam;
+
+  // ── SINGLE SOURCE OF TRUTH: if backend provided a decision, honor it. Never recompute. ──
+  if (decision && decision.winning_team_name && type === "moneyline") {
+    const tier = decision.conviction_tier;
+    const { rating, unitSize } = tierToSizing(tier);
+    const winner = decision.winning_team_name;
+
+    if (tier === "noBet") {
+      return { rating, summary: `No bet recommended. Edge does not justify a play on ${winner}.`, unitSize: null };
+    }
+
+    let intro: string;
+    if (tier === "veryHigh") intro = `Very high conviction on ${winner}. Model gives a ${decision.win_probability}% win probability${decision.edge != null ? ` with a ${decision.edge}% edge over the market` : ""}.`;
+    else if (tier === "high") intro = `Strong play on ${winner}. ${decision.win_probability}% win probability${decision.edge != null ? `, ${decision.edge}% edge` : ""}.`;
+    else if (tier === "medium") intro = `Solid lean on ${winner} at ${decision.win_probability}% win probability${decision.edge != null ? ` (${decision.edge}% edge)` : ""}.`;
+    else intro = `Slight lean on ${winner}. ${decision.win_probability}% win probability${decision.edge != null ? `, ${decision.edge}% edge` : ""}.`;
+
+    return { rating, summary: `${intro} Recommended sizing: ${unitSize}.`, unitSize };
+  }
 
   if (type === "moneyline") {
     const { tier, favorTeam1, favorTeam2, neutral } = computeMoneylineTier(props);
