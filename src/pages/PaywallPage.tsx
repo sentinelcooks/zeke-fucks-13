@@ -331,7 +331,7 @@ export default function PaywallPage() {
           {FEATURES.map((f) => {
             const isExpanded = expandedFeature === f.label;
             return (
-              <div key={f.label}>
+              <div key={f.label} className="relative z-10">
                 <button
                   onClick={() => setExpandedFeature(isExpanded ? null : f.label)}
                   className={`flex items-center gap-3 w-full rounded-xl px-3.5 py-3 border text-left transition-colors ${
@@ -363,23 +363,30 @@ export default function PaywallPage() {
             );
           })}
         </motion.div>
+        {/* Trust signal row */}
+        <div className="mt-5 flex items-center gap-3 justify-center text-[10px] text-white/40">
+          <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Secure & Encrypted</span>
+          <span className="w-1 h-1 rounded-full bg-white/20" />
+          <span>18+ Bet Responsibly</span>
+          <span className="w-1 h-1 rounded-full bg-white/20" />
+          <span>Cancel Anytime</span>
+        </div>
       </div>
 
-      {/* Sticky bottom CTA footer */}
+      {/* Sticky bottom CTA footer — gradient passes clicks through */}
       <div
-        className="fixed bottom-0 left-0 right-0 z-50 pt-8 pb-5 px-5"
-        style={{ background: "linear-gradient(to top, #0A0A0A 60%, rgba(10,10,10,0.85) 85%, transparent)" }}
+        className="fixed bottom-0 left-0 right-0 z-50 pt-8 pb-6 px-5"
+        style={{
+          background: "linear-gradient(to top, #0A0A0A 55%, rgba(10,10,10,0.95) 75%, transparent)",
+          pointerEvents: "none",
+        }}
       >
-        <div className="mx-auto max-w-md">
-          <div className="mb-2 flex items-center justify-between text-[10px] text-white/40">
-            <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Secure & Encrypted</span>
-            <span>18+ Bet Responsibly</span>
-          </div>
+        <div className="mx-auto max-w-md" style={{ pointerEvents: "auto" }}>
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={handleSubscribe}
             style={{ animation: "pulse-cta 2.5s ease-in-out infinite" }}
-            className="w-full py-4 rounded-full bg-[#00FF6A] text-black font-extrabold text-base shadow-lg shadow-[#00FF6A]/20"
+            className="w-full py-4 rounded-full bg-[#00FF6A] text-black font-extrabold text-[17px] shadow-[0_0_30px_rgba(0,255,106,0.4)]"
           >
             Start Free Trial
           </motion.button>
