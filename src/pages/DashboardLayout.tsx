@@ -94,8 +94,11 @@ const DashboardLayout = () => {
 
   return (
     <div className="min-h-screen flex flex-col w-full min-w-0 bg-background max-w-[430px] mx-auto relative overflow-x-hidden">
-      {/* Ambient background glow */}
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full opacity-[0.03] pointer-events-none" style={{ background: 'radial-gradient(circle, hsl(250 76% 62%), transparent 70%)' }} />
+      {/* Atmospheric glow orbs — bridges onboarding aesthetic */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden z-0">
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[500px] h-[400px] rounded-full opacity-[0.18] blur-[120px]" style={{ background: 'hsl(265 80% 55%)' }} />
+        <div className="absolute bottom-0 right-0 w-[300px] h-[300px] rounded-full opacity-[0.06] blur-[100px]" style={{ background: 'hsl(142 100% 50%)' }} />
+      </div>
       
       {/* Pinned header */}
       <MobileHeader title={title} />
