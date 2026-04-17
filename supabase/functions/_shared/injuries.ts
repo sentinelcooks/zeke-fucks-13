@@ -147,3 +147,228 @@ export async function fetchTeamInjuries(
   const report = await fetchMatchupInjuries(sport, team, {});
   return report.team1;
 }
+
+// ─────────────────────────────────────────────────────────────
+// NHL-specific injury adjustments with top-6 F / top-4 D detection.
+// Returns { adjustedFactors, warnings } where each warning includes the
+// detection_method actually used so we can debug post-hoc.
+// ─────────────────────────────────────────────────────────────
+
+export type NHLDetectionMethod = "atoi" | "points_l10" | "gp_plus_minus" | "blanket_capped";
+
+export interface NHLInjuryWarning {
+  player: string;
+  status: string;
+  position: string;
+  rawStatus: string;
+  detail: string;
+  detection_method: NHLDetectionMethod;
+  applied_penalty: number;
+  affected_factor: string;
+}
+
+interface RankedRoster {
+  topForwards: Set<string>; // lowercased names
+  topDefensemen: Set<string>;
+  topPPUnit: Set<string>;
+  method: NHLDetectionMethod;
+}
+
+async function rankRosterByATOI(teamId: string): Promise<RankedRoster | null> {
+  try {
+    const r = await fetch(
+      `https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/teams/${teamId}/roster`,
+      { headers: { "User-Agent": "PrimalAnalytics/1.0" } },
+    );
+    if (!r.ok) return null;
+    const data = await r.json();
+    const athletes = (data.athletes || []).flat();
+    const forwards: Array<{ name: string; toi: number }> = [];
+    const dmen: Array<{ name: string; toi: number }> = [];
+    for (const a of athletes) {
+      const pos = a.position?.abbreviation || "";
+      const stats: Record<string, number> = {};
+      for (const s of a.statistics || []) stats[s.name] = parseFloat(s.value) || 0;
+      const toi = stats.timeOnIcePerGame || stats.avgTimeOnIce || stats.toi || 0;
+      if (toi <= 0) return null; // ATOI not available → bail to next strategy
+      const name = (a.displayName || "").toLowerCase();
+      if (["C", "LW", "RW", "F"].includes(pos)) forwards.push({ name, toi });
+      else if (pos === "D") dmen.push({ name, toi });
+    }
+    if (forwards.length === 0 || dmen.length === 0) return null;
+    forwards.sort((a, b) => b.toi - a.toi);
+    dmen.sort((a, b) => b.toi - a.toi);
+    return {
+      topForwards: new Set(forwards.slice(0, 6).map((p) => p.name)),
+      topDefensemen: new Set(dmen.slice(0, 4).map((p) => p.name)),
+      topPPUnit: new Set([
+        ...forwards.slice(0, 3).map((p) => p.name),
+        ...dmen.slice(0, 2).map((p) => p.name),
+      ]),
+      method: "atoi",
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function rankRosterByPointsL10(teamId: string): Promise<RankedRoster | null> {
+  try {
+    const r = await fetch(
+      `https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/teams/${teamId}/roster`,
+      { headers: { "User-Agent": "PrimalAnalytics/1.0" } },
+    );
+    if (!r.ok) return null;
+    const data = await r.json();
+    const athletes = (data.athletes || []).flat();
+    const forwards: Array<{ name: string; pts: number }> = [];
+    const dmen: Array<{ name: string; gpPlus: number }> = [];
+    for (const a of athletes) {
+      const pos = a.position?.abbreviation || "";
+      const stats: Record<string, number> = {};
+      for (const s of a.statistics || []) stats[s.name] = parseFloat(s.value) || 0;
+      const goals = stats.goals || 0;
+      const assists = stats.assists || 0;
+      const gp = stats.gamesPlayed || stats.games || 0;
+      const pm = stats.plusMinus || stats.plus_minus || 0;
+      const name = (a.displayName || "").toLowerCase();
+      if (["C", "LW", "RW", "F"].includes(pos)) {
+        forwards.push({ name, pts: goals + assists });
+      } else if (pos === "D") {
+        dmen.push({ name, gpPlus: gp + pm });
+      }
+    }
+    if (forwards.length === 0 || dmen.length === 0) return null;
+    forwards.sort((a, b) => b.pts - a.pts);
+    dmen.sort((a, b) => b.gpPlus - a.gpPlus);
+    return {
+      topForwards: new Set(forwards.slice(0, 6).map((p) => p.name)),
+      topDefensemen: new Set(dmen.slice(0, 4).map((p) => p.name)),
+      topPPUnit: new Set([
+        ...forwards.slice(0, 3).map((p) => p.name),
+        ...dmen.slice(0, 2).map((p) => p.name),
+      ]),
+      method: forwards.some((f) => f.pts > 0) ? "points_l10" : "gp_plus_minus",
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function getRankedRoster(teamId: string): Promise<RankedRoster | { method: "blanket_capped" }> {
+  const atoi = await rankRosterByATOI(teamId);
+  if (atoi) return atoi;
+  const pts = await rankRosterByPointsL10(teamId);
+  if (pts) return pts;
+  return { method: "blanket_capped" };
+}
+
+export interface NHLInjuryAdjustResult {
+  adjustedFactors: Record<string, number>;
+  warnings: NHLInjuryWarning[];
+}
+
+export async function nhlInjuryAdjustments(
+  teamId: string,
+  injuries: NormalizedInjury[],
+  factors: Record<string, number>,
+  startingGoalieName?: string,
+  backupSvPct?: number,
+): Promise<NHLInjuryAdjustResult> {
+  const adjusted = { ...factors };
+  const warnings: NHLInjuryWarning[] = [];
+
+  const out = injuries.filter((i) => i.status === "out" || i.status === "doubtful");
+  const ranked = await getRankedRoster(teamId);
+  const method = ranked.method;
+
+  // ── Goalie handling ───────────────────────────────────
+  const goaliesOut = out.filter((i) => (i.position || "").toUpperCase() === "G");
+  const startingGoalieDown =
+    startingGoalieName &&
+    goaliesOut.some((g) =>
+      g.name.toLowerCase().includes(startingGoalieName.toLowerCase()),
+    );
+  if (startingGoalieDown) {
+    const penalty = (backupSvPct ?? 0) > 0.910 ? 12 : 15;
+    adjusted.goalie_sv = Math.max(0, (adjusted.goalie_sv ?? 50) - penalty);
+    adjusted.goalie_gaa = Math.max(0, (adjusted.goalie_gaa ?? 50) - penalty);
+    adjusted.goalie_l10 = Math.max(0, (adjusted.goalie_l10 ?? 50) - penalty);
+    for (const g of goaliesOut) {
+      warnings.push({
+        player: g.name,
+        status: g.status,
+        position: g.position,
+        rawStatus: g.rawStatus,
+        detail: g.detail,
+        detection_method: method,
+        applied_penalty: penalty,
+        affected_factor: "goalie_sv/goalie_gaa/goalie_l10",
+      });
+    }
+  }
+
+  // ── Skater handling ───────────────────────────────────
+  const skatersOut = out.filter((i) => (i.position || "").toUpperCase() !== "G");
+
+  if (method === "blanket_capped" || !("topForwards" in ranked)) {
+    // Final fallback: blanket -4/F, -5/D, capped -16 combined to scoring factors.
+    const fOut = skatersOut.filter((i) => ["C", "LW", "RW", "F"].includes((i.position || "").toUpperCase()));
+    const dOut = skatersOut.filter((i) => (i.position || "").toUpperCase() === "D");
+    const totalPenalty = Math.min(16, fOut.length * 4 + dOut.length * 5);
+    if (totalPenalty > 0) {
+      adjusted.goals_game = Math.max(0, (adjusted.goals_game ?? 50) - totalPenalty * 0.6);
+      adjusted.goals_blend = Math.max(0, (adjusted.goals_blend ?? 50) - totalPenalty * 0.6);
+      adjusted.goals_allowed = Math.max(0, (adjusted.goals_allowed ?? 50) - totalPenalty * 0.4);
+      for (const p of skatersOut) {
+        warnings.push({
+          player: p.name,
+          status: p.status,
+          position: p.position,
+          rawStatus: p.rawStatus,
+          detail: p.detail,
+          detection_method: "blanket_capped",
+          applied_penalty: ["D"].includes(p.position) ? 5 : 4,
+          affected_factor: "goals_game/goals_allowed",
+        });
+      }
+    }
+  } else {
+    const r = ranked;
+    for (const p of skatersOut) {
+      const lower = p.name.toLowerCase();
+      const pos = (p.position || "").toUpperCase();
+      let penalty = 0;
+      let affected = "";
+      if (pos === "D" && r.topDefensemen.has(lower)) {
+        penalty = 5;
+        affected = "goals_allowed";
+        adjusted.goals_allowed = Math.max(0, (adjusted.goals_allowed ?? 50) - 5);
+      } else if (["C", "LW", "RW", "F"].includes(pos) && r.topForwards.has(lower)) {
+        penalty = 4;
+        affected = "goals_game";
+        adjusted.goals_game = Math.max(0, (adjusted.goals_game ?? 50) - 4);
+        adjusted.goals_blend = Math.max(0, (adjusted.goals_blend ?? 50) - 4);
+      }
+      if (r.topPPUnit.has(lower)) {
+        adjusted.st_diff = Math.max(0, (adjusted.st_diff ?? 50) - 3);
+        affected += affected ? "+st_diff" : "st_diff";
+        penalty = penalty + 3;
+      }
+      if (penalty > 0) {
+        warnings.push({
+          player: p.name,
+          status: p.status,
+          position: p.position,
+          rawStatus: p.rawStatus,
+          detail: p.detail,
+          detection_method: method,
+          applied_penalty: penalty,
+          affected_factor: affected,
+        });
+      }
+    }
+  }
+
+  return { adjustedFactors: adjusted, warnings };
+}
