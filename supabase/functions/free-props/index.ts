@@ -157,22 +157,26 @@ function findBestEdge(books: BookLine[]): BestProp | null {
     const overEdge = (avgOverProb - fairOverProb) * 100; // positive = this book thinks it's less likely = better odds for over
     const underEdge = (avgUnderProb - fairUnderProb) * 100;
 
-    if (overEdge > bestEdge) {
-      bestEdge = overEdge;
-      bestResult = {
-        direction: "over", odds: b.over,
-        edge: Math.round(overEdge * 10) / 10,
-        book: b.book, confidence: Math.round(avgOverProb * 1000) / 10,
-      };
-    }
-    if (underEdge > bestEdge) {
-      bestEdge = underEdge;
-      bestResult = {
-        direction: "under", odds: b.under,
-        edge: Math.round(underEdge * 10) / 10,
-        book: b.book, confidence: Math.round(avgUnderProb * 1000) / 10,
-      };
-    }
+      // Confidence = avg fair prob + 0.5 * edgeFraction (clamped 0-1).
+      // Stored on 0-1 scale so downstream gates compare apples-to-apples.
+      if (overEdge > bestEdge) {
+        bestEdge = overEdge;
+        const conf01 = Math.max(0, Math.min(1, avgOverProb + 0.5 * (overEdge / 100)));
+        bestResult = {
+          direction: "over", odds: b.over,
+          edge: Math.round(overEdge * 10) / 10,
+          book: b.book, confidence: Math.round(conf01 * 1000) / 1000,
+        };
+      }
+      if (underEdge > bestEdge) {
+        bestEdge = underEdge;
+        const conf01 = Math.max(0, Math.min(1, avgUnderProb + 0.5 * (underEdge / 100)));
+        bestResult = {
+          direction: "under", odds: b.under,
+          edge: Math.round(underEdge * 10) / 10,
+          book: b.book, confidence: Math.round(conf01 * 1000) / 1000,
+        };
+      }
   }
 
   return bestResult ? { player: "", opponent: "", prop: "", line: books[0].line, ...bestResult } : null;
@@ -237,7 +241,7 @@ async function fetchSportProps(supabase: any, sportKey: string, markets: string[
         if (books.length < 2) continue;
 
         const best = findBestEdge(books);
-        if (best && best.edge >= 0.5) {
+        if (best && best.edge >= 1.5) {
           props.push({
             player, team: "", opponent: `${event.away_team} vs ${event.home_team}`,
             prop: propType, line: best.line,
@@ -306,13 +310,14 @@ async function fetchUfcProps(supabase: any): Promise<PropLine[]> {
         }
       }
 
-      if (bestEdge >= 0.5) {
+      if (bestEdge >= 1.5) {
+        const conf01 = Math.max(0, Math.min(1, avgProb + 0.5 * (bestEdge / 100)));
         props.push({
           player: fighter, team: "", opponent: `${event.home_team} vs ${event.away_team}`,
           prop: "moneyline", line: 0,
           direction: "win", odds: bestBook.odds,
           edge: Math.round(bestEdge * 10) / 10,
-          confidence: Math.round(avgProb * 1000) / 10,
+          confidence: Math.round(conf01 * 1000) / 1000,
           book: bestBook.book, sport: "ufc",
         });
       }

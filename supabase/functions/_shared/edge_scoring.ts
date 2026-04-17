@@ -116,12 +116,12 @@ export function tierVerdict(
   const isVolatileUnder = isUnder && LOW_RELIABILITY_PROPS.has(key);
   const isLongshotDog = betType === "moneyline" && odds >= 200;
   if (isVolatileUnder || isLongshotDog) {
-    if (confidence >= 0.78 && edge >= 0.06) return "Strong";
+    if (confidence >= 0.68 && edge >= 0.05) return "Strong";
     return "Pass";
   }
 
-  if (confidence >= 0.72 && edge >= 0.04 && reliability >= 0.75) return "Strong";
-  if (confidence >= 0.66 && edge >= 0.03 && reliability >= 0.6) return "Lean";
+  if (confidence >= 0.62 && edge >= 0.03 && reliability >= 0.75) return "Strong";
+  if (confidence >= 0.56 && edge >= 0.02 && reliability >= 0.6) return "Lean";
   return "Pass";
 }
 
@@ -163,7 +163,7 @@ export function score(
 }
 
 // ── Ranking + distribution with quality caps ──────────────
-const PER_SPORT_CAP = 6;
+const PER_SPORT_CAP = 8;
 const MAX_LOW_RELIABILITY_TOTAL = 2;
 const FREE_PICKS_CAP = 20;
 const TODAYS_EDGE_CAP = 5;
