@@ -25,6 +25,7 @@ interface WrittenAnalysisProps {
   sport?: string;
   withoutTeammatesData?: any;
   paceContext?: any;
+  factorBreakdown?: Array<{ name: string; team1Score?: number; team2Score?: number; weight?: number }>;
 }
 
 interface AnalysisSection {
@@ -102,38 +103,70 @@ function generateFallbackSections(data: WrittenAnalysisProps): AnalysisSection[]
   return sections.slice(0, 5);
 }
 
-function generateOverallSummary(props: WrittenAnalysisProps): { rating: "take" | "lean" | "fade"; summary: string; unitSize: string } {
+type Tier = "noBet" | "low" | "medium" | "high" | "veryHigh";
+
+function tierToSizing(tier: Tier): { rating: "take" | "lean" | "fade"; unitSize: string | null } {
+  switch (tier) {
+    case "veryHigh": return { rating: "take", unitSize: "3 units" };
+    case "high": return { rating: "take", unitSize: "1.5–2 units" };
+    case "medium": return { rating: "lean", unitSize: "1 unit" };
+    case "low": return { rating: "lean", unitSize: "0.5 units max" };
+    case "noBet": default: return { rating: "fade", unitSize: null };
+  }
+}
+
+function computeMoneylineTier(props: WrittenAnalysisProps): { tier: Tier; favorTeam1: number; favorTeam2: number; neutral: number; winnerSide: 1 | 2 | null } {
+  const v = (props.verdict || "").toUpperCase();
+  const fb = Array.isArray(props.factorBreakdown) ? props.factorBreakdown : [];
+  let favorTeam1 = 0, favorTeam2 = 0, neutral = 0;
+  for (const f of fb) {
+    if ((f.weight ?? 1) <= 0) continue;
+    const t1 = Number(f.team1Score ?? 0);
+    const t2 = Number(f.team2Score ?? 0);
+    if (t1 >= 60 && t1 > t2) favorTeam1++;
+    else if (t2 >= 60 && t2 > t1) favorTeam2++;
+    else neutral++;
+  }
+  const winnerCount = Math.max(favorTeam1, favorTeam2);
+  const total = favorTeam1 + favorTeam2;
+  const dominanceRatio = total > 0 ? winnerCount / total : 0;
+  const winnerSide: 1 | 2 | null = favorTeam1 > favorTeam2 ? 1 : favorTeam2 > favorTeam1 ? 2 : null;
+
+  // Hard guard: toss-up or no clear direction → no bet
+  const hasDirection = v.includes("LEAN") || v.includes("STRONG");
+  if (v === "TOSS-UP" || !hasDirection) return { tier: "noBet", favorTeam1, favorTeam2, neutral, winnerSide };
+
+  let tier: Tier;
+  if (winnerCount < 3 || dominanceRatio < 0.55) tier = "noBet";
+  else if (dominanceRatio < 0.65) tier = "low";
+  else if (dominanceRatio < 0.75) tier = "medium";
+  else if (dominanceRatio < 0.90) tier = "high";
+  else tier = "veryHigh";
+
+  return { tier, favorTeam1, favorTeam2, neutral, winnerSide };
+}
+
+function generateOverallSummary(props: WrittenAnalysisProps): { rating: "take" | "lean" | "fade"; summary: string; unitSize: string | null } {
   const { confidence, playerOrTeam, line, propDisplay, overUnder, seasonHitRate, last10, last5, h2hAvg, ev, edge, minutesTrend, injuries, sport, type, verdict } = props;
   const direction = overUnder?.toUpperCase() || "OVER";
   const pickLabel = line != null ? `${playerOrTeam} ${direction} ${line} ${propDisplay || ""}`.trim() : playerOrTeam;
 
-  // For moneyline/non-prop types, derive rating directly from the model's verdict & confidence
-  // so we never contradict the statistical model
   if (type === "moneyline") {
-    const v = (verdict || "").toUpperCase();
-    let rating: "take" | "lean" | "fade";
-    let unitSize: string;
-    let summaryIntro: string;
+    const { tier, favorTeam1, favorTeam2, neutral } = computeMoneylineTier(props);
+    const { rating, unitSize } = tierToSizing(tier);
 
-    if (v.includes("STRONG") || confidence >= 65) {
-      rating = "take";
-      unitSize = "1.5–2 units";
-      summaryIntro = `Strong play. ${pickLabel} checks all the boxes.`;
-    } else if (v.includes("LEAN") || confidence >= 55) {
-      rating = "lean";
-      unitSize = "0.5–1 unit";
-      summaryIntro = `Lean play. ${pickLabel} has more factors in its favor but isn't a slam dunk.`;
-    } else if (v === "TOSS-UP" || confidence >= 45) {
-      rating = "lean";
-      unitSize = "0.5 units max";
-      summaryIntro = `Coin-flip matchup. ${pickLabel} is too close to call with conviction.`;
-    } else {
-      rating = "fade";
-      unitSize = "Pass or 0.25 units max";
-      summaryIntro = `Fade. The data doesn't strongly support ${pickLabel}.`;
+    if (tier === "noBet") {
+      const summary = `No bet recommended. Factors split too evenly (${favorTeam1} vs ${favorTeam2}, ${neutral} neutral) to bet with conviction.`;
+      return { rating, summary, unitSize: null };
     }
 
-    return { rating, summary: `${summaryIntro} Recommended sizing: ${unitSize}.`, unitSize };
+    let intro: string;
+    if (tier === "veryHigh") intro = `Very high conviction. Nearly all factors favor ${pickLabel}.`;
+    else if (tier === "high") intro = `Strong play. ${pickLabel} has a clear majority of factors in its favor.`;
+    else if (tier === "medium") intro = `Solid lean. ${pickLabel} has a moderate edge across factors.`;
+    else intro = `Slight lean. ${pickLabel} has a small edge in the factor count.`;
+
+    return { rating, summary: `${intro} Recommended sizing: ${unitSize}.`, unitSize };
   }
 
   // Props: use model verdict as primary override, multi-signal scoring as tiebreaker
@@ -184,39 +217,59 @@ function generateOverallSummary(props: WrittenAnalysisProps): { rating: "take" |
   else if (confidence < 40) bearish += 2;
 
   const score = bullish - bearish;
-  let rating: "take" | "lean" | "fade";
-  let unitSize: string;
-  let summaryIntro: string;
+  const decisive = bullish + bearish;
+  const dominanceRatio = decisive > 0 ? Math.max(bullish, bearish) / decisive : 0;
 
-  // Model verdict overrides multi-signal scoring to prevent contradictions
-  if (v === "DO NOT BET" || (v === "RISKY" && confidence < 50)) {
-    rating = "fade";
-    unitSize = "Pass or 0.25 units max";
-    summaryIntro = `Fade. The data doesn't strongly support ${pickLabel}.`;
-  } else if ((v.includes("STRONG") || v === "STRONG PICK" || v === "STRONG BET") && confidence >= 60) {
-    rating = "take";
-    unitSize = "1.5–2 units";
-    summaryIntro = `Strong play. ${pickLabel} checks all the boxes.`;
-  } else if (score >= 3 && confidence >= 65) {
-    rating = "take";
-    unitSize = "1.5–2 units";
-    summaryIntro = `Strong play. ${pickLabel} checks all the boxes.`;
-  } else if (score >= 1 || confidence >= 55) {
-    rating = "lean";
-    unitSize = "0.5–1 unit";
-    summaryIntro = `Lean play. ${pickLabel} has more factors in its favor but isn't a slam dunk.`;
+  let tier: Tier;
+  // Hard guard: explicit DO NOT BET / RISKY-low / very low confidence
+  if (v === "DO NOT BET" || (v === "RISKY" && confidence < 50) || confidence < 45) {
+    tier = "noBet";
+  } else if (bullish < 3 || score <= 0 || dominanceRatio < 0.55) {
+    tier = "noBet";
+  } else if ((v.includes("STRONG")) && confidence >= 65 && dominanceRatio >= 0.75) {
+    tier = dominanceRatio >= 0.90 ? "veryHigh" : "high";
+  } else if (dominanceRatio >= 0.90 && confidence >= 65) {
+    tier = "veryHigh";
+  } else if (dominanceRatio >= 0.75 && confidence >= 60) {
+    tier = "high";
+  } else if (dominanceRatio >= 0.65) {
+    tier = "medium";
   } else {
-    rating = "fade";
-    unitSize = "Pass or 0.25 units max";
-    summaryIntro = `Fade. The data doesn't strongly support ${pickLabel}.`;
+    tier = "low";
   }
 
+  const { rating, unitSize } = tierToSizing(tier);
   const signalText = signals.length > 0 ? " " + signals.slice(0, 4).join(". ") + "." : "";
+
+  if (tier === "noBet") {
+    return { rating, summary: `No bet recommended. The data doesn't strongly support ${pickLabel}.${signalText}`, unitSize: null };
+  }
+
+  let summaryIntro: string;
+  if (tier === "veryHigh") summaryIntro = `Very high conviction. Nearly all signals favor ${pickLabel}.`;
+  else if (tier === "high") summaryIntro = `Strong play. ${pickLabel} checks the boxes.`;
+  else if (tier === "medium") summaryIntro = `Solid lean. ${pickLabel} has a moderate edge.`;
+  else summaryIntro = `Slight lean. ${pickLabel} has a small edge.`;
+
   return { rating, summary: `${summaryIntro}${signalText} Recommended sizing: ${unitSize}.`, unitSize };
 }
 
+const FORBIDDEN_WHEN_SIZED = /(toss-?up|coin-?flip|\bpass\b|uncertainty)/i;
+
 const WrittenAnalysis = (props: WrittenAnalysisProps) => {
-  const overallSummary = generateOverallSummary(props);
+  const rawSummary = generateOverallSummary(props);
+  // Belt-and-suspenders scrub: if forbidden language appears in the summary text,
+  // force noBet so we never show a sizing line alongside "toss-up/coin-flip/pass/uncertainty".
+  const overallSummary = (() => {
+    if (rawSummary.unitSize && FORBIDDEN_WHEN_SIZED.test(rawSummary.summary)) {
+      const scrubbed = rawSummary.summary
+        .replace(/\s*Recommended sizing:[^.]*\.?/i, "")
+        .trim();
+      return { rating: "fade" as const, unitSize: null as string | null, summary: `${scrubbed} No bet recommended.`.trim() };
+    }
+    return rawSummary;
+  })();
+  const isNoBet = overallSummary.unitSize === null;
   const [sections, setSections] = useState<AnalysisSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(true);
@@ -378,9 +431,11 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
                     )}
                     <div>
                       <span className={`text-[12px] font-extrabold uppercase tracking-wider ${
-                        overallSummary.rating === "take" ? "text-nba-green" : overallSummary.rating === "lean" ? "text-nba-blue" : "text-nba-red"
+                        isNoBet ? "text-nba-red" : overallSummary.rating === "take" ? "text-nba-green" : overallSummary.rating === "lean" ? "text-nba-blue" : "text-nba-red"
                       }`}>
-                        {overallSummary.rating === "take" ? "✅ Take This Pick" : overallSummary.rating === "lean" ? "🤔 Lean Play" : "❌ Fade This Pick"}
+                        {isNoBet
+                          ? "❌ No Bet Recommended"
+                          : overallSummary.rating === "take" ? "✅ Take This Pick" : overallSummary.rating === "lean" ? "🤔 Lean Play" : "❌ Fade This Pick"}
                       </span>
                       <span className="block text-[9px] text-muted-foreground/65 font-bold uppercase tracking-wider mt-0.5">
                         Overall Verdict — All Factors Combined

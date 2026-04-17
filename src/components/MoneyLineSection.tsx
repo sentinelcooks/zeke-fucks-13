@@ -1910,6 +1910,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
           factors={results.factors}
           injuries={results.injuries}
           sport={results.sport}
+          factorBreakdown={results.factorBreakdown}
         />
       )}
 
