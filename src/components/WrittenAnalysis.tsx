@@ -431,9 +431,11 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
                     )}
                     <div>
                       <span className={`text-[12px] font-extrabold uppercase tracking-wider ${
-                        overallSummary.rating === "take" ? "text-nba-green" : overallSummary.rating === "lean" ? "text-nba-blue" : "text-nba-red"
+                        isNoBet ? "text-nba-red" : overallSummary.rating === "take" ? "text-nba-green" : overallSummary.rating === "lean" ? "text-nba-blue" : "text-nba-red"
                       }`}>
-                        {overallSummary.rating === "take" ? "✅ Take This Pick" : overallSummary.rating === "lean" ? "🤔 Lean Play" : "❌ Fade This Pick"}
+                        {isNoBet
+                          ? "❌ No Bet Recommended"
+                          : overallSummary.rating === "take" ? "✅ Take This Pick" : overallSummary.rating === "lean" ? "🤔 Lean Play" : "❌ Fade This Pick"}
                       </span>
                       <span className="block text-[9px] text-muted-foreground/65 font-bold uppercase tracking-wider mt-0.5">
                         Overall Verdict — All Factors Combined
