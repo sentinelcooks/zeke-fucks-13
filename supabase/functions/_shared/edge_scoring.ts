@@ -171,11 +171,11 @@ export function score(
 }
 
 // ── Ranking + distribution with quality caps ──────────────
-const PER_SPORT_CAP = 8;
+const PER_SPORT_CAP = 25;            // raised so Picks tab gets the full slate per sport
 const MAX_LOW_RELIABILITY_TOTAL = 0;
-const FREE_PICKS_CAP = 20;
+const FREE_PICKS_CAP = 30;
 const TODAYS_EDGE_CAP = 5;
-const DAILY_PICKS_CAP = 20;
+const DAILY_PICKS_CAP = 80;           // raised so all surviving analyzer-validated picks reach the Picks tab
 
 export function rankAndDistribute(plays: ScoredPlay[]) {
   // 1. Hard floor: drop anything that fails the absolute minimums

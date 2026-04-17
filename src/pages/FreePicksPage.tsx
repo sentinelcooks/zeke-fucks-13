@@ -20,10 +20,14 @@ interface Pick {
   sport: string;
   team: string | null;
   opponent: string | null;
+  home_team: string | null;
+  away_team: string | null;
   odds: string | null;
   reasoning: string | null;
   pick_date: string;
   avg_value: number | null;
+  bet_type: string | null;
+  tier: string | null;
 }
 
 interface TrendProp {
@@ -226,8 +230,11 @@ const FreePicksPage = () => {
     fetchTrends();
   }, []);
 
+  // Normalize hit_rate (may be stored as decimal 0-1 or percent 0-100)
+  const normHr = (hr: number) => (hr > 1 ? Math.round(hr) : Math.round(hr * 100));
+  const normalized = picks.map(p => ({ ...p, hit_rate: normHr(p.hit_rate) }));
   // Apply filters — only show 50%+ confidence picks
-  let filtered = picks.filter(p => p.hit_rate >= 50);
+  let filtered = normalized.filter(p => p.hit_rate >= 50);
   if (sportFilter !== "all") filtered = filtered.filter(p => p.sport === sportFilter);
   if (propFilter !== "all") filtered = filtered.filter(p => p.prop_type === propFilter);
   filtered = [...filtered].sort((a, b) =>
@@ -374,7 +381,31 @@ const FreePicksPage = () => {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.03 }}
-                    onClick={() => navigate("/dashboard/analyze")}
+                    onClick={() => {
+                      const isGameBet = pick.bet_type && pick.bet_type !== 'prop';
+                      if (isGameBet) {
+                        navigate('/dashboard/moneyline', {
+                          state: {
+                            autoAnalyze: true,
+                            sport: pick.sport,
+                            home_team: pick.home_team,
+                            away_team: pick.away_team,
+                          },
+                        });
+                      } else {
+                        navigate('/dashboard/analyze', {
+                          state: {
+                            autoAnalyze: true,
+                            sport: pick.sport,
+                            player: pick.player_name,
+                            prop_type: pick.prop_type,
+                            line: Number(pick.line),
+                            over_under: pick.direction,
+                            opponent: pick.opponent || '',
+                          },
+                        });
+                      }
+                    }}
                     className="w-full text-left ios-row active:bg-card-hover transition-colors"
                   >
                     <div className="flex-1 min-w-0">
@@ -382,9 +413,14 @@ const FreePicksPage = () => {
                         <div className={`w-1.5 h-1.5 rounded-full ${conf.dot}`} />
                         <span className="text-[15px] font-semibold text-foreground truncate">{pick.player_name}</span>
                         <span className="text-[11px] font-medium text-muted-foreground uppercase">{pick.sport}</span>
-                        {(pick as any).bet_type && (pick as any).bet_type !== "prop" && (
+                        {pick.tier === 'edge' && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-nba-green/15 text-nba-green uppercase tracking-wide">
+                            Edge
+                          </span>
+                        )}
+                        {pick.bet_type && pick.bet_type !== "prop" && (
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-accent/15 text-accent uppercase tracking-wide">
-                            {(pick as any).bet_type === "moneyline" ? "ML" : (pick as any).bet_type}
+                            {pick.bet_type === "moneyline" ? "ML" : pick.bet_type}
                           </span>
                         )}
                       </div>

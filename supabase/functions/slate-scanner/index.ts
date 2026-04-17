@@ -54,6 +54,86 @@ async function fnFetch(path: string): Promise<FetchResult> {
   }
 }
 
+async function fnPost(path: string, body: any): Promise<FetchResult> {
+  const url = `${FN_BASE}/${path}`;
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${SVC_KEY}`,
+        apikey: SVC_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    const text = await r.text();
+    let data: any = null;
+    try { data = JSON.parse(text); } catch { data = text; }
+    return { ok: r.ok, status: r.status, data, size: text.length };
+  } catch (e) {
+    console.error(`fnPost ${path} threw:`, e);
+    return { ok: false, status: 0, data: null, size: 0 };
+  }
+}
+
+// ── Analyzer validation ──────────────────────────────────
+// Calls the live analyzer (same endpoint the Analyze tab uses) so the stored
+// confidence and reasoning EXACTLY match what See Why displays. Drops any
+// candidate the analyzer marks as PASS/FADE, playerIsOut, or confidence 0.
+async function validateWithAnalyzer(play: ScoredPlay, cache: Map<string, any>): Promise<ScoredPlay | null> {
+  if (play.bet_type !== "prop") return play; // only player props go through the analyzer
+  const cacheKey = `${play.sport}|${play.player_name}|${play.prop_type}|${play.line}|${play.direction}`;
+  let analyzed = cache.get(cacheKey);
+  if (!analyzed) {
+    const opponent =
+      play.opponent ||
+      (play.home_team && play.away_team ? play.away_team : "") ||
+      "";
+    const r = await fnPost("nba-api/analyze", {
+      player: play.player_name,
+      prop_type: play.prop_type,
+      line: play.line,
+      over_under: play.direction,
+      opponent,
+      sport: play.sport,
+      bet_type: "player_prop",
+    });
+    if (!r.ok || !r.data) return null;
+    analyzed = r.data;
+    cache.set(cacheKey, analyzed);
+  }
+  // Hard rejects from the analyzer
+  if (analyzed.playerIsOut === true) return null;
+  const conf = Number(analyzed.confidence ?? analyzed.displayConfidence ?? 0);
+  if (!conf || conf <= 0) return null;
+  const verdict = String(analyzed.verdict || "").toUpperCase();
+  if (verdict === "PASS" || verdict === "FADE") return null;
+
+  // Re-derive scoring with the analyzer's confidence as truth
+  const projected = Math.max(0, Math.min(1, conf / 100));
+  const implied = play.implied_prob;
+  const edge = projected - implied;
+  if (edge <= 0.025) return null;
+  if (projected < 0.65) return null;
+  const reasoningArr = Array.isArray(analyzed.reasoning) ? analyzed.reasoning : [];
+  const reasoning = reasoningArr.length
+    ? reasoningArr.slice(0, 3).join(" ")
+    : play.reasoning;
+  return {
+    ...play,
+    projected_prob: projected,
+    edge,
+    ev_pct: (() => {
+      const o = play.odds;
+      const decimal = o > 0 ? o / 100 + 1 : 100 / -o + 1;
+      return (projected * (decimal - 1) - (1 - projected)) * 100;
+    })(),
+    confidence: projected,
+    reasoning,
+  };
+}
+
+
 // ── Lightweight ESPN roster name resolver ──────────────────
 // Some odds-API feeds occasionally return abbreviated names ("B. Miller").
 // Resolve to full ESPN names by hitting the team roster once per game.
@@ -420,17 +500,72 @@ Deno.serve(async (req) => {
 
   const { all, stats } = await runScan();
 
-  // Defensive hard cap before ranking
-  const filtered = all.filter((p) => {
+  // Defensive hard cap before analyzer validation
+  const prefiltered = all.filter((p) => {
     if (p.odds >= 500) return false;
     if (p.odds <= -350) return false;
-    if (p.confidence < 0.65) return false;
+    if (p.confidence < 0.62) return false; // slightly looser pre-floor; analyzer will tighten
     if (p.edge <= 0) return false;
     return true;
   });
-  console.log(`Pre-rank filter: ${all.length} → ${filtered.length} (dropped ${all.length - filtered.length})`);
+  console.log(`Pre-rank filter: ${all.length} → ${prefiltered.length} (dropped ${all.length - prefiltered.length})`);
 
-  const { todaysEdge, dailyPicks, freePicks, sorted } = rankAndDistribute(filtered);
+  // ── Analyzer validation pass: replace de-vig projection with live model ──
+  // Cap analyzer calls per sport to keep wall-time bounded.
+  const ANALYZER_CAP_PER_SPORT = 20;
+  const ANALYZER_CHUNK = 6;
+  const bySport = new Map<string, ScoredPlay[]>();
+  for (const p of prefiltered) {
+    const arr = bySport.get(p.sport) || [];
+    arr.push(p);
+    bySport.set(p.sport, arr);
+  }
+
+  const analyzerCache = new Map<string, any>();
+
+  // Process all sports in parallel
+  const sportResults = await Promise.all(
+    Array.from(bySport.entries()).map(async ([sport, arr]) => {
+      const top = arr.sort((a, b) => b.edge - a.edge).slice(0, ANALYZER_CAP_PER_SPORT);
+      const out: ScoredPlay[] = [];
+      for (let i = 0; i < top.length; i += ANALYZER_CHUNK) {
+        const slice = top.slice(i, i + ANALYZER_CHUNK);
+        const results = await Promise.all(slice.map((p) => validateWithAnalyzer(p, analyzerCache).catch(() => null)));
+        for (const r of results) {
+          if (!r) continue;
+          const rescored = score({
+            sport: r.sport,
+            bet_type: r.bet_type,
+            player_name: r.player_name,
+            team: r.team ?? null,
+            opponent: r.opponent ?? null,
+            home_team: r.home_team ?? null,
+            away_team: r.away_team ?? null,
+            prop_type: r.prop_type,
+            line: r.line,
+            spread_line: r.spread_line ?? null,
+            total_line: r.total_line ?? null,
+            direction: r.direction,
+            odds: r.odds,
+            projected_prob: r.projected_prob,
+            implied_prob: r.implied_prob,
+            edge: r.edge,
+            ev_pct: r.ev_pct,
+            confidence: r.confidence,
+          });
+          rescored.reasoning = r.reasoning || rescored.reasoning;
+          out.push(rescored);
+        }
+      }
+      console.log(`[${sport}] analyzer-validated ${out.length}/${top.length} candidates`);
+      return out;
+    })
+  );
+
+  const validated: ScoredPlay[] = sportResults.flat();
+  console.log(`Analyzer validation: ${prefiltered.length} → ${validated.length}`);
+
+  const { todaysEdge, dailyPicks, freePicks, sorted } = rankAndDistribute(validated);
 
   console.log(`Distribution → todaysEdge:${todaysEdge.length} daily:${dailyPicks.length} free:${freePicks.length}`);
   console.log(`Today's Edge sports: ${[...new Set(todaysEdge.map(p => p.sport))].join(",")}`);
@@ -454,6 +589,8 @@ Deno.serve(async (req) => {
 
   const dailyRows = dailyPicks.map((p) => {
     const key = `${p.sport}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`;
+    const isEdge = edgeKeys.has(key);
+    const tier = isEdge ? "edge" : (p.confidence >= 0.70 ? "daily" : "value");
     return {
       pick_date: today,
       sport: p.sport, bet_type: p.bet_type,
@@ -462,10 +599,10 @@ Deno.serve(async (req) => {
       home_team: p.home_team ?? null, away_team: p.away_team ?? null,
       prop_type: p.prop_type, line: p.line,
       spread_line: p.spread_line ?? null, total_line: p.total_line ?? null,
-      direction: p.direction, hit_rate: p.confidence,
+      direction: p.direction, hit_rate: Math.round(p.confidence * 100),
       last_n_games: 10, avg_value: p.ev_pct,
       odds: String(p.odds), reasoning: p.reasoning,
-      tier: edgeKeys.has(key) ? "edge" : "daily",
+      tier,
     };
   });
 
