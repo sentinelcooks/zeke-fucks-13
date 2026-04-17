@@ -211,13 +211,11 @@ function ScreenHero({ onNext }: { onNext: () => void }) {
           <span className="text-[10px] font-semibold text-[#00FF6A]">View All</span>
         </div>
         <div className="flex items-center gap-3">
-          <WaveImage
-            prompt={ASSETS.avatarLuka.prompt}
-            cacheKey={ASSETS.avatarLuka.key}
-            model={ASSETS.avatarLuka.model}
+          <img
+            src={ESPN_HEADSHOTS.lukaDoncic}
             alt="Luka Doncic"
-            rounded="full"
-            className="w-11 h-11 flex-shrink-0 border border-[#2A2A2A]"
+            className="w-11 h-11 rounded-full object-cover flex-shrink-0 border border-[#2A2A2A] bg-[#1a1a1a]"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
           <div className="flex-1 min-w-0">
             <div className="text-sm font-bold text-white">Luka Doncic</div>
