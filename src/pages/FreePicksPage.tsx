@@ -378,7 +378,31 @@ const FreePicksPage = () => {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.03 }}
-                    onClick={() => navigate("/dashboard/analyze")}
+                    onClick={() => {
+                      const isGameBet = pick.bet_type && pick.bet_type !== 'prop';
+                      if (isGameBet) {
+                        navigate('/dashboard/moneyline', {
+                          state: {
+                            autoAnalyze: true,
+                            sport: pick.sport,
+                            home_team: pick.home_team,
+                            away_team: pick.away_team,
+                          },
+                        });
+                      } else {
+                        navigate('/dashboard/analyze', {
+                          state: {
+                            autoAnalyze: true,
+                            sport: pick.sport,
+                            player: pick.player_name,
+                            prop_type: pick.prop_type,
+                            line: Number(pick.line),
+                            over_under: pick.direction,
+                            opponent: pick.opponent || '',
+                          },
+                        });
+                      }
+                    }}
                     className="w-full text-left ios-row active:bg-card-hover transition-colors"
                   >
                     <div className="flex-1 min-w-0">
@@ -386,9 +410,14 @@ const FreePicksPage = () => {
                         <div className={`w-1.5 h-1.5 rounded-full ${conf.dot}`} />
                         <span className="text-[15px] font-semibold text-foreground truncate">{pick.player_name}</span>
                         <span className="text-[11px] font-medium text-muted-foreground uppercase">{pick.sport}</span>
-                        {(pick as any).bet_type && (pick as any).bet_type !== "prop" && (
+                        {pick.tier === 'edge' && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-nba-green/15 text-nba-green uppercase tracking-wide">
+                            Edge
+                          </span>
+                        )}
+                        {pick.bet_type && pick.bet_type !== "prop" && (
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-accent/15 text-accent uppercase tracking-wide">
-                            {(pick as any).bet_type === "moneyline" ? "ML" : (pick as any).bet_type}
+                            {pick.bet_type === "moneyline" ? "ML" : pick.bet_type}
                           </span>
                         )}
                       </div>
