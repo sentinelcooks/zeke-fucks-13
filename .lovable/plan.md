@@ -1,68 +1,33 @@
 
-## Plan: Redesign AuthPage in Sentinel premium style
+## Plan: Sentinel visual polish pass (sparklines, paywall sticky CTA, welcome scene, progress bar)
 
-### Reference takeaways (from uploaded mockup)
-- Tall rounded card with soft inner glow + subtle vignette
-- Wordmark at top, 3-segment progress bar (last segment glowing teal/green) — we'll adapt this as a Sentinel motif
-- Big two-line headline with second line in brand accent color
-- Small muted subheadline
-- Uppercase tiny labels above inputs ("EMAIL ADDRESS", "PASSWORD")
-- Soft dark inputs with subtle inner shadow, no harsh border
-- "or sign up with" hairline divider
-- Two full-width social buttons (Google, Apple) in dark pill cards
-- Fine-print legal line with brand-color links
-- Sticky giant gradient CTA pill at bottom ("Launch Sentinel 🚀")
-- Back link + dot indicator below CTA
+Apply the 4 fixes from the spec exactly as written. No pricing/routing/feature changes.
 
-### Sentinel brand reinterpretation
-- Replace the teal/blue mockup palette with **Sentinel green `#00FF6A` accent + dark purple ambient** (matches onboarding/paywall we just polished)
-- Keep glassmorphism + Inter font + purple atmosphere orbs already established
-- Keep existing star-field background for continuity
+### Fix 1 — Upgraded `Sparkline` component (`src/pages/OnboardingPage.tsx`)
+Replace the current plain-path `Sparkline` with the spec version: subtle grid lines, gradient fill under the line, glowing animated `motion.polyline` stroke (drop-shadow filter), small dot nodes at each data point with stagger animation, and a larger glowing endpoint circle. Keeps existing `color` / `down` / `className` props so all 4 call sites (Screen 1, Screen 2, Screen 4 ×2) work unchanged.
 
-### Changes — single file: `src/pages/AuthPage.tsx`
+### Fix 2 — Paywall vertical cards + sticky bottom CTA (`src/pages/PaywallPage.tsx`)
+- Cards already render `space-y-3` vertical — leave as-is.
+- Change scroll container `pb-12` → `pb-32` so content clears the sticky footer.
+- Remove the inline CTA block (Start Free Trial button, "Cancel anytime", "Maybe later", security row).
+- Add `fixed bottom-0 left-0 right-0 z-50` footer with top-fading gradient (`linear-gradient(to top, #0A0A0A 60%, transparent)`), pulsing CTA button (`max-w-md mx-auto`), "Cancel anytime. No hidden fees.", "Maybe later" underlined link, and the "Secure & Encrypted / 18+ Bet Responsibly" row.
 
-**Structure (top → bottom inside the card):**
-1. **Wordmark header** — "SENTINEL" in green `#00FF6A` with subtle glow + small lock/shield mark on the left. Underneath: 3-segment progress bar (1st & 2nd dim, 3rd glowing green gradient — visual cue this is the "final step")
-2. **Headline block** — "Create your" (white) / "free account" (green accent) for signup; "Welcome" / "back to Sentinel" for login. Subhead: "Unlock your personalized AI picks in seconds." / "Sign in to access today's edge."
-3. **Mode toggle** — keep the segmented Sign In / Sign Up pill but restyle: thinner, cleaner, green active fill instead of purple
-4. **Inputs** — uppercase tracked labels (`text-[10px] tracking-[0.15em] text-white/50`), softer dark fields (`bg-white/[0.03]`, `border-white/[0.06]`, inset shadow), no left-icon clutter — keep eye toggle on password
-5. **"or continue with" divider** — hairline `bg-white/[0.06]` with centered tiny muted label
-6. **Social buttons** — two full-width dark pill buttons (Google + Apple) using `lovable.auth.signInWithOAuth("google" | "apple")` per Lovable Cloud OAuth knowledge. Brand glyphs inline (Google multi-color G SVG, Apple monochrome). On click → standard redirect flow.
-7. **Legal microcopy** — "By creating an account you agree to our Terms and Privacy Policy. Must be 18+. Gamble responsibly." with green underline links to `/legal`
-8. **Sticky CTA** — large rounded-full button, gradient `linear-gradient(90deg, #00FF6A, #00C853)`, black text, soft green glow `0 8px 32px rgba(0,255,106,0.35)`. Label: "Launch Sentinel 🚀" (signup) / "Sign In →" (login)
-9. **Footer** — "← Back" link (routes to `/onboarding`) + 3-dot progress indicator (last dot green)
+### Fix 3 — Rich layered Welcome background + fixed toast (`src/pages/WelcomeConfirmationPage.tsx`)
+- Replace WaveImage-only background with a layered scene: deep `#050508` base, central purple radial glow, green ambient glow behind logo, bottom dark fade, subtle green grid overlay (4% opacity), 6 floating animated green particles. Keep `WaveImage` rendered at 30% opacity as an additional layer (graceful fallback preserved).
+- Bump watermark "SENTINEL" text opacity to `0.04` per spec.
+- Replace bottom toast with spec version: `fixed bottom-8 left-5 right-5 max-w-md mx-auto z-50`, glassmorphism card (`rgba(20,20,20,0.95)`, green border + glow shadow, `backdrop-blur`), 12×12 rounded icon tile with trophy, bold title + subtitle. Tap-to-dashboard preserved.
 
-**Visual polish:**
-- Card: `bg-[hsla(260,20%,10%,0.7)]`, `border border-white/[0.06]`, `backdrop-blur-2xl`, `rounded-[28px]`, soft inner top-light gradient overlay
-- Add green ambient orb top-right inside card (matches reference glow)
-- Keep purple atmosphere orbs in page background
-- Remove the existing `TypeGlowInput` purple glow → swap for cleaner subtle green focus ring (`focus:ring-1 focus:ring-[#00FF6A]/40`)
-- Remove "Secured Access" divider + "Sentinel Analytics" footer (replaced by legal + back link)
+### Fix 4 — Glowing `ProgressDots` (`OnboardingPage.tsx` + `PaywallPage.tsx`)
+Replace both `ProgressDots` with `motion.div` per pill:
+- Active step: width 28px, full `#00FF6A`, multi-layer green glow shadow
+- Completed: width 14px, `#00FF6A` @ 70% opacity, subtle glow
+- Upcoming: width 14px, `#2A2A2A`, no glow
+- Smooth 0.25s width/color/shadow transition
 
-**Functional preserved:**
-- `signIn` / `signUp` from `useAuth`, error handling, loading spinner, remember-me persistence (kept as a small inline checkbox above CTA), `saveOnboardingToDb` flow, redirect to `/dashboard`
-- Mode-from-location-state still respected
-
-**OAuth wiring:**
-- Add `import { lovable } from "@/integrations/lovable"` (file already auto-managed if Google/Apple was previously set up — if not, the buttons will call it and Lovable Cloud will prompt). Handler:
-  ```ts
-  const handleOAuth = async (provider: "google" | "apple") => {
-    const result = await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin + "/dashboard" });
-    if (result.error) setError(result.error.message);
-  };
-  ```
-- If `@/integrations/lovable` isn't yet present in the project, fall back to `supabase.auth.signInWithOAuth({ provider, options: { redirectTo: window.location.origin + "/dashboard" } })` so the buttons never break.
+### Verification (will run after edits)
+1. Visual: `/onboarding` Screens 1, 2, 4 sparklines + glowing progress dots; `/paywall` sticky footer pinned at 390px viewport; `/welcome` layered bg + glass toast.
+2. `tsc --noEmit` clean.
+3. No DB or edge function changes in this task — verification is purely visual + type-check (will note this explicitly in the final summary).
 
 ### Out of scope
-- Backend changes, new routes, password reset flow, email template changes
-- Onboarding/Paywall pages (already polished)
-- Logo asset swap
-
-### Verification
-1. Visit `/auth` (or login button from onboarding) → premium card renders, green accent headline, tracked uppercase labels
-2. Toggle Sign In ↔ Sign Up → headline + CTA label swap smoothly, name field animates in for signup
-3. Type in inputs → soft green focus ring, no purple glow
-4. Click Google / Apple → redirects to OAuth (or shows graceful error if provider not configured)
-5. Submit valid creds → routes to `/dashboard`
-6. Mobile viewport (390px) → card fills nicely, sticky CTA stays prominent, no overflow
-7. `tsc --noEmit` clean
+Pricing values, routing, sport icons, ESPN avatars, CountdownBanner, AuthPage, backend.
