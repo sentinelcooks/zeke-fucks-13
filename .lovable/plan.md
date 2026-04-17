@@ -1,95 +1,54 @@
 
 
-## Plan: Single Source of Truth for Injury Data
+## Plan: Sort Past Meetings Newest-First + Defensive H2H Date-Range Hardening
 
-### Root cause (what's actually wrong)
+### What I verified (live curl results)
+I called the deployed `moneyline-api/analyze` for three matchups today (2026-04-17):
 
-Three different edge functions fetch injuries from **three different ESPN endpoints** with **different parsing rules**:
-
-| Caller | Endpoint | Field shape | Cache |
+| Sport | Matchup | H2H games returned | 2026 games included? |
 |---|---|---|---|
-| `moneyline-api` (Lines / Spreads / Totals) | `/sports/{sport}/injuries` (league-wide) | `{ name, position, status, type, details }` | 5-min module-scoped per sport |
-| `mlb-model` / `nhl-model` (delegated MLB+NHL) | `/teams/{teamId}/injuries` | different shape | none |
-| `nba-api` (Props tab) | `/sports/{sport}/injuries` filtered by abbr | `{ player_name, position, status, … }` | none |
+| NBA | Heat vs Magic | 5 (10/22/25, 12/06/25, 12/09/25, **01/29/26**, **03/15/26**) | ✅ Yes (2 of 5) |
+| NHL | Oilers vs Kings | 3 (**01/11/26**, **02/27/26**, **04/11/26**) | ✅ Yes (all 3) |
+| MLB | Yankees vs Red Sox | 6 (all from Aug–Sep 2025) | ❌ No 2026 games — but ESPN confirms first 2026 meeting is **April 21, 2026** (4 days from now). The fallback to 2025 season is correct. |
 
-So the EXACT same player can appear with different statuses depending on which tab the user is on. Worse, `_injuryCache` lives across requests — meaning Lines (cache hit, stale) and Spreads (potentially fresh after invalidation) can disagree even within the same matchup. And the moneyline-api raw `inj.status` is whatever ESPN returns ("Day-To-Day", "Day To Day", "questionable", etc.) with no normalization, so a string like `"Day-To-Day"` flows straight to the UI badge — that's how Bam appeared "day-to-day" in Spreads while another section (using a different fetch) didn't show him at all.
+So the backend is **already** fetching the current season correctly: `getSeasonForSport` uses today's date (`month >= 9 ? year+1 : year`) → returns `2026` for NBA/NHL/NCAAB and `year` (2026) for MLB, and `extractH2HFromEvents` uses the union check `comp?.status?.type?.completed === true || comp?.status?.type?.name === "STATUS_FINAL"` exactly as the user requested.
 
-### Fix strategy: One canonical injury fetch per analyze, normalized, returned in response, no cache
+### Real root cause of the user's perception
+The **frontend H2HTable renders games in ESPN's natural order — chronological ascending (oldest first)**. So a user looking at "Past Meetings" sees `10/22/25, 12/06/25, 12/09/25, 1/29/26, 3/15/26` from top to bottom. The 2025 dates sit at the top, the 2026 dates sit below. On a 390px viewport this can read as "data cuts off at 2025" if the user doesn't scan the full table.
 
-**1. New shared injury module — `supabase/functions/_shared/injuries.ts`**
+### Changes (frontend + small backend hardening)
 
-A single helper used by `moneyline-api`, `mlb-model`, `nhl-model`, and `nba-api`. Fetches `/sports/{sport}/injuries` ONCE per analyze invocation (no module cache), and returns a normalized array per team with a strict status enum:
+**1. `src/components/MoneyLineSection.tsx` — `H2HTable` (line 600)**
+   - Sort the array **descending by date** before mapping rows so 2026 games appear first: `const sorted = [...h2h].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())`.
+   - Same sort applied in `H2HChart` (line 159), `DifferentialChart`, and `TotalChart` consumers — actually leave the chart in chronological asc order (charts read left→right by time), only sort the **table** descending.
 
-```ts
-type NormalizedStatus = "out" | "doubtful" | "questionable" | "day-to-day" | "probable";
-interface NormalizedInjury {
-  name: string;        // canonical display name
-  player_name: string; // alias for nba-api callers
-  position: string;
-  status: NormalizedStatus;  // lowercased + hyphenated
-  rawStatus: string;         // original ESPN string for debugging
-  detail: string;
-  source: "espn-league-injuries";
-  fetchedAt: string;         // ISO timestamp
-}
-```
+**2. `src/components/MoneyLineSection.tsx` — display the season in the header**
+   - Update the `<Section title="Past Meetings">` heading to `Past Meetings (2025–26 Season + Last Season)` so the user can immediately see the date range covered. Sport-aware label (e.g. `2026 Season + Last Season` for MLB).
 
-Normalization rules — applied in ONE place only:
-- Lowercase + collapse whitespace + replace spaces with hyphens between letters: `"Day To Day"` / `"Day-To-Day"` → `"day-to-day"`
-- Map ESPN variants: `injured-list`/`il` → `out`; `dtd` → `day-to-day`; anything not in the enum → DROPPED (not shown). This implements "default to available — never guess".
-- De-dupe by player name within a team.
+**3. `supabase/functions/moneyline-api/index.ts` — `getTeamSchedule` (line 138) hardening**
+   - Currently: returns the FIRST URL's events when `events.length > 10`. Issue: this skips `seasontype=3` (playoffs) — for NBA today (April, in the play-in/playoffs window), regular-season-only is fine for H2H but we should guarantee we cover the full season window. 
+   - Change: always **merge** events from `season=current&seasontype=2` AND `season=current&seasontype=3` (regular + playoffs) into one deduped array (key on `event.id`) before returning. Keeps response shape identical, just adds any post-season meetings.
+   - Keep the existing previous-season fallback in `getHeadToHead` exactly as-is (used when current-season H2H is empty — e.g. MLB today).
 
-**2. `moneyline-api/index.ts` — remove the stale cache + use shared module**
+**4. `supabase/functions/moneyline-api/index.ts` — `extractH2HFromEvents`**
+   - No status-filter change needed (already uses the requested union). 
+   - Add explicit sort: `h2h.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())` before returning, so backend ALSO returns newest-first as a contract guarantee for any other consumer.
 
-- Delete `_injuryCache` and `getAllInjuries`/`getTeamInjuries` (lines 215-245). Replace with `import { fetchTeamInjuries } from "../_shared/injuries.ts"`.
-- Each analyze call fetches fresh per request (no cross-request cache → "Do not cache injury data across different matchup searches" satisfied). Within one analyze, both team injuries are derived from a single league-wide fetch shared via a Promise — so Lines, Spreads, and Totals ALL see identical arrays because they're computed from the same `extras.injuries1/2`.
-- The MLB and NHL delegate branches already pass their own `injuries1/2` back in the response, but we'll override with the canonical normalized arrays from the parent so the response shape is identical regardless of which delegate ran.
+**5. Sport coverage check**
+   - All 5 sports (NBA/MLB/NHL/NFL/NCAAB) flow through the same `getHeadToHead → getTeamSchedule → extractH2HFromEvents` path in `moneyline-api`. The hardening in step 3-4 applies to all of them automatically.
+   - `mlb-model` and `nhl-model` only consume `schedule1`/`schedule2` for factor scoring (`computeH2H`, `computeLast5`, etc.) and don't produce a separate `head_to_head` array — `moneyline-api` always overrides with its own canonical `head_to_head`. Already consistent.
 
-**3. `mlb-model/index.ts` and `nhl-model/index.ts`**
-
-- Replace their `getTeamInjuries` (per-team endpoint) with the same shared helper using the league-wide endpoint. This eliminates the cross-source mismatch where MLB/NHL delegates disagreed with the parent moneyline-api.
-- `adjustForInjuries` stays — but reads the normalized `status` enum (cleaner branching than substring matches like `s.includes("dtd")`).
-
-**4. `nba-api/index.ts` — props tab**
-
-- Replace `getTeamInjuries` (lines 849-882) with the shared helper. Map `{name → player_name}` for backward compat with existing UI keys (`player_injuries`, `teammate_injuries`, `opponent_injuries`).
-- Result: Bam Adebayo's status in **Props** is the exact same normalized value as in **Lines/Spreads** for the same team, fetched at the same minute.
-
-**5. Frontend — `src/components/MoneyLineSection.tsx`**
-
-- The injury render (line 1782-1810) already reads from `results.injuries` — no logic change needed because it's already the same source for moneyline/spread/total within one response. The fix is purely backend.
-- Tighten the status color/label switch to use the normalized enum exclusively (drops the case-insensitive guesses like `"Day To Day"` matching nothing).
-- Add a small "as of HH:MM" timestamp under the Injury Report header from `results.injuries.fetchedAt` so users see freshness.
-
-**6. Response contract (consistent across all sports)**
-
-Every analyze response returns:
-```json
-{
-  "injuries": {
-    "team1": NormalizedInjury[],
-    "team2": NormalizedInjury[],
-    "fetchedAt": "2026-04-17T19:32:14Z",
-    "source": "espn-league-injuries"
-  }
-}
-```
-
-### Verification (will run in default mode)
-
-1. `supabase--deploy_edge_functions` for `moneyline-api`, `mlb-model`, `nhl-model`, `nba-api`.
-2. `supabase--curl_edge_functions` POST `/moneyline-api/analyze` for `Heat vs <opp>`, `bet_type=moneyline` → grep response for `"Adebayo"`. Note status (or absence).
-3. Same matchup, `bet_type=spread` → grep response. **Status MUST be byte-identical to step 2** (same normalized value or both absent).
-4. Same matchup, `bet_type=total` → same check.
-5. `supabase--curl_edge_functions` POST `/nba-api/analyze` for any Heat player → grep `teammate_injuries` for Adebayo. **Status MUST match the moneyline-api response from steps 2-4.**
-6. Repeat steps 2-5 for an MLB matchup (Yankees vs anyone) → confirm injury array identical between `moneyline-api` (which delegates to `mlb-model`) and direct `mlb-model/analyze` calls.
-7. Repeat for NHL.
-8. Paste the matching JSON slices in the completion summary as proof.
+### Verification (in default mode)
+1. Deploy `moneyline-api` and re-curl the three matchups above.
+2. Confirm `head_to_head` is sorted descending (most recent first) in JSON output.
+3. Visual check on `/dashboard/analyze` for Heat vs Magic — confirm `Past Meetings` table shows `3/15/26` and `1/29/26` at the **top** of the table.
+4. Repeat for an NHL matchup → confirm 2026 dates at top.
+5. Repeat for MLB Yankees vs Red Sox (after April 21, the first 2026 meeting will appear; until then, last-season fallback is correct).
+6. Paste curl JSON slices showing 2026 dates in position [0] of `head_to_head`.
 
 ### Out of scope
-
-- No DB/schema changes (no new tables/columns).
-- No changes to factor weights or scoring math — only the data feed is unified and normalized.
-- No new AI prompts.
-- Other tabs (Games schedule, Free Props, Daily Picks) keep their own unrelated injury references for now — this fix targets the analyze flow the user reported.
+- No DB / RLS changes.
+- No factor scoring changes.
+- No new endpoints — purely sort + season-window hardening + UI label.
+- Past meetings remains sport-agnostic; same code path for all leagues.
 
