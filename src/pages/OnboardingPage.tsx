@@ -7,6 +7,42 @@ import logoNba from "@/assets/logo-nba.png";
 import logoMlb from "@/assets/logo-mlb.png";
 import logoUfc from "@/assets/logo-ufc.png";
 import logoNhl from "@/assets/logo-nhl.png";
+import OnboardingHero from "@/components/onboarding/OnboardingHero";
+import { preloadGeneratedImage } from "@/hooks/useGeneratedImage";
+
+/* ───────── WaveSpeed hero prompts ───────── */
+const HERO_PROMPTS: Record<string, { key: string; prompt: string }> = {
+  welcome: {
+    key: "onboarding-welcome",
+    prompt:
+      "Cinematic dark stadium at night, glowing purple data overlays and neon analytics graphs floating above the field, predator-hunter mood, ultra-detailed, 4k, moody lighting, premium sports intelligence aesthetic",
+  },
+  edge: {
+    key: "onboarding-edge",
+    prompt:
+      "Split-screen visualization: chaotic red losing chart on the left vs glowing green ascending profit graph on the right, dark cinematic background, holographic data overlays, sharp focus, premium fintech mood",
+  },
+  odds: {
+    key: "onboarding-odds",
+    prompt:
+      "Glowing dice and floating odds numbers (-110, +150, 1.91) suspended in dark space, electric purple highlights, premium fintech aesthetic, cinematic lighting",
+  },
+  sports: {
+    key: "onboarding-sports",
+    prompt:
+      "Dark collage of NBA basketball, MLB baseball, NHL hockey, and UFC octagon — silhouetted athletes mid-action with purple and cyan rim lighting, predator vibe, cinematic 4k",
+  },
+  experience: {
+    key: "onboarding-experience",
+    prompt:
+      "Lone hooded figure analyzing a massive holographic data wall of sports analytics, dark room, deep purple glow, intense focus, cinematic ultra-detailed",
+  },
+  value: {
+    key: "onboarding-valueproof",
+    prompt:
+      "Glowing premium player card hovering above a dark surface, surrounded by floating heatmaps, shot charts and stat overlays, mint green confidence indicator, cinematic 4k",
+  },
+};
 
 /* ───────── Constants ───────── */
 const ease = [0.32, 0.72, 0, 1] as const;
@@ -55,10 +91,21 @@ const OnboardingPage = () => {
   const [extraSports, setExtraSports] = useState<string[]>([]);
   const [style, setStyle] = useState<string | null>(null);
 
-  // Preload paywall on experience screen
+  // Preload paywall + next-screen hero image
   useEffect(() => {
     if (screen === "experience" || screen === "value") {
       import("./PaywallPage").catch(() => {});
+    }
+    // Preload next screen's hero so it's ready by the time user advances
+    const order: Screen[] = ["welcome", "edge", "odds", "sports", "experience", "value"];
+    const idx = order.indexOf(screen);
+    const next = order[idx + 1];
+    if (next && HERO_PROMPTS[next]) {
+      preloadGeneratedImage(HERO_PROMPTS[next].prompt, HERO_PROMPTS[next].key);
+    }
+    // Always make sure current screen's image is preloaded
+    if (HERO_PROMPTS[screen]) {
+      preloadGeneratedImage(HERO_PROMPTS[screen].prompt, HERO_PROMPTS[screen].key);
     }
   }, [screen]);
 
@@ -174,7 +221,15 @@ const OnboardingPage = () => {
             {/* ─── WELCOME ─── */}
             {screen === "welcome" && (
               <motion.div key="welcome" custom={dir} variants={slideVariants} initial="enter" animate="center" exit="exit"
-                transition={pageTransition} className="flex flex-col items-center text-center pt-[max(env(safe-area-inset-top,40px),40px)]">
+                transition={pageTransition} className="flex flex-col items-center text-center pt-[max(env(safe-area-inset-top,32px),32px)]">
+                {/* WaveSpeed hero */}
+                <div className="w-full mb-5">
+                  <OnboardingHero
+                    prompt={HERO_PROMPTS.welcome.prompt}
+                    cacheKey={HERO_PROMPTS.welcome.key}
+                    alt="Sentinel intelligence"
+                  />
+                </div>
                 <motion.div className="relative mb-6"
                   initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                   transition={{ type: "spring", stiffness: 220, damping: 18 }}>
@@ -232,6 +287,13 @@ const OnboardingPage = () => {
             {screen === "edge" && (
               <motion.div key="edge" custom={dir} variants={slideVariants} initial="enter" animate="center" exit="exit"
                 transition={pageTransition} className="pt-2">
+                <div className="mb-5">
+                  <OnboardingHero
+                    prompt={HERO_PROMPTS.edge.prompt}
+                    cacheKey={HERO_PROMPTS.edge.key}
+                    alt="The Sentinel edge"
+                  />
+                </div>
                 <h2 className="text-[28px] font-extrabold tracking-tight leading-[1.1] text-center mb-2">
                   Stop guessing.<br />Start winning.
                 </h2>
@@ -308,6 +370,13 @@ const OnboardingPage = () => {
             {screen === "odds" && (
               <motion.div key="odds" custom={dir} variants={slideVariants} initial="enter" animate="center" exit="exit"
                 transition={pageTransition} className="pt-4">
+                <div className="mb-5">
+                  <OnboardingHero
+                    prompt={HERO_PROMPTS.odds.prompt}
+                    cacheKey={HERO_PROMPTS.odds.key}
+                    alt="Odds format"
+                  />
+                </div>
                 <div className="text-center mb-6">
                   <div className="text-4xl mb-3">🎲</div>
                   <h2 className="text-[28px] font-extrabold tracking-tight leading-[1.1]">How do you read odds?</h2>
@@ -349,6 +418,13 @@ const OnboardingPage = () => {
             {screen === "sports" && (
               <motion.div key="sports" custom={dir} variants={slideVariants} initial="enter" animate="center" exit="exit"
                 transition={pageTransition} className="pt-4">
+                <div className="mb-5">
+                  <OnboardingHero
+                    prompt={HERO_PROMPTS.sports.prompt}
+                    cacheKey={HERO_PROMPTS.sports.key}
+                    alt="Sports"
+                  />
+                </div>
                 <div className="text-center mb-5">
                   <div className="text-4xl mb-3">🎯</div>
                   <h2 className="text-[28px] font-extrabold tracking-tight leading-[1.1]">What do you bet on?</h2>
@@ -436,6 +512,13 @@ const OnboardingPage = () => {
             {screen === "experience" && (
               <motion.div key="experience" custom={dir} variants={slideVariants} initial="enter" animate="center" exit="exit"
                 transition={pageTransition} className="pt-4">
+                <div className="mb-5">
+                  <OnboardingHero
+                    prompt={HERO_PROMPTS.experience.prompt}
+                    cacheKey={HERO_PROMPTS.experience.key}
+                    alt="Experience level"
+                  />
+                </div>
                 <div className="text-center mb-6">
                   <div className="text-4xl mb-3">🎓</div>
                   <h2 className="text-[28px] font-extrabold tracking-tight leading-[1.1]">What's your experience level?</h2>
@@ -483,6 +566,13 @@ const OnboardingPage = () => {
             {screen === "value" && (
               <motion.div key="value" custom={dir} variants={slideVariants} initial="enter" animate="center" exit="exit"
                 transition={pageTransition} className="pt-2">
+                <div className="mb-5">
+                  <OnboardingHero
+                    prompt={HERO_PROMPTS.value.prompt}
+                    cacheKey={HERO_PROMPTS.value.key}
+                    alt="Value proof"
+                  />
+                </div>
                 <div className="text-center mb-5">
                   <h2 className="text-[26px] font-extrabold tracking-tight leading-[1.15]">Here's what you've been missing</h2>
                   <p className="text-sm text-muted-foreground mt-2">A real Sentinel pick from today</p>
