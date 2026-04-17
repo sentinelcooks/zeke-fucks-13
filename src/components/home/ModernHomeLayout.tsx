@@ -253,23 +253,19 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       supabase.from("daily_picks").select("*").eq("pick_date", yesterday).order("created_at", { ascending: false }),
     ]);
 
-    // hit_rate may be stored as decimal (0.75) or percent (75) — normalize threshold
-    const hrOk = (hr: number) => (hr > 1 ? hr >= 50 : hr >= 0.5);
-    let allToday = ((todayRes.data as DailyPick[]) || []).filter(p => hrOk(p.hit_rate));
-
-    // Fallback: if no picks today, fetch most recent picks from the last 3 days
-    if (allToday.length === 0) {
-      const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString().split("T")[0];
-      const { data: recentData } = await supabase
-        .from("daily_picks")
-        .select("*")
-        .gte("pick_date", threeDaysAgo)
-        .lt("pick_date", today)
-        .order("pick_date", { ascending: false })
-        .order("hit_rate", { ascending: false })
-        .limit(40);
-      allToday = ((recentData as DailyPick[]) || []).filter(p => hrOk(p.hit_rate));
-    }
+    // hit_rate may be stored as decimal (0.55) or percent (55) — normalize threshold to 55
+    const hrOk = (hr: number) => (hr > 1 ? hr >= 55 : hr >= 0.55);
+    // Hard odds guard: drop any pick where |odds| >= 500 (longshot junk)
+    const oddsOk = (o: string | null | undefined) => {
+      if (!o) return true;
+      const n = parseInt(String(o).replace(/[^\d-]/g, ""), 10);
+      if (Number.isNaN(n)) return true;
+      return Math.abs(n) < 500;
+    };
+    // STRICT: today only. No 3-day stale fallback — show empty state if no picks today.
+    const allToday = ((todayRes.data as DailyPick[]) || []).filter(
+      p => hrOk(p.hit_rate) && oddsOk(p.odds) && p.tier !== "pass"
+    );
 
     const sortByPref = (arr: DailyPick[]) => {
       if (userSports.length > 0) {
@@ -529,6 +525,11 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               <div className="flex gap-3 pb-2">
                 {todayPicks.map((pick, i) => {
                   const isGameBet = pick.bet_type && pick.bet_type !== 'prop';
+                  // Defensive: hit_rate may be decimal (0.76) or percent (76). Normalize to percent.
+                  const rawHr = pick.hit_rate ?? 0;
+                  const confPercent = rawHr > 1 ? Math.round(rawHr) : Math.round(rawHr * 100);
+                  // Hard skip: never render junk in Today's Edge
+                  if (confPercent < 55) return null;
                   return (
                   <motion.div
                     key={`${pick.id}-${i}`}
@@ -687,13 +688,13 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
 
                       {/* Right: Confidence Ring */}
                       <div style={{ width: 80, height: 80, flexShrink: 0 }}>
-                        <ConfidenceRing rate={Math.round(pick.hit_rate)} />
+                        <ConfidenceRing rate={confPercent} />
                       </div>
                     </div>
 
                     {/* VERDICT BADGE */}
                     {(() => {
-                      const label = getConfidenceLabel(pick.hit_rate);
+                      const label = getConfidenceLabel(confPercent);
                       const ou = pick.bet_type === 'over_under'
                         ? (pick.direction === "over" ? "OVER" : "UNDER")
                         : pick.bet_type === 'moneyline'
