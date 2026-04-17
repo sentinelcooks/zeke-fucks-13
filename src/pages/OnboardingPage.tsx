@@ -482,15 +482,9 @@ function ScreenPersonalize({ onBack, onNext }: { onBack: () => void; onNext: () 
                     <Check className="w-3 h-3 text-black" strokeWidth={3} />
                   </div>
                 )}
-                <WaveImage
-                  prompt={s.asset.prompt}
-                  cacheKey={s.asset.key}
-                  model={s.asset.model}
-                  alt={s.label}
-                  rounded="lg"
-                  className="w-14 h-14 mx-auto mb-2"
-                  fallbackClassName="bg-[#0A0A0A]"
-                />
+                <div className="flex justify-center mb-2">
+                  {SPORT_ICONS[s.id](active ? "#00FF6A" : "#666666")}
+                </div>
                 <div className={`text-center text-sm font-bold ${active ? "text-[#00FF6A]" : "text-white"}`}>{s.label}</div>
               </motion.button>
             );
