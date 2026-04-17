@@ -34,34 +34,12 @@ const SCREEN2_PICKS = [
   { img: ESPN_TEAM_LOGOS.rockies, name: "Rockies", pick: "+1.5", conf: 57, ev: 5.7 },
 ];
 
-/* ─────────── Inline SVG sport icons ─────────── */
-const SPORT_ICONS: Record<string, (color: string) => JSX.Element> = {
-  nba: (color) => (
-    <svg viewBox="0 0 48 48" fill="none" className="w-12 h-12">
-      <circle cx="24" cy="24" r="18" stroke={color} strokeWidth="2.5" />
-      <path d="M6 24h36M24 6v36" stroke={color} strokeWidth="2" />
-      <path d="M10 10c8 6 20 6 28 0M10 38c8-6 20-6 28 0" stroke={color} strokeWidth="2" />
-    </svg>
-  ),
-  mlb: (color) => (
-    <svg viewBox="0 0 48 48" fill="none" className="w-12 h-12">
-      <circle cx="24" cy="24" r="18" stroke={color} strokeWidth="2.5" />
-      <path d="M14 10c4 8 4 20 0 28M34 10c-4 8-4 20 0 28" stroke={color} strokeWidth="2" />
-      <path d="M16 14l2 1M16 20l2 1M16 26l2 1M16 32l2 1M32 14l-2 1M32 20l-2 1M32 26l-2 1M32 32l-2 1" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  ),
-  nhl: (color) => (
-    <svg viewBox="0 0 48 48" fill="none" className="w-12 h-12">
-      <ellipse cx="24" cy="24" rx="14" ry="10" stroke={color} strokeWidth="2.5" />
-      <ellipse cx="24" cy="24" rx="6" ry="4" fill={color} opacity="0.3" />
-    </svg>
-  ),
-  ufc: (color) => (
-    <svg viewBox="0 0 48 48" fill="none" className="w-12 h-12">
-      <path d="M24 8C18 8 14 12 14 18v6c0 2-2 4-2 4l6 10h12l6-10s-2-2-2-4v-6c0-6-4-10-10-10z" stroke={color} strokeWidth="2.5" strokeLinejoin="round" />
-      <path d="M20 18h2v6h-2zM26 18h2v6h-2z" fill={color} opacity="0.5" />
-    </svg>
-  ),
+/* ─────────── Official league logos (ESPN CDN) ─────────── */
+const SPORT_LOGOS: Record<string, string> = {
+  nba: "https://a.espncdn.com/i/teamlogos/leagues/500/nba.png",
+  mlb: "https://a.espncdn.com/i/teamlogos/leagues/500/mlb.png",
+  nhl: "https://a.espncdn.com/i/teamlogos/leagues/500/nhl.png",
+  ufc: "https://a.espncdn.com/i/teamlogos/leagues/500/ufc.png",
 };
 
 /* ─────────── Storage keys ─────────── */
