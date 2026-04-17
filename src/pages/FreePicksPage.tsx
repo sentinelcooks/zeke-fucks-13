@@ -230,8 +230,11 @@ const FreePicksPage = () => {
     fetchTrends();
   }, []);
 
+  // Normalize hit_rate (may be stored as decimal 0-1 or percent 0-100)
+  const normHr = (hr: number) => (hr > 1 ? Math.round(hr) : Math.round(hr * 100));
+  const normalized = picks.map(p => ({ ...p, hit_rate: normHr(p.hit_rate) }));
   // Apply filters — only show 50%+ confidence picks
-  let filtered = picks.filter(p => p.hit_rate >= 50);
+  let filtered = normalized.filter(p => p.hit_rate >= 50);
   if (sportFilter !== "all") filtered = filtered.filter(p => p.sport === sportFilter);
   if (propFilter !== "all") filtered = filtered.filter(p => p.prop_type === propFilter);
   filtered = [...filtered].sort((a, b) =>
