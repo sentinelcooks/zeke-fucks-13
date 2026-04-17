@@ -220,28 +220,37 @@ export default function PaywallPage() {
               <motion.button
                 onClick={() => setSelectedPlan("monthly")}
                 whileTap={{ scale: 0.98 }}
-                className="relative w-full rounded-2xl border-2 border-[#00FF6A] bg-[#141414] px-4 py-4 mb-3 text-left overflow-hidden block"
+                className="relative w-full rounded-2xl border-2 border-[#00FF6A] bg-[#141414] pl-10 pr-4 py-4 mb-3 text-left overflow-hidden block"
                 style={{
-                  boxShadow:
-                    "0 0 0 1px rgba(0,255,106,0.3), 0 0 30px rgba(0,255,106,0.18), inset 0 0 20px rgba(0,255,106,0.04)",
+                  boxShadow: isSelected
+                    ? "0 0 0 2px #00FF6A, 0 0 40px rgba(0,255,106,0.35), 0 0 80px rgba(0,255,106,0.15), inset 0 0 30px rgba(0,255,106,0.05)"
+                    : "0 0 0 1px rgba(0,255,106,0.4), 0 0 20px rgba(0,255,106,0.15)",
+                  animation: isSelected ? "card-pulse 3s ease-in-out infinite" : undefined,
                 }}
               >
                 <div className="absolute -top-px left-1/2 -translate-x-1/2 bg-[#FFC93C] text-black text-[9px] font-black px-3 py-0.5 rounded-b-lg tracking-widest uppercase">
                   MOST POPULAR
                 </div>
 
-                <div className="flex items-center justify-between mt-3">
-                  <div>
+                <div className="absolute top-3 left-3">
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-[#00FF6A]" : "border-white/30"}`}>
+                    {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-[#00FF6A]" />}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between mt-3 gap-3">
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-base font-extrabold text-white">{monthly.label}</span>
-                      <span className="px-1.5 py-0.5 rounded bg-[#00FF6A]/20 text-[#00FF6A] text-[8px] font-black tracking-wider">
+                      <span className="px-1.5 py-0.5 rounded bg-[#1F1F1F] text-white text-[8px] font-black tracking-wider">
                         7-DAY FREE TRIAL
                       </span>
                     </div>
                     <div className="text-[11px] text-white/50 mt-0.5">{monthly.perDay}</div>
                   </div>
-                  <div className="text-right pr-7">
-                    <div className="text-[28px] font-black text-[#00FF6A] tabular-nums leading-none">
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-[13px] text-white/40 line-through tabular-nums leading-none mb-1">$59.99</div>
+                    <div className="text-[34px] font-black text-[#00FF6A] tabular-nums leading-none">
                       {monthly.price}
                     </div>
                     {monthly.saving && (
@@ -250,12 +259,6 @@ export default function PaywallPage() {
                         <span className="text-[10px] font-semibold text-[#00FF6A]">{monthly.saving}</span>
                       </div>
                     )}
-                  </div>
-                </div>
-
-                <div className="absolute top-3.5 right-3">
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-[#00FF6A]" : "border-white/30"}`}>
-                    {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-[#00FF6A]" />}
                   </div>
                 </div>
               </motion.button>
