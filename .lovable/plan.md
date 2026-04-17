@@ -1,31 +1,36 @@
 
 
-## Plan: Scroll to top after correlated prop search
+## Plan: Add team logos to Today's Edge moneyline / game-bet cards
 
 ### Root cause
-In `src/pages/NbaPropsPage.tsx`, the correlated prop row's search button onClick calls `handleAnalyze({...})` but never scrolls. Since the correlated section sits well below the results area, the user stays at the bottom of the page even though new results have loaded above.
+In `src/components/home/ModernHomeLayout.tsx` (lines 538–584), the 52×52 header slot on each Today's Edge card has two branches:
+- **Player props** (`!isGameBet`): renders the player headshot from `headshots[pick.player_name]`.
+- **Game bets** (moneyline / spread / totals): renders only a 💰/📊/📈 emoji + the bet-type label. **No team logos are ever rendered**, even though `pick.home_team`, `pick.away_team`, and `pick.sport` are available, and `getTeamLogoUrl(team, sport)` already exists in `src/utils/teamLogos.ts` and returns ESPN CDN URLs (no base64 conversion needed — ESPN URLs render directly in `<img>`).
 
-### Fix
+### Fix (single file: `src/components/home/ModernHomeLayout.tsx`)
 
-**1. `src/pages/NbaPropsPage.tsx`** — correlated prop tap handler
-- Right after the `handleAnalyze({ player, propType, line, overUnder })` call inside the correlated row's onClick, add a scroll-to-top.
-- The dashboard scroll container is the `<main>` element in `DashboardLayout.tsx` (not `window`), so `window.scrollTo` alone won't work reliably. Use the same pattern as elsewhere — scroll the closest scrollable ancestor:
-  ```ts
-  document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-  ```
-- Place this immediately after the `handleAnalyze(...)` call so state updates and the fetch are already initiated.
+Replace the game-bet branch of the logo slot (lines ~545–558) so it shows **two stacked team logos** (away over home) instead of an emoji:
 
-**2. Audit other "tap a related row to re-analyze" patterns**
-- Check `src/pages/MoneyLinePage.tsx`, `src/pages/UfcPage.tsx`, `src/components/MoneyLineSection.tsx`, `src/components/parlay/*` for similar "tap related item → re-run analysis" handlers. If found, apply the same scroll-to-top pattern.
-- Likely candidates: any "View matchup" / "Analyze this prop" buttons inside results panels.
+```
+┌────────────┐
+│  [away]    │   ← away team logo, 22×22
+│  [home]    │   ← home team logo, 22×22
+└────────────┘
+```
 
-### Verification (default mode)
-1. NBA Props → search Devin Booker Points → scroll down to Correlated Props → tap any row's search button.
-2. Confirm the page smoothly scrolls back to the top and the new results header is visible without manual scrolling.
-3. Repeat on at least one other page where a similar pattern exists (if found in audit).
+Implementation:
+1. Import `getTeamLogoUrl` from `@/utils/teamLogos`.
+2. Compute `sportKey = (pick.sport || 'nba').toLowerCase()` and cast to the supported union (`nba`/`mlb`/`nhl`/`nfl`); fall back to emoji branch if sport is unsupported (e.g. UFC).
+3. Resolve `awayLogo = getTeamLogoUrl(pick.away_team || pick.opponent || '', sportKey)` and `homeLogo = getTeamLogoUrl(pick.home_team || pick.team || '', sportKey)`.
+4. If at least one logo URL resolves, render both stacked vertically inside the existing 52×52 tile (each ~22×22, `objectFit: contain`, with `onError` hiding the broken `<img>` so the existing emoji fallback shows).
+5. If neither resolves (e.g. UFC moneyline, unmapped team name), keep the current emoji + bet-type label as the fallback — no regression.
 
-### Out of scope
-- No edge-function or DB changes — purely client-side scroll behavior.
-- No changes to the analyze logic itself (already fixed in prior task).
+No edge-function, DB, or schema changes. No base64 conversion needed (the stack-overflow snippet about base64 doesn't apply here — that was for edge-function rendering; this is a direct browser `<img>` to ESPN CDN, which works fine and is already used elsewhere in the app, e.g. `src/components/MoneyLineSection.tsx`).
+
+### Verification
+1. Open `/dashboard/home` → scroll to Today's Edge.
+2. Confirm moneyline cards (e.g. "Chicago White Sox" pick from screenshot) now show stacked away/home team logos in the left tile instead of the 💰 emoji.
+3. Confirm spread + over/under game-bet cards also get logos.
+4. Confirm player-prop cards still show headshots (unchanged branch).
+5. Confirm UFC or any unmapped team gracefully falls back to the existing emoji.
 
