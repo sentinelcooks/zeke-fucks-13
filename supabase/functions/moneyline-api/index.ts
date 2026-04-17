@@ -212,36 +212,17 @@ async function resolveMatchupVenue(team1Id: string, team2Id: string, sport: stri
   return null;
 }
 
-// ── Injuries ──
-let _injuryCache: Record<string, { data: any[]; ts: number }> = {};
+// ── Injuries (single source of truth — see _shared/injuries.ts) ──
+import { fetchMatchupInjuries, type InjuryReport, type NormalizedInjury } from "../_shared/injuries.ts";
 
-async function getAllInjuries(sport = "nba") {
-  const base = getEspnBase(sport);
-  if (_injuryCache[sport] && Date.now() - _injuryCache[sport].ts < 300_000) return _injuryCache[sport].data;
-  try {
-    const data = await fetchJSON(`${base}/injuries`);
-    _injuryCache[sport] = { data: data.injuries || [], ts: Date.now() };
-    return _injuryCache[sport].data;
-  } catch {
-    return [];
-  }
-}
-
-async function getTeamInjuries(teamId: string, sport = "nba") {
-  try {
-    const allTeams = await getAllInjuries(sport);
-    const teamEntry = allTeams.find((t: any) => t.id === teamId);
-    if (!teamEntry) return [];
-    return (teamEntry.injuries || []).map((inj: any) => ({
-      name: inj.athlete?.displayName || "Unknown",
-      position: inj.athlete?.position?.abbreviation || "",
-      status: inj.status || "Unknown",
-      type: inj.shortComment || inj.longComment || "",
-      details: inj.longComment || inj.shortComment || "",
-    }));
-  } catch {
-    return [];
-  }
+// Per-request injury report — populated once per analyze invocation. NO module cache.
+// Use a Map keyed by team-pair so concurrent invocations don't collide.
+async function getMatchupInjuries(team1Id: string, team2Id: string, sport: string): Promise<InjuryReport> {
+  return await fetchMatchupInjuries(
+    sport,
+    { id: team1Id },
+    { id: team2Id },
+  );
 }
 
 function getCompetitorId(competitor: any) {
