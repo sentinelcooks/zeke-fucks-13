@@ -276,6 +276,22 @@ function TeamSelect({ label, value, onChange, teams }: { label: string; value: s
   );
 }
 
+/* ── HomeAwayBadge — shown only when ESPN confirms the matchup ── */
+const HomeAwayBadge: React.FC<{ value?: "home" | "away" | null }> = ({ value }) => {
+  if (value !== "home" && value !== "away") return null;
+  const isHome = value === "home";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${
+        isHome ? "bg-nba-green/15 text-nba-green" : "bg-nba-blue/15 text-nba-blue"
+      }`}
+    >
+      {isHome ? <Home className="w-2 h-2" /> : <Plane className="w-2 h-2" />}
+      {value}
+    </span>
+  );
+};
+
 /* ── Section ── */
 function Section({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = React.useState(defaultOpen);
@@ -1607,6 +1623,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                 {results.team1?.logo && <img src={results.team1.logo} alt="" className="w-14 h-14 object-contain mb-1.5 drop-shadow-lg" />}
                 <span className="text-xs font-bold text-foreground leading-tight">{results.team1?.shortName}</span>
                 <span className="text-[10px] text-muted-foreground/65">{results.team1?.record}</span>
+                <HomeAwayBadge value={results.team1?.homeAway} />
               </div>
               <div className="flex flex-col items-center text-center w-[40%]">
                 {betType === "moneyline" ? (
@@ -1626,6 +1643,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                 {results.team2?.logo && <img src={results.team2.logo} alt="" className="w-14 h-14 object-contain mb-1.5 drop-shadow-lg" />}
                 <span className="text-xs font-bold text-foreground leading-tight">{results.team2?.shortName}</span>
                 <span className="text-[10px] text-muted-foreground/65">{results.team2?.record}</span>
+                <HomeAwayBadge value={results.team2?.homeAway} />
               </div>
             </div>
             {betType === "moneyline" && (
@@ -1802,6 +1820,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                     <div className="flex items-center gap-2 mb-2">
                       {team.logo && <img src={team.logo} alt="" className="w-4 h-4 object-contain" />}
                       <span className="text-xs font-bold text-foreground">{team.shortName}</span>
+                      <HomeAwayBadge value={team.homeAway} />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="bg-secondary/40 rounded-xl p-3 text-center">
