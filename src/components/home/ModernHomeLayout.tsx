@@ -688,13 +688,13 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
 
                       {/* Right: Confidence Ring */}
                       <div style={{ width: 80, height: 80, flexShrink: 0 }}>
-                        <ConfidenceRing rate={Math.round(pick.hit_rate)} />
+                        <ConfidenceRing rate={confPercent} />
                       </div>
                     </div>
 
                     {/* VERDICT BADGE */}
                     {(() => {
-                      const label = getConfidenceLabel(pick.hit_rate);
+                      const label = getConfidenceLabel(confPercent);
                       const ou = pick.bet_type === 'over_under'
                         ? (pick.direction === "over" ? "OVER" : "UNDER")
                         : pick.bet_type === 'moneyline'
