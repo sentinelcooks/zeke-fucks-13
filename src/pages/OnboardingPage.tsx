@@ -1,739 +1,638 @@
-import React, { useState, useCallback, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, Lock } from "lucide-react";
+import { ArrowLeft, Lock, TrendingUp, Brain, BarChart3, Calendar, Check, X, Sparkles, ShieldCheck } from "lucide-react";
 import logo from "@/assets/sentinel-lock.jpg";
-import logoNba from "@/assets/logo-nba.png";
-import logoMlb from "@/assets/logo-mlb.png";
-import logoUfc from "@/assets/logo-ufc.png";
-import logoNhl from "@/assets/logo-nhl.png";
-import OnboardingHero from "@/components/onboarding/OnboardingHero";
+import WaveImage from "@/components/onboarding/WaveImage";
 import { preloadGeneratedImage } from "@/hooks/useGeneratedImage";
+import type { WaveModel } from "@/utils/generateImage";
 
-/* ───────── WaveSpeed hero prompts ───────── */
-const HERO_PROMPTS: Record<string, { key: string; prompt: string }> = {
-  welcome: {
-    key: "onboarding-welcome",
-    prompt:
-      "Cinematic dark stadium at night, glowing purple data overlays and neon analytics graphs floating above the field, predator-hunter mood, ultra-detailed, 4k, moody lighting, premium sports intelligence aesthetic",
-  },
-  edge: {
-    key: "onboarding-edge",
-    prompt:
-      "Split-screen visualization: chaotic red losing chart on the left vs glowing green ascending profit graph on the right, dark cinematic background, holographic data overlays, sharp focus, premium fintech mood",
-  },
-  odds: {
-    key: "onboarding-odds",
-    prompt:
-      "Glowing dice and floating odds numbers (-110, +150, 1.91) suspended in dark space, electric purple highlights, premium fintech aesthetic, cinematic lighting",
-  },
-  sports: {
-    key: "onboarding-sports",
-    prompt:
-      "Dark collage of NBA basketball, MLB baseball, NHL hockey, and UFC octagon — silhouetted athletes mid-action with purple and cyan rim lighting, predator vibe, cinematic 4k",
-  },
-  experience: {
-    key: "onboarding-experience",
-    prompt:
-      "Lone hooded figure analyzing a massive holographic data wall of sports analytics, dark room, deep purple glow, intense focus, cinematic ultra-detailed",
-  },
-  value: {
-    key: "onboarding-valueproof",
-    prompt:
-      "Glowing premium player card hovering above a dark surface, surrounded by floating heatmaps, shot charts and stat overlays, mint green confidence indicator, cinematic 4k",
-  },
+/* ─────────── WaveSpeed asset registry ─────────── */
+type Asset = { key: string; prompt: string; model: WaveModel };
+
+const NANO: WaveModel = "wavespeed-ai/nano-banana-pro";
+const FAST: WaveModel = "wavespeed-ai/flux-dev/image-to-image/ultra-fast";
+const KREA: WaveModel = "wavespeed-ai/flux-dev/lora/krea";
+
+const ASSETS = {
+  avatarLuka: { key: "avatar-luka", model: NANO,
+    prompt: "Professional headshot of a young male basketball player, dark background, studio lighting, facing camera, photorealistic" } as Asset,
+  avatarTatum: { key: "avatar-tatum", model: NANO,
+    prompt: "Professional headshot of a male NBA basketball player wearing a green jersey, dark studio background, photorealistic" } as Asset,
+  avatarMatthews: { key: "avatar-matthews", model: NANO,
+    prompt: "Professional headshot of a male NHL hockey player, short hair, athletic, dark studio background, photorealistic" } as Asset,
+  social1: { key: "social-1", model: NANO,
+    prompt: "Friendly young male sports fan headshot, casual clothing, dark background, natural lighting, photorealistic" } as Asset,
+  social2: { key: "social-2", model: NANO,
+    prompt: "Smiling young woman sports fan headshot, casual clothing, dark background, natural lighting, photorealistic" } as Asset,
+  social3: { key: "social-3", model: NANO,
+    prompt: "Young man with beard, casual sports fan headshot, dark background, natural lighting, photorealistic" } as Asset,
+  testimonialMike: { key: "testimonial-miker", model: NANO,
+    prompt: "Confident young man smiling, casual photo, dark background, natural lighting, photorealistic headshot" } as Asset,
+  sportNba: { key: "sport-nba", model: FAST,
+    prompt: "Minimal glowing neon green basketball icon centered on solid pure black background, clean modern vector style, sharp" } as Asset,
+  sportMlb: { key: "sport-mlb", model: FAST,
+    prompt: "Minimal glowing neon green baseball icon centered on solid pure black background, clean modern vector style, sharp" } as Asset,
+  sportNhl: { key: "sport-nhl", model: FAST,
+    prompt: "Minimal glowing neon green hockey puck icon centered on solid pure black background, clean modern vector style, sharp" } as Asset,
+  sportUfc: { key: "sport-ufc", model: FAST,
+    prompt: "Minimal glowing neon green MMA glove icon centered on solid pure black background, clean modern vector style, sharp" } as Asset,
+  stadiumBg: { key: "stadium-bg", model: KREA,
+    prompt: "Cinematic silhouette of a person standing in a massive sports stadium at night, looking out at the field, dramatic purple and violet atmospheric lighting from stadium lights, fog, moody, dark, wide angle, ultra realistic" } as Asset,
 };
 
-/* ───────── Constants ───────── */
-const ease = [0.32, 0.72, 0, 1] as const;
-const pageTransition = { duration: 0.3, ease };
+/* ─────────── Storage keys ─────────── */
+const STORAGE = {
+  oddsFormat: "sentinel_onboarding_odds_format",
+  sports: "sentinel_onboarding_sports",
+  referral: "sentinel_onboarding_referral",
+  style: "sentinel_onboarding_style",
+} as const;
 
-const haptic = () => {
-  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-    try { navigator.vibrate(8); } catch {}
-  }
-};
-
+/* ─────────── Sport options ─────────── */
 const SPORTS = [
-  { label: "NBA", emoji: "🏀", logo: logoNba },
-  { label: "MLB", emoji: "⚾", logo: logoMlb },
-  { label: "UFC", emoji: "🥊", logo: logoUfc },
-  { label: "NHL", emoji: "🏒", logo: logoNhl },
+  { id: "nba", label: "NBA", asset: ASSETS.sportNba },
+  { id: "mlb", label: "MLB", asset: ASSETS.sportMlb },
+  { id: "nhl", label: "NHL", asset: ASSETS.sportNhl },
+  { id: "ufc", label: "UFC", asset: ASSETS.sportUfc },
 ];
 
-const STYLES = [
-  { label: "Beginner", emoji: "🌱", sub: "New to betting, show me the ropes" },
-  { label: "Intermediate", emoji: "📊", sub: "I know the basics, want an edge" },
-  { label: "Knowledgeable", emoji: "🧠", sub: "Experienced, I'm data-driven" },
-  { label: "Expert", emoji: "🔥", sub: "Sharp bettor, give me raw numbers" },
-];
+/* ─────────── Animation ─────────── */
+const ease = [0.32, 0.72, 0, 1] as const;
+const pageT = { duration: 0.3, ease };
 
-const FEATURE_PILLS = [
-  { emoji: "📊", text: "AI Prop Analyzer — NBA, MLB, NHL, UFC" },
-  { emoji: "🎯", text: "Daily High-EV Picks" },
-  { emoji: "📈", text: "Profit Tracker + Parlay Builder" },
-  { emoji: "🔴", text: "Live Game Schedules" },
-];
-
-type Screen = "welcome" | "edge" | "odds" | "sports" | "experience" | "value";
-const STEPS: Screen[] = ["edge", "odds", "sports", "experience", "value"];
-const TOTAL_STEPS = STEPS.length; // 5
-
-/* ───────── Main ───────── */
-const OnboardingPage = () => {
-  const navigate = useNavigate();
-  const [screen, setScreen] = useState<Screen>("welcome");
-  const [dir, setDir] = useState(1);
-
-  const [oddsFormat, setOddsFormat] = useState<"american" | "decimal" | null>(null);
-  const [sports, setSports] = useState<string[]>([]);
-  const [customSport, setCustomSport] = useState("");
-  const [extraSports, setExtraSports] = useState<string[]>([]);
-  const [style, setStyle] = useState<string | null>(null);
-
-  // Preload paywall + next-screen hero image
-  useEffect(() => {
-    if (screen === "experience" || screen === "value") {
-      import("./PaywallPage").catch(() => {});
-    }
-    // Preload next screen's hero so it's ready by the time user advances
-    const order: Screen[] = ["welcome", "edge", "odds", "sports", "experience", "value"];
-    const idx = order.indexOf(screen);
-    const next = order[idx + 1];
-    if (next && HERO_PROMPTS[next]) {
-      preloadGeneratedImage(HERO_PROMPTS[next].prompt, HERO_PROMPTS[next].key);
-    }
-    // Always make sure current screen's image is preloaded
-    if (HERO_PROMPTS[screen]) {
-      preloadGeneratedImage(HERO_PROMPTS[screen].prompt, HERO_PROMPTS[screen].key);
-    }
-  }, [screen]);
-
-  const stepIndex = screen === "welcome" ? -1 : STEPS.indexOf(screen);
-  const progress = stepIndex >= 0 ? ((stepIndex + 1) / TOTAL_STEPS) * 100 : 0;
-
-  const saveOnboardingData = useCallback(() => {
-    localStorage.setItem("sentinel_onboarding_referral", "Direct");
-    localStorage.setItem(
-      "sentinel_onboarding_sports",
-      JSON.stringify([...sports, ...extraSports])
-    );
-    localStorage.setItem("sentinel_onboarding_style", style || "");
-    localStorage.setItem("sentinel_onboarding_odds_format", oddsFormat || "american");
-  }, [sports, extraSports, style, oddsFormat]);
-
-  const goTo = (next: Screen, direction: 1 | -1 = 1) => {
-    haptic();
-    setDir(direction);
-    setScreen(next);
-  };
-
-  const goNext = () => {
-    const idx = STEPS.indexOf(screen as Screen);
-    if (idx < 0) goTo(STEPS[0]);
-    else if (idx < STEPS.length - 1) goTo(STEPS[idx + 1]);
-    else { saveOnboardingData(); navigate("/paywall", { replace: true }); }
-  };
-
-  const goBack = () => {
-    if (screen === "welcome") return;
-    const idx = STEPS.indexOf(screen);
-    if (idx === 0) goTo("welcome", -1);
-    else goTo(STEPS[idx - 1], -1);
-  };
-
-  const skipAll = () => {
-    saveOnboardingData();
-    navigate("/paywall", { replace: true });
-  };
-
-  const toggleSport = (s: string) => {
-    haptic();
-    setSports(p => p.includes(s) ? p.filter(x => x !== s) : [...p, s]);
-  };
-
-  const addCustomSport = () => {
-    const t = customSport.trim();
-    if (!t) return;
-    haptic();
-    setExtraSports(p => p.includes(t) ? p : [...p, t]);
-    setCustomSport("");
-  };
-
-  const slideVariants = {
-    enter: (d: number) => ({ opacity: 0, x: d > 0 ? 50 : -50 }),
-    center: { opacity: 1, x: 0 },
-    exit: (d: number) => ({ opacity: 0, x: d > 0 ? -50 : 50 }),
-  };
-
-  const showChrome = screen !== "welcome";
-
+/* ─────────── Atoms ─────────── */
+function ProgressDots({ current, total }: { current: number; total: number }) {
   return (
-    <div className="min-h-[100dvh] bg-background flex flex-col items-center relative overflow-x-hidden">
-      <style>{`
-        @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 32px hsl(var(--primary) / 0.35); } 50% { box-shadow: 0 0 56px hsl(var(--primary) / 0.6); } }
-        @keyframes scale-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.02); } }
-        @keyframes draw-line { from { stroke-dashoffset: 400; } to { stroke-dashoffset: 0; } }
-        @keyframes bar-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
-      `}</style>
-
-      {/* Ambient glow */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-[-30%] left-1/2 -translate-x-1/2 w-[700px] h-[700px] rounded-full opacity-[0.06]"
-          style={{ background: "radial-gradient(circle, hsl(var(--primary)), transparent 60%)", filter: "blur(100px)" }} />
-      </div>
-
-      {/* Top chrome: progress + back/skip */}
-      {showChrome && (
-        <div className="w-full max-w-md px-5 pt-[max(env(safe-area-inset-top,16px),16px)] relative z-10">
-          {/* Progress bar */}
-          <div className="h-1 w-full rounded-full bg-border/30 overflow-hidden">
+    <div className="flex items-center gap-2 mb-6">
+      <span className="text-xs font-bold text-white/60 tabular-nums">
+        {current} / {total}
+      </span>
+      <div className="flex gap-1.5 ml-1">
+        {Array.from({ length: total }).map((_, i) => {
+          const active = i < current;
+          return (
             <motion.div
-              className="h-full rounded-full"
-              style={{ background: "linear-gradient(90deg, hsl(var(--primary)), hsl(var(--nba-cyan)))" }}
-              initial={false}
-              animate={{ width: `${progress}%` }}
-              transition={{ duration: 0.4, ease: "easeOut" }}
+              key={i}
+              animate={{
+                width: active ? 22 : 16,
+                backgroundColor: active ? "#00FF6A" : "#2A2A2A",
+              }}
+              transition={{ duration: 0.2 }}
+              className="h-1.5 rounded-full"
             />
-          </div>
-          {/* Back + Skip */}
-          <div className="flex justify-between items-center mt-3">
-            <button onClick={goBack} className="flex items-center gap-1 text-xs text-muted-foreground/70 hover:text-foreground transition-colors">
-              <ArrowLeft className="w-3.5 h-3.5" /> Back
-            </button>
-            <span className="text-[10px] text-muted-foreground/55 uppercase tracking-wider font-medium">
-              Step {stepIndex + 1} of {TOTAL_STEPS}
-            </span>
-            {screen !== "value" ? (
-              <button onClick={skipAll} className="text-[11px] text-muted-foreground/55 hover:text-muted-foreground transition-colors">
-                Skip all
-              </button>
-            ) : <span className="w-10" />}
-          </div>
-        </div>
-      )}
-
-      {/* Content */}
-      <div className="flex-1 flex items-start justify-center w-full px-5 py-6 relative z-10 overflow-y-auto min-h-0">
-        <div className="w-full max-w-md">
-          <AnimatePresence mode="wait" custom={dir}>
-
-            {/* ─── WELCOME ─── */}
-            {screen === "welcome" && (
-              <motion.div key="welcome" custom={dir} variants={slideVariants} initial="enter" animate="center" exit="exit"
-                transition={pageTransition} className="flex flex-col items-center text-center pt-[max(env(safe-area-inset-top,32px),32px)]">
-                {/* WaveSpeed hero */}
-                <div className="w-full mb-5">
-                  <OnboardingHero
-                    prompt={HERO_PROMPTS.welcome.prompt}
-                    cacheKey={HERO_PROMPTS.welcome.key}
-                    alt="Sentinel intelligence"
-                  />
-                </div>
-                <motion.div className="relative mb-6"
-                  initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: "spring", stiffness: 220, damping: 18 }}>
-                  <img src={logo} alt="Sentinel" className="w-20 h-20 rounded-[20px] relative border border-primary/30"
-                    style={{ animation: "pulse-glow 2.6s ease-in-out infinite" }} draggable={false} />
-                </motion.div>
-                <motion.h1 initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, ...pageTransition }}
-                  className="text-[40px] font-extrabold tracking-tight leading-[1] mb-2">
-                  Sentinel
-                </motion.h1>
-                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25, ...pageTransition }}
-                  className="text-[15px] text-muted-foreground max-w-[300px] leading-snug mb-8">
-                  The AI edge sharp bettors use to beat the books
-                </motion.p>
-
-                {/* Feature pills */}
-                <div className="w-full space-y-2.5 mb-8">
-                  {FEATURE_PILLS.map((p, i) => (
-                    <motion.div
-                      key={p.text}
-                      initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.35 + i * 0.08, ...pageTransition }}
-                      className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-card/70 border border-border/50"
-                    >
-                      <span className="text-xl shrink-0">{p.emoji}</span>
-                      <span className="text-sm font-medium text-foreground/90 text-left">{p.text}</span>
-                    </motion.div>
-                  ))}
-                </div>
-
-                <motion.button
-                  initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7, ...pageTransition }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => goTo("edge")}
-                  className="w-full py-4 rounded-xl text-white font-bold text-base relative overflow-hidden"
-                  style={{
-                    background: "linear-gradient(135deg, hsl(var(--primary)), hsl(258, 80%, 58%))",
-                    boxShadow: "0 12px 32px hsl(var(--primary) / 0.4)",
-                  }}
-                >
-                  Get Started
-                </motion.button>
-
-                <motion.button
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.85 }}
-                  onClick={() => navigate("/auth")}
-                  className="mt-4 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Already have an account? <span className="text-primary font-semibold">Sign in</span>
-                </motion.button>
-              </motion.div>
-            )}
-
-            {/* ─── 1. EDGE / FOMO ─── */}
-            {screen === "edge" && (
-              <motion.div key="edge" custom={dir} variants={slideVariants} initial="enter" animate="center" exit="exit"
-                transition={pageTransition} className="pt-2">
-                <div className="mb-5">
-                  <OnboardingHero
-                    prompt={HERO_PROMPTS.edge.prompt}
-                    cacheKey={HERO_PROMPTS.edge.key}
-                    alt="The Sentinel edge"
-                  />
-                </div>
-                <h2 className="text-[28px] font-extrabold tracking-tight leading-[1.1] text-center mb-2">
-                  Stop guessing.<br />Start winning.
-                </h2>
-                <p className="text-sm text-muted-foreground text-center mb-6">Data beats gut feeling — every time.</p>
-
-                <div className="space-y-3 mb-4">
-                  {/* Red — Gut */}
-                  <div className="rounded-2xl p-4 relative overflow-hidden"
-                    style={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--destructive) / 0.3)" }}>
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">😬 Going with Your Gut</p>
-                        <p className="text-2xl font-extrabold mt-1" style={{ color: "hsl(var(--destructive))" }}>−$1,340</p>
-                      </div>
-                      <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold"
-                        style={{ background: "hsl(var(--destructive) / 0.12)", color: "hsl(var(--destructive))" }}>
-                        −67% ROI
-                      </span>
-                    </div>
-                    <svg viewBox="0 0 360 80" className="w-full h-16" preserveAspectRatio="none">
-                      <motion.polyline
-                        points="0,12 40,18 80,16 120,28 160,36 200,46 240,54 280,62 320,70 360,78"
-                        fill="none" stroke="hsl(var(--destructive))" strokeWidth="2.5" strokeLinecap="round"
-                        initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.1, ease: "easeOut", delay: 0.2 }}
-                      />
-                    </svg>
-                    <p className="text-[10px] text-muted-foreground/60 mt-1">Week 1 → Week 12</p>
-                  </div>
-
-                  {/* Green — Sentinel */}
-                  <div className="rounded-2xl p-4 relative overflow-hidden"
-                    style={{
-                      background: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--nba-green) / 0.5)",
-                      boxShadow: "0 0 32px hsl(var(--nba-green) / 0.15)",
-                    }}>
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">🤖 Using Sentinel</p>
-                        <p className="text-2xl font-extrabold mt-1" style={{ color: "hsl(var(--nba-green))" }}>+$2,847</p>
-                      </div>
-                      <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold"
-                        style={{ background: "hsl(var(--nba-green) / 0.12)", color: "hsl(var(--nba-green))" }}>
-                        +142% ROI
-                      </span>
-                    </div>
-                    <svg viewBox="0 0 360 80" className="w-full h-16" preserveAspectRatio="none">
-                      <motion.polyline
-                        points="0,72 40,66 80,58 120,52 160,42 200,36 240,28 280,20 320,14 360,6"
-                        fill="none" stroke="hsl(var(--nba-green))" strokeWidth="2.5" strokeLinecap="round"
-                        initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.1, ease: "easeOut", delay: 0.3 }}
-                      />
-                    </svg>
-                    <p className="text-[10px] text-muted-foreground/60 mt-1">Week 1 → Week 12</p>
-                  </div>
-                </div>
-
-                <p className="text-[10px] text-muted-foreground/50 text-center mb-5">Hypothetical · Based on +EV strategy</p>
-
-                <button
-                  onClick={goNext}
-                  className="w-full py-4 rounded-xl text-white font-bold text-base flex items-center justify-center gap-2"
-                  style={{
-                    background: "linear-gradient(135deg, hsl(var(--primary)), hsl(258, 80%, 58%))",
-                    boxShadow: "0 10px 28px hsl(var(--primary) / 0.35)",
-                  }}
-                >
-                  Show me the edge <ArrowRight className="w-4 h-4" />
-                </button>
-              </motion.div>
-            )}
-
-            {/* ─── 2. ODDS FORMAT ─── */}
-            {screen === "odds" && (
-              <motion.div key="odds" custom={dir} variants={slideVariants} initial="enter" animate="center" exit="exit"
-                transition={pageTransition} className="pt-4">
-                <div className="mb-5">
-                  <OnboardingHero
-                    prompt={HERO_PROMPTS.odds.prompt}
-                    cacheKey={HERO_PROMPTS.odds.key}
-                    alt="Odds format"
-                  />
-                </div>
-                <div className="text-center mb-6">
-                  <div className="text-4xl mb-3">🎲</div>
-                  <h2 className="text-[28px] font-extrabold tracking-tight leading-[1.1]">How do you read odds?</h2>
-                  <p className="text-sm text-muted-foreground mt-2">We'll display them your way</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { id: "american" as const, label: "AMERICAN", val: "−110 / +150", sub: "US sportsbooks" },
-                    { id: "decimal" as const, label: "DECIMAL", val: "1.91 / 2.50", sub: "European style" },
-                  ].map(o => {
-                    const selected = oddsFormat === o.id;
-                    return (
-                      <motion.button
-                        key={o.id}
-                        whileTap={{ scale: 0.96 }}
-                        onClick={() => {
-                          haptic();
-                          setOddsFormat(o.id);
-                          setTimeout(goNext, 400);
-                        }}
-                        className={`flex flex-col items-center justify-center p-5 rounded-2xl border-2 transition-all min-h-[160px] ${
-                          selected
-                            ? "border-primary bg-primary/10 shadow-[0_0_24px_hsl(var(--primary)/0.3)]"
-                            : "border-border/50 bg-card/70 hover:border-primary/40"
-                        }`}
-                      >
-                        <p className="text-[11px] font-bold text-muted-foreground tracking-widest mb-2">{o.label}</p>
-                        <p className="text-2xl font-extrabold text-foreground mb-2">{o.val}</p>
-                        <p className="text-[11px] text-muted-foreground/70">{o.sub}</p>
-                      </motion.button>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            )}
-
-            {/* ─── 3. SPORTS ─── */}
-            {screen === "sports" && (
-              <motion.div key="sports" custom={dir} variants={slideVariants} initial="enter" animate="center" exit="exit"
-                transition={pageTransition} className="pt-4">
-                <div className="mb-5">
-                  <OnboardingHero
-                    prompt={HERO_PROMPTS.sports.prompt}
-                    cacheKey={HERO_PROMPTS.sports.key}
-                    alt="Sports"
-                  />
-                </div>
-                <div className="text-center mb-5">
-                  <div className="text-4xl mb-3">🎯</div>
-                  <h2 className="text-[28px] font-extrabold tracking-tight leading-[1.1]">What do you bet on?</h2>
-                  <p className="text-sm text-muted-foreground mt-2">Pick your sports — we'll personalize your feed</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  {SPORTS.map((s, i) => {
-                    const selected = sports.includes(s.label);
-                    return (
-                      <motion.button
-                        key={s.label}
-                        initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.05, ...pageTransition }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => toggleSport(s.label)}
-                        className={`relative flex flex-col items-center justify-center p-5 rounded-2xl border-2 transition-all min-h-[120px] ${
-                          selected
-                            ? "border-primary bg-primary/10 shadow-[0_0_24px_hsl(var(--primary)/0.25)]"
-                            : "border-border/50 bg-card/70 hover:border-primary/40"
-                        }`}
-                      >
-                        <img src={s.logo} alt={s.label} className="w-12 h-12 object-contain mb-2" />
-                        <p className="text-sm font-bold text-foreground">{s.label}</p>
-                        <AnimatePresence>
-                          {selected && (
-                            <motion.div
-                              initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
-                              transition={{ type: "spring", stiffness: 500, damping: 20 }}
-                              className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center"
-                            >
-                              <Check className="w-3 h-3 text-white" strokeWidth={3} />
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </motion.button>
-                    );
-                  })}
-                </div>
-
-                {/* Custom sport */}
-                <div className="flex gap-2 mb-3">
-                  <input
-                    type="text"
-                    value={customSport}
-                    onChange={e => setCustomSport(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && addCustomSport()}
-                    placeholder="Other sport (e.g. Horse Racing)"
-                    className="flex-1 px-3 py-2.5 rounded-xl bg-card/70 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50"
-                  />
-                  <button
-                    onClick={addCustomSport}
-                    className="px-4 py-2.5 rounded-xl bg-primary/15 border border-primary/30 text-primary text-sm font-semibold hover:bg-primary/20 transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
-
-                {extraSports.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {extraSports.map(es => (
-                      <span key={es} className="px-3 py-1.5 rounded-full bg-primary/10 border border-primary/30 text-xs font-semibold text-primary flex items-center gap-1.5">
-                        {es}
-                        <button onClick={() => setExtraSports(p => p.filter(x => x !== es))} className="text-primary/60 hover:text-primary">×</button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                <button
-                  onClick={goNext}
-                  disabled={sports.length === 0 && extraSports.length === 0}
-                  className="w-full py-4 rounded-xl text-white font-bold text-base flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-                  style={{
-                    background: "linear-gradient(135deg, hsl(var(--primary)), hsl(258, 80%, 58%))",
-                    boxShadow: (sports.length || extraSports.length) ? "0 10px 28px hsl(var(--primary) / 0.35)" : undefined,
-                  }}
-                >
-                  Continue <ArrowRight className="w-4 h-4" />
-                </button>
-              </motion.div>
-            )}
-
-            {/* ─── 4. EXPERIENCE ─── */}
-            {screen === "experience" && (
-              <motion.div key="experience" custom={dir} variants={slideVariants} initial="enter" animate="center" exit="exit"
-                transition={pageTransition} className="pt-4">
-                <div className="mb-5">
-                  <OnboardingHero
-                    prompt={HERO_PROMPTS.experience.prompt}
-                    cacheKey={HERO_PROMPTS.experience.key}
-                    alt="Experience level"
-                  />
-                </div>
-                <div className="text-center mb-6">
-                  <div className="text-4xl mb-3">🎓</div>
-                  <h2 className="text-[28px] font-extrabold tracking-tight leading-[1.1]">What's your experience level?</h2>
-                  <p className="text-sm text-muted-foreground mt-2">We'll tailor insights to your skill</p>
-                </div>
-
-                <div className="space-y-2.5">
-                  {STYLES.map((s, i) => {
-                    const selected = style === s.label;
-                    return (
-                      <motion.button
-                        key={s.label}
-                        initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: i * 0.06, ...pageTransition }}
-                        whileTap={{ scale: 0.97 }}
-                        onClick={() => {
-                          haptic();
-                          setStyle(s.label);
-                          setTimeout(goNext, 400);
-                        }}
-                        className={`w-full flex items-center gap-3.5 p-4 rounded-2xl border-2 text-left transition-all ${
-                          selected
-                            ? "border-primary bg-primary/10 shadow-[0_0_24px_hsl(var(--primary)/0.25)]"
-                            : "border-border/50 bg-card/70 hover:border-primary/40"
-                        }`}
-                      >
-                        <span className="text-2xl shrink-0">{s.emoji}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-foreground">{s.label}</p>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">{s.sub}</p>
-                        </div>
-                        {selected && (
-                          <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shrink-0">
-                            <Check className="w-3 h-3 text-white" strokeWidth={3} />
-                          </div>
-                        )}
-                      </motion.button>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            )}
-
-            {/* ─── 5. VALUE PROOF ─── */}
-            {screen === "value" && (
-              <motion.div key="value" custom={dir} variants={slideVariants} initial="enter" animate="center" exit="exit"
-                transition={pageTransition} className="pt-2">
-                <div className="mb-5">
-                  <OnboardingHero
-                    prompt={HERO_PROMPTS.value.prompt}
-                    cacheKey={HERO_PROMPTS.value.key}
-                    alt="Value proof"
-                  />
-                </div>
-                <div className="text-center mb-5">
-                  <h2 className="text-[26px] font-extrabold tracking-tight leading-[1.15]">Here's what you've been missing</h2>
-                  <p className="text-sm text-muted-foreground mt-2">A real Sentinel pick from today</p>
-                </div>
-
-                {/* Sample pick card */}
-                <div className="rounded-2xl bg-card border border-border/60 p-4 mb-4 relative overflow-hidden">
-                  {/* Player header */}
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-14 h-14 rounded-full bg-secondary border border-border/50 overflow-hidden shrink-0">
-                      <img
-                        src="https://a.espncdn.com/i/headshots/nba/players/full/3112335.png"
-                        alt="Nikola Jokic"
-                        className="w-full h-full object-cover"
-                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-base font-bold text-foreground">Nikola Jokić</p>
-                      <p className="text-[11px] text-muted-foreground">DEN · C</p>
-                    </div>
-                    <div className="px-2.5 py-1.5 rounded-lg text-[10px] font-black tracking-wide"
-                      style={{
-                        background: "hsl(var(--nba-green) / 0.18)",
-                        color: "hsl(var(--nba-green))",
-                        border: "1px solid hsl(var(--nba-green) / 0.4)",
-                        boxShadow: "0 0 18px hsl(var(--nba-green) / 0.3)",
-                      }}>
-                      72% STRONG
-                    </div>
-                  </div>
-
-                  <div className="px-3 py-2 rounded-xl bg-secondary/50 border border-border/40 mb-3">
-                    <p className="text-sm font-bold text-foreground text-center">Over 10.5 Rebounds</p>
-                  </div>
-
-                  {/* Stat pills */}
-                  <div className="grid grid-cols-4 gap-1.5 mb-3">
-                    {[
-                      { l: "SEASON", v: "12.4" },
-                      { l: "L10", v: "13.1" },
-                      { l: "L5", v: "14.2" },
-                      { l: "vs LAL", v: "13.8" },
-                    ].map(s => (
-                      <div key={s.l} className="text-center rounded-lg bg-secondary/40 border border-border/30 py-1.5">
-                        <p className="text-[8px] text-muted-foreground font-semibold">{s.l}</p>
-                        <p className="text-sm font-extrabold text-foreground">{s.v}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Mini bar chart */}
-                  <div className="mb-3">
-                    <p className="text-[10px] text-muted-foreground font-semibold mb-1.5">GAME LOG</p>
-                    <div className="flex items-end gap-1 h-12">
-                      {[10, 13, 11, 15, 12, 14, 9, 16, 13, 14].map((h, i) => {
-                        const hit = h > 10.5;
-                        return (
-                          <div key={i} className="flex-1 flex flex-col justify-end">
-                            <div
-                              className="w-full rounded-sm origin-bottom"
-                              style={{
-                                height: `${(h / 16) * 100}%`,
-                                background: hit ? "hsl(var(--nba-green))" : "hsl(var(--destructive) / 0.7)",
-                                animation: `bar-grow 0.5s ease-out ${i * 0.05}s both`,
-                              }}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Hit rates */}
-                  <div className="space-y-1.5 mb-3">
-                    {[
-                      { l: "Season", v: 72 },
-                      { l: "L10", v: 80 },
-                      { l: "L5", v: 80 },
-                      { l: "vs LAL", v: 83 },
-                    ].map((r, i) => (
-                      <div key={r.l} className="flex items-center gap-2">
-                        <span className="text-[10px] text-muted-foreground w-12">{r.l}</span>
-                        <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
-                          <motion.div
-                            initial={{ width: 0 }} animate={{ width: `${r.v}%` }}
-                            transition={{ delay: 0.3 + i * 0.1, duration: 0.7, ease: "easeOut" }}
-                            className="h-full rounded-full"
-                            style={{ background: "hsl(var(--nba-green))" }}
-                          />
-                        </div>
-                        <span className="text-[10px] font-bold text-foreground w-8 text-right">{r.v}%</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Line shopping */}
-                  <div className="mb-3">
-                    <p className="text-[10px] text-muted-foreground font-semibold mb-1.5">LINE SHOPPING</p>
-                    <div className="space-y-1">
-                      {[
-                        { b: "DraftKings", o: "−105", best: true },
-                        { b: "FanDuel", o: "−110" },
-                        { b: "BetMGM", o: "−115" },
-                        { b: "Caesars", o: "−120" },
-                      ].map(r => (
-                        <div key={r.b} className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 ${
-                          r.best ? "bg-[hsl(var(--nba-green)/0.1)] border border-[hsl(var(--nba-green)/0.3)]" : "bg-secondary/30 border border-border/30"
-                        }`}>
-                          <span className="text-[11px] text-foreground font-medium">{r.b}</span>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[11px] font-bold text-foreground">{r.o}</span>
-                            {r.best && <span className="text-[8px] font-black text-[hsl(var(--nba-green))] bg-[hsl(var(--nba-green)/0.2)] px-1 rounded">BEST</span>}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Blurred analysis preview */}
-                  <div className="relative rounded-xl bg-secondary/30 border border-border/40 p-3 overflow-hidden">
-                    <div className="blur-[3px] select-none pointer-events-none">
-                      <p className="text-[10px] text-muted-foreground font-semibold mb-1">IN-DEPTH ANALYSIS</p>
-                      <p className="text-[11px] text-foreground/80 leading-relaxed">
-                        Jokić has dominated the boards against LAL with 13.8 RPG over the last 5 matchups. With Davis questionable and Denver pushing pace tonight, the rebounding rate projects elite. Model edge: +8.4%, EV: +6.2%.
-                      </p>
-                    </div>
-                    <div className="absolute inset-0 flex items-center justify-center bg-card/60">
-                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/15 border border-primary/30">
-                        <Lock className="w-3.5 h-3.5 text-primary" />
-                        <span className="text-[11px] font-bold text-primary">Unlock Analysis</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* CTA */}
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  onClick={goNext}
-                  className="w-full py-4 rounded-xl text-white font-extrabold text-base flex items-center justify-center gap-2"
-                  style={{
-                    background: "linear-gradient(135deg, hsl(var(--primary)), hsl(258, 80%, 58%))",
-                    boxShadow: "0 12px 32px hsl(var(--primary) / 0.45)",
-                    animation: "scale-pulse 2.4s ease-in-out infinite",
-                  }}
-                >
-                  Unlock Sentinel <ArrowRight className="w-4 h-4" />
-                </motion.button>
-
-                <p className="text-center text-xs font-semibold mt-3 mb-2" style={{ color: "hsl(var(--nba-green))" }}>
-                  💰 Most users recover their subscription in 1–3 days
-                </p>
-              </motion.div>
-            )}
-
-          </AnimatePresence>
-        </div>
+          );
+        })}
       </div>
     </div>
   );
-};
+}
 
-export default OnboardingPage;
+function GreenCTA({ children, onClick, disabled }: { children: React.ReactNode; onClick: () => void; disabled?: boolean }) {
+  return (
+    <motion.button
+      whileTap={{ scale: 0.97 }}
+      disabled={disabled}
+      onClick={onClick}
+      className={`w-full py-4 rounded-full font-extrabold text-base transition-all ${
+        disabled
+          ? "bg-[#1a1a1a] text-white/40 cursor-not-allowed"
+          : "bg-[#00FF6A] text-black shadow-lg shadow-[#00FF6A]/20 hover:shadow-[#00FF6A]/40"
+      }`}
+      style={!disabled ? { animation: "pulse-cta 2.5s ease-in-out infinite" } : undefined}
+    >
+      {children}
+    </motion.button>
+  );
+}
+
+function SectionContainer({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="relative min-h-screen w-full bg-[#0A0A0A] text-white overflow-x-hidden">
+      <style>{`
+        @keyframes pulse-cta { 0%,100% { box-shadow: 0 0 0 0 rgba(0,255,106,0.35) } 50% { box-shadow: 0 0 24px 6px rgba(0,255,106,0.45) } }
+        @keyframes draw-line { from { stroke-dashoffset: 200 } to { stroke-dashoffset: 0 } }
+      `}</style>
+      {/* Atmospheric corner glows */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-[#7B2FFF]/10 blur-[120px]" />
+        <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-[#7B2FFF]/8 blur-[100px]" />
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[400px] rounded-full bg-[#00FF6A]/[0.04] blur-[120px]" />
+      </div>
+      <div className="relative z-10 mx-auto max-w-md px-5 py-6 pb-12">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────── Mini sparkline ─────────── */
+function Sparkline({ color = "#00FF6A", down = false, className = "" }: { color?: string; down?: boolean; className?: string }) {
+  const path = down
+    ? "M2,10 L12,18 L22,15 L32,28 L42,30 L52,38"
+    : "M2,38 L12,30 L22,32 L32,20 L42,22 L52,8";
+  return (
+    <svg viewBox="0 0 54 40" className={className} fill="none">
+      <motion.path
+        d={path}
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        initial={{ pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        transition={{ duration: 1.1, ease: "easeOut" }}
+      />
+    </svg>
+  );
+}
+
+/* ───────────────────────────────────────────────
+   Screen 1 — Hero / Welcome
+   ─────────────────────────────────────────────── */
+function ScreenHero({ onNext }: { onNext: () => void }) {
+  const navigate = useNavigate();
+  return (
+    <SectionContainer>
+      <ProgressDots current={1} total={5} />
+
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={pageT} className="flex flex-col items-center">
+        <div className="relative mb-3">
+          <div className="absolute inset-0 rounded-2xl bg-[#00FF6A]/30 blur-2xl" />
+          <img src={logo} alt="Sentinel" className="relative w-14 h-14 rounded-2xl" />
+        </div>
+        <p className="text-[11px] font-bold tracking-[0.35em] text-white/60 mb-6">SENTINEL</p>
+
+        <h1 className="text-[34px] leading-[1.05] font-extrabold text-center tracking-tight">
+          Stop guessing.<br />
+          <span className="text-[#00FF6A]">Start winning.</span>
+        </h1>
+        <p className="mt-3 text-sm text-white/60 text-center max-w-xs">
+          AI-powered props, data-backed decisions, real edge.
+        </p>
+      </motion.div>
+
+      {/* App preview card */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.1 }}
+        className="mt-6 rounded-2xl border border-[#2A2A2A] bg-[#141414] p-4"
+      >
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-[10px] font-black tracking-wider text-white/60">TODAY'S PICKS</span>
+          <span className="text-[10px] font-semibold text-[#00FF6A]">View All</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <WaveImage
+            prompt={ASSETS.avatarLuka.prompt}
+            cacheKey={ASSETS.avatarLuka.key}
+            model={ASSETS.avatarLuka.model}
+            alt="Luka Doncic"
+            rounded="full"
+            className="w-11 h-11 flex-shrink-0 border border-[#2A2A2A]"
+          />
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-bold text-white">Luka Doncic</div>
+            <div className="text-[10px] text-white/50">NBA vs DEN · 8:30 PM</div>
+            <div className="text-[11px] text-white mt-0.5 font-semibold">OVER 32.5 Points</div>
+          </div>
+          <div className="flex flex-col items-end gap-0.5">
+            <span className="px-1.5 py-0.5 rounded bg-[#00FF6A]/15 text-[#00FF6A] text-[8px] font-black tracking-wider">HIGH CONF</span>
+            <span className="text-[#00FF6A] text-sm font-extrabold leading-none">64%</span>
+            <span className="text-[#00FF6A] text-[9px] font-bold">+EV: 7.2%</span>
+          </div>
+        </div>
+
+        {/* Stats row */}
+        <div className="mt-4 pt-3 border-t border-[#2A2A2A] flex items-center justify-between">
+          <div>
+            <div className="text-[9px] tracking-wider text-white/50">YTD ROI</div>
+            <div className="text-lg font-extrabold text-[#00FF6A] tabular-nums">+18.47%</div>
+          </div>
+          <div>
+            <div className="text-[9px] tracking-wider text-white/50">WIN RATE</div>
+            <div className="text-lg font-extrabold text-white tabular-nums">58.3%</div>
+          </div>
+          <Sparkline className="w-14 h-10" />
+        </div>
+
+        {/* Locked footer */}
+        <div className="mt-3 pt-3 border-t border-[#2A2A2A] flex items-center gap-2">
+          <Lock className="w-3 h-3 text-white/40" />
+          <span className="text-[10px] text-white/50">Advanced Analytics</span>
+          <span className="ml-auto text-[10px] font-bold text-[#00FF6A]">Unlock Premium</span>
+        </div>
+      </motion.div>
+
+      {/* Feature pills */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.18 }}
+        className="mt-4 grid grid-cols-3 gap-2"
+      >
+        {[
+          { icon: Calendar, title: "Live Games", l1: "NBA · MLB · NHL", l2: "More Coming" },
+          { icon: Brain, title: "AI Picks", l1: "High Confidence", l2: "+EV Daily" },
+          { icon: BarChart3, title: "Profit Tracker", l1: "Track, Build &", l2: "Win Smarter" },
+        ].map((f) => (
+          <div key={f.title} className="rounded-xl border border-[#2A2A2A] bg-[#141414] p-2.5">
+            <f.icon className="w-4 h-4 text-[#00FF6A] mb-1.5" />
+            <div className="text-[11px] font-bold text-white">{f.title}</div>
+            <div className="text-[9px] text-white/50 leading-tight">{f.l1}</div>
+            <div className="text-[9px] text-white/50 leading-tight">{f.l2}</div>
+          </div>
+        ))}
+      </motion.div>
+
+      {/* CTA */}
+      <div className="mt-6">
+        <GreenCTA onClick={onNext}>Get Started</GreenCTA>
+        <p className="text-center text-[11px] text-white/50 mt-3">
+          Already have an account?{" "}
+          <button onClick={() => navigate("/auth")} className="text-[#00FF6A] underline font-semibold">Sign in</button>
+        </p>
+      </div>
+    </SectionContainer>
+  );
+}
+
+/* ───────────────────────────────────────────────
+   Screen 2 — Value Prop
+   ─────────────────────────────────────────────── */
+function ScreenValue({ onNext }: { onNext: () => void }) {
+  return (
+    <SectionContainer>
+      <ProgressDots current={2} total={5} />
+
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={pageT}>
+        <h1 className="text-[32px] leading-[1.05] font-extrabold tracking-tight">
+          See What You're<br />Missing.
+        </h1>
+        <p className="mt-2 text-sm text-white/60">Pros don't guess. They use data.</p>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.1 }}
+        className="mt-5 rounded-2xl border border-[#2A2A2A] bg-[#141414] p-3.5"
+      >
+        {/* App header */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1.5">
+            <img src={logo} alt="" className="w-5 h-5 rounded-md" />
+            <span className="text-[10px] font-bold tracking-widest text-white">SENTINEL</span>
+          </div>
+        </div>
+        {/* Tabs */}
+        <div className="flex items-center gap-1 mb-3 overflow-hidden">
+          {["Dashboard", "Picks", "Tracker", "Parlay"].map((t, i) => (
+            <span
+              key={t}
+              className={`px-2 py-1 rounded-full text-[9px] font-bold whitespace-nowrap ${
+                i === 0 ? "bg-[#00FF6A] text-black" : "text-white/50"
+              }`}
+            >
+              {t}
+            </span>
+          ))}
+        </div>
+
+        {/* Top picks header */}
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[9px] font-black tracking-wider text-white/60">TODAY'S TOP PICKS</span>
+          <span className="text-[9px] font-semibold text-[#00FF6A]">View All</span>
+        </div>
+
+        {/* Picks rows */}
+        <div className="space-y-1.5">
+          {[
+            { avatar: ASSETS.avatarTatum, name: "J. Tatum", pick: "OVER 28.5 PTS", conf: 62, ev: 6.1 },
+            { avatar: ASSETS.avatarMatthews, name: "A. Matthews", pick: "ML", conf: 59, ev: 4.3 },
+            { avatar: null as any, name: "Rockies", pick: "+1.5", conf: 57, ev: 5.7 },
+          ].map((p) => (
+            <div key={p.name} className="flex items-center gap-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] px-2 py-1.5">
+              {p.avatar ? (
+                <WaveImage prompt={p.avatar.prompt} cacheKey={p.avatar.key} model={p.avatar.model} alt={p.name}
+                  rounded="full" className="w-7 h-7 flex-shrink-0" />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-[#1a1a1a] border border-[#2A2A2A] flex items-center justify-center text-[9px] font-black text-white/60 flex-shrink-0">
+                  COL
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-bold text-white truncate">{p.name}</div>
+                <div className="text-[9px] text-white/50">{p.pick}</div>
+              </div>
+              <span className="text-[#00FF6A] text-xs font-extrabold tabular-nums">{p.conf}%</span>
+              <span className="px-1.5 py-0.5 rounded bg-[#00FF6A]/15 text-[#00FF6A] text-[8px] font-black tracking-wider">+EV {p.ev}%</span>
+            </div>
+          ))}
+        </div>
+
+        {/* YTD performance */}
+        <div className="mt-3 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] p-2.5 flex items-center justify-between">
+          <div>
+            <div className="text-[9px] tracking-wider text-white/50">YTD PERFORMANCE</div>
+            <div className="text-lg font-extrabold text-[#00FF6A] tabular-nums">+18.47%</div>
+          </div>
+          <Sparkline className="w-16 h-10" />
+        </div>
+
+        {/* Locked blurred area */}
+        <div className="mt-2 relative rounded-lg overflow-hidden border border-[#2A2A2A]">
+          <div className="absolute inset-0 backdrop-blur-sm bg-[#0A0A0A]/80" />
+          <div className="relative px-3 py-3 flex items-center gap-2">
+            <Lock className="w-3.5 h-3.5 text-white/60" />
+            <div className="flex-1">
+              <div className="text-[10px] font-bold text-white">Advanced Projections & Line Movement</div>
+              <div className="text-[9px] text-white/50">Upgrade to Unlock</div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Social proof */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.18 }}
+        className="mt-4 rounded-2xl border border-[#2A2A2A] bg-[#141414] p-3 flex items-center gap-3"
+      >
+        <div className="flex -space-x-2">
+          {[ASSETS.social1, ASSETS.social2, ASSETS.social3].map((a) => (
+            <WaveImage key={a.key} prompt={a.prompt} cacheKey={a.key} model={a.model} alt="user"
+              rounded="full" className="w-8 h-8 border-2 border-[#141414]" />
+          ))}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-bold text-white">10,000+ users joined this week</div>
+          <div className="text-[11px] font-bold text-[#00FF6A]">20% Average ROI Increase</div>
+        </div>
+      </motion.div>
+
+      <div className="mt-6">
+        <GreenCTA onClick={onNext}>Continue</GreenCTA>
+      </div>
+    </SectionContainer>
+  );
+}
+
+/* ───────────────────────────────────────────────
+   Screen 3 — Personalize
+   ─────────────────────────────────────────────── */
+function ScreenPersonalize({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+  const [oddsFormat, setOddsFormat] = useState<"american" | "decimal" | null>(() => {
+    try { return (localStorage.getItem(STORAGE.oddsFormat) as any) || "american"; } catch { return "american"; }
+  });
+  const [sports, setSports] = useState<string[]>(() => {
+    try { const r = localStorage.getItem(STORAGE.sports); return r ? JSON.parse(r) : ["nba"]; } catch { return ["nba"]; }
+  });
+
+  const toggleSport = (id: string) =>
+    setSports((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+
+  const canContinue = !!oddsFormat && sports.length > 0;
+
+  const handleNext = () => {
+    if (!canContinue) return;
+    try {
+      localStorage.setItem(STORAGE.oddsFormat, oddsFormat!);
+      localStorage.setItem(STORAGE.sports, JSON.stringify(sports));
+    } catch {}
+    onNext();
+  };
+
+  return (
+    <SectionContainer>
+      <ProgressDots current={3} total={5} />
+
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={pageT}>
+        <h1 className="text-[32px] leading-[1.05] font-extrabold tracking-tight">Make It Yours.</h1>
+        <p className="mt-2 text-sm text-white/60">We'll personalize your experience.</p>
+      </motion.div>
+
+      {/* Odds format */}
+      <div className="mt-6">
+        <p className="text-[10px] font-black tracking-wider text-white/60 mb-1">ODDS FORMAT</p>
+        <p className="text-xs text-white/50 mb-3">We'll show odds the way you like them.</p>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { id: "american" as const, label: "American", sample: "+150 -110" },
+            { id: "decimal" as const, label: "Decimal", sample: "2.50 1.91" },
+          ].map((o) => {
+            const active = oddsFormat === o.id;
+            return (
+              <motion.button
+                key={o.id}
+                onClick={() => setOddsFormat(o.id)}
+                whileTap={{ scale: 0.97 }}
+                className={`rounded-xl border px-3 py-3 text-left transition-all ${
+                  active
+                    ? "border-[#00FF6A] bg-[#00FF6A]/5 shadow-[0_0_18px_rgba(0,255,106,0.15)]"
+                    : "border-[#2A2A2A] bg-[#141414]"
+                }`}
+              >
+                <div className={`text-sm font-bold ${active ? "text-[#00FF6A]" : "text-white"}`}>{o.label}</div>
+                <div className={`text-xs font-mono mt-0.5 ${active ? "text-[#00FF6A]/80" : "text-white/50"}`}>{o.sample}</div>
+              </motion.button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Sports */}
+      <div className="mt-6">
+        <p className="text-[10px] font-black tracking-wider text-white/60 mb-1">SPORTS YOU BET ON</p>
+        <p className="text-xs text-white/50 mb-3">Select all that apply.</p>
+        <div className="grid grid-cols-2 gap-3">
+          {SPORTS.map((s) => {
+            const active = sports.includes(s.id);
+            return (
+              <motion.button
+                key={s.id}
+                onClick={() => toggleSport(s.id)}
+                whileTap={{ scale: 0.97 }}
+                className={`relative rounded-xl border p-3 transition-all ${
+                  active
+                    ? "border-[#00FF6A] bg-[#00FF6A]/5 shadow-[0_0_18px_rgba(0,255,106,0.15)]"
+                    : "border-[#2A2A2A] bg-[#141414]"
+                }`}
+              >
+                {active && (
+                  <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[#00FF6A] flex items-center justify-center">
+                    <Check className="w-3 h-3 text-black" strokeWidth={3} />
+                  </div>
+                )}
+                <WaveImage
+                  prompt={s.asset.prompt}
+                  cacheKey={s.asset.key}
+                  model={s.asset.model}
+                  alt={s.label}
+                  rounded="lg"
+                  className="w-14 h-14 mx-auto mb-2"
+                  fallbackClassName="bg-[#0A0A0A]"
+                />
+                <div className={`text-center text-sm font-bold ${active ? "text-[#00FF6A]" : "text-white"}`}>{s.label}</div>
+              </motion.button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-5 flex items-start gap-2 text-[11px] text-white/50">
+        <Sparkles className="w-3.5 h-3.5 text-[#00FF6A] flex-shrink-0 mt-0.5" />
+        <span>We'll personalize picks &amp; insights based on your preferences.</span>
+      </div>
+
+      <div className="mt-6 flex items-center gap-3">
+        <button onClick={onBack} className="px-5 py-3 text-sm font-semibold text-white/70">
+          <ArrowLeft className="w-4 h-4 inline mr-1" /> Back
+        </button>
+        <div className="flex-1">
+          <GreenCTA onClick={handleNext} disabled={!canContinue}>Next</GreenCTA>
+        </div>
+      </div>
+    </SectionContainer>
+  );
+}
+
+/* ───────────────────────────────────────────────
+   Screen 4 — Without vs With
+   ─────────────────────────────────────────────── */
+function ScreenComparison({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+  return (
+    <SectionContainer>
+      <ProgressDots current={4} total={6} />
+
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={pageT}>
+        <h1 className="text-[30px] leading-[1.05] font-extrabold tracking-tight">
+          Don't Bet Blind.<br />
+          <span className="text-[#00FF6A]">See The Difference.</span>
+        </h1>
+        <p className="mt-2 text-sm text-white/60">Data beats luck. Every time.</p>
+      </motion.div>
+
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        {/* WITHOUT */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.1 }}
+          className="rounded-2xl border border-[#FF3B3B]/30 bg-[#141414] p-3"
+          style={{ boxShadow: "inset 0 0 30px rgba(255,59,59,0.06)" }}
+        >
+          <div className="text-[9px] font-black tracking-wider text-white/60 mb-2">WITHOUT SENTINEL</div>
+          <div className="text-2xl font-extrabold text-[#FF3B3B] tabular-nums leading-none">-12.34%</div>
+          <div className="text-[10px] text-white/50 mt-1">ROI After 90 Days</div>
+          <Sparkline color="#FF3B3B" down className="w-full h-10 mt-2" />
+          <div className="mt-3 space-y-1.5">
+            {["Guessing & Hope", "Emotional Bets", "Chasing Losses", "No Real Strategy"].map((t) => (
+              <div key={t} className="flex items-center gap-1.5">
+                <X className="w-3 h-3 text-[#FF3B3B] flex-shrink-0" strokeWidth={3} />
+                <span className="text-[10px] text-white/70">{t}</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* WITH */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.18 }}
+          className="rounded-2xl border border-[#00FF6A]/40 bg-[#141414] p-3"
+          style={{ boxShadow: "inset 0 0 30px rgba(0,255,106,0.08), 0 0 24px rgba(0,255,106,0.12)" }}
+        >
+          <div className="text-[9px] font-black tracking-wider text-[#00FF6A] mb-2">WITH SENTINEL</div>
+          <div className="text-2xl font-extrabold text-[#00FF6A] tabular-nums leading-none">+18.47%</div>
+          <div className="text-[10px] text-white/50 mt-1">ROI After 90 Days</div>
+          <Sparkline color="#00FF6A" className="w-full h-10 mt-2" />
+          <div className="mt-3 space-y-1.5">
+            {["AI-Powered Picks", "High Confidence & +EV", "Track & Improve", "Smarter Parlays"].map((t) => (
+              <div key={t} className="flex items-center gap-1.5">
+                <Check className="w-3 h-3 text-[#00FF6A] flex-shrink-0" strokeWidth={3} />
+                <span className="text-[10px] text-white/70">{t}</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Testimonial */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.26 }}
+        className="mt-5 rounded-2xl border border-[#2A2A2A] bg-[#141414] p-4 flex items-start gap-3"
+      >
+        <WaveImage
+          prompt={ASSETS.testimonialMike.prompt}
+          cacheKey={ASSETS.testimonialMike.key}
+          model={ASSETS.testimonialMike.model}
+          alt="Mike R."
+          rounded="full"
+          className="w-12 h-12 flex-shrink-0 border border-[#2A2A2A]"
+        />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-white/80 italic leading-snug">
+            "I was skeptical at first. Now I'm up 23% this season. Sentinel changed the way I bet."
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-xs font-bold text-white">- Mike R.</span>
+            <span className="px-1.5 py-0.5 rounded bg-[#00FF6A] text-black text-[8px] font-black tracking-wider flex items-center gap-0.5">
+              <ShieldCheck className="w-2.5 h-2.5" strokeWidth={3} /> VERIFIED
+            </span>
+          </div>
+        </div>
+      </motion.div>
+
+      <div className="mt-6 flex items-center gap-3">
+        <button onClick={onBack} className="px-5 py-3 text-sm font-semibold text-white/70">
+          <ArrowLeft className="w-4 h-4 inline mr-1" /> Back
+        </button>
+        <div className="flex-1">
+          <GreenCTA onClick={onNext}>Continue</GreenCTA>
+        </div>
+      </div>
+    </SectionContainer>
+  );
+}
+
+/* ───────────────────────────────────────────────
+   Top-level Onboarding orchestrator
+   ─────────────────────────────────────────────── */
+export default function OnboardingPage() {
+  const navigate = useNavigate();
+  const [step, setStep] = useState(0);
+
+  // Default referral if missing (used downstream)
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem(STORAGE.referral)) {
+        localStorage.setItem(STORAGE.referral, "Direct");
+      }
+    } catch {}
+  }, []);
+
+  // Batch-preload all WaveSpeed assets in parallel on mount.
+  // Stadium (slowest) and avatars get fired immediately.
+  useEffect(() => {
+    Object.values(ASSETS).forEach((a) => {
+      preloadGeneratedImage(a.prompt, a.key, a.model);
+    });
+  }, []);
+
+  const goNext = () => setStep((s) => s + 1);
+  const goBack = () => setStep((s) => Math.max(0, s - 1));
+  const goPaywall = () => navigate("/paywall");
+
+  const screens = [
+    <ScreenHero key="s1" onNext={goNext} />,
+    <ScreenValue key="s2" onNext={goNext} />,
+    <ScreenPersonalize key="s3" onBack={goBack} onNext={goNext} />,
+    <ScreenComparison key="s4" onBack={goBack} onNext={goPaywall} />,
+  ];
+
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={step}
+        initial={{ opacity: 0, x: 24 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -24 }}
+        transition={pageT}
+      >
+        {screens[step]}
+      </motion.div>
+    </AnimatePresence>
+  );
+}
