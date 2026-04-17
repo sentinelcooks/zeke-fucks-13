@@ -804,7 +804,8 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                   );
                 })}
               </div>
-            </CarouselWrapper>
+              </div>
+            </div>
           )}
         </motion.div>
 
