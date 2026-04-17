@@ -845,40 +845,21 @@ async function getNextGame(teamAbbr: string, config?: EspnConfig) {
   return null;
 }
 
-// ── Injuries ────────────────────────────────────────────────
+// ── Injuries (single source of truth — see _shared/injuries.ts) ────
+import { fetchTeamInjuries as _sharedFetchTeamInjuries } from "../_shared/injuries.ts";
+
 async function getTeamInjuries(teamAbbr: string, config?: EspnConfig) {
   const cfg = config || getEspnConfig("nba");
-  const injuries: any[] = [];
-
-  // Build a lookup: abbreviation -> full team name
-  const abbrToName: Record<string, string> = {};
-  for (const t of cfg.teams) {
-    abbrToName[t.abbr.toUpperCase()] = t.name.toLowerCase();
-  }
-  const targetName = abbrToName[teamAbbr.toUpperCase()] || teamAbbr.toLowerCase();
-
-  try {
-    const resp = await fetch(`${cfg.base}/injuries`);
-    const data = await resp.json();
-    for (const teamData of data?.injuries || []) {
-      // Match by team abbreviation in team object OR by displayName
-      const teamAbbrVal = (teamData.team?.abbreviation || "").toUpperCase();
-      const teamDisplayName = (teamData.displayName || "").toLowerCase();
-      const isMatch = teamAbbrVal === teamAbbr.toUpperCase() || teamDisplayName.includes(targetName);
-      if (!isMatch) continue;
-      for (const item of teamData.injuries || []) {
-        const athlete = item.athlete || {};
-        injuries.push({
-          player_name: athlete.displayName || "",
-          position: athlete.position?.abbreviation || "",
-          status: item.status || "Unknown",
-          detail: item.type?.description || item.longComment || item.shortComment || "",
-        });
-      }
-    }
-  } catch { /* ignore */ }
-  console.log(`Injuries for ${teamAbbr}: ${injuries.length} found (${injuries.filter(i => ["out","doubtful"].includes(i.status?.toLowerCase())).length} out/doubtful)`);
-  return injuries;
+  const teamMeta = (cfg.teams as any[]).find((t: any) => t.abbr.toUpperCase() === teamAbbr.toUpperCase());
+  const list = await _sharedFetchTeamInjuries(cfg.sportKey, {
+    abbr: teamAbbr,
+    name: teamMeta?.name,
+  });
+  // Backward-compat: existing call sites read `player_name` (aliased in shared module) and use
+  // status string comparisons. Normalized values ("out", "doubtful", "day-to-day", "questionable", "probable")
+  // all satisfy existing .includes() and equality checks.
+  console.log(`Injuries for ${teamAbbr}: ${list.length} found (${list.filter((i) => ["out", "doubtful"].includes(i.status)).length} out/doubtful)`);
+  return list;
 }
 
 // ── Fetch Team Roster & Identify Key Players ────────────────

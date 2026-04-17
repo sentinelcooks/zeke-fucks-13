@@ -97,18 +97,17 @@ async function getTeamSchedule(teamId: string): Promise<any[]> {
   } catch { return []; }
 }
 
+// Single source of truth — see _shared/injuries.ts
+import { fetchTeamInjuries } from "../_shared/injuries.ts";
+
 async function getTeamInjuries(teamId: string): Promise<any[]> {
-  try {
-    const data = await fetchJSON(`${ESPN_NHL}/teams/${teamId}/injuries`);
-    return (data.items || []).map((item: any) => ({
-      name: item.athlete?.displayName || "Unknown",
-      position: item.athlete?.position?.abbreviation || "",
-      status: item.status || "Unknown",
-      detail: item.longComment || item.shortComment || "",
-      isGoalie: ["G"].includes(item.athlete?.position?.abbreviation || ""),
-      isKey: ["G", "C", "LW", "RW", "D"].includes(item.athlete?.position?.abbreviation || ""),
-    }));
-  } catch { return []; }
+  const list = await fetchTeamInjuries("nhl", { id: teamId });
+  // Add NHL-specific position flags
+  return list.map((i) => ({
+    ...i,
+    isGoalie: ["G"].includes(i.position || ""),
+    isKey: ["G", "C", "LW", "RW", "D"].includes(i.position || ""),
+  }));
 }
 
 async function getStartingGoalieInfo(event: any): Promise<{ home: any; away: any }> {
