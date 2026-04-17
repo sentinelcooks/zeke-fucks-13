@@ -1,52 +1,56 @@
 
-This is a large visual-only refactor. The user wants to bridge onboarding (black + neon green #00FF6A + Inter) into the main app (currently dark navy + purple/blue primary). Strict constraint: visuals only, no logic.
+## Goal
+Replace the AI-shortlist pipeline with a deterministic full-slate scan. Today's Edge + Picks tab will only show high-probability, model-backed plays.
 
-Strategy: do this primarily via design tokens in `src/index.css` and `tailwind.config.ts` so most changes propagate automatically, then targeted per-file tweaks for hardcoded colors.
+## Root cause
+- `daily-picks` ranks games with AI, then asks Gemini to pick 4–5 candidate players per game → strong props get missed before grading.
+- Player props are graded with `confidence ≥ 60%` (too low) and there's a fallback that accepts `45%` confidence to "fill volume" → junk picks survive.
+- `free-props` separately publishes pure odds-edge picks (no model), with no confidence/reliability/longshot gates → low-hit-rate longshots leak in.
+- Gates in `_shared/edge_scoring.ts` allow `Strong` at confidence ≥ 0.62 — below the user's required 0.65.
 
-## Plan
+## Fix (3 files, no schema changes)
 
-### 1. Global tokens (`src/index.css`)
-- Repoint `--primary` from purple `250 76% 62%` → neon green `135 100% 50%` (#00FF6A)
-- Repoint `--ring`, `--accent`, `--sidebar-primary`, `--sidebar-ring` to same green
-- Update `--gradient-blue` and `--gradient-purple` token values used by primary CTAs to green-tinted gradients
-- Add new utility vars: `--color-primary-dim`, `--color-primary-glow`
-- Confirm `body` font-family already includes Inter (it does — keep)
+### 1. `supabase/functions/_shared/edge_scoring.ts` — tighten gates
+- Bump `tierVerdict` minimums:
+  - Strong: `confidence ≥ 0.65 AND edge ≥ 0.03 AND reliability ≥ 0.70`
+  - Lean: `confidence ≥ 0.60 AND edge ≥ 0.025 AND reliability ≥ 0.65`
+- Longshots (`odds ≥ +250`) → require `confidence ≥ 0.72 AND edge ≥ 0.06`
+- Volatile-market `under` → require `confidence ≥ 0.70 AND edge ≥ 0.06`
+- `rankAndDistribute`: cut `MAX_LOW_RELIABILITY_TOTAL` from 2 → 1, hard-drop anything with `confidence < 0.65 OR reliability < 0.70 OR edge ≤ 0`.
+- Today's Edge stays top-5 Strong by `quality_score`.
 
-This single change automatically converts: shadcn `Button` default variant, all `bg-primary` / `text-primary` / `border-primary` / `ring-primary` usages across the app, sidebar active states, focus rings, and the bottom tab bar's `text-primary` icons.
+### 2. `supabase/functions/daily-picks/index.ts` — full-slate deterministic scan
+Rewrite the orchestrator (keep helpers `getGamesForSport`, `getGameLineup`, `analyzeGameBets`, `analyzePlayerProp`, `fetchRealOdds`, `fetchGameOdds`):
+- **Remove** `rankGamesByAnticipation` and `getLineupPropSuggestions` from the selection path (AI no longer chooses what gets graded).
+- **Phase A — All games, all markets:** loop every NBA/MLB/NHL game today, grade `moneyline`, `spread`, `total` via the existing sport models. Throttled with `delay()`; respect existing 140s timeout guard.
+- **Phase B — All active players, both directions:** for each game, pull `getGameLineup` (already returns active roster from box score / roster fallback). For every player, grade every supported prop type per sport for **both `over` and `under`**:
+  - NBA: points, rebounds, assists, threes, steals, blocks, turnovers
+  - MLB: strikeouts, hits, home_runs, total_bases, rbi, runs
+  - NHL: goals, assists, points, shots_on_goal
+  - Use the player's market line returned by `analyzePlayerProp` (it already pulls real lines); skip if no market line found.
+  - Limit to ~12 players per game (top scorers from box score / roster order) to stay within timeout — this is a perf cap, not an AI shortlist.
+- **Phase C — Score & gate:** convert every graded result into a `ScoredPlay` via shared `score()` and run through `rankAndDistribute()`. Drop fallbacks/expansion/45% rescues entirely.
+- **Phase D — Persist:**
+  - `daily_picks`: top of `dailyPicks` with `tier="edge"` for the 5 in `todaysEdge`, `tier="daily"` for the rest.
+  - `free_props`: replace today's rows with the curated `freePicks` from the same scan (single source of truth).
 
-### 2. Bottom tab bar (`src/components/mobile/BottomTabBar.tsx`)
-- Active indicator pill gradient: purple→blue → solid `#00FF6A` with green glow
-- Icons/labels already use `text-primary` → auto-update via token
+### 3. `supabase/functions/free-props/index.ts` — stop being a parallel writer
+- Keep the `today` and `correlated` GET handlers untouched (frontend reads them).
+- Replace `generate` so it just proxies to `daily-picks` (no separate odds-only scan, no separate writer). This kills the source of low-confidence longshot leaks.
 
-### 3. Atmospheric glow orbs
-- Add fixed glow orbs (purple top-center + green bottom-right at low opacity) to `src/pages/DashboardLayout.tsx` so all dashboard pages inherit the onboarding atmosphere
+## What stays the same
+- Scoring math, EV/edge formula, reliability map (just stricter thresholds).
+- All frontend code: `daily_picks` and `free_props` schemas unchanged. Today's Edge carousel still filters by `tier === "edge"`.
+- AI still used for explanations elsewhere (prop-explainer) — only removed from selection.
 
-### 4. Hardcoded purple/blue → green sweeps (visual className only)
-Targeted files where primary actions use hardcoded hex/HSL instead of tokens:
-- `src/pages/PaywallPage.tsx` — leave (already greens for selection)
-- `src/pages/FreePicksPage.tsx` — confidence badges, edge %, active filter pills → green
-- `src/pages/GamesPage.tsx` — active sport tab, "Analyze Matchup" button, LIVE badge, calendar icon → green
-- `src/pages/Dashboard.tsx` (Analyze) — Props/Lines toggle, OVER active, sport tabs, stat pills, primary Analyze CTA, results "STRONG BET" / hit-rate ring stroke, ADD TO PARLAY → green
-- `src/pages/ProfitTrackerPage.tsx` — IN PROFIT card, ROI value, "+ Add Play" CTA, filter pills → green
-- `src/pages/SettingsPage.tsx` — American/Decimal toggle, Modern/Classic toggle, switch on-state → green
-- `src/components/home/ModernHomeLayout.tsx` — Today's Edge section dot + label accent → green; edge card border → green tint; "+ Add to Slip" button → green bg/black text/green glow
+## Files touched
+1. `supabase/functions/_shared/edge_scoring.ts` — stricter `tierVerdict` + `rankAndDistribute` caps.
+2. `supabase/functions/daily-picks/index.ts` — replace orchestrator with full-slate deterministic scan; write both `daily_picks` (with `tier`) and `free_props`.
+3. `supabase/functions/free-props/index.ts` — `generate` becomes a proxy to `daily-picks`.
 
-### 5. What I will NOT touch
-- No state, hooks, handlers, routing, data, conditionals, layout structure, text content
-- Colored icon backgrounds in Quick Access (user said keep)
-- Inactive tab styling
-- Red destructive colors (UNDER, losses) stay red
-- Yellow warning ("MOST POPULAR", medium confidence) stays amber
-
-### Files touched (visual className/token only)
-1. `src/index.css` — token repoint
-2. `src/components/mobile/BottomTabBar.tsx` — active pill green
-3. `src/pages/DashboardLayout.tsx` — atmospheric orbs
-4. `src/components/home/ModernHomeLayout.tsx` — Today's Edge accents + Add to Slip
-5. `src/pages/GamesPage.tsx` — sport tabs, LIVE, Analyze CTA
-6. `src/pages/Dashboard.tsx` — analyzer toggles, CTAs, results accents
-7. `src/pages/FreePicksPage.tsx` — confidence/edge/filter colors
-8. `src/pages/ProfitTrackerPage.tsx` — profit card, Add Play CTA, filter pills
-9. `src/pages/SettingsPage.tsx` — toggles to green
-
-Most reach is achieved by step 1 alone; steps 4–9 only swap remaining hardcoded purples/blues. Zero functional changes.
+## Success criteria mapping
+- Full slate scanned → Phase A+B loop every game/player.
+- No more longshot junk → tightened `tierVerdict` + `rankAndDistribute` hard drops.
+- Today's Edge = best 5 of full slate → `rankAndDistribute.todaysEdge` ranks all plays globally by `quality_score`.
+- Picks tab = remaining approved plays → `dailyPicks` minus the 5 edge picks.
+- AI removed from selection → ranker + lineup shortlister deleted from the pipeline.
