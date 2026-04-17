@@ -543,21 +543,55 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                         border: '1px solid #252340', flexShrink: 0,
                         background: '#252340',
                       }}>
-                        {isGameBet ? (
-                          <div style={{
-                            width: '100%', height: '100%',
-                            display: 'flex', flexDirection: 'column',
-                            alignItems: 'center', justifyContent: 'center',
-                            gap: 2,
-                          }}>
-                            <span style={{ fontSize: 16 }}>
-                              {pick.bet_type === 'moneyline' ? '💰' : pick.bet_type === 'spread' ? '📊' : '📈'}
-                            </span>
-                            <span style={{ fontSize: 8, fontWeight: 700, color: '#22d3ee', letterSpacing: 1 }}>
-                              {(pick.bet_type || '').replace('_', '/').toUpperCase()}
-                            </span>
-                          </div>
-                        ) : (
+                        {isGameBet ? (() => {
+                          const sportRaw = (pick.sport || 'nba').toLowerCase();
+                          const supported = ['nba', 'mlb', 'nhl', 'nfl'];
+                          const sportKey = (supported.includes(sportRaw) ? sportRaw : null) as 'nba' | 'mlb' | 'nhl' | 'nfl' | null;
+                          const awayLogo = sportKey ? getTeamLogoUrl(pick.away_team || pick.opponent || '', sportKey) : '';
+                          const homeLogo = sportKey ? getTeamLogoUrl(pick.home_team || pick.team || '', sportKey) : '';
+                          if (sportKey && (awayLogo || homeLogo)) {
+                            return (
+                              <div style={{
+                                width: '100%', height: '100%',
+                                display: 'flex', flexDirection: 'column',
+                                alignItems: 'center', justifyContent: 'center',
+                                gap: 3, padding: 4,
+                              }}>
+                                {awayLogo && (
+                                  <img
+                                    src={awayLogo}
+                                    alt={pick.away_team || ''}
+                                    style={{ width: 22, height: 22, objectFit: 'contain' }}
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  />
+                                )}
+                                {homeLogo && (
+                                  <img
+                                    src={homeLogo}
+                                    alt={pick.home_team || ''}
+                                    style={{ width: 22, height: 22, objectFit: 'contain' }}
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  />
+                                )}
+                              </div>
+                            );
+                          }
+                          return (
+                            <div style={{
+                              width: '100%', height: '100%',
+                              display: 'flex', flexDirection: 'column',
+                              alignItems: 'center', justifyContent: 'center',
+                              gap: 2,
+                            }}>
+                              <span style={{ fontSize: 16 }}>
+                                {pick.bet_type === 'moneyline' ? '💰' : pick.bet_type === 'spread' ? '📊' : '📈'}
+                              </span>
+                              <span style={{ fontSize: 8, fontWeight: 700, color: '#22d3ee', letterSpacing: 1 }}>
+                                {(pick.bet_type || '').replace('_', '/').toUpperCase()}
+                              </span>
+                            </div>
+                          );
+                        })() : (
                           <>
                             {headshots[pick.player_name] ? (
                               <img
