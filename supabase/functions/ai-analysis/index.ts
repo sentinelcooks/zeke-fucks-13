@@ -377,6 +377,9 @@ ${formatRule}
       prompt = genericMoneylinePrompt;
     }
 
+    // Prepend the locked-pick block to every prompt (sport-agnostic, all bet types)
+    prompt = lockedPickBlock + prompt;
+
     const systemMessage = getSystemMessage(sportLower, type);
 
     // Determine AI provider: prefer Grok (xAI) if key is set, fallback to Lovable AI Gateway
@@ -414,7 +417,7 @@ ${formatRule}
           { role: "user", content: prompt },
         ],
         max_tokens: 600,
-        temperature: 0.6,
+        temperature: 0.3,
       }),
     });
 
