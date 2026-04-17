@@ -1052,8 +1052,10 @@ Deno.serve(async (req) => {
 
       const splits1 = computeHomeAwaySplits(schedule1, team1.id);
       const splits2 = computeHomeAwaySplits(schedule2, team2.id);
-      const b2b1 = detectBackToBack(schedule1, team1.id);
-      const b2b2 = detectBackToBack(schedule2, team2.id);
+      const [b2b1, b2b2] = await Promise.all([
+        detectBackToBack(schedule1, team1.id, sport),
+        detectBackToBack(schedule2, team2.id, sport),
+      ]);
       const pace1 = computePace(team1Stats, schedule1, team1.id);
       const pace2 = computePace(team2Stats, schedule2, team2.id);
 
