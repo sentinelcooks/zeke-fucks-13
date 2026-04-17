@@ -262,7 +262,15 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
     const homeTeam = ev.home_team || data?.home_team || null;
     const awayTeam = ev.away_team || data?.away_team || null;
 
-    for (const [playerName, markets] of Object.entries(players as Record<string, any>)) {
+    // Pre-load both team rosters for full-name resolution (parallel, cached)
+    const [homeRoster, awayRoster] = await Promise.all([
+      loadTeamRoster(sport, homeTeam),
+      loadTeamRoster(sport, awayTeam),
+    ]);
+    const rosterPool = [...homeRoster, ...awayRoster];
+
+    for (const [rawPlayerName, markets] of Object.entries(players as Record<string, any>)) {
+      const playerName = rosterPool.length ? resolveFullName(rawPlayerName, rosterPool) : rawPlayerName;
       playerSet.add(playerName);
       for (const [rawMarketKey, outcomes] of Object.entries(markets as Record<string, any[]>)) {
         // Normalize Odds API market keys (e.g. "player_points" → "points") so reliability map works.
