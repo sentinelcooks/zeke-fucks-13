@@ -1267,6 +1267,16 @@ Deno.serve(async (req) => {
 
               const odds = buildOddsPayload(oddsData, bet_type, conf, team1.name, team2.name, over_under);
 
+              const decision = buildDecision({
+                team1, team2,
+                team1_pct: bet_type === "moneyline" ? conf : conf,
+                verdict: mlbResult.verdict,
+                factorBreakdown: mlbResult.factorBreakdown,
+                oddsAmerican: odds?.bestOdds?.american ?? null,
+                betType: bet_type,
+                overUnder: over_under,
+              });
+
               return json({
                 bet_type, sport, model: "mlb-20-factor",
                 team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
@@ -1281,6 +1291,7 @@ Deno.serve(async (req) => {
                 writeup: mlbResult.writeup,
                 pitchers: mlbResult.pitchers,
                 odds,
+                decision,
                 ...analysis,
               });
             }
