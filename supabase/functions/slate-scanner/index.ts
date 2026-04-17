@@ -305,7 +305,15 @@ Deno.serve(async (req) => {
     debugInfo = r.debug;
   }
 
-  const { todaysEdge, dailyPicks, freePicks, sorted } = rankAndDistribute(all);
+  // DEFENSIVE HARD CAP: drop absurd longshots before ranking, regardless of verdict tiering
+  const filtered = all.filter((p) => {
+    if (p.odds >= 500) return false;
+    if (p.confidence < 0.65) return false;
+    if (p.edge <= 0) return false;
+    return true;
+  });
+  console.log(`Pre-rank filter: ${all.length} → ${filtered.length} (dropped ${all.length - filtered.length} junk/longshots)`);
+  const { todaysEdge, dailyPicks, freePicks, sorted } = rankAndDistribute(filtered);
 
   if (dryRun) {
     return json({
