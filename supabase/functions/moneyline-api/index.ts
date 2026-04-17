@@ -185,6 +185,33 @@ async function getScoreboard(sport = "nba") {
   return data.events || [];
 }
 
+// ── Resolve real scheduled venue (HOME/AWAY for tonight's matchup) ──
+async function resolveMatchupVenue(team1Id: string, team2Id: string, sport: string): Promise<{ team1IsHome: boolean; gameDate: string } | null> {
+  try {
+    const base = getEspnBase(sport);
+    const t1 = String(team1Id), t2 = String(team2Id);
+    for (let d = 0; d < 3; d++) {
+      const date = new Date();
+      date.setDate(date.getDate() + d);
+      const ymd = date.toISOString().slice(0, 10).replace(/-/g, "");
+      const data = await fetchJSON(`${base}/scoreboard?dates=${ymd}`).catch(() => null);
+      for (const ev of data?.events || []) {
+        const comp = ev?.competitions?.[0];
+        if (!comp) continue;
+        const ids = (comp.competitors || []).map((c: any) => String(c.id || c.team?.id));
+        if (ids.includes(t1) && ids.includes(t2)) {
+          const home = comp.competitors.find((c: any) => c.homeAway === "home");
+          const homeId = String(home?.id || home?.team?.id);
+          return { team1IsHome: homeId === t1, gameDate: ev.date };
+        }
+      }
+    }
+  } catch (e) {
+    console.error("resolveMatchupVenue error:", e);
+  }
+  return null;
+}
+
 // ── Injuries ──
 let _injuryCache: Record<string, { data: any[]; ts: number }> = {};
 
@@ -1040,6 +1067,11 @@ Deno.serve(async (req) => {
       if (!team1) return json({ error: `Team not found: ${t1Input}` }, 400);
       if (!team2) return json({ error: `Team not found: ${t2Input}` }, 400);
 
+      // Resolve real scheduled venue (which team is HOME tonight) — never guess
+      const venue = await resolveMatchupVenue(team1.id, team2.id, sport);
+      const team1HomeAway: "home" | "away" | null = venue ? (venue.team1IsHome ? "home" : "away") : null;
+      const team2HomeAway: "home" | "away" | null = venue ? (venue.team1IsHome ? "away" : "home") : null;
+
       const [h2h, team1Stats, team2Stats, injuries1, injuries2, schedule1, schedule2] = await Promise.all([
         getHeadToHead(team1.id, team2.id, sport),
         getTeamStats(team1.id, sport),
@@ -1105,8 +1137,9 @@ Deno.serve(async (req) => {
 
               return json({
                 bet_type, sport, model: "mlb-20-factor",
-                team1: { ...team1, stats: team1Stats },
-                team2: { ...team2, stats: team2Stats },
+                team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
+                team2: { ...team2, stats: team2Stats, homeAway: team2HomeAway },
+                matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue },
                 head_to_head: h2h,
                 injuries: { team1: injuries1, team2: injuries2 },
                 splits: { team1: splits1, team2: splits2 },
@@ -1161,8 +1194,9 @@ Deno.serve(async (req) => {
 
               return json({
                 bet_type, sport, model: "nhl-20-factor",
-                team1: { ...team1, stats: team1Stats },
-                team2: { ...team2, stats: team2Stats },
+                team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
+                team2: { ...team2, stats: team2Stats, homeAway: team2HomeAway },
+                matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue },
                 head_to_head: h2h,
                 injuries: { team1: injuries1, team2: injuries2 },
                 splits: { team1: splits1, team2: splits2 },
@@ -1227,8 +1261,9 @@ Deno.serve(async (req) => {
         bet_type,
         sport,
         model: `${sport}-20-factor`,
-        team1: { ...team1, stats: team1Stats },
-        team2: { ...team2, stats: team2Stats },
+        team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
+        team2: { ...team2, stats: team2Stats, homeAway: team2HomeAway },
+        matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue },
         head_to_head: h2h,
         injuries: { team1: injuries1, team2: injuries2 },
         splits: { team1: splits1, team2: splits2 },
