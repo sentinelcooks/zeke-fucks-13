@@ -1,4 +1,15 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { WEIGHTS_V2, FACTOR_LABELS, MODEL_VERSION } from "./weights.ts";
+import {
+  computeXGProxy, scoreXG,
+  computeCFProxy, scoreCFProxy,
+  computePace, scorePace,
+} from "../_shared/advanced_stats.ts";
+import {
+  pullOddsHistory, computeLineMovement, scoreLineMovement19,
+  computeRLM, scoreRLM20, sharpBookDivergence,
+} from "../_shared/odds_intelligence.ts";
+import { nhlInjuryAdjustments, type NHLInjuryWarning } from "../_shared/injuries.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
