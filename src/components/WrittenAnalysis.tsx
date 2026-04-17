@@ -254,8 +254,22 @@ function generateOverallSummary(props: WrittenAnalysisProps): { rating: "take" |
   return { rating, summary: `${summaryIntro}${signalText} Recommended sizing: ${unitSize}.`, unitSize };
 }
 
+const FORBIDDEN_WHEN_SIZED = /(toss-?up|coin-?flip|\bpass\b|uncertainty)/i;
+
 const WrittenAnalysis = (props: WrittenAnalysisProps) => {
-  const overallSummary = generateOverallSummary(props);
+  const rawSummary = generateOverallSummary(props);
+  // Belt-and-suspenders scrub: if forbidden language appears in the summary text,
+  // force noBet so we never show a sizing line alongside "toss-up/coin-flip/pass/uncertainty".
+  const overallSummary = (() => {
+    if (rawSummary.unitSize && FORBIDDEN_WHEN_SIZED.test(rawSummary.summary)) {
+      const scrubbed = rawSummary.summary
+        .replace(/\s*Recommended sizing:[^.]*\.?/i, "")
+        .trim();
+      return { rating: "fade" as const, unitSize: null as string | null, summary: `${scrubbed} No bet recommended.`.trim() };
+    }
+    return rawSummary;
+  })();
+  const isNoBet = overallSummary.unitSize === null;
   const [sections, setSections] = useState<AnalysisSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(true);
