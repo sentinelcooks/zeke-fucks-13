@@ -473,7 +473,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
                   <div className="w-10 h-10 rounded-full border-2 border-accent/20 border-t-accent animate-spin" />
                   <Brain className="w-4 h-4 text-accent absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                 </div>
-                <p className="text-[11px] text-muted-foreground/50 animate-pulse">Generating analysis...</p>
+                <p className="text-[11px] text-muted-foreground/50 animate-pulse">{regenerating ? "Regenerating analysis..." : "Generating analysis..."}</p>
               </div>
             ) : (
               <div className="p-4 space-y-4">
