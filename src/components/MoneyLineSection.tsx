@@ -1929,11 +1929,14 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
           type="moneyline"
           verdict={results.verdict}
           confidence={results.confidence}
-          playerOrTeam={results.pick || results.team1?.shortName || "Pick"}
+          playerOrTeam={results.decision?.winning_team_name || results.pick || results.team1?.shortName || "Pick"}
           factors={results.factors}
           injuries={results.injuries}
           sport={results.sport}
           factorBreakdown={results.factorBreakdown}
+          decision={results.decision}
+          team1Name={results.team1?.shortName || results.team1?.name}
+          team2Name={results.team2?.shortName || results.team2?.name}
         />
       )}
 
