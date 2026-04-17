@@ -1,29 +1,50 @@
 
-## Plan: Diagnose & harden slate-scanner so it actually returns plays
+## Plan: Curate Free Picks — quality over quantity
 
-The pipeline deployed and the schema is correct, but a live dry-run returned 0 plays across all 4 sports with 0 sanity issues — meaning either (a) every downstream fetch is silently failing, or (b) it's a genuinely empty slate. Right now we can't tell which because `fnFetch` swallows everything. Fix that, then verify with real numbers.
+Replace the current "any edge ≥ 2%" firehose with a tiered, market-aware quality filter so Free Picks only surfaces high-conviction, high-value plays.
 
-### Steps
+### Root cause
+Current thresholds in `_shared/edge_scoring.ts` + `slate-scanner` are too permissive:
+- Free Picks accepts confidence ≥ 0.65 with no edge floor and no market-reliability weighting.
+- Game-line generator accepts edge ≥ 0.02 with projected_prob clamp down to 0.05 → surfaces longshot home/away ML picks and under-totals with thin signal.
+- All prop markets treated equally — volatile markets (HRs, strikeouts, blocks, steals, threes) compete on the same threshold as stable ones (points, hits, rebounds, assists).
+- Final ranking uses `edge × confidence` only — no penalty for low hit rate or low-reliability markets.
 
-1. **Add diagnostics to `slate-scanner`** (`supabase/functions/slate-scanner/index.ts`):
-   - Make `fnFetch` return `{ ok, status, data, url }` instead of just data, and log every downstream call's status + payload size.
-   - Add a `debug=true` query param that returns a per-sport breakdown: `{ sport, gamesFetched, oddsFetched, propsFetched, gamesWithOdds, playsGenerated }` so we can pinpoint which step is empty.
-   - Log the actual game count vs the count after the `STATUS_FINAL`/`IN_PROGRESS` filter.
+### Changes
 
-2. **Fix likely root cause — wrong call signatures.** Audit the 3 internal calls:
-   - `games-schedule?sport=basketball_nba` → confirm this function accepts `sport` as the Odds-API key vs short code (`nba`). Likely mismatch.
-   - `nba-odds/events?sport=nba&markets=h2h,spreads,totals` → confirm this path exists; the existing function may only expose a different route.
-   - `free-props/scan?sport=nba` → confirm this scan subroute exists; the cron-driven function may only have a default POST handler.
-   Read each function's `index.ts` and align the orchestrator's URLs + params exactly.
+**1. `_shared/edge_scoring.ts`** — introduce market reliability + composite quality score
+- Add `MARKET_RELIABILITY` map (0.4–1.0):
+  - High (1.0): NBA points/rebounds/assists, MLB hits, NHL SOG, moneyline (favorites only)
+  - Mid (0.75): NBA threes/PRA, MLB total bases, NHL points, spreads, totals
+  - Low (0.5): NBA steals/blocks, MLB HRs/strikeouts (under), longshot ML (+150+)
+- New `qualityScore = confidence × reliability × (1 + edge) × hitRateFactor`
+- Tier thresholds become market-aware:
+  - Strong: confidence ≥ 0.72 AND edge ≥ 0.04 AND reliability ≥ 0.75
+  - Lean: confidence ≥ 0.66 AND edge ≥ 0.03 AND reliability ≥ 0.6
+  - Reject everything else
+- Special rule: under-HR, under-K, longshot dog ML require confidence ≥ 0.78 AND edge ≥ 0.06
 
-3. **Re-run dry-run with `debug=true`** via `supabase--curl_edge_functions` and paste the per-sport breakdown. Expected: at least NBA or NHL returns >0 games and >0 plays on a normal day; if it's a true off-day for all 4 leagues, the breakdown will show `gamesFetched: 0` everywhere, which is a legit empty slate.
+**2. `slate-scanner/index.ts`** — apply curated filters
+- Game lines: raise edge floor to 0.035, drop projected_prob clamp floor to 0.35 (no longshot dogs), require qualityScore ≥ threshold.
+- Player props pulled from `free_props` table: re-score with new module, drop anything below new tier gates.
+- Cap Free Picks at top 20 by qualityScore (was 30), max 6 per sport, max 2 low-reliability picks total.
+- Today's Edge: top 5 globally by qualityScore (was per-sport).
 
-4. **If 0 plays is genuine** (off-season alignment), seed a single synthetic game through the dry-run path so the validation tooling has something to score, proving end-to-end math works. This synthetic mode lives behind `?seed=true` and never writes to DB.
+**3. `rankAndDistribute`** — sort by qualityScore (not raw score), enforce per-sport and per-reliability caps.
 
-5. **Re-verify live**:
-   - `SELECT bet_type, count(*) FROM daily_picks WHERE pick_date = current_date GROUP BY bet_type;`
-   - `SELECT bet_type, count(*) FROM free_props WHERE prop_date = current_date GROUP BY bet_type;`
-   - `curl /slate-scanner?dryRun=true&debug=true` and paste the breakdown + top 3 plays.
+**4. Verification (after default mode)**
+1. Deploy `slate-scanner` + `_shared/edge_scoring.ts`.
+2. `curl /slate-scanner?dryRun=true&debug=true&seed=true` — confirm seed plays still pass new gates with their new qualityScore field surfaced.
+3. `curl /slate-scanner?dryRun=true&debug=true` — paste counts per sport and top 5 with full math (confidence, edge, reliability, qualityScore).
+4. Run live (non-dry) scan, then:
+   ```sql
+   SELECT sport, prop_type, direction, confidence, edge,
+          ROUND((confidence*edge)::numeric, 4) AS legacy_score
+   FROM free_props WHERE prop_date = current_date
+   ORDER BY confidence DESC LIMIT 20;
+   ```
+   Confirm: zero `under home_runs` / `under strikeouts` unless conf ≥ 0.78, zero +200 ML dogs, total row count ≤ 20.
+5. Visual check at `/dashboard/free-picks`.
 
 ### Out of scope
-Paywall contrast fixes from the uploaded markdown (separate task — happy to tackle next), model weight changes, new sports.
+Pulling in new model factors (rest days, lineup splits) — that's a separate model upgrade; this PR is purely curation gates over current model output.
