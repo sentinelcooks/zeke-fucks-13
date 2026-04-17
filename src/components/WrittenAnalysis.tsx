@@ -217,34 +217,40 @@ function generateOverallSummary(props: WrittenAnalysisProps): { rating: "take" |
   else if (confidence < 40) bearish += 2;
 
   const score = bullish - bearish;
-  let rating: "take" | "lean" | "fade";
-  let unitSize: string;
-  let summaryIntro: string;
+  const decisive = bullish + bearish;
+  const dominanceRatio = decisive > 0 ? Math.max(bullish, bearish) / decisive : 0;
 
-  // Model verdict overrides multi-signal scoring to prevent contradictions
-  if (v === "DO NOT BET" || (v === "RISKY" && confidence < 50)) {
-    rating = "fade";
-    unitSize = "Pass or 0.25 units max";
-    summaryIntro = `Fade. The data doesn't strongly support ${pickLabel}.`;
-  } else if ((v.includes("STRONG") || v === "STRONG PICK" || v === "STRONG BET") && confidence >= 60) {
-    rating = "take";
-    unitSize = "1.5–2 units";
-    summaryIntro = `Strong play. ${pickLabel} checks all the boxes.`;
-  } else if (score >= 3 && confidence >= 65) {
-    rating = "take";
-    unitSize = "1.5–2 units";
-    summaryIntro = `Strong play. ${pickLabel} checks all the boxes.`;
-  } else if (score >= 1 || confidence >= 55) {
-    rating = "lean";
-    unitSize = "0.5–1 unit";
-    summaryIntro = `Lean play. ${pickLabel} has more factors in its favor but isn't a slam dunk.`;
+  let tier: Tier;
+  // Hard guard: explicit DO NOT BET / RISKY-low / very low confidence
+  if (v === "DO NOT BET" || (v === "RISKY" && confidence < 50) || confidence < 45) {
+    tier = "noBet";
+  } else if (bullish < 3 || score <= 0 || dominanceRatio < 0.55) {
+    tier = "noBet";
+  } else if ((v.includes("STRONG")) && confidence >= 65 && dominanceRatio >= 0.75) {
+    tier = dominanceRatio >= 0.90 ? "veryHigh" : "high";
+  } else if (dominanceRatio >= 0.90 && confidence >= 65) {
+    tier = "veryHigh";
+  } else if (dominanceRatio >= 0.75 && confidence >= 60) {
+    tier = "high";
+  } else if (dominanceRatio >= 0.65) {
+    tier = "medium";
   } else {
-    rating = "fade";
-    unitSize = "Pass or 0.25 units max";
-    summaryIntro = `Fade. The data doesn't strongly support ${pickLabel}.`;
+    tier = "low";
   }
 
+  const { rating, unitSize } = tierToSizing(tier);
   const signalText = signals.length > 0 ? " " + signals.slice(0, 4).join(". ") + "." : "";
+
+  if (tier === "noBet") {
+    return { rating, summary: `No bet recommended. The data doesn't strongly support ${pickLabel}.${signalText}`, unitSize: null };
+  }
+
+  let summaryIntro: string;
+  if (tier === "veryHigh") summaryIntro = `Very high conviction. Nearly all signals favor ${pickLabel}.`;
+  else if (tier === "high") summaryIntro = `Strong play. ${pickLabel} checks the boxes.`;
+  else if (tier === "medium") summaryIntro = `Solid lean. ${pickLabel} has a moderate edge.`;
+  else summaryIntro = `Slight lean. ${pickLabel} has a small edge.`;
+
   return { rating, summary: `${summaryIntro}${signalText} Recommended sizing: ${unitSize}.`, unitSize };
 }
 
