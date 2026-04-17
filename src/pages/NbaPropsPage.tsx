@@ -1073,7 +1073,7 @@ const NbaPropsPage = () => {
             {/* Analyze Button — Sticky */}
             <div className="relative z-10 mt-2">
               <motion.button
-                onClick={handleAnalyze}
+                onClick={() => handleAnalyze()}
                 disabled={loading}
                 whileTap={{ scale: 0.97 }}
                 className="relative w-full group overflow-hidden rounded-xl shadow-2xl shadow-black/40"
@@ -1468,7 +1468,7 @@ const NbaPropsPage = () => {
             {/* Analyze Button — Sticky */}
             <div className="sticky bottom-20 z-30">
               <motion.button
-                onClick={handleAnalyze}
+                onClick={() => handleAnalyze()}
                 disabled={loading}
                 whileTap={{ scale: 0.97 }}
                 className="relative w-full group overflow-hidden rounded-xl shadow-2xl shadow-black/40"
