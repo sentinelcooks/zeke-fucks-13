@@ -30,7 +30,7 @@ const ESPN_TEAM_LOGOS = {
 
 const SCREEN2_PICKS = [
   { img: ESPN_HEADSHOTS.jaysonTatum, name: "J. Tatum", pick: "OVER 28.5 PTS", conf: 62, ev: 6.1 },
-  { img: ESPN_HEADSHOTS.austinMatthews, name: "A. Matthews", pick: "ML", conf: 59, ev: 4.3 },
+  { img: ESPN_HEADSHOTS.austinMatthews, name: "A. Matthews", pick: "OVER 3.5 SOG", conf: 59, ev: 4.3 },
   { img: ESPN_TEAM_LOGOS.rockies, name: "Rockies", pick: "+1.5", conf: 57, ev: 5.7 },
 ];
 
