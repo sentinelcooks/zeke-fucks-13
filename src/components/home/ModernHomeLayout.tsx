@@ -253,23 +253,19 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       supabase.from("daily_picks").select("*").eq("pick_date", yesterday).order("created_at", { ascending: false }),
     ]);
 
-    // hit_rate may be stored as decimal (0.75) or percent (75) — normalize threshold
-    const hrOk = (hr: number) => (hr > 1 ? hr >= 50 : hr >= 0.5);
-    let allToday = ((todayRes.data as DailyPick[]) || []).filter(p => hrOk(p.hit_rate));
-
-    // Fallback: if no picks today, fetch most recent picks from the last 3 days
-    if (allToday.length === 0) {
-      const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString().split("T")[0];
-      const { data: recentData } = await supabase
-        .from("daily_picks")
-        .select("*")
-        .gte("pick_date", threeDaysAgo)
-        .lt("pick_date", today)
-        .order("pick_date", { ascending: false })
-        .order("hit_rate", { ascending: false })
-        .limit(40);
-      allToday = ((recentData as DailyPick[]) || []).filter(p => hrOk(p.hit_rate));
-    }
+    // hit_rate may be stored as decimal (0.55) or percent (55) — normalize threshold to 55
+    const hrOk = (hr: number) => (hr > 1 ? hr >= 55 : hr >= 0.55);
+    // Hard odds guard: drop any pick where |odds| >= 500 (longshot junk)
+    const oddsOk = (o: string | null | undefined) => {
+      if (!o) return true;
+      const n = parseInt(String(o).replace(/[^\d-]/g, ""), 10);
+      if (Number.isNaN(n)) return true;
+      return Math.abs(n) < 500;
+    };
+    // STRICT: today only. No 3-day stale fallback — show empty state if no picks today.
+    const allToday = ((todayRes.data as DailyPick[]) || []).filter(
+      p => hrOk(p.hit_rate) && oddsOk(p.odds) && p.tier !== "pass"
+    );
 
     const sortByPref = (arr: DailyPick[]) => {
       if (userSports.length > 0) {
