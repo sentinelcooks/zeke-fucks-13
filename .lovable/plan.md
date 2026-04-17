@@ -1,55 +1,94 @@
 
 
-## Plan: Fix B2B Status Display + Add Explainer Popup
+## Plan: Show HOME/AWAY Labels Based on Real Scheduled Game
 
-### Current state
-- **Backend** (`moneyline-api/index.ts` line 282): `detectBackToBack` returns `{ isB2B, lastGameDate, nextGameDate }`. No starter-minutes data.
-- **Frontend** (`MoneyLineSection.tsx` lines 1825-1842): Shows a Moon "B2B" badge if `isB2B`, else a green ✓. Per the user's screenshot, both Hornets and Magic show ✅ — meaning neither is on a B2B, but the visual reads ambiguously and there's no explainer.
+### Root cause
+The backend (`moneyline-api/index.ts`) never resolves which team is hosting tonight. `team1`/`team2` are just whatever the user typed — no `is_home` flag is attached, so the frontend has no way to label them. ESPN's scoreboard (already fetched via `getScoreboard`) is the source of truth: each event's `competitions[0].competitors[*].homeAway` reliably says "home" or "away".
 
-### User-requested semantics (the inversion)
-- ✅ checkmark = team **IS** on a back-to-back
-- ❌ X = team **IS NOT** on a back-to-back
-- Tap either icon → popup with team-specific explanation, including dynamic risk level (low/medium/high) when starter-minutes data is available, else default to "medium."
+### Backend change — `supabase/functions/moneyline-api/index.ts` (analyze handler, ~line 1043)
 
-### Changes
+Add ONE helper that, given `team1.id` and `team2.id`, scans the next 3 days of ESPN scoreboard events for the requested sport and finds a competition containing both team IDs. If found, return `{ team1IsHome: boolean, gameDate: string }`. If not found → return `null` (no labels shown — per requirement, never guess).
 
-**1. Backend — `supabase/functions/moneyline-api/index.ts`** (`detectBackToBack`, ~line 282)
-
-Extend the return object with a `b2bRisk` field. Compute it from previous-game starter minutes when available:
-- Find the team's most recent completed game (the day-before game when `isB2B`).
-- Pull the boxscore via ESPN's `/summary?event={id}` endpoint (already used elsewhere for splits).
-- Count starters with >35 min played: `>=3 → "high"`, `1-2 → "medium"`, `0 → "low"`.
-- If boxscore fetch fails or sport doesn't track minutes the same way (MLB/NHL), default to `"medium"` when `isB2B === true`, `null` when not on B2B.
-- Wrap in try/catch — must not break the analyze response if ESPN summary 404s.
-
-Return shape:
 ```ts
-{ isB2B: boolean, lastGameDate: string|null, nextGameDate?: string, b2bRisk: "low"|"medium"|"high"|null }
+async function resolveMatchupVenue(team1Id: string, team2Id: string, sport: string) {
+  const base = getEspnBase(sport);
+  const t1 = String(team1Id), t2 = String(team2Id);
+  for (let d = 0; d < 3; d++) {
+    const date = new Date(); date.setDate(date.getDate() + d);
+    const ymd = date.toISOString().slice(0,10).replace(/-/g, "");
+    const data = await fetchJSON(`${base}/scoreboard?dates=${ymd}`).catch(() => null);
+    for (const ev of data?.events || []) {
+      const comp = ev?.competitions?.[0]; if (!comp) continue;
+      const ids = (comp.competitors || []).map((c: any) => String(c.id || c.team?.id));
+      if (ids.includes(t1) && ids.includes(t2)) {
+        const home = comp.competitors.find((c: any) => c.homeAway === "home");
+        const homeId = String(home?.id || home?.team?.id);
+        return { team1IsHome: homeId === t1, gameDate: ev.date };
+      }
+    }
+  }
+  return null;
+}
 ```
 
-This applies automatically across NBA, MLB, NHL, NFL, NCAAB since `detectBackToBack` is sport-agnostic and called for all sports in the analyze flow (lines 1026-1027).
+Call it once in the analyze handler (right after `team1`/`team2` are resolved at line 1041), and surface on the response in BOTH success branches (generic, MLB delegate, NHL delegate) by adding to the team objects:
 
-**2. Frontend — `src/components/MoneyLineSection.tsx`**
+```ts
+const venue = await resolveMatchupVenue(team1.id, team2.id, sport);
+const team1HomeAway = venue ? (venue.team1IsHome ? "home" : "away") : null;
+const team2HomeAway = venue ? (venue.team1IsHome ? "away" : "home") : null;
+// ...
+team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
+team2: { ...team2, stats: team2Stats, homeAway: team2HomeAway },
+matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue },
+```
 
-a. **Invert the icon semantics** (lines 1832-1838):
-   - `isB2B === true` → green ✅ checkmark (`Check` from lucide-react)
-   - `isB2B === false` → red ❌ X (`X` from lucide-react, already imported)
+This is sport-agnostic — works for NBA/MLB/NHL/NFL/NCAAB since `getEspnBase(sport)` already maps all five.
 
-b. **Wrap each row in a `<button>`** mirroring the Pace card pattern (lines 1847-1869). Add new state `b2bInfo` of type `{ team, b2b } | null`.
+No DB changes. No changes to model/scoring logic, splits computation, or B2B logic — only metadata.
 
-c. **Add an explainer modal** at the bottom of the section, alongside the existing Pace modal. Reuse the same `framer-motion` AnimatePresence + Vision UI styling already used by the Pace popup. Content:
-   - **Not B2B:** *"{Team} is not playing on a back-to-back. No fatigue risk from travel or short rest — this is a neutral factor for this matchup."*
-   - **On B2B:** *"{Team} is playing on a back-to-back. They played a game yesterday and are on short rest today. Back-to-back games can impact performance — fatigue, reduced minutes for star players, and lower energy late in games are common. This adds {risk} risk to the play depending on how many key players logged heavy minutes last night."* — where `{risk}` comes from `b2b.b2bRisk` or defaults to `"medium"`.
-   - Dismiss on backdrop click + X button (same pattern as Pace modal).
+### Frontend change — `src/components/MoneyLineSection.tsx`
 
-### Verification (mandatory before complete)
-1. Deploy `moneyline-api`.
-2. `supabase--curl_edge_functions` POST `/moneyline-api/analyze` for an NBA matchup where one team played yesterday → grep response for `back_to_back.team1.b2bRisk` and confirm field present with value `"low"|"medium"|"high"|null`. Paste the slice.
-3. Repeat for MLB and NHL matchups → confirm field present (likely `"medium"` default or `null`).
-4. UI smoke: load Analyze → Moneyline → Lines → run a matchup → tap each B2B row → confirm popup opens with correct text and dismisses on X / backdrop.
+Define a small `<HomeAwayBadge>` helper:
+```tsx
+const HomeAwayBadge = ({ value }: { value: "home" | "away" | null }) => {
+  if (!value) return null;
+  const isHome = value === "home";
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${isHome ? "bg-nba-green/15 text-nba-green" : "bg-nba-blue/15 text-nba-blue"}`}>
+      {isHome ? <Home className="w-2 h-2" /> : <Plane className="w-2 h-2" />}
+      {value}
+    </span>
+  );
+};
+```
+
+**1. Matchup Hero Card (line 1606-1629)** — add badge under each team's record:
+```tsx
+<span className="text-[10px] text-muted-foreground/65">{results.team1?.record}</span>
+<HomeAwayBadge value={results.team1?.homeAway} />
+```
+(same for team2)
+
+**2. Home/Away Splits card (line 1800-1805)** — add badge next to the team name in the row header:
+```tsx
+<span className="text-xs font-bold text-foreground">{team.shortName}</span>
+<HomeAwayBadge value={team.homeAway} />
+```
+
+That's it. When `homeAway` is `null` (no scheduled game found), the badge silently renders nothing — exactly per the "never guess" requirement.
+
+### Verification (mandatory, will run in default mode)
+
+1. `supabase--deploy_edge_functions ["moneyline-api"]`
+2. `supabase--curl_edge_functions` POST `/moneyline-api/analyze` for an NBA matchup scheduled today (e.g. Hornets vs Magic) → confirm response contains `team1.homeAway` and `team2.homeAway` with the correct "home"/"away" values cross-checked against ESPN.
+3. Repeat for MLB, NHL matchups → confirm same field present and correct.
+4. Test a non-scheduled matchup (two teams not playing each other tonight) → confirm `homeAway: null` on both teams.
+5. Paste curl output slices in completion summary.
 
 ### Out of scope
-- No DB/schema changes.
-- No changes to other tabs (Props, Slip, Games).
-- No changes to the B2B factor weight/scoring inside `runModel` — only the display + risk metadata.
+- No DB/schema changes
+- No changes to splits math, B2B math, or model scoring
+- No changes to other tabs (Props, Slip, Games)
+- No fallback "guess" logic — strictly null when ESPN doesn't confirm
 
