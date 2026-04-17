@@ -29,15 +29,15 @@
     --muted: 228 20% 12%;
     --muted-foreground: 228 12% 82%;
 
-    --accent: 250 76% 62%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 142 100% 50%;
+    --accent-foreground: 0 0% 0%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 228 18% 15%;
     --input: 228 20% 11%;
-    --ring: 250 76% 62%;
+    --ring: 142 100% 50%;
 
     --radius: 1rem;
 
@@ -56,20 +56,20 @@
     /* Vision UI gradient tokens */
     --gradient-card: linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.94) 19.41%, hsla(228, 30%, 8%, 0.49) 76.65%);
     --gradient-card-border: linear-gradient(127.09deg, hsla(228, 30%, 22%, 0.6) 19.41%, hsla(228, 30%, 12%, 0.2) 76.65%);
-    --gradient-blue: linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%));
+    --gradient-blue: linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%));
     --gradient-green: linear-gradient(135deg, hsl(158 64% 52%), hsl(175 55% 42%));
     --gradient-red: linear-gradient(135deg, hsl(0 72% 51%), hsl(340 65% 47%));
-    --gradient-purple: linear-gradient(135deg, hsl(250 76% 62%), hsl(280 70% 55%));
+    --gradient-purple: linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%));
     --gradient-cyan: linear-gradient(135deg, hsl(190 90% 55%), hsl(210 100% 60%));
 
     --sidebar-background: 228 28% 6%;
     --sidebar-foreground: 228 10% 72%;
-    --sidebar-primary: 250 76% 62%;
+    --sidebar-primary: 142 100% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 228 20% 14%;
     --sidebar-accent-foreground: 228 20% 98%;
     --sidebar-border: 228 20% 16%;
-    --sidebar-ring: 250 76% 62%;
+    --sidebar-ring: 142 100% 50%;
 
     /* Mobile safe areas */
     --safe-top: env(safe-area-inset-top, 0px);
