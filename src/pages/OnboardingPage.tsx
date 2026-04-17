@@ -261,7 +261,7 @@ function ScreenHero({ onNext }: { onNext: () => void }) {
           />
           <div className="flex-1 min-w-0">
             <div className="text-sm font-bold text-white">Luka Doncic</div>
-            <div className="text-[10px] text-white/50">NBA vs DEN · 8:30 PM</div>
+            <div className="text-[10px] text-white/50">LAKERS vs DENVER · 8:30 PM</div>
             <div className="text-[11px] text-white mt-0.5 font-semibold">OVER 32.5 Points</div>
           </div>
           <div className="flex flex-col items-end gap-0.5">
