@@ -324,7 +324,54 @@ function scorePublicPercent(lineMovementMagnitude: number): number {
   return Math.max(0, Math.min(100, 50 + lineMovementMagnitude * 2));
 }
 
-// ── Weight Tables ──
+// ── v2.0 NEW SCORERS (factors 21-26 + improved blends) ───
+function scoreGoalieWorkload(startsLast7Days: number): number {
+  if (startsLast7Days >= 4) return 42; // fatigue
+  if (startsLast7Days === 0) return 46; // rust
+  return 50; // 1-3 starts = neutral
+}
+
+function scoreSpecialTeamsDiff(ppPct: number, oppPkPct: number): number {
+  const diff = ppPct - (100 - oppPkPct); // higher diff = bigger ST advantage
+  return Math.max(0, Math.min(100, 50 + diff * 4));
+}
+
+function scoreArena(arenaFactor: number): number {
+  // 1.10→75, 1.03→50, 0.95→35
+  return Math.max(0, Math.min(100, 50 + (arenaFactor - 1.03) * 357));
+}
+
+function scoreGoalsBlend(l5: number, l10: number, l20: number): number {
+  // Each is total goals over the window; normalize per-game to 3.1 baseline
+  const avgL5 = l5 / 5;
+  const avgL10 = l10 / 10;
+  const avgL20 = l20 > 0 ? l20 / 20 : avgL10;
+  const blended = avgL5 * 0.5 + avgL10 * 0.3 + avgL20 * 0.2;
+  return Math.max(0, Math.min(100, 50 + (blended - 3.1) * 18));
+}
+
+function scoreGoalieL10Weighted(svPctL10: number[]): number {
+  // Most recent start weighted 1.5x
+  if (svPctL10.length === 0) return 50;
+  let weighted = 0;
+  let totalW = 0;
+  for (let i = 0; i < svPctL10.length; i++) {
+    const recencyW = 1 + (i / svPctL10.length) * 0.5; // newest entries assumed at end
+    weighted += svPctL10[i] * recencyW;
+    totalW += recencyW;
+  }
+  const avg = weighted / totalW;
+  const diff = avg - 0.908;
+  return Math.max(0, Math.min(100, 50 + diff * 900));
+}
+
+function scoreRestDaysV2(daysSinceLastGame: number, isB2BRoad: boolean): number {
+  let s = scoreRestDays(daysSinceLastGame);
+  if (daysSinceLastGame === 0 && isB2BRoad) s -= 5;
+  return Math.max(0, Math.min(100, s));
+}
+
+// ── Legacy WEIGHTS table kept for backward compatibility (unused by v2 path) ──
 const WEIGHTS: Record<string, Record<string, number>> = {
   moneyline: {
     goalie_sv: 0.18, goalie_gaa: 0.10, goalie_l5: 0.08, backup_goalie: 0.02,
@@ -332,27 +379,6 @@ const WEIGHTS: Record<string, Record<string, number>> = {
     pts_l10: 0.03, goals_l5: 0.07, pk_pct: 0.04, blocks_hits: 0.02,
     goals_allowed: 0.03, hd_chances: 0.02, home_away: 0.08, rest_days: 0.03,
     momentum: 0.07, h2h: 0.04, line_movement: 0.02, public_pct: 0.02,
-  },
-  puckline: {
-    goalie_sv: 0.10, goalie_gaa: 0.06, goalie_l5: 0.05, backup_goalie: 0.02,
-    shots_against: 0.05, goals_game: 0.06, shooting_pct: 0.04, pp_pct: 0.08,
-    pts_l10: 0.04, goals_l5: 0.05, pk_pct: 0.08, blocks_hits: 0.04,
-    goals_allowed: 0.08, hd_chances: 0.04, home_away: 0.05, rest_days: 0.03,
-    momentum: 0.05, h2h: 0.04, line_movement: 0.03, public_pct: 0.01,
-  },
-  total: {
-    goalie_sv: 0.12, goalie_gaa: 0.12, goalie_l5: 0.08, backup_goalie: 0.03,
-    shots_against: 0.05, goals_game: 0.10, shooting_pct: 0.08, pp_pct: 0.04,
-    pts_l10: 0.03, goals_l5: 0.05, pk_pct: 0.04, blocks_hits: 0.02,
-    goals_allowed: 0.08, hd_chances: 0.03, home_away: 0.02, rest_days: 0.05,
-    momentum: 0.02, h2h: 0.02, line_movement: 0.02, public_pct: 0.02,
-  },
-  player_prop: {
-    goalie_sv: 0.05, goalie_gaa: 0.05, goalie_l5: 0.03, backup_goalie: 0.02,
-    shots_against: 0.08, goals_game: 0.05, shooting_pct: 0.12, pp_pct: 0.12,
-    pts_l10: 0.05, goals_l5: 0.08, pk_pct: 0.03, blocks_hits: 0.05,
-    goals_allowed: 0.05, hd_chances: 0.05, home_away: 0.05, rest_days: 0.05,
-    momentum: 0.03, h2h: 0.02, line_movement: 0.01, public_pct: 0.01,
   },
 };
 
