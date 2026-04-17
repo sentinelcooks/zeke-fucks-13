@@ -638,8 +638,10 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       {/* Middle: Name + Sport Pill + Matchup */}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{
-                          fontSize: isGameBet ? 15 : 18, fontWeight: 700, color: '#f0eeff',
-                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                          fontSize: isGameBet ? 15 : 17, fontWeight: 700, color: '#f0eeff',
+                          lineHeight: 1.2, wordBreak: 'break-word',
+                          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
                         }}>
                           {isGameBet
                             ? `${pick.away_team || pick.opponent || ''} @ ${pick.home_team || pick.team || ''}`
