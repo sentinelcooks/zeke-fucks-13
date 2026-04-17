@@ -54,6 +54,83 @@ async function fnFetch(path: string): Promise<FetchResult> {
   }
 }
 
+// ── Lightweight ESPN roster name resolver ──────────────────
+// Some odds-API feeds occasionally return abbreviated names ("B. Miller").
+// Resolve to full ESPN names by hitting the team roster once per game.
+const ESPN_SPORT_PATH: Record<string, { sport: string; league: string }> = {
+  nba: { sport: "basketball", league: "nba" },
+  mlb: { sport: "baseball", league: "mlb" },
+  nhl: { sport: "hockey", league: "nhl" },
+};
+
+const teamRosterCache = new Map<string, string[]>(); // key: `${sport}|${teamName}` → fullName[]
+
+async function loadTeamRoster(sport: string, teamName: string): Promise<string[]> {
+  if (!teamName) return [];
+  const cacheKey = `${sport}|${teamName.toLowerCase()}`;
+  if (teamRosterCache.has(cacheKey)) return teamRosterCache.get(cacheKey)!;
+  const path = ESPN_SPORT_PATH[sport];
+  if (!path) { teamRosterCache.set(cacheKey, []); return []; }
+  try {
+    // Find team id
+    const teamsRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${path.sport}/${path.league}/teams`);
+    const teamsData = await teamsRes.json();
+    const teams = teamsData?.sports?.[0]?.leagues?.[0]?.teams || [];
+    const wanted = teamName.toLowerCase();
+    const teamId = teams.find((t: any) =>
+      t?.team?.displayName?.toLowerCase() === wanted ||
+      t?.team?.name?.toLowerCase() === wanted ||
+      t?.team?.location?.toLowerCase() === wanted ||
+      `${t?.team?.location} ${t?.team?.name}`.toLowerCase() === wanted
+    )?.team?.id;
+    if (!teamId) { teamRosterCache.set(cacheKey, []); return []; }
+    const rosterRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${path.sport}/${path.league}/teams/${teamId}/roster`);
+    const rosterData = await rosterRes.json();
+    const names: string[] = [];
+    const collect = (arr: any[]) => {
+      for (const a of arr || []) {
+        if (a?.displayName) names.push(a.displayName);
+        if (a?.fullName) names.push(a.fullName);
+        if (Array.isArray(a?.items)) collect(a.items);
+      }
+    };
+    collect(rosterData?.athletes || []);
+    teamRosterCache.set(cacheKey, names);
+    return names;
+  } catch (e) {
+    console.error(`roster fetch failed for ${sport} ${teamName}:`, e);
+    teamRosterCache.set(cacheKey, []);
+    return [];
+  }
+}
+
+function resolveFullName(rawName: string, rosterPool: string[]): string {
+  if (!rawName) return rawName;
+  // If already looks full (2+ words, no single-letter token), keep as-is but try exact match for canonical casing
+  const lower = rawName.toLowerCase().trim();
+  const exact = rosterPool.find((n) => n.toLowerCase() === lower);
+  if (exact) return exact;
+  // Match "B. Miller" or "B Miller" → first initial + last name
+  const m = rawName.match(/^([A-Za-z])\.?\s+(.+)$/);
+  if (m) {
+    const [, initial, last] = m;
+    const candidates = rosterPool.filter((n) => {
+      const parts = n.split(/\s+/);
+      return parts[0]?.[0]?.toLowerCase() === initial.toLowerCase() &&
+             parts[parts.length - 1]?.toLowerCase() === last.toLowerCase();
+    });
+    if (candidates.length === 1) return candidates[0];
+  }
+  // Fallback: substring last-name match if unique
+  const tokens = rawName.split(/\s+/);
+  const last = tokens[tokens.length - 1]?.toLowerCase();
+  if (last && last.length > 2) {
+    const candidates = rosterPool.filter((n) => n.toLowerCase().endsWith(` ${last}`));
+    if (candidates.length === 1) return candidates[0];
+  }
+  return rawName;
+}
+
 // ── Game-line evaluation (unchanged behavior) ──────────────
 async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[]> {
   const sportKey = SPORT_KEYS[sport];
