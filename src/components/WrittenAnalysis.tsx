@@ -3,6 +3,16 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FileText, Brain, TrendingUp, Swords, BarChart3, AlertTriangle, Loader2, ChevronDown, ChevronUp, CheckCircle, XCircle, MinusCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
+export interface Decision {
+  winning_side: "team1" | "team2" | "over" | "under" | null;
+  winning_team_name: string | null;
+  win_probability: number;
+  edge: number | null;
+  conviction_tier: "noBet" | "low" | "medium" | "high" | "veryHigh";
+  recommended_units: 0 | 0.5 | 1 | 2 | 3;
+  verdict_text: string;
+}
+
 interface WrittenAnalysisProps {
   verdict: string;
   confidence: number;
@@ -26,6 +36,11 @@ interface WrittenAnalysisProps {
   withoutTeammatesData?: any;
   paceContext?: any;
   factorBreakdown?: Array<{ name: string; team1Score?: number; team2Score?: number; weight?: number }>;
+  // Single source of truth from backend (moneyline-api). When present, overrides local recompute.
+  decision?: Decision | null;
+  // Names of the two teams — used for the validation guardrail
+  team1Name?: string;
+  team2Name?: string;
 }
 
 interface AnalysisSection {
@@ -147,9 +162,28 @@ function computeMoneylineTier(props: WrittenAnalysisProps): { tier: Tier; favorT
 }
 
 function generateOverallSummary(props: WrittenAnalysisProps): { rating: "take" | "lean" | "fade"; summary: string; unitSize: string | null } {
-  const { confidence, playerOrTeam, line, propDisplay, overUnder, seasonHitRate, last10, last5, h2hAvg, ev, edge, minutesTrend, injuries, sport, type, verdict } = props;
+  const { confidence, playerOrTeam, line, propDisplay, overUnder, seasonHitRate, last10, last5, h2hAvg, ev, edge, minutesTrend, injuries, sport, type, verdict, decision } = props;
   const direction = overUnder?.toUpperCase() || "OVER";
   const pickLabel = line != null ? `${playerOrTeam} ${direction} ${line} ${propDisplay || ""}`.trim() : playerOrTeam;
+
+  // ── SINGLE SOURCE OF TRUTH: if backend provided a decision, honor it. Never recompute. ──
+  if (decision && decision.winning_team_name && type === "moneyline") {
+    const tier = decision.conviction_tier;
+    const { rating, unitSize } = tierToSizing(tier);
+    const winner = decision.winning_team_name;
+
+    if (tier === "noBet") {
+      return { rating, summary: `No bet recommended. Edge does not justify a play on ${winner}.`, unitSize: null };
+    }
+
+    let intro: string;
+    if (tier === "veryHigh") intro = `Very high conviction on ${winner}. Model gives a ${decision.win_probability}% win probability${decision.edge != null ? ` with a ${decision.edge}% edge over the market` : ""}.`;
+    else if (tier === "high") intro = `Strong play on ${winner}. ${decision.win_probability}% win probability${decision.edge != null ? `, ${decision.edge}% edge` : ""}.`;
+    else if (tier === "medium") intro = `Solid lean on ${winner} at ${decision.win_probability}% win probability${decision.edge != null ? ` (${decision.edge}% edge)` : ""}.`;
+    else intro = `Slight lean on ${winner}. ${decision.win_probability}% win probability${decision.edge != null ? `, ${decision.edge}% edge` : ""}.`;
+
+    return { rating, summary: `${intro} Recommended sizing: ${unitSize}.`, unitSize };
+  }
 
   if (type === "moneyline") {
     const { tier, favorTeam1, favorTeam2, neutral } = computeMoneylineTier(props);
@@ -273,12 +307,47 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
   const [sections, setSections] = useState<AnalysisSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(true);
+  const [regenerating, setRegenerating] = useState(false);
+
+  // Sport-agnostic decision validator. Returns the offending section name if a contradiction is found.
+  const validateAgainstDecision = (sects: AnalysisSection[]): string | null => {
+    const decision = props.decision;
+    if (!decision || !decision.winning_team_name) return null;
+    if (props.type !== "moneyline") return null;
+
+    const winnerName = decision.winning_team_name.toLowerCase();
+    const loserName = (() => {
+      if (decision.winning_side === "team1") return (props.team2Name || "").toLowerCase();
+      if (decision.winning_side === "team2") return (props.team1Name || "").toLowerCase();
+      if (decision.winning_side === "over") return "under";
+      if (decision.winning_side === "under") return "over";
+      return "";
+    })();
+    if (!loserName || loserName === winnerName) return null;
+
+    // Match phrases like "bet on X", "take X", "lean X", "X moneyline", "X to cover", "I like X", "back X"
+    const escaped = loserName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(
+      `\\b(bet on|take|lean(?:ing)? toward|back|i like|i'd take|recommend|pick)\\s+(?:the\\s+)?${escaped}\\b|\\b${escaped}\\s+(moneyline|to cover|to win|are the play|is the play)\\b`,
+      "i"
+    );
+
+    for (const s of sects) {
+      if (re.test(s.content || "") || re.test(s.title || "")) {
+        return s.title || "section";
+      }
+    }
+    return null;
+  };
 
   useEffect(() => {
     let cancelled = false;
+    let attempts = 0;
+    const MAX_RETRIES = 2;
 
-    const fetchAnalysis = async () => {
-      setLoading(true);
+    const fetchAnalysis = async (): Promise<void> => {
+      if (attempts === 0) setLoading(true);
+      else setRegenerating(true);
       try {
         const { data, error } = await supabase.functions.invoke("ai-analysis", {
           body: {
@@ -297,26 +366,63 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
             paceContext: props.paceContext,
             overallRating: overallSummary.rating,
             overallSummary: overallSummary.summary,
+            decision: props.decision || null,
           },
         });
 
-        if (!cancelled) {
-          if (error || !data?.sections?.length) {
-            setSections(generateFallbackSections(props));
-          } else {
-            setSections(data.sections);
-          }
+        if (cancelled) return;
+
+        if (error || !data?.sections?.length) {
+          setSections(generateFallbackSections(props));
+          return;
         }
+
+        // ── Validation guardrail: detect contradictions vs the locked decision ──
+        const offendingSection = validateAgainstDecision(data.sections);
+        if (offendingSection && attempts < MAX_RETRIES) {
+          attempts++;
+          const detail = {
+            expected: props.decision?.winning_team_name,
+            section: offendingSection,
+            attempt: attempts,
+            sport: props.sport,
+            type: props.type,
+          };
+          // eslint-disable-next-line no-console
+          console.warn("[decision-mismatch] Retrying AI analysis", detail);
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("sentinel:decision-mismatch", { detail }));
+          }
+          // Auto-retry
+          await fetchAnalysis();
+          return;
+        }
+
+        if (offendingSection) {
+          // Exhausted retries — fall back to safe deterministic prose
+          // eslint-disable-next-line no-console
+          console.warn("[decision-mismatch] Max retries reached, using fallback", {
+            expected: props.decision?.winning_team_name,
+            section: offendingSection,
+          });
+          setSections(generateFallbackSections(props));
+          return;
+        }
+
+        setSections(data.sections);
       } catch {
         if (!cancelled) setSections(generateFallbackSections(props));
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setRegenerating(false);
+        }
       }
     };
 
     fetchAnalysis();
     return () => { cancelled = true; };
-  }, [props.playerOrTeam, props.confidence, props.verdict, props.type, overallSummary.rating]);
+  }, [props.playerOrTeam, props.confidence, props.verdict, props.type, overallSummary.rating, props.decision?.winning_team_name]);
 
   const borderColor = props.confidence >= 70
     ? "border-nba-green/30"
@@ -367,7 +473,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
                   <div className="w-10 h-10 rounded-full border-2 border-accent/20 border-t-accent animate-spin" />
                   <Brain className="w-4 h-4 text-accent absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                 </div>
-                <p className="text-[11px] text-muted-foreground/50 animate-pulse">Generating analysis...</p>
+                <p className="text-[11px] text-muted-foreground/50 animate-pulse">{regenerating ? "Regenerating analysis..." : "Generating analysis..."}</p>
               </div>
             ) : (
               <div className="p-4 space-y-4">

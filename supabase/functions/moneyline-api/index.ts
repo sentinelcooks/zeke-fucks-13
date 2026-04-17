@@ -1,5 +1,131 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+/* ── Single Source of Truth: Decision Builder ──
+ * Sport-agnostic. Used for moneyline / spread / total across all sports.
+ * Produces a canonical "decision" object that all downstream renderers + LLM prompts MUST honor.
+ */
+type ConvictionTier = "noBet" | "low" | "medium" | "high" | "veryHigh";
+type WinningSide = "team1" | "team2" | "over" | "under" | null;
+
+interface Decision {
+  winning_side: WinningSide;
+  winning_team_name: string | null;
+  win_probability: number;
+  edge: number | null;
+  conviction_tier: ConvictionTier;
+  recommended_units: 0 | 0.5 | 1 | 2 | 3;
+  verdict_text: string;
+}
+
+function tierToUnits(tier: ConvictionTier): 0 | 0.5 | 1 | 2 | 3 {
+  switch (tier) {
+    case "veryHigh": return 3;
+    case "high": return 2;
+    case "medium": return 1;
+    case "low": return 0.5;
+    default: return 0;
+  }
+}
+
+function americanToImpliedPct(american: number | null | undefined): number | null {
+  if (american == null || !isFinite(american)) return null;
+  if (american > 0) return 100 / (american + 100) * 100;
+  return -american / (-american + 100) * 100;
+}
+
+function buildDecision(opts: {
+  team1: { name?: string; shortName?: string; abbr?: string };
+  team2: { name?: string; shortName?: string; abbr?: string };
+  team1_pct: number;                      // 0-100, model probability for team1 (or "over" for totals)
+  verdict: string;                        // "STRONG/LEAN <name>" or "TOSS-UP" or "DO NOT BET"
+  factorBreakdown?: Array<{ team1Score?: number; team2Score?: number; weight?: number }>;
+  oddsAmerican?: number | null;           // best price on the WINNING side, if available
+  betType: "moneyline" | "spread" | "total";
+  overUnder?: string | null;              // for totals
+}): Decision {
+  const { team1, team2, team1_pct, verdict, factorBreakdown = [], oddsAmerican, betType, overUnder } = opts;
+  const v = (verdict || "").toUpperCase();
+  const t1Name = team1.shortName || team1.name || "Team 1";
+  const t2Name = team2.shortName || team2.name || "Team 2";
+
+  // Resolve winning side
+  let winning_side: WinningSide = null;
+  let winning_team_name: string | null = null;
+  let win_probability = team1_pct;
+
+  if (betType === "total") {
+    const ou = (overUnder || "").toLowerCase();
+    if (ou === "over") { winning_side = "over"; winning_team_name = "Over"; win_probability = team1_pct; }
+    else if (ou === "under") { winning_side = "under"; winning_team_name = "Under"; win_probability = team1_pct; }
+  } else {
+    // Prefer verdict text
+    const t1Match = v.includes(t1Name.toUpperCase()) || (team1.abbr && v.includes(team1.abbr.toUpperCase()));
+    const t2Match = v.includes(t2Name.toUpperCase()) || (team2.abbr && v.includes(team2.abbr.toUpperCase()));
+    if (t1Match && !t2Match) { winning_side = "team1"; winning_team_name = t1Name; win_probability = team1_pct; }
+    else if (t2Match && !t1Match) { winning_side = "team2"; winning_team_name = t2Name; win_probability = 100 - team1_pct; }
+    else {
+      // Fallback to probability
+      if (team1_pct >= 50) { winning_side = "team1"; winning_team_name = t1Name; win_probability = team1_pct; }
+      else { winning_side = "team2"; winning_team_name = t2Name; win_probability = 100 - team1_pct; }
+    }
+  }
+
+  // Edge vs market
+  const impliedPct = americanToImpliedPct(oddsAmerican ?? null);
+  const edge = impliedPct != null ? Math.round((win_probability - impliedPct) * 10) / 10 : null;
+
+  // Conviction tier — port of computeMoneylineTier, but uses winning side
+  let tier: ConvictionTier;
+  const hasDirection = v.includes("LEAN") || v.includes("STRONG") || (betType === "total" && (overUnder || ""));
+
+  if (v === "TOSS-UP" || v === "DO NOT BET" || !hasDirection) {
+    tier = "noBet";
+  } else if (betType === "total") {
+    // Totals: rely on confidence + edge
+    if (win_probability < 55) tier = "noBet";
+    else if (win_probability < 60) tier = "low";
+    else if (win_probability < 67) tier = "medium";
+    else if (win_probability < 75) tier = "high";
+    else tier = "veryHigh";
+  } else {
+    // Moneyline / spread: use factorBreakdown dominance keyed on winning side
+    let favorWinner = 0, favorLoser = 0;
+    for (const f of factorBreakdown) {
+      if ((f.weight ?? 1) <= 0) continue;
+      const tWin = winning_side === "team1" ? Number(f.team1Score ?? 0) : Number(f.team2Score ?? 0);
+      const tLose = winning_side === "team1" ? Number(f.team2Score ?? 0) : Number(f.team1Score ?? 0);
+      if (tWin >= 60 && tWin > tLose) favorWinner++;
+      else if (tLose >= 60 && tLose > tWin) favorLoser++;
+    }
+    const total = favorWinner + favorLoser;
+    const dominanceRatio = total > 0 ? favorWinner / total : 0;
+
+    if (favorWinner < 3 || dominanceRatio < 0.55) tier = "noBet";
+    else if (dominanceRatio < 0.65) tier = "low";
+    else if (dominanceRatio < 0.75) tier = "medium";
+    else if (dominanceRatio < 0.90) tier = "high";
+    else tier = "veryHigh";
+
+    // Boost using edge if odds available
+    if (edge != null && edge >= 8 && tier !== "noBet" && tier !== "veryHigh") {
+      tier = tier === "low" ? "medium" : tier === "medium" ? "high" : "veryHigh";
+    } else if (edge != null && edge < -3 && tier !== "noBet") {
+      // Negative edge — downgrade
+      tier = tier === "veryHigh" ? "high" : tier === "high" ? "medium" : tier === "medium" ? "low" : "noBet";
+    }
+  }
+
+  return {
+    winning_side,
+    winning_team_name,
+    win_probability: Math.round(win_probability * 10) / 10,
+    edge,
+    conviction_tier: tier,
+    recommended_units: tierToUnits(tier),
+    verdict_text: verdict || "",
+  };
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -1141,6 +1267,16 @@ Deno.serve(async (req) => {
 
               const odds = buildOddsPayload(oddsData, bet_type, conf, team1.name, team2.name, over_under);
 
+              const decision = buildDecision({
+                team1, team2,
+                team1_pct: bet_type === "moneyline" ? conf : conf,
+                verdict: mlbResult.verdict,
+                factorBreakdown: mlbResult.factorBreakdown,
+                oddsAmerican: odds?.bestOdds?.american ?? null,
+                betType: bet_type,
+                overUnder: over_under,
+              });
+
               return json({
                 bet_type, sport, model: "mlb-20-factor",
                 team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
@@ -1155,6 +1291,7 @@ Deno.serve(async (req) => {
                 writeup: mlbResult.writeup,
                 pitchers: mlbResult.pitchers,
                 odds,
+                decision,
                 ...analysis,
               });
             }
@@ -1198,6 +1335,16 @@ Deno.serve(async (req) => {
 
               const odds = buildOddsPayload(oddsData, bet_type, conf, team1.name, team2.name, over_under);
 
+              const decision = buildDecision({
+                team1, team2,
+                team1_pct: conf,
+                verdict: nhlResult.verdict,
+                factorBreakdown: nhlResult.factorBreakdown,
+                oddsAmerican: odds?.bestOdds?.american ?? null,
+                betType: bet_type,
+                overUnder: over_under,
+              });
+
               return json({
                 bet_type, sport, model: "nhl-20-factor",
                 team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
@@ -1213,6 +1360,7 @@ Deno.serve(async (req) => {
                 goalies: nhlResult.goalies,
                 context: nhlResult.context,
                 odds,
+                decision,
                 ...analysis,
               });
             }
@@ -1263,6 +1411,16 @@ Deno.serve(async (req) => {
         top_factors: (analysis.factorBreakdown || []).slice(0, 5),
       }).catch((err) => console.error("logSnapshot failed:", err));
 
+      const decision = buildDecision({
+        team1, team2,
+        team1_pct: bet_type === "moneyline" ? analysis.team1_pct : analysis.confidence,
+        verdict: analysis.verdict,
+        factorBreakdown: analysis.factorBreakdown,
+        oddsAmerican: odds?.bestOdds?.american ?? null,
+        betType: bet_type,
+        overUnder: over_under,
+      });
+
       return json({
         bet_type,
         sport,
@@ -1276,6 +1434,7 @@ Deno.serve(async (req) => {
         back_to_back: { team1: b2b1, team2: b2b2 },
         pace: { team1: pace1, team2: pace2 },
         odds,
+        decision,
         ...analysis,
       });
     }

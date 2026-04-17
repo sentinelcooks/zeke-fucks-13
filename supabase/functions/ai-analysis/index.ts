@@ -213,10 +213,27 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { type, verdict, confidence, playerOrTeam, line, propDisplay, overUnder, reasoning, factors, injuries, sport, withoutTeammatesData, overallRating, overallSummary: overallSummaryText } = body;
+    const { type, verdict, confidence, playerOrTeam, line, propDisplay, overUnder, reasoning, factors, injuries, sport, withoutTeammatesData, overallRating, overallSummary: overallSummaryText, decision } = body;
 
     const dataPoints = (reasoning || factors || []).join("\n- ");
     const sportLower = (sport || "nba").toLowerCase();
+
+    // ── LOCKED PICK BLOCK — sport-agnostic, prepended to every prompt ──
+    const lockedPickBlock = decision && decision.winning_team_name
+      ? `\n\nLOCKED PICK (DO NOT CONTRADICT — THIS IS THE FINAL DECISION):
+- Side: ${decision.winning_team_name}
+- Conviction tier: ${decision.conviction_tier}
+- Recommended sizing: ${decision.recommended_units} units
+- Win probability: ${decision.win_probability}%
+- Edge over market: ${decision.edge ?? "n/a"}%
+
+ABSOLUTE RULES:
+1. You MUST write rationale supporting THIS pick. Do NOT recommend the opposite side.
+2. Do NOT change the unit size. Use exactly ${decision.recommended_units} units.
+3. Your final "Verdict & Risk" section MUST explicitly say: "${decision.recommended_units} units on ${decision.winning_team_name}".
+4. If conviction is "noBet" or units = 0, recommend PASSING — do not push a side.
+5. Never reference the losing side as the recommended play.\n`
+      : "";
 
     // Build injury context string
     let injuryContext = "";
@@ -360,6 +377,9 @@ ${formatRule}
       prompt = genericMoneylinePrompt;
     }
 
+    // Prepend the locked-pick block to every prompt (sport-agnostic, all bet types)
+    prompt = lockedPickBlock + prompt;
+
     const systemMessage = getSystemMessage(sportLower, type);
 
     // Determine AI provider: prefer Grok (xAI) if key is set, fallback to Lovable AI Gateway
@@ -397,7 +417,7 @@ ${formatRule}
           { role: "user", content: prompt },
         ],
         max_tokens: 600,
-        temperature: 0.6,
+        temperature: 0.3,
       }),
     });
 
