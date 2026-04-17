@@ -1,40 +1,68 @@
 
-## Plan: Replace AI-generated images with reliable CDN sources
+## Plan: Redesign AuthPage in Sentinel premium style
 
-### Scope
-Onboarding avatars/icons are blank because WaveSpeed calls aren't returning usable images for small assets. Switch all small assets (player headshots, team logos, social proof, testimonial, sport icons) to ESPN CDN / pravatar / inline SVGs. Reserve WaveSpeed for Screen 6 stadium background only.
+### Reference takeaways (from uploaded mockup)
+- Tall rounded card with soft inner glow + subtle vignette
+- Wordmark at top, 3-segment progress bar (last segment glowing teal/green) — we'll adapt this as a Sentinel motif
+- Big two-line headline with second line in brand accent color
+- Small muted subheadline
+- Uppercase tiny labels above inputs ("EMAIL ADDRESS", "PASSWORD")
+- Soft dark inputs with subtle inner shadow, no harsh border
+- "or sign up with" hairline divider
+- Two full-width social buttons (Google, Apple) in dark pill cards
+- Fine-print legal line with brand-color links
+- Sticky giant gradient CTA pill at bottom ("Launch Sentinel 🚀")
+- Back link + dot indicator below CTA
 
-### Changes
+### Sentinel brand reinterpretation
+- Replace the teal/blue mockup palette with **Sentinel green `#00FF6A` accent + dark purple ambient** (matches onboarding/paywall we just polished)
+- Keep glassmorphism + Inter font + purple atmosphere orbs already established
+- Keep existing star-field background for continuity
 
-**1. `src/pages/OnboardingPage.tsx`**
-- Add constants:
-  - `ESPN_HEADSHOTS` (Luka, Tatum, Matthews) and `ESPN_TEAM_LOGOS` (Rockies)
-  - `SCREEN2_PICKS` data array with `img` field per pick
-  - `SPORT_ICONS` map of inline SVG components keyed by sport id (nba/mlb/nhl/ufc), each accepting a color prop
-- Screen 1: replace Luka `<WaveImage>` with `<img>` using ESPN headshot, 44px circular, `onError` hides
-- Screen 2:
-  - Replace 3 pick rows with mapped `SCREEN2_PICKS` using `<img>` tags (ESPN headshots + Rockies logo)
-  - Replace 3 social proof `<WaveImage>` with `pravatar.cc` `<img>` tags (img=11/12/13), `-space-x-2` overlap
-- Screen 3: replace 4 sport `<WaveImage>` tiles with inline `SPORT_ICONS[s.id](iconColor)` — green `#00FF6A` when selected, gray `#666666` otherwise
-- Screen 4: replace Mike R. `<WaveImage>` with pravatar `<img>` (img=11)
-- Reduce `ASSETS` to just `stadiumBg` (keep KREA model constant); preload only that
-- Remove unused imports: `WaveImage`, `WaveModel`, NANO/FAST constants, individual avatar/icon ASSET entries
+### Changes — single file: `src/pages/AuthPage.tsx`
 
-**2. `src/pages/WelcomeConfirmationPage.tsx`** — no changes (already uses `WaveImage` with KREA model and graceful fallback for stadium bg)
+**Structure (top → bottom inside the card):**
+1. **Wordmark header** — "SENTINEL" in green `#00FF6A` with subtle glow + small lock/shield mark on the left. Underneath: 3-segment progress bar (1st & 2nd dim, 3rd glowing green gradient — visual cue this is the "final step")
+2. **Headline block** — "Create your" (white) / "free account" (green accent) for signup; "Welcome" / "back to Sentinel" for login. Subhead: "Unlock your personalized AI picks in seconds." / "Sign in to access today's edge."
+3. **Mode toggle** — keep the segmented Sign In / Sign Up pill but restyle: thinner, cleaner, green active fill instead of purple
+4. **Inputs** — uppercase tracked labels (`text-[10px] tracking-[0.15em] text-white/50`), softer dark fields (`bg-white/[0.03]`, `border-white/[0.06]`, inset shadow), no left-icon clutter — keep eye toggle on password
+5. **"or continue with" divider** — hairline `bg-white/[0.06]` with centered tiny muted label
+6. **Social buttons** — two full-width dark pill buttons (Google + Apple) using `lovable.auth.signInWithOAuth("google" | "apple")` per Lovable Cloud OAuth knowledge. Brand glyphs inline (Google multi-color G SVG, Apple monochrome). On click → standard redirect flow.
+7. **Legal microcopy** — "By creating an account you agree to our Terms and Privacy Policy. Must be 18+. Gamble responsibly." with green underline links to `/legal`
+8. **Sticky CTA** — large rounded-full button, gradient `linear-gradient(90deg, #00FF6A, #00C853)`, black text, soft green glow `0 8px 32px rgba(0,255,106,0.35)`. Label: "Launch Sentinel 🚀" (signup) / "Sign In →" (login)
+9. **Footer** — "← Back" link (routes to `/onboarding`) + 3-dot progress indicator (last dot green)
 
-**3. `supabase/functions/generate-image/index.ts`** — already correctly reads `WAVESPEED_API_KEY`, accepts `{ prompt, model }`, hits `https://api.wavespeed.ai/api/v3/${model}`, polls. No changes needed; will verify via curl after edits.
+**Visual polish:**
+- Card: `bg-[hsla(260,20%,10%,0.7)]`, `border border-white/[0.06]`, `backdrop-blur-2xl`, `rounded-[28px]`, soft inner top-light gradient overlay
+- Add green ambient orb top-right inside card (matches reference glow)
+- Keep purple atmosphere orbs in page background
+- Remove the existing `TypeGlowInput` purple glow → swap for cleaner subtle green focus ring (`focus:ring-1 focus:ring-[#00FF6A]/40`)
+- Remove "Secured Access" divider + "Sentinel Analytics" footer (replaced by legal + back link)
 
-### Verification
-1. Reload `/onboarding` Screen 1 → Luka headshot visible in pick card
-2. Continue → Screen 2 → Tatum, Matthews headshots + Rockies logo visible; 3 overlapping social-proof avatars from pravatar render
-3. Continue → Screen 3 → 4 sport tiles show clean inline SVG icons; tapping turns icon + label green with checkmark
-4. Continue → Screen 4 → Mike R. pravatar shows in testimonial
-5. Continue → `/paywall` → unchanged
-6. Tap Start Free Trial → `/welcome` → stadium bg loads via WaveSpeed (or dark gradient fallback)
-7. Run `tsc --noEmit` to confirm no unused-import / type errors
-8. `curl` the generate-image edge function with a test prompt + KREA model to confirm it returns an `imageUrl`
+**Functional preserved:**
+- `signIn` / `signUp` from `useAuth`, error handling, loading spinner, remember-me persistence (kept as a small inline checkbox above CTA), `saveOnboardingToDb` flow, redirect to `/dashboard`
+- Mode-from-location-state still respected
+
+**OAuth wiring:**
+- Add `import { lovable } from "@/integrations/lovable"` (file already auto-managed if Google/Apple was previously set up — if not, the buttons will call it and Lovable Cloud will prompt). Handler:
+  ```ts
+  const handleOAuth = async (provider: "google" | "apple") => {
+    const result = await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin + "/dashboard" });
+    if (result.error) setError(result.error.message);
+  };
+  ```
+- If `@/integrations/lovable` isn't yet present in the project, fall back to `supabase.auth.signInWithOAuth({ provider, options: { redirectTo: window.location.origin + "/dashboard" } })` so the buttons never break.
 
 ### Out of scope
-- Changes to WaveImage component, edge function, or WelcomeConfirmationPage
-- Replacing pravatar with project-hosted avatars
-- Real player/team data wiring (these are static onboarding mockups)
+- Backend changes, new routes, password reset flow, email template changes
+- Onboarding/Paywall pages (already polished)
+- Logo asset swap
+
+### Verification
+1. Visit `/auth` (or login button from onboarding) → premium card renders, green accent headline, tracked uppercase labels
+2. Toggle Sign In ↔ Sign Up → headline + CTA label swap smoothly, name field animates in for signup
+3. Type in inputs → soft green focus ring, no purple glow
+4. Click Google / Apple → redirects to OAuth (or shows graceful error if provider not configured)
+5. Submit valid creds → routes to `/dashboard`
+6. Mobile viewport (390px) → card fills nicely, sticky CTA stays prominent, no overflow
+7. `tsc --noEmit` clean
