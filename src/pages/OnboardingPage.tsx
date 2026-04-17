@@ -1,44 +1,67 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type JSX } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Lock, TrendingUp, Brain, BarChart3, Calendar, Check, X, Sparkles, ShieldCheck } from "lucide-react";
 import logo from "@/assets/sentinel-lock.jpg";
-import WaveImage from "@/components/onboarding/WaveImage";
 import { preloadGeneratedImage } from "@/hooks/useGeneratedImage";
 import type { WaveModel } from "@/utils/generateImage";
 
-/* ─────────── WaveSpeed asset registry ─────────── */
-type Asset = { key: string; prompt: string; model: WaveModel };
-
-const NANO: WaveModel = "wavespeed-ai/nano-banana-pro";
-const FAST: WaveModel = "wavespeed-ai/flux-dev/image-to-image/ultra-fast";
+/* ─────────── WaveSpeed asset registry (stadium bg only) ─────────── */
 const KREA: WaveModel = "wavespeed-ai/flux-dev/lora/krea";
 
 const ASSETS = {
-  avatarLuka: { key: "avatar-luka", model: NANO,
-    prompt: "Professional headshot of a young male basketball player, dark background, studio lighting, facing camera, photorealistic" } as Asset,
-  avatarTatum: { key: "avatar-tatum", model: NANO,
-    prompt: "Professional headshot of a male NBA basketball player wearing a green jersey, dark studio background, photorealistic" } as Asset,
-  avatarMatthews: { key: "avatar-matthews", model: NANO,
-    prompt: "Professional headshot of a male NHL hockey player, short hair, athletic, dark studio background, photorealistic" } as Asset,
-  social1: { key: "social-1", model: NANO,
-    prompt: "Friendly young male sports fan headshot, casual clothing, dark background, natural lighting, photorealistic" } as Asset,
-  social2: { key: "social-2", model: NANO,
-    prompt: "Smiling young woman sports fan headshot, casual clothing, dark background, natural lighting, photorealistic" } as Asset,
-  social3: { key: "social-3", model: NANO,
-    prompt: "Young man with beard, casual sports fan headshot, dark background, natural lighting, photorealistic" } as Asset,
-  testimonialMike: { key: "testimonial-miker", model: NANO,
-    prompt: "Confident young man smiling, casual photo, dark background, natural lighting, photorealistic headshot" } as Asset,
-  sportNba: { key: "sport-nba", model: FAST,
-    prompt: "Minimal glowing neon green basketball icon centered on solid pure black background, clean modern vector style, sharp" } as Asset,
-  sportMlb: { key: "sport-mlb", model: FAST,
-    prompt: "Minimal glowing neon green baseball icon centered on solid pure black background, clean modern vector style, sharp" } as Asset,
-  sportNhl: { key: "sport-nhl", model: FAST,
-    prompt: "Minimal glowing neon green hockey puck icon centered on solid pure black background, clean modern vector style, sharp" } as Asset,
-  sportUfc: { key: "sport-ufc", model: FAST,
-    prompt: "Minimal glowing neon green MMA glove icon centered on solid pure black background, clean modern vector style, sharp" } as Asset,
-  stadiumBg: { key: "stadium-bg", model: KREA,
-    prompt: "Cinematic silhouette of a person standing in a massive sports stadium at night, looking out at the field, dramatic purple and violet atmospheric lighting from stadium lights, fog, moody, dark, wide angle, ultra realistic" } as Asset,
+  stadiumBg: {
+    key: "stadium-bg",
+    model: KREA,
+    prompt: "Cinematic silhouette of a person standing in a massive sports stadium at night, looking out at the field, dramatic purple and violet atmospheric lighting from stadium lights, fog, moody, dark, wide angle, ultra realistic",
+  },
+};
+
+/* ─────────── Direct CDN image sources ─────────── */
+const ESPN_HEADSHOTS = {
+  lukaDoncic: "https://a.espncdn.com/i/headshots/nba/players/full/3945274.png",
+  jaysonTatum: "https://a.espncdn.com/i/headshots/nba/players/full/4065648.png",
+  austinMatthews: "https://a.espncdn.com/i/headshots/nhl/players/full/4024123.png",
+};
+
+const ESPN_TEAM_LOGOS = {
+  rockies: "https://a.espncdn.com/i/teamlogos/mlb/500/col.png",
+};
+
+const SCREEN2_PICKS = [
+  { img: ESPN_HEADSHOTS.jaysonTatum, name: "J. Tatum", pick: "OVER 28.5 PTS", conf: 62, ev: 6.1 },
+  { img: ESPN_HEADSHOTS.austinMatthews, name: "A. Matthews", pick: "ML", conf: 59, ev: 4.3 },
+  { img: ESPN_TEAM_LOGOS.rockies, name: "Rockies", pick: "+1.5", conf: 57, ev: 5.7 },
+];
+
+/* ─────────── Inline SVG sport icons ─────────── */
+const SPORT_ICONS: Record<string, (color: string) => JSX.Element> = {
+  nba: (color) => (
+    <svg viewBox="0 0 48 48" fill="none" className="w-12 h-12">
+      <circle cx="24" cy="24" r="18" stroke={color} strokeWidth="2.5" />
+      <path d="M6 24h36M24 6v36" stroke={color} strokeWidth="2" />
+      <path d="M10 10c8 6 20 6 28 0M10 38c8-6 20-6 28 0" stroke={color} strokeWidth="2" />
+    </svg>
+  ),
+  mlb: (color) => (
+    <svg viewBox="0 0 48 48" fill="none" className="w-12 h-12">
+      <circle cx="24" cy="24" r="18" stroke={color} strokeWidth="2.5" />
+      <path d="M14 10c4 8 4 20 0 28M34 10c-4 8-4 20 0 28" stroke={color} strokeWidth="2" />
+      <path d="M16 14l2 1M16 20l2 1M16 26l2 1M16 32l2 1M32 14l-2 1M32 20l-2 1M32 26l-2 1M32 32l-2 1" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  ),
+  nhl: (color) => (
+    <svg viewBox="0 0 48 48" fill="none" className="w-12 h-12">
+      <ellipse cx="24" cy="24" rx="14" ry="10" stroke={color} strokeWidth="2.5" />
+      <ellipse cx="24" cy="24" rx="6" ry="4" fill={color} opacity="0.3" />
+    </svg>
+  ),
+  ufc: (color) => (
+    <svg viewBox="0 0 48 48" fill="none" className="w-12 h-12">
+      <path d="M24 8C18 8 14 12 14 18v6c0 2-2 4-2 4l6 10h12l6-10s-2-2-2-4v-6c0-6-4-10-10-10z" stroke={color} strokeWidth="2.5" strokeLinejoin="round" />
+      <path d="M20 18h2v6h-2zM26 18h2v6h-2z" fill={color} opacity="0.5" />
+    </svg>
+  ),
 };
 
 /* ─────────── Storage keys ─────────── */
@@ -51,10 +74,10 @@ const STORAGE = {
 
 /* ─────────── Sport options ─────────── */
 const SPORTS = [
-  { id: "nba", label: "NBA", asset: ASSETS.sportNba },
-  { id: "mlb", label: "MLB", asset: ASSETS.sportMlb },
-  { id: "nhl", label: "NHL", asset: ASSETS.sportNhl },
-  { id: "ufc", label: "UFC", asset: ASSETS.sportUfc },
+  { id: "nba", label: "NBA" },
+  { id: "mlb", label: "MLB" },
+  { id: "nhl", label: "NHL" },
+  { id: "ufc", label: "UFC" },
 ];
 
 /* ─────────── Animation ─────────── */
@@ -188,13 +211,11 @@ function ScreenHero({ onNext }: { onNext: () => void }) {
           <span className="text-[10px] font-semibold text-[#00FF6A]">View All</span>
         </div>
         <div className="flex items-center gap-3">
-          <WaveImage
-            prompt={ASSETS.avatarLuka.prompt}
-            cacheKey={ASSETS.avatarLuka.key}
-            model={ASSETS.avatarLuka.model}
+          <img
+            src={ESPN_HEADSHOTS.lukaDoncic}
             alt="Luka Doncic"
-            rounded="full"
-            className="w-11 h-11 flex-shrink-0 border border-[#2A2A2A]"
+            className="w-11 h-11 rounded-full object-cover flex-shrink-0 border border-[#2A2A2A] bg-[#1a1a1a]"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
           <div className="flex-1 min-w-0">
             <div className="text-sm font-bold text-white">Luka Doncic</div>
@@ -308,20 +329,13 @@ function ScreenValue({ onNext }: { onNext: () => void }) {
 
         {/* Picks rows */}
         <div className="space-y-1.5">
-          {[
-            { avatar: ASSETS.avatarTatum, name: "J. Tatum", pick: "OVER 28.5 PTS", conf: 62, ev: 6.1 },
-            { avatar: ASSETS.avatarMatthews, name: "A. Matthews", pick: "ML", conf: 59, ev: 4.3 },
-            { avatar: null as any, name: "Rockies", pick: "+1.5", conf: 57, ev: 5.7 },
-          ].map((p) => (
+          {SCREEN2_PICKS.map((p) => (
             <div key={p.name} className="flex items-center gap-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] px-2 py-1.5">
-              {p.avatar ? (
-                <WaveImage prompt={p.avatar.prompt} cacheKey={p.avatar.key} model={p.avatar.model} alt={p.name}
-                  rounded="full" className="w-7 h-7 flex-shrink-0" />
-              ) : (
-                <div className="w-7 h-7 rounded-full bg-[#1a1a1a] border border-[#2A2A2A] flex items-center justify-center text-[9px] font-black text-white/60 flex-shrink-0">
-                  COL
-                </div>
-              )}
+              <img
+                src={p.img}
+                alt={p.name}
+                className="w-7 h-7 rounded-full object-cover flex-shrink-0 bg-[#1a1a1a]"
+              />
               <div className="flex-1 min-w-0">
                 <div className="text-[11px] font-bold text-white truncate">{p.name}</div>
                 <div className="text-[9px] text-white/50">{p.pick}</div>
@@ -360,9 +374,13 @@ function ScreenValue({ onNext }: { onNext: () => void }) {
         className="mt-4 rounded-2xl border border-[#2A2A2A] bg-[#141414] p-3 flex items-center gap-3"
       >
         <div className="flex -space-x-2">
-          {[ASSETS.social1, ASSETS.social2, ASSETS.social3].map((a) => (
-            <WaveImage key={a.key} prompt={a.prompt} cacheKey={a.key} model={a.model} alt="user"
-              rounded="full" className="w-8 h-8 border-2 border-[#141414]" />
+          {[11, 12, 13].map((i) => (
+            <img
+              key={i}
+              src={`https://i.pravatar.cc/80?img=${i}`}
+              alt="user"
+              className="w-8 h-8 rounded-full border-2 border-[#141414] object-cover bg-[#1a1a1a]"
+            />
           ))}
         </div>
         <div className="flex-1 min-w-0">
@@ -464,15 +482,9 @@ function ScreenPersonalize({ onBack, onNext }: { onBack: () => void; onNext: () 
                     <Check className="w-3 h-3 text-black" strokeWidth={3} />
                   </div>
                 )}
-                <WaveImage
-                  prompt={s.asset.prompt}
-                  cacheKey={s.asset.key}
-                  model={s.asset.model}
-                  alt={s.label}
-                  rounded="lg"
-                  className="w-14 h-14 mx-auto mb-2"
-                  fallbackClassName="bg-[#0A0A0A]"
-                />
+                <div className="flex justify-center mb-2">
+                  {SPORT_ICONS[s.id](active ? "#00FF6A" : "#666666")}
+                </div>
                 <div className={`text-center text-sm font-bold ${active ? "text-[#00FF6A]" : "text-white"}`}>{s.label}</div>
               </motion.button>
             );
@@ -560,13 +572,10 @@ function ScreenComparison({ onBack, onNext }: { onBack: () => void; onNext: () =
         initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.26 }}
         className="mt-5 rounded-2xl border border-[#2A2A2A] bg-[#141414] p-4 flex items-start gap-3"
       >
-        <WaveImage
-          prompt={ASSETS.testimonialMike.prompt}
-          cacheKey={ASSETS.testimonialMike.key}
-          model={ASSETS.testimonialMike.model}
+        <img
+          src="https://i.pravatar.cc/100?img=11"
           alt="Mike R."
-          rounded="full"
-          className="w-12 h-12 flex-shrink-0 border border-[#2A2A2A]"
+          className="w-12 h-12 rounded-full flex-shrink-0 border border-[#2A2A2A] object-cover bg-[#1a1a1a]"
         />
         <div className="flex-1 min-w-0">
           <p className="text-xs text-white/80 italic leading-snug">
