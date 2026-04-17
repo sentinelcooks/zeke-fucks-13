@@ -161,9 +161,9 @@ export default function PaywallPage() {
       <style>{`@keyframes pulse-cta { 0%,100% { box-shadow: 0 0 0 0 rgba(0,255,106,0.35) } 50% { box-shadow: 0 0 24px 6px rgba(0,255,106,0.45) } }`}</style>
       {/* Atmospheric glows */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-[#7B2FFF]/10 blur-[120px]" />
-        <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-[#7B2FFF]/8 blur-[100px]" />
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[400px] rounded-full bg-[#00FF6A]/[0.04] blur-[120px]" />
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[520px] h-[420px] rounded-full bg-[#7B2FFF]/30 blur-[120px]" />
+        <div className="absolute -bottom-32 -left-32 w-[420px] h-[420px] rounded-full bg-[#641EDC]/20 blur-[120px]" />
+        <div className="absolute bottom-0 right-0 w-[360px] h-[320px] rounded-full bg-[#00FF6A]/[0.05] blur-[120px]" />
       </div>
 
       <div className="relative z-10 mx-auto max-w-md px-5 py-6 pb-12">
