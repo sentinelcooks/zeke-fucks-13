@@ -158,10 +158,11 @@ async function evaluateGameLines(
       if (mkt.key === "h2h") {
         for (const o of mkt.outcomes || []) {
           const isHome = o.name === g.home_team;
-          const implied = americanToImpliedProb(o.price);
-          const projected = Math.max(0.05, Math.min(0.95, implied * 0.92 + (isHome ? 0.04 : 0.02)));
-          const edge = projected - implied;
-          if (edge < 0.02) continue;
+            const implied = americanToImpliedProb(o.price);
+            // Tighter clamp: no longshot dogs (<35% projected)
+            const projected = Math.max(0.35, Math.min(0.95, implied * 0.92 + (isHome ? 0.04 : 0.02)));
+            const edge = projected - implied;
+            if (edge < 0.035) continue;
           plays.push(score({
             sport, bet_type: "moneyline",
             player_name: `${g.away_team} @ ${g.home_team}`,
@@ -177,9 +178,9 @@ async function evaluateGameLines(
         const betType = mkt.key === "spreads" ? "spread" : "total";
         for (const o of mkt.outcomes || []) {
           const implied = americanToImpliedProb(o.price);
-          const projected = Math.max(0.05, Math.min(0.95, implied * 0.94 + 0.03));
+          const projected = Math.max(0.4, Math.min(0.92, implied * 0.94 + 0.03));
           const edge = projected - implied;
-          if (edge < 0.02) continue;
+          if (edge < 0.035) continue;
           const dir = betType === "total"
             ? ((o.name || "").toLowerCase().includes("over") ? "over" : "under")
             : (o.name === g.home_team ? "home" : "away");
