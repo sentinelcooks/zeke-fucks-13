@@ -423,6 +423,7 @@ Deno.serve(async (req) => {
   // Defensive hard cap before ranking
   const filtered = all.filter((p) => {
     if (p.odds >= 500) return false;
+    if (p.odds <= -350) return false;
     if (p.confidence < 0.65) return false;
     if (p.edge <= 0) return false;
     return true;
