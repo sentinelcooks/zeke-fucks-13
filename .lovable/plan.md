@@ -1,33 +1,26 @@
 
-## Plan: Sentinel visual polish pass (sparklines, paywall sticky CTA, welcome scene, progress bar)
+## Plan: Paywall horizontal layout + Sparkline clip + Comparison chart fix
 
-Apply the 4 fixes from the spec exactly as written. No pricing/routing/feature changes.
+Three targeted edits from the uploaded spec. No pricing/routing/other-screen changes.
 
-### Fix 1 — Upgraded `Sparkline` component (`src/pages/OnboardingPage.tsx`)
-Replace the current plain-path `Sparkline` with the spec version: subtle grid lines, gradient fill under the line, glowing animated `motion.polyline` stroke (drop-shadow filter), small dot nodes at each data point with stagger animation, and a larger glowing endpoint circle. Keeps existing `color` / `down` / `className` props so all 4 call sites (Screen 1, Screen 2, Screen 4 ×2) work unchanged.
+### Fix 1 — Paywall 3-column horizontal cards (`src/pages/PaywallPage.tsx`)
+Replace the current vertical `space-y-3` pricing block with `grid grid-cols-3 gap-2`. Each card becomes a compact vertical column: centered top badge, tiny plan label, trial pill, price (monthly in `#00FF6A`), per-day text, saving line, and per-card CTA pill ("Try Free" / "Subscribe"). Selected state keeps green border + glow; monthly adds the double-ring shadow. Sticky bottom CTA footer, features accordion, and `pb-32` padding all unchanged.
 
-### Fix 2 — Paywall vertical cards + sticky bottom CTA (`src/pages/PaywallPage.tsx`)
-- Cards already render `space-y-3` vertical — leave as-is.
-- Change scroll container `pb-12` → `pb-32` so content clears the sticky footer.
-- Remove the inline CTA block (Start Free Trial button, "Cancel anytime", "Maybe later", security row).
-- Add `fixed bottom-0 left-0 right-0 z-50` footer with top-fading gradient (`linear-gradient(to top, #0A0A0A 60%, transparent)`), pulsing CTA button (`max-w-md mx-auto`), "Cancel anytime. No hidden fees.", "Maybe later" underlined link, and the "Secure & Encrypted / 18+ Bet Responsibly" row.
+### Fix 2 — Sparkline clipPath (`src/pages/OnboardingPage.tsx`)
+Update the `Sparkline` component: add `overflow="hidden"` on the root `<svg>`, define a `<clipPath>` covering the 54×44 viewBox, and wrap all content (grid lines, gradient fill, glowing polyline, dot nodes, endpoint circle) inside a `<g clipPath={...}>`. This keeps grid strokes and glow filters from bleeding into surrounding cards.
 
-### Fix 3 — Rich layered Welcome background + fixed toast (`src/pages/WelcomeConfirmationPage.tsx`)
-- Replace WaveImage-only background with a layered scene: deep `#050508` base, central purple radial glow, green ambient glow behind logo, bottom dark fade, subtle green grid overlay (4% opacity), 6 floating animated green particles. Keep `WaveImage` rendered at 30% opacity as an additional layer (graceful fallback preserved).
-- Bump watermark "SENTINEL" text opacity to `0.04` per spec.
-- Replace bottom toast with spec version: `fixed bottom-8 left-5 right-5 max-w-md mx-auto z-50`, glassmorphism card (`rgba(20,20,20,0.95)`, green border + glow shadow, `backdrop-blur`), 12×12 rounded icon tile with trophy, bold title + subtitle. Tap-to-dashboard preserved.
+### Fix 3 — Comparison chart sizing (`src/pages/OnboardingPage.tsx`, Screen 4)
+- Change the two "ROI After 90 Days" labels → "ROI After 30 Days".
+- Wrap each `Sparkline` in `<div className="mt-2 flex justify-center">` and give the sparkline `className="h-12 w-full max-w-[120px]"` so it no longer stretches across the narrow column.
+- Tighten both comparison card paddings from `p-3` → `p-2.5` (keeping the red/green border colors).
 
-### Fix 4 — Glowing `ProgressDots` (`OnboardingPage.tsx` + `PaywallPage.tsx`)
-Replace both `ProgressDots` with `motion.div` per pill:
-- Active step: width 28px, full `#00FF6A`, multi-layer green glow shadow
-- Completed: width 14px, `#00FF6A` @ 70% opacity, subtle glow
-- Upcoming: width 14px, `#2A2A2A`, no glow
-- Smooth 0.25s width/color/shadow transition
-
-### Verification (will run after edits)
-1. Visual: `/onboarding` Screens 1, 2, 4 sparklines + glowing progress dots; `/paywall` sticky footer pinned at 390px viewport; `/welcome` layered bg + glass toast.
-2. `tsc --noEmit` clean.
-3. No DB or edge function changes in this task — verification is purely visual + type-check (will note this explicitly in the final summary).
+### Verification
+1. Visual at 390×844:
+   - `/paywall` — 3 equal-width cards in one row, Monthly highlighted green with "MOST POPULAR" pill centered on top, per-card CTAs visible, sticky footer still pinned.
+   - `/onboarding` Screen 1/2 — sparklines fully contained, no grid lines bleeding into card edges.
+   - `/onboarding` Screen 4 — "Without Sentinel" vs "With Sentinel" cards each show a centered, non-stretched sparkline (max 120px wide) and say "ROI After 30 Days".
+2. `npx tsc --noEmit` clean.
+3. No DB or edge function changes in this task — purely client-side JSX/Tailwind. I will state this explicitly in the final summary instead of running SELECT/curl verification, since there is nothing backend-side to verify.
 
 ### Out of scope
-Pricing values, routing, sport icons, ESPN avatars, CountdownBanner, AuthPage, backend.
+Pricing values, routing, progress bar, ESPN avatars, sport icons, welcome/auth screens.
