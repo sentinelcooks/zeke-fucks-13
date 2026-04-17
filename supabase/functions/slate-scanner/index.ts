@@ -204,26 +204,40 @@ async function evaluateGameLines(
   return plays;
 }
 
-// ── Player props — read from free_props table after triggering refresh ──
+// ── Player props — read from free_props; auto-trigger generate if empty ──
 async function evaluatePlayerProps(
   sport: string,
   diag: Record<string, any>,
   supabase: any
 ): Promise<ScoredPlay[]> {
-  // free-props has no per-sport scan; it generates everything in one call.
-  // Read whatever's already there for today, scoped to this sport.
   const today = new Date().toISOString().slice(0, 10);
-  const { data, error } = await supabase
-    .from("free_props")
-    .select("*")
-    .eq("prop_date", today)
-    .eq("sport", sport);
-  if (error) {
-    diag.propsError = error.message;
-    diag.propsFetched = 0;
-    return [];
+
+  async function readRows() {
+    const { data, error } = await supabase
+      .from("free_props")
+      .select("*")
+      .eq("prop_date", today)
+      .eq("sport", sport);
+    if (error) {
+      diag.propsError = error.message;
+      return [];
+    }
+    return data || [];
   }
-  const rows = data || [];
+
+  let rows = await readRows();
+  // If nothing for this sport, trigger one global generate and re-read.
+  // Use a module-level flag to avoid triggering more than once per scan.
+  if (rows.filter((r: any) => !r.bet_type || r.bet_type === "prop").length === 0) {
+    if (!(globalThis as any).__freePropsGenerated) {
+      (globalThis as any).__freePropsGenerated = true;
+      diag.triggeredGenerate = true;
+      const gen = await fnFetch("free-props/generate");
+      diag.generateStatus = gen.status;
+      diag.generateBody = gen.data;
+    }
+    rows = await readRows();
+  }
   diag.propsFetched = rows.length;
 
   const plays: ScoredPlay[] = [];
@@ -312,8 +326,8 @@ Deno.serve(async (req) => {
   const today = new Date().toISOString().slice(0, 10);
 
   await supabase.from("daily_picks").delete().eq("pick_date", today);
-  // Only delete game-line rows in free_props; preserve cron-generated prop rows
-  await supabase.from("free_props").delete().eq("prop_date", today).neq("bet_type", "prop");
+  // Wipe today's free_props entirely — scanner is now the single source of truth.
+  await supabase.from("free_props").delete().eq("prop_date", today);
 
   const dailyRows = dailyPicks.map((p) => ({
     pick_date: today,
@@ -328,20 +342,18 @@ Deno.serve(async (req) => {
     odds: String(p.odds), reasoning: p.reasoning,
   }));
 
-  // Only insert game-line plays into free_props (props handled by free-props cron)
-  const freeRows = freePicks
-    .filter((p) => p.bet_type !== "prop")
-    .map((p) => ({
-      prop_date: today,
-      sport: p.sport, bet_type: p.bet_type,
-      player_name: p.player_name,
-      team: p.team ?? null, opponent: p.opponent ?? null,
-      home_team: p.home_team ?? null, away_team: p.away_team ?? null,
-      prop_type: p.prop_type, line: p.line,
-      spread_line: p.spread_line ?? null, total_line: p.total_line ?? null,
-      direction: p.direction, odds: Math.round(p.odds),
-      confidence: p.confidence, edge: p.edge, reasoning: p.reasoning,
-    }));
+  // Persist all curated free picks (props + game lines) — scanner re-scored them through current gates.
+  const freeRows = freePicks.map((p) => ({
+    prop_date: today,
+    sport: p.sport, bet_type: p.bet_type,
+    player_name: p.player_name,
+    team: p.team ?? null, opponent: p.opponent ?? null,
+    home_team: p.home_team ?? null, away_team: p.away_team ?? null,
+    prop_type: p.prop_type, line: p.line,
+    spread_line: p.spread_line ?? null, total_line: p.total_line ?? null,
+    direction: p.direction, odds: Math.round(p.odds),
+    confidence: p.confidence, edge: p.edge, reasoning: p.reasoning,
+  }));
 
   if (dailyRows.length) await supabase.from("daily_picks").insert(dailyRows);
   if (freeRows.length) await supabase.from("free_props").insert(freeRows);
