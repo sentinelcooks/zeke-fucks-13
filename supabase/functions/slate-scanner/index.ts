@@ -150,19 +150,40 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
     events = Array.isArray(r.data?.events) ? r.data.events : [];
   }
   const now = Date.now();
-  const upcoming = events.filter((e: any) => !e.commence_time || new Date(e.commence_time).getTime() > now);
+  // Today + next 24h window only — avoid scanning 7 days of MLB at once
+  const cutoff = now + 36 * 3600 * 1000;
+  const upcoming = events
+    .filter((e: any) => {
+      if (!e.commence_time) return true;
+      const t = new Date(e.commence_time).getTime();
+      return t > now && t < cutoff;
+    })
+    .sort((a: any, b: any) => new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime())
+    .slice(0, 16); // hard cap per sport to stay under wall-time
   stats.events = upcoming.length;
 
   const plays: ScoredPlay[] = [];
   let propLineCount = 0;
   const playerSet = new Set<string>();
 
-  for (const ev of upcoming) {
-    if (!ev.id) continue;
-    const propsRes = await fnFetch(`nba-odds/player-props?sport=${sport}&eventId=${ev.id}`);
-    const players = propsRes.data?.players || {};
-    const homeTeam = ev.home_team || propsRes.data?.home_team || null;
-    const awayTeam = ev.away_team || propsRes.data?.away_team || null;
+  // Fetch event props in chunks of 5 in parallel
+  const CHUNK = 5;
+  const eventProps: Array<{ ev: any; data: any }> = [];
+  for (let i = 0; i < upcoming.length; i += CHUNK) {
+    const slice = upcoming.slice(i, i + CHUNK);
+    const results = await Promise.all(
+      slice.map((ev: any) =>
+        fnFetch(`nba-odds/player-props?sport=${sport}&eventId=${ev.id}`).then((r) => ({ ev, data: r.data }))
+      )
+    );
+    eventProps.push(...results);
+  }
+
+  for (const { ev, data } of eventProps) {
+    if (!ev?.id) continue;
+    const players = data?.players || {};
+    const homeTeam = ev.home_team || data?.home_team || null;
+    const awayTeam = ev.away_team || data?.away_team || null;
 
     for (const [playerName, markets] of Object.entries(players as Record<string, any>)) {
       playerSet.add(playerName);
