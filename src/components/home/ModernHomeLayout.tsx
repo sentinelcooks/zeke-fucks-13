@@ -46,6 +46,7 @@ interface DailyPick {
   away_team?: string | null;
   spread_line?: number | null;
   total_line?: number | null;
+  tier?: string;
 }
 
 const stagger = (i: number) => ({
@@ -221,6 +222,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const [slipSheetPick, setSlipSheetPick] = useState<import("@/components/AddToSlipSheet").SlipSheetPick | null>(null);
   const { user, profile } = useAuth();
   const [todayPicks, setTodayPicks] = useState<DailyPick[]>([]);
+  const [dailyTierPicks, setDailyTierPicks] = useState<DailyPick[]>([]);
   const [yesterdayPicks, setYesterdayPicks] = useState<DailyPick[]>([]);
   const [picksLoading, setPicksLoading] = useState(true);
   const [userSports, setUserSports] = useState<string[]>([]);
@@ -247,14 +249,14 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
 
     const [todayRes, yesterdayRes] = await Promise.all([
-      supabase.from("daily_picks").select("*").eq("pick_date", today).order("hit_rate", { ascending: false }).limit(30),
+      supabase.from("daily_picks").select("*").eq("pick_date", today).order("hit_rate", { ascending: false }).limit(40),
       supabase.from("daily_picks").select("*").eq("pick_date", yesterday).order("created_at", { ascending: false }),
     ]);
 
-    let picks = ((todayRes.data as DailyPick[]) || []).filter(p => p.hit_rate >= 50);
+    let allToday = ((todayRes.data as DailyPick[]) || []).filter(p => p.hit_rate >= 50);
 
     // Fallback: if no picks today, fetch most recent picks from the last 3 days
-    if (picks.length === 0) {
+    if (allToday.length === 0) {
       const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString().split("T")[0];
       const { data: recentData } = await supabase
         .from("daily_picks")
@@ -263,21 +265,30 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
         .lt("pick_date", today)
         .order("pick_date", { ascending: false })
         .order("hit_rate", { ascending: false })
-        .limit(30);
-      picks = ((recentData as DailyPick[]) || []).filter(p => p.hit_rate >= 50);
+        .limit(40);
+      allToday = ((recentData as DailyPick[]) || []).filter(p => p.hit_rate >= 50);
     }
 
-    if (userSports.length > 0) {
-      picks.sort((a, b) => {
-        const aMatch = userSports.includes(a.sport?.toLowerCase()) ? 1 : 0;
-        const bMatch = userSports.includes(b.sport?.toLowerCase()) ? 1 : 0;
-        if (bMatch !== aMatch) return bMatch - aMatch;
-        return b.hit_rate - a.hit_rate;
-      });
-    } else {
-      picks.sort((a, b) => b.hit_rate - a.hit_rate);
-    }
-    setTodayPicks(picks);
+    const sortByPref = (arr: DailyPick[]) => {
+      if (userSports.length > 0) {
+        arr.sort((a, b) => {
+          const aMatch = userSports.includes(a.sport?.toLowerCase()) ? 1 : 0;
+          const bMatch = userSports.includes(b.sport?.toLowerCase()) ? 1 : 0;
+          if (bMatch !== aMatch) return bMatch - aMatch;
+          return b.hit_rate - a.hit_rate;
+        });
+      } else {
+        arr.sort((a, b) => b.hit_rate - a.hit_rate);
+      }
+      return arr;
+    };
+
+    // Split by tier — top quality goes to Today's Edge, rest to Daily Picks
+    const edgeTier = allToday.filter(p => p.tier === "edge");
+    const dailyTier = allToday.filter(p => p.tier !== "edge");
+
+    setTodayPicks(sortByPref(edgeTier.length > 0 ? edgeTier : allToday.slice(0, 5)));
+    setDailyTierPicks(sortByPref(edgeTier.length > 0 ? dailyTier : allToday.slice(5)));
     setYesterdayPicks((yesterdayRes.data as DailyPick[]) || []);
     setPicksLoading(false);
     setLastRefreshed(new Date());
@@ -307,12 +318,13 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("daily-picks");
+      const { data, error } = await supabase.functions.invoke("slate-scanner");
       if (error) {
         toast.error("Failed to refresh picks. Try again later.");
       } else {
-        const count = data?.count || 0;
-        toast.success(count > 0 ? `${count} picks generated!` : "No games available for picks right now.");
+        const total = data?.counts?.total ?? 0;
+        const edge = data?.counts?.todaysEdge ?? 0;
+        toast.success(total > 0 ? `${edge} edge picks · ${total} total generated` : "No games available for picks right now.");
       }
       await fetchTodayPicks();
     } catch {
@@ -816,6 +828,105 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
             </CarouselWrapper>
           )}
         </motion.div>
+
+        {/* ── Daily Picks (rest of slate, below Today's Edge) ── */}
+        {dailyTierPicks.length > 0 && (
+          <motion.div {...stagger(1.5)} className="relative z-10 w-full min-w-0">
+            <div className="flex items-center justify-between border-b border-[hsl(250,20%,18%)]/40 pb-2 mb-3">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4" style={{ color: 'hsl(190 90% 55%)' }} />
+                <span className="text-xs font-bold tracking-[0.15em] uppercase" style={{ color: 'hsl(190 90% 55%)' }}>Daily Picks</span>
+              </div>
+              <span className="text-[10px] text-muted-foreground/40">{dailyTierPicks.length} plays</span>
+            </div>
+
+            <div className="space-y-2">
+              {dailyTierPicks.slice(0, 15).map((pick, i) => {
+                const isGameBet = pick.bet_type && pick.bet_type !== 'prop';
+                const rate = Math.round(pick.hit_rate);
+                const dotColor = getConfidenceColor(rate);
+                const dirLabel = isGameBet
+                  ? (pick.direction === "home" ? (pick.home_team || pick.team || "HOME").toUpperCase() :
+                     pick.direction === "away" ? (pick.away_team || pick.opponent || "AWAY").toUpperCase() :
+                     pick.direction.toUpperCase())
+                  : (pick.direction === "over" ? `O ${pick.line}` : `U ${pick.line}`);
+                return (
+                  <motion.button
+                    key={`${pick.id}-${i}`}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.04 * i, duration: 0.3 }}
+                    onClick={() => {
+                      if (isGameBet) {
+                        navigate("/dashboard/moneyline", {
+                          state: {
+                            autoAnalyze: true,
+                            team1: pick.home_team || pick.team,
+                            team2: pick.away_team || pick.opponent,
+                            sport: pick.sport,
+                            bet_type: pick.bet_type,
+                            spread_line: pick.spread_line,
+                            total_line: pick.total_line,
+                          },
+                        });
+                      } else {
+                        navigate("/dashboard/analyze", {
+                          state: {
+                            autoAnalyze: true,
+                            player: pick.player_name,
+                            prop_type: pick.prop_type,
+                            line: pick.line,
+                            over_under: pick.direction as "over" | "under",
+                            opponent: pick.opponent || "",
+                            sport: pick.sport || "nba",
+                            pick_snapshot: { confidence: pick.hit_rate, reasoning: pick.reasoning || "" },
+                          },
+                        });
+                      }
+                    }}
+                    className="w-full flex items-center gap-3 p-3 active:opacity-70 transition-opacity text-left"
+                    style={{
+                      background: 'linear-gradient(165deg, hsl(250 20% 12%), hsl(250 22% 9%))',
+                      border: '1px solid hsl(250 20% 18% / 0.5)',
+                      borderRadius: 14,
+                    }}
+                  >
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: dotColor, boxShadow: `0 0 8px ${dotColor}` }} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-bold truncate" style={{ color: 'hsl(250 80% 97%)' }}>
+                          {pick.player_name}
+                        </span>
+                        <span className="text-[9px] uppercase tracking-wider font-semibold shrink-0" style={{ color: 'hsl(250 15% 55%)' }}>
+                          {pick.sport}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[11px]" style={{ color: 'hsl(250 20% 65%)' }}>
+                          {dirLabel} {!isGameBet && pick.prop_type}
+                        </span>
+                        {pick.odds && (
+                          <span className="text-[10px] tabular-nums" style={{ color: 'hsl(250 15% 50%)' }}>
+                            {pick.odds}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-[14px] font-extrabold tabular-nums" style={{ color: dotColor }}>
+                        {rate}%
+                      </div>
+                      <div className="text-[8px] uppercase tracking-wider" style={{ color: 'hsl(250 15% 45%)' }}>
+                        Hit Rate
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 shrink-0" style={{ color: 'hsl(250 15% 45%)' }} />
+                  </motion.button>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
 
         <motion.div {...stagger(2)} className="relative z-10 w-full min-w-0 overflow-hidden" style={{
           background: 'linear-gradient(165deg, hsl(250 20% 12%), hsl(250 22% 9%))',
