@@ -322,6 +322,8 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
           for (const side of ["over", "under"] as const) {
             const pick = side === "over" ? over : under;
             if (!pick) continue;
+            // Hard-skip over-juiced prices — not realistically placeable on standard books
+            if (pick.bestPrice <= -350 || pick.bestPrice >= 400) continue;
             propLineCount++;
             const impliedSide = americanToImpliedProb(pick.bestPrice);
             const oppPick = side === "over" ? under : over;
