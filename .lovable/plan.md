@@ -1,26 +1,32 @@
 
-## Plan: Paywall horizontal layout + Sparkline clip + Comparison chart fix
+## Plan: Paywall conversion redesign + accordion click fix
 
-Three targeted edits from the uploaded spec. No pricing/routing/other-screen changes.
+Apply the 4 fixes from the spec exactly to `src/pages/PaywallPage.tsx` and `src/components/onboarding/CountdownBanner.tsx`.
 
-### Fix 1 — Paywall 3-column horizontal cards (`src/pages/PaywallPage.tsx`)
-Replace the current vertical `space-y-3` pricing block with `grid grid-cols-3 gap-2`. Each card becomes a compact vertical column: centered top badge, tiny plan label, trial pill, price (monthly in `#00FF6A`), per-day text, saving line, and per-card CTA pill ("Try Free" / "Subscribe"). Selected state keeps green border + glow; monthly adds the double-ring shadow. Sticky bottom CTA footer, features accordion, and `pb-32` padding all unchanged.
+### Fix 1 — Sticky footer click pass-through (`PaywallPage.tsx`)
+- Set `pointerEvents: "none"` on the fixed gradient wrapper so the gradient area no longer intercepts taps on the accordion behind it.
+- Wrap the button + microcopy in an inner div with `pointerEvents: "auto"` so only the actual interactive elements capture clicks.
+- Bump scroll container padding from `pb-32` → `pb-36`.
 
-### Fix 2 — Sparkline clipPath (`src/pages/OnboardingPage.tsx`)
-Update the `Sparkline` component: add `overflow="hidden"` on the root `<svg>`, define a `<clipPath>` covering the 54×44 viewBox, and wrap all content (grid lines, gradient fill, glowing polyline, dot nodes, endpoint circle) inside a `<g clipPath={...}>`. This keeps grid strokes and glow filters from bleeding into surrounding cards.
+### Fix 2 — Pricing hierarchy redesign (`PaywallPage.tsx`)
+Replace the 3-column grid with:
+- **Monthly card**: full-width hero, green border + double-glow shadow, MOST POPULAR tab badge anchored top-center, $39.99 in 28px green on right, radio indicator top-right, "7-DAY FREE TRIAL" pill inline with label, "Save $19.97 vs Weekly" with check.
+- **Weekly + Yearly**: 2-column grid below, compact cards with BEST VALUE badge on Yearly, radio indicators, smaller price treatment.
+- Keep `PLANS` data and `selectedPlan` state untouched — only JSX changes.
 
-### Fix 3 — Comparison chart sizing (`src/pages/OnboardingPage.tsx`, Screen 4)
-- Change the two "ROI After 90 Days" labels → "ROI After 30 Days".
-- Wrap each `Sparkline` in `<div className="mt-2 flex justify-center">` and give the sparkline `className="h-12 w-full max-w-[120px]"` so it no longer stretches across the narrow column.
-- Tighten both comparison card paddings from `p-3` → `p-2.5` (keeping the red/green border colors).
+### Fix 3 — Conversion psychology
+- **3a** Social proof row (3 pravatar avatars + "10,000+ bettors already winning") between pricing and features accordion.
+- **3b** Trust signal row (Lock + Secure & Encrypted · 18+ Bet Responsibly · Cancel Anytime) appended at the bottom of the scroll content, above the sticky footer area. Remove the duplicate trust row currently inside the sticky footer.
+- **3c** Pulsing red dot in `CountdownBanner.tsx` next to "LIMITED TIME" label.
 
-### Verification
-1. Visual at 390×844:
-   - `/paywall` — 3 equal-width cards in one row, Monthly highlighted green with "MOST POPULAR" pill centered on top, per-card CTAs visible, sticky footer still pinned.
-   - `/onboarding` Screen 1/2 — sparklines fully contained, no grid lines bleeding into card edges.
-   - `/onboarding` Screen 4 — "Without Sentinel" vs "With Sentinel" cards each show a centered, non-stretched sparkline (max 120px wide) and say "ROI After 30 Days".
+### Fix 4 — Accordion accessibility
+- Wrap each feature row in `<div className="relative z-10">` so they sit above any stray overlays.
+- Confirmed `pb-36` from Fix 1 prevents the last row being hidden.
+
+### Verification (after switching to default mode)
+1. Visual at 390×844: Monthly hero card dominant, Weekly/Yearly side-by-side below, social proof row visible, accordion rows fully tappable when scrolled near the sticky footer (the gradient area no longer blocks touches), pulsing red dot animating on countdown.
 2. `npx tsc --noEmit` clean.
-3. No DB or edge function changes in this task — purely client-side JSX/Tailwind. I will state this explicitly in the final summary instead of running SELECT/curl verification, since there is nothing backend-side to verify.
+3. No DB or edge function changes — purely client-side JSX/Tailwind. I will state this explicitly in the final summary in lieu of SELECT/curl output, since there is nothing backend-side to verify.
 
 ### Out of scope
-Pricing values, routing, progress bar, ESPN avatars, sport icons, welcome/auth screens.
+Pricing values, routing, sparklines, comparison charts, onboarding, auth, welcome screen, ESPN avatars, sport icons.
