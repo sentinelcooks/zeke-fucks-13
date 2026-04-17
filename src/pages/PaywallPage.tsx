@@ -2,7 +2,6 @@ import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Star, Shield, Zap, BarChart3, TrendingUp, Crown, ChevronDown, Lock } from "lucide-react";
-import CountdownBanner from "@/components/onboarding/CountdownBanner";
 
 type PlanInterval = "weekly" | "monthly" | "yearly";
 
@@ -10,22 +9,22 @@ interface Plan {
   id: PlanInterval;
   label: string;
   price: string;
-  perDay: string;
-  badge?: "MOST POPULAR" | "BEST VALUE";
-  trialText?: string;
+  subtext: string;
+  badge?: string;
   saving?: string;
-  perMonthText?: string;
+  extraLine?: string;
 }
 
 const PLANS: Plan[] = [
-  { id: "weekly",  label: "Weekly",  price: "$9.99",   perDay: "$1.43/day",   trialText: "7-DAY FREE TRIAL" },
-  { id: "monthly", label: "Monthly", price: "$39.99",  perDay: "$39.99/mo",   trialText: "7-DAY FREE TRIAL", badge: "MOST POPULAR", saving: "Save $19.97 vs Weekly" },
-  { id: "yearly",  label: "Yearly",  price: "$219.99", perDay: "$18.33/mo",   trialText: "7-DAY FREE TRIAL", badge: "BEST VALUE",   saving: "Save $339.49 vs Monthly", perMonthText: "= $18.33/mo" },
+  { id: "weekly",  label: "Weekly",  price: "$9.99",   subtext: "Good for trying it out" },
+  { id: "monthly", label: "Monthly", price: "$39.99",  subtext: "$1.33/day", badge: "MOST POPULAR", saving: "Save 60% vs Weekly" },
+  { id: "yearly",  label: "Yearly",  price: "$219",    subtext: "$18.25/month", badge: "Best Long-Term Value", saving: "Save $260 vs weekly", extraLine: "2 months free" },
 ];
 
 interface Feature {
   icon: typeof BarChart3;
   label: string;
+  bullets: string;
   description: string;
   preview: ReactNode;
 }
@@ -34,6 +33,7 @@ const FEATURES: Feature[] = [
   {
     icon: BarChart3,
     label: "Real-Time Prop Analysis",
+    bullets: "Live odds tracking · Top EV plays · Instant updates",
     description: "Instant AI breakdowns for any player prop — hit rates, trends, and a clear verdict.",
     preview: (
       <div className="space-y-2">
@@ -55,6 +55,7 @@ const FEATURES: Feature[] = [
   {
     icon: TrendingUp,
     label: "EV & Edge Calculations",
+    bullets: "Model vs market · Edge % · Expected value",
     description: "Know exactly when the books are wrong — see your edge and expected value on every prop.",
     preview: (
       <div className="space-y-1.5">
@@ -69,6 +70,7 @@ const FEATURES: Feature[] = [
   {
     icon: Zap,
     label: "Arbitrage Scanner",
+    bullets: "Risk-free spots · Cross-book scan · Instant alerts",
     description: "Find guaranteed profit opportunities across sportsbooks — zero risk.",
     preview: (
       <div className="rounded-lg border border-[#2A2A2A] bg-white/5 p-2 space-y-1.5">
@@ -83,6 +85,7 @@ const FEATURES: Feature[] = [
   {
     icon: Shield,
     label: "AI-Powered Picks",
+    bullets: "Daily curated · Confidence ranked · Multi-sport",
     description: "Daily curated picks ranked by confidence, powered by our AI model.",
     preview: (
       <div className="space-y-1.5">
@@ -98,6 +101,7 @@ const FEATURES: Feature[] = [
   {
     icon: Star,
     label: "Line Shopping Across Major Books",
+    bullets: "Compare books · Best odds · Save on every play",
     description: "Compare odds across major sportsbooks instantly. Always get the best number.",
     preview: (
       <div className="space-y-1">
@@ -116,6 +120,7 @@ const FEATURES: Feature[] = [
   {
     icon: Crown,
     label: "Profit Tracker & Analytics",
+    bullets: "P&L calendar · ROI tracking · Shareable cards",
     description: "Track every play, see your P&L calendar, and share your results.",
     preview: (
       <div className="flex gap-1 justify-between">
@@ -175,15 +180,26 @@ export default function PaywallPage() {
     navigate("/welcome", { replace: true });
   };
 
-  const handleSkip = () => navigate("/auth", { replace: true });
+  const ctaLabel =
+    selectedPlan === "monthly"
+      ? "Start Monthly Trial"
+      : selectedPlan === "yearly"
+      ? "Start Yearly Trial"
+      : "Start Free Trial";
+
+  const monthlyValueStack = [
+    "Full AI prop access",
+    "Daily top-rated plays",
+    "Real-time updates",
+  ];
 
   return (
     <div className="relative min-h-screen w-full bg-[#0A0A0A] text-white overflow-x-hidden">
       <style>{`
-        @keyframes pulse-cta { 0%,100% { box-shadow: 0 0 0 0 rgba(0,255,106,0.35) } 50% { box-shadow: 0 0 24px 6px rgba(0,255,106,0.45) } }
+        @keyframes pulse-cta { 0%,100% { box-shadow: 0 0 0 0 rgba(0,255,106,0.22) } 50% { box-shadow: 0 0 18px 4px rgba(0,255,106,0.28) } }
         @keyframes card-pulse {
-          0%,100% { box-shadow: 0 0 0 2px #00FF6A, 0 0 40px rgba(0,255,106,0.35), 0 0 80px rgba(0,255,106,0.15), inset 0 0 30px rgba(0,255,106,0.05); }
-          50% { box-shadow: 0 0 0 2px #00FF6A, 0 0 55px rgba(0,255,106,0.5), 0 0 110px rgba(0,255,106,0.22), inset 0 0 30px rgba(0,255,106,0.07); }
+          0%,100% { box-shadow: 0 0 0 2px #00FF6A, 0 0 30px rgba(0,255,106,0.26), 0 0 60px rgba(0,255,106,0.11), inset 0 0 24px rgba(0,255,106,0.04); }
+          50% { box-shadow: 0 0 0 2px #00FF6A, 0 0 42px rgba(0,255,106,0.38), 0 0 84px rgba(0,255,106,0.16), inset 0 0 24px rgba(0,255,106,0.05); }
         }
       `}</style>
       {/* Atmospheric glows */}
@@ -196,15 +212,36 @@ export default function PaywallPage() {
       <div className="relative z-10 mx-auto max-w-md px-5 py-6 pb-36">
         <ProgressDots current={5} total={6} />
 
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
-          <h1 className="text-[30px] leading-[1.05] font-extrabold tracking-tight">Unlock Your Winning Edge.</h1>
-          <p className="mt-2 text-sm text-white/60">Join now and start winning.</p>
+        {/* Header */}
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-4">
+          <h1 className="text-[30px] leading-[1.05] font-extrabold tracking-tight">Start Winning With Data</h1>
+          <p className="mt-2 text-sm text-white/60">AI-powered props. Real edge. Proven results.</p>
         </motion.div>
 
-        {/* Countdown banner */}
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="mt-5">
-          <CountdownBanner />
+        {/* Trial pill */}
+        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }} className="mt-3 flex justify-center">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#00FF6A]/12 border border-[#00FF6A]/30 px-3 py-1 text-[11px] font-bold text-[#00FF6A]">
+            <Check className="w-3 h-3" strokeWidth={3} />
+            7-Day Free Trial • No charge today
+          </span>
         </motion.div>
+
+        {/* Social proof — moved up */}
+        <div className="mt-3 flex items-center justify-center gap-2">
+          <div className="flex -space-x-1.5">
+            {[11, 12, 13].map((i) => (
+              <img
+                key={i}
+                src={`https://i.pravatar.cc/32?img=${i}`}
+                alt=""
+                className="w-6 h-6 rounded-full border border-[#0A0A0A] object-cover"
+              />
+            ))}
+          </div>
+          <span className="text-[12px] text-white/70 font-semibold">
+            <span className="text-white font-extrabold">10,000+</span> bettors using our AI daily
+          </span>
+        </div>
 
         {/* Pricing — Monthly hero + Weekly/Yearly side-by-side */}
         <motion.div
@@ -220,38 +257,33 @@ export default function PaywallPage() {
               <motion.button
                 onClick={() => setSelectedPlan("monthly")}
                 whileTap={{ scale: 0.98 }}
-                className="relative w-full rounded-2xl border-2 border-[#00FF6A] bg-[#141414] pl-10 pr-4 py-4 mb-3 text-left overflow-hidden block"
+                className="relative w-full rounded-[20px] border-2 border-[#00FF6A] bg-[#141414] pl-11 pr-5 py-6 mb-3 text-left overflow-hidden block"
                 style={{
                   boxShadow: isSelected
-                    ? "0 0 0 2px #00FF6A, 0 0 40px rgba(0,255,106,0.35), 0 0 80px rgba(0,255,106,0.15), inset 0 0 30px rgba(0,255,106,0.05)"
-                    : "0 0 0 1px rgba(0,255,106,0.4), 0 0 20px rgba(0,255,106,0.15)",
+                    ? "0 0 0 2px #00FF6A, 0 0 30px rgba(0,255,106,0.26), 0 0 60px rgba(0,255,106,0.11), inset 0 0 24px rgba(0,255,106,0.04)"
+                    : "0 0 0 1px rgba(0,255,106,0.4), 0 0 16px rgba(0,255,106,0.12)",
                   animation: isSelected ? "card-pulse 3s ease-in-out infinite" : undefined,
                 }}
               >
-                <div className="absolute -top-px left-1/2 -translate-x-1/2 bg-[#FFC93C] text-black text-[9px] font-black px-3 py-0.5 rounded-b-lg tracking-widest uppercase">
+                <div className="absolute -top-px left-1/2 -translate-x-1/2 bg-[#FFC93C] text-black text-[8px] font-black px-2.5 py-0.5 rounded-b-lg tracking-widest uppercase">
                   MOST POPULAR
                 </div>
 
-                <div className="absolute top-3 left-3">
+                <div className="absolute top-4 left-3.5">
                   <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-[#00FF6A]" : "border-white/30"}`}>
                     {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-[#00FF6A]" />}
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between mt-3 gap-3">
+                <div className="flex items-start justify-between mt-2 gap-3">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-base font-extrabold text-white">{monthly.label}</span>
-                      <span className="px-1.5 py-0.5 rounded bg-[#1F1F1F] text-white text-[8px] font-black tracking-wider">
-                        7-DAY FREE TRIAL
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-white/50 mt-0.5">{monthly.perDay}</div>
+                    <div className="text-base font-extrabold text-white">{monthly.label}</div>
+                    <div className="text-[11px] text-white/50 mt-0.5">{monthly.subtext}</div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <div className="text-[13px] text-white/40 line-through tabular-nums leading-none mb-1">$59.99</div>
-                    <div className="text-[34px] font-black text-[#00FF6A] tabular-nums leading-none">
-                      {monthly.price}
+                    <div className="flex items-baseline justify-end gap-1">
+                      <span className="text-[34px] font-black text-[#00FF6A] tabular-nums leading-none">{monthly.price}</span>
+                      <span className="text-[11px] font-bold text-white/50">/month</span>
                     </div>
                     {monthly.saving && (
                       <div className="flex items-center gap-0.5 mt-1 justify-end">
@@ -261,6 +293,16 @@ export default function PaywallPage() {
                     )}
                   </div>
                 </div>
+
+                {/* Value stack */}
+                <ul className="mt-4 space-y-1.5">
+                  {monthlyValueStack.map((v) => (
+                    <li key={v} className="flex items-center gap-2 text-[12px] text-white/85">
+                      <Check className="w-3.5 h-3.5 text-[#00FF6A] flex-shrink-0" strokeWidth={3} />
+                      <span className="font-medium">{v}</span>
+                    </li>
+                  ))}
+                </ul>
               </motion.button>
             );
           })()}
@@ -268,6 +310,7 @@ export default function PaywallPage() {
           <div className="grid grid-cols-2 gap-2.5">
             {PLANS.filter((p) => p.id !== "monthly").map((plan) => {
               const isSelected = selectedPlan === plan.id;
+              const isWeekly = plan.id === "weekly";
               return (
                 <motion.button
                   key={plan.id}
@@ -277,19 +320,10 @@ export default function PaywallPage() {
                     isSelected
                       ? "border-[#00FF6A] bg-[#141414]"
                       : "border-[#2A2A2A] bg-[#141414]"
-                  }`}
-                  style={
-                    plan.id === "yearly"
-                      ? {
-                          boxShadow: isSelected
-                            ? "0 0 0 2px #00FF6A, 0 0 24px rgba(0,255,106,0.25)"
-                            : "0 0 16px rgba(0,255,106,0.08)",
-                        }
-                      : undefined
-                  }
+                  } ${isWeekly && !isSelected ? "opacity-70" : ""}`}
                 >
                   {plan.badge && (
-                    <div className="absolute -top-px left-1/2 -translate-x-1/2 bg-[#1F1F1F] text-[#00FF6A] text-[9px] font-black px-2.5 py-0.5 rounded-b-md tracking-widest uppercase border-x border-b border-[#00FF6A]/40">
+                    <div className="absolute -top-px left-1/2 -translate-x-1/2 bg-[#1F1F1F] text-white/70 text-[8px] font-black px-2 py-0.5 rounded-b-md tracking-wider uppercase border-x border-b border-[#2A2A2A] whitespace-nowrap">
                       {plan.badge}
                     </div>
                   )}
@@ -301,20 +335,19 @@ export default function PaywallPage() {
                   </div>
 
                   <div className="mt-3">
-                    <div className="text-[14px] font-extrabold text-white mb-1.5">{plan.label}</div>
-                    {plan.trialText && (
-                      <span className="px-1.5 py-0.5 rounded bg-[#1F1F1F] text-white text-[9px] font-black tracking-wider">
-                        {plan.trialText}
-                      </span>
-                    )}
+                    <div className={`text-[14px] font-extrabold mb-1.5 ${isWeekly && !isSelected ? "text-white/80" : "text-white"}`}>{plan.label}</div>
                   </div>
 
                   <div>
-                    <div className={`text-[24px] font-extrabold tabular-nums leading-none ${isSelected ? "text-[#00FF6A]" : "text-white"}`}>
+                    <div className={`text-[24px] font-extrabold tabular-nums leading-none ${isSelected ? "text-[#00FF6A]" : isWeekly ? "text-white/80" : "text-white"}`}>
                       {plan.price}
                     </div>
-                    <div className="text-[10px] text-white/50 mt-1">{plan.perDay}</div>
+                    <div className={`text-[10px] mt-1 ${isWeekly ? "text-white/50" : "text-white/60"}`}>{plan.subtext}</div>
                   </div>
+
+                  {plan.extraLine && (
+                    <div className="text-[10px] font-bold text-[#00FF6A]">{plan.extraLine}</div>
+                  )}
 
                   {plan.saving && (
                     <div className="flex items-start gap-1">
@@ -322,31 +355,11 @@ export default function PaywallPage() {
                       <span className="text-[10px] font-semibold text-[#00FF6A] leading-tight">{plan.saving}</span>
                     </div>
                   )}
-                  {plan.perMonthText && (
-                    <div className="text-[10px] text-white/40">{plan.perMonthText}</div>
-                  )}
                 </motion.button>
               );
             })}
           </div>
         </motion.div>
-
-        {/* Social proof */}
-        <div className="mt-4 mb-2 flex items-center justify-center gap-2">
-          <div className="flex -space-x-1.5">
-            {[11, 12, 13].map((i) => (
-              <img
-                key={i}
-                src={`https://i.pravatar.cc/32?img=${i}`}
-                alt=""
-                className="w-6 h-6 rounded-full border border-[#0A0A0A] object-cover"
-              />
-            ))}
-          </div>
-          <span className="text-[11px] text-white/60">
-            <span className="text-white font-bold">10,000+</span> bettors already winning
-          </span>
-        </div>
 
         {/* Features accordion */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="mt-6 space-y-2">
@@ -356,14 +369,19 @@ export default function PaywallPage() {
               <div key={f.label} className="relative z-10">
                 <button
                   onClick={() => setExpandedFeature(isExpanded ? null : f.label)}
-                  className={`flex items-center gap-3 w-full rounded-xl px-3.5 py-3 border text-left transition-colors ${
+                  className={`flex items-center gap-3 w-full rounded-xl px-3.5 py-2.5 border text-left transition-colors ${
                     isExpanded ? "border-[#00FF6A]/40 bg-[#141414]" : "border-[#2A2A2A] bg-[#141414]"
                   }`}
                 >
                   <div className="w-8 h-8 rounded-lg bg-[#00FF6A]/15 flex items-center justify-center flex-shrink-0">
                     <f.icon className="w-4 h-4 text-[#00FF6A]" />
                   </div>
-                  <span className="text-sm font-semibold text-white flex-1">{f.label}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-white">{f.label}</div>
+                    {!isExpanded && (
+                      <div className="text-[10.5px] text-white/45 truncate mt-0.5">{f.bullets}</div>
+                    )}
+                  </div>
                   <ChevronDown className={`w-4 h-4 text-white/50 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                 </button>
                 <AnimatePresence>
@@ -408,14 +426,11 @@ export default function PaywallPage() {
             whileTap={{ scale: 0.97 }}
             onClick={handleSubscribe}
             style={{ animation: "pulse-cta 2.5s ease-in-out infinite" }}
-            className="w-full py-4 rounded-full bg-[#00FF6A] text-black font-extrabold text-[17px] shadow-[0_0_30px_rgba(0,255,106,0.4)]"
+            className="w-full py-[18px] rounded-full bg-[#00FF6A] text-black font-extrabold text-[17px] shadow-[0_0_22px_rgba(0,255,106,0.25)]"
           >
-            Start Free Trial
+            {ctaLabel}
           </motion.button>
-          <p className="text-center text-[11px] text-white/50 mt-2">Cancel anytime. No hidden fees.</p>
-          <p className="text-center text-[12px] text-white/60 mt-1">
-            <button onClick={handleSkip} className="underline">Maybe later</button>
-          </p>
+          <p className="text-center text-[11px] text-white/55 mt-2">No charge today • Cancel anytime</p>
         </div>
       </div>
     </div>
