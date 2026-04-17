@@ -183,14 +183,12 @@ const FEATURES: Feature[] = [
 ];
 
 const REVIEWS = [
-  { name: "CJ", avatar: "https://ui-avatars.com/api/?name=CJ&background=1a1a2e&color=fff&size=80", text: "Arb scanner paid for itself day one. Found 3 plays before the lines moved." },
-  { name: "Trey", avatar: "https://ui-avatars.com/api/?name=T&background=2d2d44&color=fff&size=80", text: "Been capping for years but the EV tool showed me edges I was completely missing." },
-  { name: "Dez", avatar: "https://ui-avatars.com/api/?name=D&background=0f3460&color=fff&size=80", text: "Hit a 4-leg parlay first week using the correlated props. This app is different." },
-  { name: "Big Rob", avatar: "https://ui-avatars.com/api/?name=BR&background=1a1a2e&color=fff&size=80", text: "Line shopping alone saves me juice every single day. No brainer subscription." },
-  { name: "Kev", avatar: "https://ui-avatars.com/api/?name=K&background=16213e&color=fff&size=80", text: "Tracker keeps me honest. I can see exactly where my edge is and where I'm leaking." },
-  { name: "Ant", avatar: "https://ui-avatars.com/api/?name=A&background=2d2d44&color=fff&size=80", text: "Props analysis is on point. The hit rates are legit, not some cap." },
-  { name: "J-Money", avatar: "https://ui-avatars.com/api/?name=JM&background=0f3460&color=fff&size=80", text: "Best betting tool I've used and I've tried em all. Data is clean and fast." },
-  { name: "Dame", avatar: "https://ui-avatars.com/api/?name=DM&background=1a1a2e&color=fff&size=80", text: "Free trial got me hooked. The AI picks actually hit different fr." },
+  { name: "JM", avatar: "https://ui-avatars.com/api/?name=JM&background=0f3460&color=fff&size=80", text: "Paid for itself first week — nailed props." },
+  { name: "Big Rob", avatar: "https://ui-avatars.com/api/?name=BR&background=1a1a2e&color=fff&size=80", text: "Line shopping alone saves me juice every day." },
+  { name: "CJ", avatar: "https://ui-avatars.com/api/?name=CJ&background=1a1a2e&color=fff&size=80", text: "Arb scanner paid for itself day one." },
+  { name: "J-Money", avatar: "https://ui-avatars.com/api/?name=JM2&background=2d2d44&color=fff&size=80", text: "Best betting tool I've used. Clean and fast." },
+  { name: "Dame", avatar: "https://ui-avatars.com/api/?name=DM&background=1a1a2e&color=fff&size=80", text: "Free trial got me hooked. Picks hit different." },
+  { name: "Kev", avatar: "https://ui-avatars.com/api/?name=K&background=16213e&color=fff&size=80", text: "Tracker keeps me locked in. Can see every edge." },
 ];
 
 export default function PaywallPage() {
@@ -255,8 +253,6 @@ export default function PaywallPage() {
                 whileTap={{ scale: 0.98 }}
                 style={plan.id === "monthly" ? { animation: 'glow-pulse-green 2s ease-in-out infinite' } : undefined}
                 className={`relative w-full rounded-2xl border-2 px-4 py-3 text-left transition-all duration-200 overflow-hidden ${
-                  plan.id === "weekly" ? "opacity-70" : ""
-                } ${
                   isSelected
                     ? "border-green-500/60 ring-1 ring-green-500/30 bg-card"
                     : "border-border bg-card/60"
