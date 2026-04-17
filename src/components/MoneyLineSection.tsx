@@ -49,14 +49,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { formatOdds } from "@/utils/oddsFormat";
 import sportNba from "@/assets/logo-nba.png";
 import sportMlb from "@/assets/logo-mlb.png";
-import sportNfl from "@/assets/logo-nfl.png";
+
 import sportNhl from "@/assets/logo-nhl.png";
 import sportNcaab from "@/assets/sport-ncaab.png";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, LineController, PointElement, Title, Tooltip, Legend);
 
 type BetType = "moneyline" | "spread" | "total";
-type SportType = "nba" | "ncaab" | "mlb" | "nfl" | "nhl";
+type SportType = "nba" | "ncaab" | "mlb" | "nhl";
 
 interface Team {
   id: string;
@@ -1348,7 +1348,6 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
           options={[
             { value: "nba" as SportType, label: "NBA", icon: <img src={sportNba} alt="NBA" className="w-7 h-7 object-contain" /> },
             { value: "mlb" as SportType, label: "MLB", icon: <img src={sportMlb} alt="MLB" className="w-7 h-7 object-contain" /> },
-            { value: "nfl" as SportType, label: "NFL", icon: <img src={sportNfl} alt="NFL" className="w-7 h-7 object-contain" /> },
             { value: "nhl" as SportType, label: "NHL", icon: <img src={sportNhl} alt="NHL" className="w-7 h-7 object-contain" /> },
             { value: "ncaab" as SportType, label: "NCAAB", icon: <img src={sportNcaab} alt="NCAAB" className="w-7 h-7 object-contain" /> },
           ]}
@@ -1440,11 +1439,9 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
               desc: "Bet on whether the combined final score of both teams will be over or under a set number posted by the sportsbook.",
               exampleAmerican: sport === "mlb" ? "Total set at 8.5 (-110 both sides) — if the final score is Dodgers 5, Mets 4 (total 9), the Over wins. If it's 3-2 (5), the Under wins."
                 : sport === "nhl" ? "Total set at 5.5 (-110 both sides) — if the final score is Rangers 4, Bruins 3 (total 7), the Over wins. If it's 2-1 (3), the Under wins."
-                : sport === "nfl" ? "Total set at 44.5 (-110 both sides) — if the final score is Chiefs 28, Eagles 24 (total 52), the Over wins. If it's 17-14 (31), the Under wins."
                 : "Total set at 215.5 (-110 both sides) — if the final score is Lakers 112, Celtics 108 (total 220), the Over wins. If it's 105-104 (209), the Under wins.",
               exampleDecimal: sport === "mlb" ? "Total set at 8.5 (1.91 both sides) — if the final score is Dodgers 5, Mets 4 (total 9), the Over wins. If it's 3-2 (5), the Under wins."
                 : sport === "nhl" ? "Total set at 5.5 (1.91 both sides) — if the final score is Rangers 4, Bruins 3 (total 7), the Over wins. If it's 2-1 (3), the Under wins."
-                : sport === "nfl" ? "Total set at 44.5 (1.91 both sides) — if the final score is Chiefs 28, Eagles 24 (total 52), the Over wins. If it's 17-14 (31), the Under wins."
                 : "Total set at 215.5 (1.91 both sides) — if the final score is Lakers 112, Celtics 108 (total 220), the Over wins. If it's 105-104 (209), the Under wins.",
               color: "hsl(158 64% 52%)",
             },
@@ -1569,7 +1566,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                     background: 'hsla(228, 20%, 10%, 0.5)',
                     border: '1px solid hsla(228, 30%, 20%, 0.25)',
                   }}>
-                    <input type="number" value={totalLine} onChange={(e) => setTotalLine(e.target.value)} placeholder={sport === "ncaab" ? "140.5" : sport === "mlb" ? "8.5" : sport === "nhl" ? "5.5" : sport === "nfl" ? "44.5" : "215.5"} step="0.5" min="0"
+                    <input type="number" value={totalLine} onChange={(e) => setTotalLine(e.target.value)} placeholder={sport === "ncaab" ? "140.5" : sport === "mlb" ? "8.5" : sport === "nhl" ? "5.5" : "215.5"} step="0.5" min="0"
                       className="w-full bg-transparent py-2.5 text-center text-lg font-extrabold text-foreground placeholder:text-muted-foreground/12 focus:outline-none tabular-nums" />
                   </div>
                 </div>
