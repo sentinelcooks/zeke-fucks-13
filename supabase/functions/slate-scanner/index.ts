@@ -187,7 +187,12 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
 
     for (const [playerName, markets] of Object.entries(players as Record<string, any>)) {
       playerSet.add(playerName);
-      for (const [marketKey, outcomes] of Object.entries(markets as Record<string, any[]>)) {
+      for (const [rawMarketKey, outcomes] of Object.entries(markets as Record<string, any[]>)) {
+        // Normalize Odds API market keys (e.g. "player_points" → "points") so reliability map works.
+        const marketKey = rawMarketKey
+          .replace(/^(player|batter|pitcher)_/, "")
+          .replace(/_alternate$/, "")
+          .replace(/^(?:nba_|mlb_|nhl_)/, "");
         // Group outcomes by (line, direction) and pick best price per side
         const grouped = new Map<string, { side: string; line: number; bestPrice: number }>();
         for (const o of outcomes as any[]) {
