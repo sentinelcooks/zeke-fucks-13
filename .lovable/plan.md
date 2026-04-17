@@ -1,38 +1,64 @@
 
 
-## Plan
+## Plan — Split slate-scanner into per-sport functions + orchestrator
 
-Route every analyzer-validated pick from `slate-scanner` so that the top 5 surface in Today's Edge (already in place) and the remainder flow into the Picks tab under the correct sport tab.
+### Architecture
 
-### 1. `supabase/functions/slate-scanner/index.ts`
-- Keep the new flow: prefilter → analyzer call → strict floor (`confidence ≥ 65`, `edge > 0.025`, no `PASS/FADE`, no injured players).
-- After analyzer validation, write **all** surviving picks to `daily_picks` (not just edge tier):
-  - Top 5 overall (max 2/sport) → `tier = 'edge'`
-  - Next batch per sport (cap ~15/sport) → `tier = 'daily'`
-  - Anything below `confidence 70` but ≥ 65 → `tier = 'value'`
-- Store `sport` on every row so the Picks tab can group.
+```text
+slate-scanner (orchestrator)
+  ├─ wipe today's daily_picks + free_props (ONCE)
+  ├─ invoke slate-scanner-nba  ──┐
+  ├─ invoke slate-scanner-mlb   ├─ each runs analyzer on its own sport,
+  ├─ invoke slate-scanner-nhl   │  appends raw candidates to a staging row
+  ├─ invoke slate-scanner-ufc  ──┘  set in daily_picks with tier='_pending'
+  └─ finalize: read all _pending rows, run rankAndDistribute → 
+       update tiers (edge / daily / value), write free_props top 20
+```
 
-### 2. `src/pages/FreePicksPage.tsx` (Picks tab)
-- Confirm it queries `daily_picks` for today and renders by `sport`.
-- Add tab/section grouping: NBA / MLB / NHL / UFC, sorted by `hit_rate desc` within each.
-- Exclude rows already shown in Today's Edge carousel? No — show all so the tab is the full slate; mark edge picks with a small "Edge" chip.
-- Reuse the same "See why" → `/dashboard/analyze` navigation pattern from `ModernHomeLayout.tsx` so analyzer output stays the source of truth.
+### 1. New per-sport functions
+Create 4 thin wrappers that each import the existing scanner internals:
+- `supabase/functions/slate-scanner-nba/index.ts`
+- `supabase/functions/slate-scanner-mlb/index.ts`
+- `supabase/functions/slate-scanner-nhl/index.ts`
+- `supabase/functions/slate-scanner-ufc/index.ts`
 
-### 3. Verification
-- Deploy `slate-scanner`, trigger `POST /slate-scanner?debug=true`, paste counts per sport/tier.
+Each:
+- Fetches that sport's events + props (existing logic, scoped to one sport)
+- Runs prefilter → analyzer validation (existing `validateWithAnalyzer`)
+- Inserts surviving candidates into `daily_picks` with `tier='_pending'` (staging marker)
+- Returns `{ sport, scanned, validated, inserted }`
+
+### 2. Refactor `slate-scanner/index.ts` into orchestrator
+- DELETE today's `daily_picks` + `free_props` rows once at start
+- `Promise.allSettled` invoke the 4 per-sport functions via `supabase.functions.invoke()` (they run as separate edge invocations, each with its own wall-time budget)
+- After all complete: SELECT all `tier='_pending'` rows for today, run existing `rankAndDistribute` from `_shared/edge_scoring.ts`, then UPDATE tiers to `edge` / `daily` / `value` and INSERT top 20 into `free_props`
+- Return aggregated stats: `{ perSport: {...}, totals: {...}, tiers: {edge, daily, value} }`
+
+### 3. Shared helpers
+Move the per-sport scan body (event fetch, prop fetch, validate, insert) into `_shared/sport_scan.ts` so each per-sport function is ~30 lines and the orchestrator stays focused on coordination.
+
+### 4. Cron
+Cron already targets `slate-scanner` — no schedule change. The orchestrator handles everything.
+
+### 5. Verification
+- Deploy: `slate-scanner`, `slate-scanner-nba`, `slate-scanner-mlb`, `slate-scanner-nhl`, `slate-scanner-ufc`
+- `curl POST /slate-scanner?debug=true` → paste per-sport stats + final tier counts
 - SQL:
   ```sql
-  SELECT sport, tier, COUNT(*) 
-  FROM daily_picks 
-  WHERE pick_date = CURRENT_DATE 
+  SELECT sport, tier, COUNT(*) FROM daily_picks
+  WHERE pick_date = CURRENT_DATE
   GROUP BY sport, tier ORDER BY sport, tier;
   ```
-- Reload `/dashboard/home` → 5 edge cards. Open `/dashboard/picks` → confirm remaining picks appear under correct sport sections, all with realistic standard lines and no injured players.
+- Reload `/dashboard/home` → confirm 5 edge cards render
 
 ### Out of scope
-Analyzer model, edge_scoring, card UI styling, onboarding, paywall, free_props cron.
+Analyzer logic, edge_scoring rules, schema, frontend, onboarding, paywall.
 
 ### Files touched
-1. `supabase/functions/slate-scanner/index.ts`
-2. `src/pages/FreePicksPage.tsx`
+1. `supabase/functions/_shared/sport_scan.ts` (new)
+2. `supabase/functions/slate-scanner-nba/index.ts` (new)
+3. `supabase/functions/slate-scanner-mlb/index.ts` (new)
+4. `supabase/functions/slate-scanner-nhl/index.ts` (new)
+5. `supabase/functions/slate-scanner-ufc/index.ts` (new)
+6. `supabase/functions/slate-scanner/index.ts` (rewrite as orchestrator)
 
