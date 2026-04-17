@@ -700,7 +700,7 @@ const NbaPropsPage = () => {
     }, 300);
   };
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = async (overrides?: { player?: string; propType?: string; line?: string; overUnder?: "over" | "under" }) => {
     if (sport === "ufc") {
       if (!fighter1 || !fighter2) { setError("Enter both fighter names"); return; }
       setLoading(true); setError(""); setResults(null);
@@ -712,12 +712,18 @@ const NbaPropsPage = () => {
       finally { setLoading(false); }
       return;
     }
-    if (!player) { setError("Enter a player name"); return; }
-    const lineNum = parseFloat(line);
+    // Use override values directly to avoid stale React state on rapid taps (e.g., correlated prop tap)
+    const effPlayer = overrides?.player ?? player;
+    const effPropType = overrides?.propType ?? propType;
+    const effLine = overrides?.line ?? line;
+    const effOverUnder = overrides?.overUnder ?? overUnder;
+
+    if (!effPlayer) { setError("Enter a player name"); return; }
+    const lineNum = parseFloat(effLine);
     if (isNaN(lineNum) || lineNum <= 0) { setError("Enter a valid line value"); return; }
     setLoading(true); setError(""); setResults(null); setCorrProps([]);
     try {
-      const data = await analyzeProp({ player, prop_type: propType, line: lineNum, over_under: overUnder, opponent: opponent || undefined, sport });
+      const data = await analyzeProp({ player: effPlayer, prop_type: effPropType, line: lineNum, over_under: effOverUnder, opponent: opponent || undefined, sport });
       if (data.error) setError(data.error);
       else {
         setResults(data);
@@ -726,7 +732,7 @@ const NbaPropsPage = () => {
           setCorrLoading(true);
           const playerTeam = data.team || data.player?.team_abbr || data.player?.team || data.player_info?.team || "";
           supabase.functions.invoke("correlated-props", {
-            body: { player, prop: propType, line: lineNum, team: playerTeam, over_under: overUnder },
+            body: { player: effPlayer, prop: effPropType, line: lineNum, team: playerTeam, over_under: effOverUnder },
           }).then(({ data: corrData, error: corrErr }) => {
             if (!corrErr && Array.isArray(corrData)) setCorrProps(corrData);
             else setCorrProps([]);
