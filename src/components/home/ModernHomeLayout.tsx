@@ -46,6 +46,7 @@ interface DailyPick {
   away_team?: string | null;
   spread_line?: number | null;
   total_line?: number | null;
+  tier?: string;
 }
 
 const stagger = (i: number) => ({
@@ -221,6 +222,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const [slipSheetPick, setSlipSheetPick] = useState<import("@/components/AddToSlipSheet").SlipSheetPick | null>(null);
   const { user, profile } = useAuth();
   const [todayPicks, setTodayPicks] = useState<DailyPick[]>([]);
+  const [dailyTierPicks, setDailyTierPicks] = useState<DailyPick[]>([]);
   const [yesterdayPicks, setYesterdayPicks] = useState<DailyPick[]>([]);
   const [picksLoading, setPicksLoading] = useState(true);
   const [userSports, setUserSports] = useState<string[]>([]);
@@ -247,14 +249,14 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
 
     const [todayRes, yesterdayRes] = await Promise.all([
-      supabase.from("daily_picks").select("*").eq("pick_date", today).order("hit_rate", { ascending: false }).limit(30),
+      supabase.from("daily_picks").select("*").eq("pick_date", today).order("hit_rate", { ascending: false }).limit(40),
       supabase.from("daily_picks").select("*").eq("pick_date", yesterday).order("created_at", { ascending: false }),
     ]);
 
-    let picks = ((todayRes.data as DailyPick[]) || []).filter(p => p.hit_rate >= 50);
+    let allToday = ((todayRes.data as DailyPick[]) || []).filter(p => p.hit_rate >= 50);
 
     // Fallback: if no picks today, fetch most recent picks from the last 3 days
-    if (picks.length === 0) {
+    if (allToday.length === 0) {
       const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString().split("T")[0];
       const { data: recentData } = await supabase
         .from("daily_picks")
@@ -263,21 +265,30 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
         .lt("pick_date", today)
         .order("pick_date", { ascending: false })
         .order("hit_rate", { ascending: false })
-        .limit(30);
-      picks = ((recentData as DailyPick[]) || []).filter(p => p.hit_rate >= 50);
+        .limit(40);
+      allToday = ((recentData as DailyPick[]) || []).filter(p => p.hit_rate >= 50);
     }
 
-    if (userSports.length > 0) {
-      picks.sort((a, b) => {
-        const aMatch = userSports.includes(a.sport?.toLowerCase()) ? 1 : 0;
-        const bMatch = userSports.includes(b.sport?.toLowerCase()) ? 1 : 0;
-        if (bMatch !== aMatch) return bMatch - aMatch;
-        return b.hit_rate - a.hit_rate;
-      });
-    } else {
-      picks.sort((a, b) => b.hit_rate - a.hit_rate);
-    }
-    setTodayPicks(picks);
+    const sortByPref = (arr: DailyPick[]) => {
+      if (userSports.length > 0) {
+        arr.sort((a, b) => {
+          const aMatch = userSports.includes(a.sport?.toLowerCase()) ? 1 : 0;
+          const bMatch = userSports.includes(b.sport?.toLowerCase()) ? 1 : 0;
+          if (bMatch !== aMatch) return bMatch - aMatch;
+          return b.hit_rate - a.hit_rate;
+        });
+      } else {
+        arr.sort((a, b) => b.hit_rate - a.hit_rate);
+      }
+      return arr;
+    };
+
+    // Split by tier — top quality goes to Today's Edge, rest to Daily Picks
+    const edgeTier = allToday.filter(p => p.tier === "edge");
+    const dailyTier = allToday.filter(p => p.tier !== "edge");
+
+    setTodayPicks(sortByPref(edgeTier.length > 0 ? edgeTier : allToday.slice(0, 5)));
+    setDailyTierPicks(sortByPref(edgeTier.length > 0 ? dailyTier : allToday.slice(5)));
     setYesterdayPicks((yesterdayRes.data as DailyPick[]) || []);
     setPicksLoading(false);
     setLastRefreshed(new Date());
@@ -307,12 +318,13 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("daily-picks");
+      const { data, error } = await supabase.functions.invoke("slate-scanner");
       if (error) {
         toast.error("Failed to refresh picks. Try again later.");
       } else {
-        const count = data?.count || 0;
-        toast.success(count > 0 ? `${count} picks generated!` : "No games available for picks right now.");
+        const total = data?.counts?.total ?? 0;
+        const edge = data?.counts?.todaysEdge ?? 0;
+        toast.success(total > 0 ? `${edge} edge picks · ${total} total generated` : "No games available for picks right now.");
       }
       await fetchTodayPicks();
     } catch {
