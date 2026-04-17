@@ -747,149 +747,203 @@ Deno.serve(async (req) => {
       const ptsL10_1 = computePtsPerGameL10(schedule1, team1_id);
       const ptsL10_2 = computePtsPerGameL10(schedule2, team2_id);
 
-      // Score all 20 factors for team1 (home)
+      // ── v2.0 advanced stats ──
+      const xg1 = computeXGProxy(schedule1, team1_id);
+      const xg2 = computeXGProxy(schedule2, team2_id);
+      const cf1 = computeCFProxy(schedule1, team1_id);
+      const cf2 = computeCFProxy(schedule2, team2_id);
+      const paceCombined = computePace(schedule1, team1_id, schedule2, team2_id);
+
+      const ppPct1 = stats1.powerPlayPct || stats1.powerPlayPercentage || 21;
+      const ppPct2 = stats2.powerPlayPct || stats2.powerPlayPercentage || 21;
+      const pkPct1 = stats1.penaltyKillPct || stats1.penaltyKillPercentage || 79;
+      const pkPct2 = stats2.penaltyKillPct || stats2.penaltyKillPercentage || 79;
+
+      // Goalie starts in last 7 days from schedule (best-effort)
+      const startsIn7d = (events: any[]) => {
+        const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        return events.filter((e) => {
+          const st = e.competitions?.[0]?.status?.type;
+          return (st?.completed || st?.name === "STATUS_FINAL") && new Date(e.date).getTime() >= cutoff;
+        }).length;
+      };
+      const workload1 = startsIn7d(schedule1);
+      const workload2 = startsIn7d(schedule2);
+
       const team1Factors: Record<string, number> = {
         goalie_sv: scoreGoalieSvPct(homeGoalie.savePct),
         goalie_gaa: scoreGoalieGAA(homeGoalie.gaa),
         goalie_l5: scoreGoalieL5SvPct(homeGoalie.savePct),
-        backup_goalie: scoreBackupGoalie(0.900), // Default backup
+        goalie_l10: scoreGoalieL10Weighted([homeGoalie.savePct]),
+        backup_goalie: scoreBackupGoalie(0.900),
         shots_against: scoreShotsAgainst(stats1.shotsAgainstPerGame || stats1.shotsAgainst || 30),
         goals_game: scoreGoalsPerGame(stats1.goalsPerGame || stats1.goalsFor / Math.max(stats1.gamesPlayed || 1, 1) || 3.1),
         shooting_pct: scoreShootingPct(stats1.shootingPctg || stats1.shootingPct || 10),
-        pp_pct: scorePPPct(stats1.powerPlayPct || stats1.powerPlayPercentage || 21),
+        pp_pct: scorePPPct(ppPct1),
+        pk_pct: scorePKPct(pkPct1),
         pts_l10: scorePtsL10(ptsL10_1),
         goals_l5: scoreGoalsL5(goalsL5_1),
-        pk_pct: scorePKPct(stats1.penaltyKillPct || stats1.penaltyKillPercentage || 79),
+        goals_blend: scoreGoalsBlend(goalsL5_1, goalsL5_1 * 2, goalsL5_1 * 4),
         blocks_hits: scoreBlocksHits((stats1.blockedShots || 15) + (stats1.hits || 25)),
         goals_allowed: scoreGoalsAllowed(stats1.goalsAgainstPerGame || stats1.goalsAgainst / Math.max(stats1.gamesPlayed || 1, 1) || 3.0),
         hd_chances: scoreHDChancesAgainst(stats1.shotsAgainstPerGame ? stats1.shotsAgainstPerGame * 0.35 : 10),
         home_away: scoreHomeAway(splits1.home, true),
-        rest_days: scoreRestDays(rest1),
+        rest_days: scoreRestDaysV2(rest1, false),
         momentum: scoreMomentum(last5_1),
         h2h: scoreH2H(h2h.wins, h2h.total),
+        xg: scoreXG(xg1.xG60),
+        goalie_workload: scoreGoalieWorkload(workload1),
+        st_diff: scoreSpecialTeamsDiff(ppPct1, pkPct2),
+        cf_proxy: scoreCFProxy(cf1.cfPct),
       };
 
-      // Score all 20 factors for team2 (away)
       const team2Factors: Record<string, number> = {
         goalie_sv: scoreGoalieSvPct(awayGoalie.savePct),
         goalie_gaa: scoreGoalieGAA(awayGoalie.gaa),
         goalie_l5: scoreGoalieL5SvPct(awayGoalie.savePct),
+        goalie_l10: scoreGoalieL10Weighted([awayGoalie.savePct]),
         backup_goalie: scoreBackupGoalie(0.900),
         shots_against: scoreShotsAgainst(stats2.shotsAgainstPerGame || stats2.shotsAgainst || 30),
         goals_game: scoreGoalsPerGame(stats2.goalsPerGame || stats2.goalsFor / Math.max(stats2.gamesPlayed || 1, 1) || 3.1),
         shooting_pct: scoreShootingPct(stats2.shootingPctg || stats2.shootingPct || 10),
-        pp_pct: scorePPPct(stats2.powerPlayPct || stats2.powerPlayPercentage || 21),
+        pp_pct: scorePPPct(ppPct2),
+        pk_pct: scorePKPct(pkPct2),
         pts_l10: scorePtsL10(ptsL10_2),
         goals_l5: scoreGoalsL5(goalsL5_2),
-        pk_pct: scorePKPct(stats2.penaltyKillPct || stats2.penaltyKillPercentage || 79),
+        goals_blend: scoreGoalsBlend(goalsL5_2, goalsL5_2 * 2, goalsL5_2 * 4),
         blocks_hits: scoreBlocksHits((stats2.blockedShots || 15) + (stats2.hits || 25)),
         goals_allowed: scoreGoalsAllowed(stats2.goalsAgainstPerGame || stats2.goalsAgainst / Math.max(stats2.gamesPlayed || 1, 1) || 3.0),
         hd_chances: scoreHDChancesAgainst(stats2.shotsAgainstPerGame ? stats2.shotsAgainstPerGame * 0.35 : 10),
         home_away: scoreHomeAway(splits2.away, false),
-        rest_days: scoreRestDays(rest2),
+        rest_days: scoreRestDaysV2(rest2, false),
         momentum: scoreMomentum(last5_2),
         h2h: scoreH2H(h2h.total - h2h.wins, h2h.total),
+        xg: scoreXG(xg2.xG60),
+        goalie_workload: scoreGoalieWorkload(workload2),
+        st_diff: scoreSpecialTeamsDiff(ppPct2, pkPct1),
+        cf_proxy: scoreCFProxy(cf2.cfPct),
       };
 
-      // Shared/environmental factors
+      // ── Shared factors (line movement / RLM / arena / pace) ──
       const sharedFactors: Record<string, number> = {
-        line_movement: 50,
-        public_pct: 50,
+        line_movement: 50, public_pct: 50, rlm: 50,
+        arena: scoreArena(arenaFactor),
+        pace: scorePace(paceCombined),
       };
 
-      // Try to get odds data
+      let lineMovementSide: "home" | "away" | "neutral" = "neutral";
+      let sharpMoneyTriggered = false;
       if (game_id && eventData) {
-        const odds = await getOddsForGame(supabase, {
-          home: eventData.competitions?.[0]?.competitors?.find((c: any) => c.homeAway === "home")?.team?.displayName || "",
-          away: eventData.competitions?.[0]?.competitors?.find((c: any) => c.homeAway === "away")?.team?.displayName || "",
-        });
-        if (odds) {
-          const h2hOdds = odds.h2h || [];
-          if (h2hOdds.length > 1) {
-            const prices = h2hOdds.map((o: any) => o.price || 0);
-            const spread = Math.max(...prices) - Math.min(...prices);
-            sharedFactors.line_movement = Math.min(100, 50 + spread * 0.2);
-            sharedFactors.public_pct = scorePublicPercent(spread * 0.1);
+        try {
+          const odds = await getOddsForGame(supabase, {
+            home: eventData.competitions?.[0]?.competitors?.find((c: any) => c.homeAway === "home")?.team?.displayName || "",
+            away: eventData.competitions?.[0]?.competitors?.find((c: any) => c.homeAway === "away")?.team?.displayName || "",
+          });
+          const history = await pullOddsHistory(supabase, String(game_id), "h2h");
+          if (odds?.h2h) {
+            const current = (odds.h2h || []).map((o: any) => ({
+              book: o.book || "unknown", price: o.price || 0, market: "h2h",
+            }));
+            const lm = computeLineMovement(history, current);
+            sharedFactors.line_movement = scoreLineMovement19(lm);
+            lineMovementSide = lm.side;
+            const rlm = computeRLM(history, null, current, "h2h");
+            sharedFactors.rlm = scoreRLM20(rlm);
+            sharpMoneyTriggered = rlm.triggered || sharpBookDivergence(current).diverges;
           }
-        }
+        } catch (e) { console.error("odds intel error:", (e as Error).message); }
       }
 
-      // Apply injury adjustments
-      const { adjustedFactors: adj1, warnings: warn1 } = adjustForInjuries(injuries1, team1Factors);
-      const { adjustedFactors: adj2, warnings: warn2 } = adjustForInjuries(injuries2, team2Factors);
+      // ── v2 injury adjustments ──
+      const inj1 = await nhlInjuryAdjustments(team1_id, injuries1, team1Factors, homeGoalie?.name, 0.905);
+      const inj2 = await nhlInjuryAdjustments(team2_id, injuries2, team2Factors, awayGoalie?.name, 0.905);
 
-      // Block player prop for injured/out players
       if (bet_type === "player_prop" && player_name) {
-        const allInjured = [...injuries1, ...injuries2];
-        const playerInjury = allInjured.find(i =>
-          i.name.toLowerCase().includes(player_name.toLowerCase())
+        const pInj = [...injuries1, ...injuries2].find((i) =>
+          i.name.toLowerCase().includes(player_name.toLowerCase()),
         );
-        if (playerInjury) {
-          const s = (playerInjury.status || "").toLowerCase();
-          if (s.includes("out") || s.includes("injured reserve") || s.includes("ir")) {
-            return json({
-              error: `Cannot generate prediction: ${player_name} is ${playerInjury.status}`,
-              blocked: true,
-              injury: playerInjury,
-            }, 400);
-          }
+        if (pInj && (pInj.status === "out" || pInj.status === "doubtful")) {
+          return json({ error: `Cannot generate prediction: ${player_name} is ${pInj.status}`, blocked: true, injury: pInj }, 400);
         }
       }
 
-      // Run model
-      const result = runModel(bet_type, adj1, adj2, sharedFactors);
+      const result = runModelV2(bet_type, inj1.adjustedFactors, inj2.adjustedFactors, sharedFactors);
 
-      // Generate AI writeup
-      const writeup = await generateWriteup({ ...result, warnings: [...warn1, ...warn2] }, bet_type);
+      const topFactors = [...result.factorBreakdown]
+        .sort((a, b) => b.weight - a.weight)
+        .slice(0, 3);
+
+      const writeup = await generateWriteup(
+        { ...result, warnings: [...inj1.warnings, ...inj2.warnings].map((w) => `${w.player} (${w.position}) — ${w.status}`) },
+        bet_type,
+      );
+
+      const goalieWarning = [...inj1.warnings, ...inj2.warnings].find((w) =>
+        (w.affected_factor || "").includes("goalie"),
+      );
 
       const prediction = {
         bet_type,
+        model_version: MODEL_VERSION,
         confidence: result.confidence,
         verdict: result.verdict,
+        confidence_tier: result.tier,
         factorBreakdown: result.factorBreakdown,
+        top_factors: topFactors,
+        line_movement_indicator: lineMovementSide === "home" ? "↑" : lineMovementSide === "away" ? "↓" : "=",
+        sharp_money_indicator: sharpMoneyTriggered,
+        goalie_warning: goalieWarning ? `${goalieWarning.player} ${goalieWarning.status}` : null,
+        injury_warnings: [...inj1.warnings, ...inj2.warnings],
         writeup,
-        injuries: {
-          team1: injuries1,
-          team2: injuries2,
-          warnings: [...warn1, ...warn2],
-        },
-        goalies: {
-          home: homeGoalie,
-          away: awayGoalie,
-        },
+        injuries: { team1: injuries1, team2: injuries2 },
+        goalies: { home: homeGoalie, away: awayGoalie },
         context: {
           arenaFactor,
+          xg: { team1: xg1.xG60, team2: xg2.xG60, fallback: xg1.fallback || xg2.fallback },
+          cf: { team1: cf1.cfPct, team2: cf2.cfPct },
+          pace: paceCombined,
+          workload: { team1: workload1, team2: workload2 },
           momentum: { team1: last5_1, team2: last5_2 },
           splits: { team1: splits1, team2: splits2 },
           goalDiff: { team1: gd1, team2: gd2 },
         },
       };
 
-      // Cache prediction
+      // Per-factor audit log (service-role only)
+      if (game_id) {
+        try {
+          const factorRows = result.factorBreakdown.map((f: any) => ({
+            game_id: String(game_id),
+            factor_name: f.factor,
+            score: f.advantageScore,
+            weight: f.weight / 100, // back to fraction
+            bet_type,
+            model_version: MODEL_VERSION,
+          }));
+          if (factorRows.length > 0) {
+            await supabase.from("nhl_factor_log").insert(factorRows);
+          }
+        } catch (e) { console.error("nhl_factor_log insert failed:", (e as Error).message); }
+      }
+
       if (game_id && !player_name) {
         try {
           await supabase.from("nhl_predictions").insert({
-            game_id: String(game_id),
-            bet_type,
-            prediction,
-            confidence: result.confidence,
-            verdict: result.verdict,
+            game_id: String(game_id), bet_type, prediction,
+            confidence: result.confidence, verdict: result.verdict,
             prediction_date: new Date().toISOString().split("T")[0],
           });
-        } catch (_) { /* cache miss is fine */ }
+        } catch (_) { /* ok */ }
       }
 
-      // Snapshot logging — fire and forget
       logSnapshot({
-        sport: "nhl",
-        market_type: bet_type,
+        sport: "nhl", market_type: bet_type,
         player_or_team: player_name || `${team1_id} vs ${team2_id}`,
         prop_type: prop_type || null,
         line: typeof line === "string" ? parseFloat(line) : (line ?? null),
         direction: over_under || null,
-        confidence: result.confidence,
-        verdict: result.verdict,
-        top_factors: (result.factorBreakdown || []).slice(0, 5),
+        confidence: result.confidence, verdict: result.verdict,
+        top_factors: topFactors,
       }).catch((err) => console.error("logSnapshot failed:", err));
 
       return json(prediction);
