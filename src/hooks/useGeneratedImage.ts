@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { generateImage } from "@/utils/generateImage";
+import { generateImage, type WaveModel } from "@/utils/generateImage";
 
 // Module-level cache survives re-renders within a session.
 const memCache = new Map<string, string>();
@@ -22,7 +22,8 @@ function writeSession(key: string, url: string) {
 export function useGeneratedImage(
   prompt: string,
   cacheKey: string,
-  enabled: boolean = true
+  enabled: boolean = true,
+  model: WaveModel = "wavespeed-ai/flux-dev"
 ) {
   const initial = memCache.get(cacheKey) ?? readSession(cacheKey);
   if (initial && !memCache.has(cacheKey)) memCache.set(cacheKey, initial);
@@ -51,7 +52,7 @@ export function useGeneratedImage(
     setError(false);
 
     const existing = inflight.get(cacheKey);
-    const p = existing ?? generateImage(prompt);
+    const p = existing ?? generateImage(prompt, model);
     if (!existing) inflight.set(cacheKey, p);
 
     p.then((result) => {
@@ -71,17 +72,21 @@ export function useGeneratedImage(
       });
 
     return () => { cancelled = true; };
-  }, [prompt, cacheKey, enabled]);
+  }, [prompt, cacheKey, enabled, model]);
 
   return { url, loading, error };
 }
 
 /** Fire-and-forget preload (for the next screen). */
-export function preloadGeneratedImage(prompt: string, cacheKey: string) {
+export function preloadGeneratedImage(
+  prompt: string,
+  cacheKey: string,
+  model: WaveModel = "wavespeed-ai/flux-dev"
+) {
   if (memCache.has(cacheKey)) return;
   if (readSession(cacheKey)) return;
   if (inflight.has(cacheKey)) return;
-  const p = generateImage(prompt).then((url) => {
+  const p = generateImage(prompt, model).then((url) => {
     if (url) {
       memCache.set(cacheKey, url);
       writeSession(cacheKey, url);

@@ -29,6 +29,7 @@ const AuthPage = lazy(() => import("./pages/AuthPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
 const PaywallPage = lazy(() => import("./pages/PaywallPage"));
+const WelcomeConfirmationPage = lazy(() => import("./pages/WelcomeConfirmationPage"));
 
 const queryClient = new QueryClient();
 
@@ -87,6 +88,11 @@ function AppRoutes() {
       <Route path="/paywall" element={
         <Suspense fallback={<LoadingSpinner />}>
           <PaywallPage />
+        </Suspense>
+      } />
+      <Route path="/welcome" element={
+        <Suspense fallback={<LoadingSpinner />}>
+          <WelcomeConfirmationPage />
         </Suspense>
       } />
       <Route path="/dashboard" element={
