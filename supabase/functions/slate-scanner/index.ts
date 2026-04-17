@@ -1,9 +1,5 @@
 // ─────────────────────────────────────────────────────────────
 // slate-scanner — daily orchestrator
-// 1. Pulls full slate (NBA/MLB/NHL/UFC) from games-schedule
-// 2. Evaluates game lines (ML/spread/total) + player props
-// 3. Ranks by score = edge × confidence
-// 4. Writes to daily_picks (≥70%) and free_props (≥65%)
 // ─────────────────────────────────────────────────────────────
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
@@ -28,83 +24,154 @@ function json(body: unknown, status = 200) {
   });
 }
 
+// Map short code -> Odds-API sport key (for games-schedule)
 const SPORT_KEYS: Record<string, string> = {
   nba: "basketball_nba",
   mlb: "baseball_mlb",
   nhl: "icehockey_nhl",
-  ufc: "mma_mixed_martial_arts",
+  // UFC not supported by games-schedule yet
 };
 
 const FN_BASE = `${Deno.env.get("SUPABASE_URL")}/functions/v1`;
 const SVC_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-async function fnFetch(path: string) {
-  const r = await fetch(`${FN_BASE}/${path}`, {
-    headers: { Authorization: `Bearer ${SVC_KEY}`, apikey: SVC_KEY },
-  });
-  if (!r.ok) {
-    console.warn(`fnFetch ${path} -> ${r.status}`);
-    return null;
+interface FetchResult {
+  ok: boolean;
+  status: number;
+  data: any;
+  url: string;
+  size: number;
+}
+
+async function fnFetch(path: string): Promise<FetchResult> {
+  const url = `${FN_BASE}/${path}`;
+  try {
+    const r = await fetch(url, {
+      headers: { Authorization: `Bearer ${SVC_KEY}`, apikey: SVC_KEY },
+    });
+    const text = await r.text();
+    let data: any = null;
+    try { data = JSON.parse(text); } catch { data = text; }
+    const size = text.length;
+    console.log(`fnFetch ${path} -> ${r.status} (${size}b)`);
+    return { ok: r.ok, status: r.status, data, url, size };
+  } catch (e) {
+    console.error(`fnFetch ${path} threw:`, e);
+    return { ok: false, status: 0, data: null, url, size: 0 };
   }
-  return r.json().catch(() => null);
+}
+
+// ── Synthetic seed for off-season validation ────────────────
+function syntheticPlays(): ScoredPlay[] {
+  const odds = -110;
+  const implied = americanToImpliedProb(odds);
+  const projected = 0.62;
+  const edge = projected - implied;
+  return [
+    score({
+      sport: "nba",
+      bet_type: "moneyline",
+      player_name: "Test Lakers @ Test Celtics",
+      home_team: "Test Celtics",
+      away_team: "Test Lakers",
+      team: "Test Celtics",
+      opponent: "Test Lakers",
+      prop_type: "moneyline",
+      line: 0,
+      direction: "home",
+      odds,
+      projected_prob: projected,
+      implied_prob: implied,
+      edge,
+      ev_pct: calcEv(projected, odds),
+      confidence: projected,
+    }),
+    score({
+      sport: "nba",
+      bet_type: "prop",
+      player_name: "Test Player",
+      team: "Test Lakers",
+      opponent: "Test Celtics",
+      prop_type: "points",
+      line: 25.5,
+      direction: "over",
+      odds: -115,
+      projected_prob: 0.68,
+      implied_prob: americanToImpliedProb(-115),
+      edge: 0.68 - americanToImpliedProb(-115),
+      ev_pct: calcEv(0.68, -115),
+      confidence: 0.68,
+    }),
+  ];
 }
 
 // ── Game-line evaluation ───────────────────────────────────
-async function evaluateGameLines(sport: string): Promise<ScoredPlay[]> {
+async function evaluateGameLines(
+  sport: string,
+  diag: Record<string, any>
+): Promise<ScoredPlay[]> {
   const sportKey = SPORT_KEYS[sport];
-  const games = (await fnFetch(`games-schedule?sport=${sportKey}`)) || [];
-  if (!Array.isArray(games) || games.length === 0) return [];
+  if (!sportKey) {
+    diag.gamesFetched = 0;
+    diag.note = "sport not supported by games-schedule";
+    return [];
+  }
 
-  // Pull odds for the sport (h2h / spreads / totals)
-  const odds =
-    (await fnFetch(`nba-odds/events?sport=${sport}&markets=h2h,spreads,totals`)) || [];
+  const gamesRes = await fnFetch(`games-schedule?sport=${sportKey}`);
+  const games = Array.isArray(gamesRes.data) ? gamesRes.data : [];
+  diag.gamesFetched = games.length;
+  diag.gamesScheduleStatus = gamesRes.status;
+  if (games.length === 0) return [];
+
+  const upcoming = games.filter(
+    (g: any) => g.status !== "STATUS_FINAL" && g.status !== "STATUS_IN_PROGRESS"
+  );
+  diag.gamesUpcoming = upcoming.length;
+  if (upcoming.length === 0) return [];
+
+  const oddsRes = await fnFetch(
+    `nba-odds/events?sport=${sport}&markets=h2h,spreads,totals`
+  );
+  const oddsEvents = Array.isArray(oddsRes.data?.events)
+    ? oddsRes.data.events
+    : Array.isArray(oddsRes.data)
+      ? oddsRes.data
+      : [];
+  diag.oddsFetched = oddsEvents.length;
+  diag.oddsStatus = oddsRes.status;
+
   const oddsMap = new Map<string, any>();
-  for (const ev of Array.isArray(odds) ? odds : []) {
+  for (const ev of oddsEvents) {
     const key = `${(ev.home_team || "").toLowerCase()}|${(ev.away_team || "").toLowerCase()}`;
     oddsMap.set(key, ev);
   }
 
+  let matched = 0;
   const plays: ScoredPlay[] = [];
-  for (const g of games) {
-    if (g.status === "STATUS_FINAL" || g.status === "STATUS_IN_PROGRESS") continue;
+  for (const g of upcoming) {
     const key = `${(g.home_team || "").toLowerCase()}|${(g.away_team || "").toLowerCase()}`;
     const ev = oddsMap.get(key);
     if (!ev?.bookmakers?.length) continue;
-
-    // Use first bookmaker as canonical (Pinnacle preferred if present)
+    matched++;
     const bm = ev.bookmakers.find((b: any) => b.key === "pinnacle") || ev.bookmakers[0];
     for (const mkt of bm.markets || []) {
       if (mkt.key === "h2h") {
         for (const o of mkt.outcomes || []) {
           const isHome = o.name === g.home_team;
           const implied = americanToImpliedProb(o.price);
-          // Lightweight model: shrink toward 50/50 + small home bias
-          const projected = Math.max(
-            0.05,
-            Math.min(0.95, implied * 0.92 + (isHome ? 0.04 : 0.02))
-          );
+          const projected = Math.max(0.05, Math.min(0.95, implied * 0.92 + (isHome ? 0.04 : 0.02)));
           const edge = projected - implied;
           if (edge < 0.02) continue;
-          plays.push(
-            score({
-              sport,
-              bet_type: "moneyline",
-              player_name: `${g.away_team} @ ${g.home_team}`,
-              home_team: g.home_team,
-              away_team: g.away_team,
-              team: o.name,
-              opponent: isHome ? g.away_team : g.home_team,
-              prop_type: "moneyline",
-              line: 0,
-              direction: isHome ? "home" : "away",
-              odds: o.price,
-              projected_prob: projected,
-              implied_prob: implied,
-              edge,
-              ev_pct: calcEv(projected, o.price),
-              confidence: projected,
-            })
-          );
+          plays.push(score({
+            sport, bet_type: "moneyline",
+            player_name: `${g.away_team} @ ${g.home_team}`,
+            home_team: g.home_team, away_team: g.away_team,
+            team: o.name, opponent: isHome ? g.away_team : g.home_team,
+            prop_type: "moneyline", line: 0,
+            direction: isHome ? "home" : "away",
+            odds: o.price, projected_prob: projected, implied_prob: implied,
+            edge, ev_pct: calcEv(projected, o.price), confidence: projected,
+          }));
         }
       } else if (mkt.key === "spreads" || mkt.key === "totals") {
         const betType = mkt.key === "spreads" ? "spread" : "total";
@@ -113,93 +180,92 @@ async function evaluateGameLines(sport: string): Promise<ScoredPlay[]> {
           const projected = Math.max(0.05, Math.min(0.95, implied * 0.94 + 0.03));
           const edge = projected - implied;
           if (edge < 0.02) continue;
-          const dir =
-            betType === "total"
-              ? (o.name || "").toLowerCase().includes("over")
-                ? "over"
-                : "under"
-              : o.name === g.home_team
-                ? "home"
-                : "away";
-          plays.push(
-            score({
-              sport,
-              bet_type: betType as "spread" | "total",
-              player_name: `${g.away_team} @ ${g.home_team}`,
-              home_team: g.home_team,
-              away_team: g.away_team,
-              prop_type: betType,
-              line: o.point ?? 0,
-              spread_line: betType === "spread" ? o.point : null,
-              total_line: betType === "total" ? o.point : null,
-              direction: dir,
-              odds: o.price,
-              projected_prob: projected,
-              implied_prob: implied,
-              edge,
-              ev_pct: calcEv(projected, o.price),
-              confidence: projected,
-            })
-          );
+          const dir = betType === "total"
+            ? ((o.name || "").toLowerCase().includes("over") ? "over" : "under")
+            : (o.name === g.home_team ? "home" : "away");
+          plays.push(score({
+            sport, bet_type: betType as "spread" | "total",
+            player_name: `${g.away_team} @ ${g.home_team}`,
+            home_team: g.home_team, away_team: g.away_team,
+            prop_type: betType, line: o.point ?? 0,
+            spread_line: betType === "spread" ? o.point : null,
+            total_line: betType === "total" ? o.point : null,
+            direction: dir, odds: o.price,
+            projected_prob: projected, implied_prob: implied,
+            edge, ev_pct: calcEv(projected, o.price), confidence: projected,
+          }));
         }
       }
     }
   }
+  diag.gamesWithOdds = matched;
+  diag.linesGenerated = plays.length;
   return plays;
 }
 
-// ── Player-prop evaluation (delegates to existing free-props logic) ──
-async function evaluatePlayerProps(sport: string): Promise<ScoredPlay[]> {
-  // Reuse free-props edge function which already scans active players
-  const data = await fnFetch(`free-props/scan?sport=${sport}`);
-  const rows = Array.isArray(data) ? data : data?.props || [];
+// ── Player props — read from free_props table after triggering refresh ──
+async function evaluatePlayerProps(
+  sport: string,
+  diag: Record<string, any>,
+  supabase: any
+): Promise<ScoredPlay[]> {
+  // free-props has no per-sport scan; it generates everything in one call.
+  // Read whatever's already there for today, scoped to this sport.
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from("free_props")
+    .select("*")
+    .eq("prop_date", today)
+    .eq("sport", sport);
+  if (error) {
+    diag.propsError = error.message;
+    diag.propsFetched = 0;
+    return [];
+  }
+  const rows = data || [];
+  diag.propsFetched = rows.length;
+
   const plays: ScoredPlay[] = [];
   for (const r of rows) {
+    if (r.bet_type && r.bet_type !== "prop") continue; // skip game-line rows we wrote
     const odds = r.odds ?? -110;
     const implied = americanToImpliedProb(odds);
-    const conf = (r.confidence ?? 0) / (r.confidence > 1 ? 100 : 1);
-    const edge = (r.edge ?? Math.max(0, conf - implied)) / (Math.abs(r.edge) > 1 ? 100 : 1);
-    plays.push(
-      score({
-        sport,
-        bet_type: "prop",
-        player_name: r.player_name,
-        team: r.team,
-        opponent: r.opponent,
-        prop_type: r.prop_type,
-        line: r.line,
-        direction: r.direction || "over",
-        odds,
-        projected_prob: conf,
-        implied_prob: implied,
-        edge,
-        ev_pct: calcEv(conf, odds),
-        confidence: conf,
-      })
-    );
+    const conf = (r.confidence ?? 0) > 1 ? r.confidence / 100 : (r.confidence ?? 0);
+    const edgeRaw = r.edge ?? Math.max(0, conf - implied);
+    const edge = Math.abs(edgeRaw) > 1 ? edgeRaw / 100 : edgeRaw;
+    plays.push(score({
+      sport, bet_type: "prop",
+      player_name: r.player_name, team: r.team, opponent: r.opponent,
+      prop_type: r.prop_type, line: r.line,
+      direction: r.direction || "over",
+      odds, projected_prob: conf, implied_prob: implied,
+      edge, ev_pct: calcEv(conf, odds), confidence: conf,
+    }));
   }
+  diag.propPlaysGenerated = plays.length;
   return plays;
 }
 
-async function runScan(): Promise<{ all: ScoredPlay[]; perSport: Record<string, number> }> {
+async function runScan(supabase: any) {
   const sports = ["nba", "mlb", "nhl", "ufc"];
   const all: ScoredPlay[] = [];
-  const perSport: Record<string, number> = {};
+  const debug: Record<string, any> = {};
   for (const sport of sports) {
+    const d: Record<string, any> = {};
     try {
       const [lines, props] = await Promise.all([
-        evaluateGameLines(sport),
-        evaluatePlayerProps(sport),
+        evaluateGameLines(sport, d),
+        evaluatePlayerProps(sport, d, supabase),
       ]);
       const combined = [...lines, ...props];
-      perSport[sport] = combined.length;
+      d.playsGenerated = combined.length;
       all.push(...combined);
     } catch (e) {
-      console.error(`scan ${sport} failed:`, e);
-      perSport[sport] = 0;
+      d.error = String(e);
     }
+    debug[sport] = d;
   }
-  return { all, perSport };
+  return { all, debug };
 }
 
 Deno.serve(async (req) => {
@@ -207,16 +273,36 @@ Deno.serve(async (req) => {
 
   const url = new URL(req.url);
   const dryRun = url.searchParams.get("dryRun") === "true";
+  const debug = url.searchParams.get("debug") === "true";
+  const seed = url.searchParams.get("seed") === "true";
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, SVC_KEY);
 
-  const { all, perSport } = await runScan();
+  let all: ScoredPlay[] = [];
+  let debugInfo: Record<string, any> = {};
+
+  if (seed) {
+    all = syntheticPlays();
+    debugInfo = { mode: "synthetic", count: all.length };
+  } else {
+    const r = await runScan(supabase);
+    all = r.all;
+    debugInfo = r.debug;
+  }
+
   const { todaysEdge, dailyPicks, freePicks, sorted } = rankAndDistribute(all);
 
   if (dryRun) {
     return json({
       dry_run: true,
-      counts: { total: all.length, perSport, dailyPicks: dailyPicks.length, freePicks: freePicks.length, todaysEdge: todaysEdge.length },
+      seed,
+      counts: {
+        total: all.length,
+        dailyPicks: dailyPicks.length,
+        freePicks: freePicks.length,
+        todaysEdge: todaysEdge.length,
+      },
+      ...(debug ? { debug: debugInfo } : {}),
       top10: sorted.slice(0, 10),
       sanity_issues: sanityCheck(all),
     });
@@ -224,50 +310,37 @@ Deno.serve(async (req) => {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  // Wipe today's rows then insert
   await supabase.from("daily_picks").delete().eq("pick_date", today);
-  await supabase.from("free_props").delete().eq("prop_date", today);
+  // Only delete game-line rows in free_props; preserve cron-generated prop rows
+  await supabase.from("free_props").delete().eq("prop_date", today).neq("bet_type", "prop");
 
   const dailyRows = dailyPicks.map((p) => ({
     pick_date: today,
-    sport: p.sport,
-    bet_type: p.bet_type,
+    sport: p.sport, bet_type: p.bet_type,
     player_name: p.player_name,
-    team: p.team ?? null,
-    opponent: p.opponent ?? null,
-    home_team: p.home_team ?? null,
-    away_team: p.away_team ?? null,
-    prop_type: p.prop_type,
-    line: p.line,
-    spread_line: p.spread_line ?? null,
-    total_line: p.total_line ?? null,
-    direction: p.direction,
-    hit_rate: p.confidence,
-    last_n_games: 10,
-    avg_value: p.ev_pct,
-    odds: String(p.odds),
-    reasoning: p.reasoning,
+    team: p.team ?? null, opponent: p.opponent ?? null,
+    home_team: p.home_team ?? null, away_team: p.away_team ?? null,
+    prop_type: p.prop_type, line: p.line,
+    spread_line: p.spread_line ?? null, total_line: p.total_line ?? null,
+    direction: p.direction, hit_rate: p.confidence,
+    last_n_games: 10, avg_value: p.ev_pct,
+    odds: String(p.odds), reasoning: p.reasoning,
   }));
 
-  const freeRows = freePicks.map((p) => ({
-    prop_date: today,
-    sport: p.sport,
-    bet_type: p.bet_type,
-    player_name: p.player_name,
-    team: p.team ?? null,
-    opponent: p.opponent ?? null,
-    home_team: p.home_team ?? null,
-    away_team: p.away_team ?? null,
-    prop_type: p.prop_type,
-    line: p.line,
-    spread_line: p.spread_line ?? null,
-    total_line: p.total_line ?? null,
-    direction: p.direction,
-    odds: Math.round(p.odds),
-    confidence: p.confidence,
-    edge: p.edge,
-    reasoning: p.reasoning,
-  }));
+  // Only insert game-line plays into free_props (props handled by free-props cron)
+  const freeRows = freePicks
+    .filter((p) => p.bet_type !== "prop")
+    .map((p) => ({
+      prop_date: today,
+      sport: p.sport, bet_type: p.bet_type,
+      player_name: p.player_name,
+      team: p.team ?? null, opponent: p.opponent ?? null,
+      home_team: p.home_team ?? null, away_team: p.away_team ?? null,
+      prop_type: p.prop_type, line: p.line,
+      spread_line: p.spread_line ?? null, total_line: p.total_line ?? null,
+      direction: p.direction, odds: Math.round(p.odds),
+      confidence: p.confidence, edge: p.edge, reasoning: p.reasoning,
+    }));
 
   if (dailyRows.length) await supabase.from("daily_picks").insert(dailyRows);
   if (freeRows.length) await supabase.from("free_props").insert(freeRows);
@@ -276,10 +349,10 @@ Deno.serve(async (req) => {
     ok: true,
     counts: {
       total: all.length,
-      perSport,
       dailyPicks: dailyRows.length,
       freePicks: freeRows.length,
       todaysEdge: todaysEdge.length,
     },
+    ...(debug ? { debug: debugInfo } : {}),
   });
 });
