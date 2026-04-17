@@ -268,7 +268,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
         .order("pick_date", { ascending: false })
         .order("hit_rate", { ascending: false })
         .limit(40);
-      allToday = ((recentData as DailyPick[]) || []).filter(p => p.hit_rate >= 50);
+      allToday = ((recentData as DailyPick[]) || []).filter(p => hrOk(p.hit_rate));
     }
 
     const sortByPref = (arr: DailyPick[]) => {
