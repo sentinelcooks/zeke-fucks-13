@@ -382,6 +382,11 @@ const FreePicksPage = () => {
                         <div className={`w-1.5 h-1.5 rounded-full ${conf.dot}`} />
                         <span className="text-[15px] font-semibold text-foreground truncate">{pick.player_name}</span>
                         <span className="text-[11px] font-medium text-muted-foreground uppercase">{pick.sport}</span>
+                        {(pick as any).bet_type && (pick as any).bet_type !== "prop" && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-accent/15 text-accent uppercase tracking-wide">
+                            {(pick as any).bet_type === "moneyline" ? "ML" : (pick as any).bet_type}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 pl-3.5">
                         <span className={`text-[12px] font-bold ${pick.direction === "over" ? "text-nba-green" : "text-nba-red"}`}>
