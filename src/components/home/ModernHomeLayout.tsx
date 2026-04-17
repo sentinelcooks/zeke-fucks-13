@@ -220,6 +220,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const { addLeg } = useParlaySlip();
   const [slipSheetOpen, setSlipSheetOpen] = useState(false);
   const [slipSheetPick, setSlipSheetPick] = useState<import("@/components/AddToSlipSheet").SlipSheetPick | null>(null);
+  const [seeWhyPick, setSeeWhyPick] = useState<DailyPick | null>(null);
   const { user, profile } = useAuth();
   const [todayPicks, setTodayPicks] = useState<DailyPick[]>([]);
   const [dailyTierPicks, setDailyTierPicks] = useState<DailyPick[]>([]);
@@ -521,9 +522,9 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               <p className="text-[11px] text-muted-foreground/55">No picks generated yet today. Check back soon!</p>
             </div>
           ) : (
-            <CarouselWrapper pickCount={todayPicks.length}>
+            <div className="-mx-5 px-5 overflow-x-auto hide-scrollbar snap-x snap-mandatory">
               <div className="flex gap-3 pb-2">
-                {todayPicks.map((pick, i) => {
+                {todayPicks.slice(0, 5).map((pick, i) => {
                   const isGameBet = pick.bet_type && pick.bet_type !== 'prop';
                   // Defensive: hit_rate may be decimal (0.76) or percent (76). Normalize to percent.
                   const rawHr = pick.hit_rate ?? 0;
@@ -637,8 +638,10 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       {/* Middle: Name + Sport Pill + Matchup */}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{
-                          fontSize: isGameBet ? 15 : 18, fontWeight: 700, color: '#f0eeff',
-                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                          fontSize: isGameBet ? 15 : 17, fontWeight: 700, color: '#f0eeff',
+                          lineHeight: 1.2, wordBreak: 'break-word',
+                          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
                         }}>
                           {isGameBet
                             ? `${pick.away_team || pick.opponent || ''} @ ${pick.home_team || pick.team || ''}`
@@ -764,35 +767,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     {/* BUTTONS */}
                     <div className="relative z-10" style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                       <button
-                        onClick={() => {
-                          if (isGameBet) {
-                            navigate("/dashboard/moneyline", {
-                              state: {
-                                autoAnalyze: true,
-                                home_team: pick.home_team || pick.team,
-                                away_team: pick.away_team || pick.opponent,
-                                bet_type: pick.bet_type,
-                                sport: pick.sport || "nba",
-                              },
-                            });
-                          } else {
-                            navigate("/dashboard/analyze", {
-                              state: {
-                                autoAnalyze: true,
-                                player: pick.player_name,
-                                prop_type: pick.prop_type,
-                                line: pick.line,
-                                over_under: pick.direction as "over" | "under",
-                                opponent: pick.opponent || "",
-                                sport: pick.sport || "nba",
-                                pick_snapshot: {
-                                  confidence: pick.hit_rate,
-                                  reasoning: pick.reasoning || "",
-                                },
-                              },
-                            });
-                          }
-                        }}
+                        onClick={() => setSeeWhyPick(pick)}
                         className="flex items-center justify-center active:opacity-70"
                         style={{
                           flex: 1, height: 42, borderRadius: 10,
@@ -829,7 +804,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                   );
                 })}
               </div>
-            </CarouselWrapper>
+            </div>
           )}
         </motion.div>
 
@@ -1026,6 +1001,93 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
 
       </div>
       <AddToSlipSheet open={slipSheetOpen} onOpenChange={setSlipSheetOpen} pick={slipSheetPick} />
+
+      <AnimatePresence>
+        {seeWhyPick && (() => {
+          const pick = seeWhyPick;
+          const rawHr = pick.hit_rate ?? 0;
+          const confPercent = rawHr > 1 ? Math.round(rawHr) : Math.round(rawHr * 100);
+          const verdict = confPercent >= 75 ? 'STRONG' : confPercent >= 65 ? 'LEAN' : 'MID';
+          const verdictColor = confPercent >= 75 ? '#22c55e' : confPercent >= 65 ? '#22d3ee' : '#f59e0b';
+          const isGameBet = pick.bet_type && pick.bet_type !== 'prop';
+          const propLabel = isGameBet
+            ? pick.bet_type === 'moneyline'
+              ? `Winner: ${pick.player_name}`
+              : pick.bet_type === 'spread'
+                ? `Spread ${pick.spread_line && pick.spread_line > 0 ? '+' : ''}${pick.spread_line}`
+                : `${pick.direction === 'over' ? 'Over' : 'Under'} ${pick.total_line}`
+            : `${(pick.direction || '').toUpperCase()} ${pick.line} ${(pick.prop_type || '').replace(/_/g, ' ')}`;
+          return (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+              onClick={() => setSeeWhyPick(null)}
+            >
+              <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.92, y: 16 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ type: 'spring', damping: 24, stiffness: 320 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative w-full max-w-sm rounded-2xl overflow-hidden p-6 space-y-4"
+                style={{
+                  background: 'linear-gradient(165deg, hsl(250 20% 12%), hsl(250 22% 9%))',
+                  border: `1px solid ${verdictColor}30`,
+                  boxShadow: `0 25px 50px -12px rgba(0,0,0,0.6), 0 0 40px -10px ${verdictColor}25`,
+                }}
+              >
+                <button
+                  onClick={() => setSeeWhyPick(null)}
+                  className="absolute top-3 right-3 p-1.5 rounded-lg text-muted-foreground/60 hover:text-foreground hover:bg-secondary/40 transition-all z-10"
+                  aria-label="Close"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/50 mb-1">Sentinel Confidence</p>
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-5xl font-black tabular-nums" style={{ color: verdictColor }}>{confPercent}%</span>
+                    <span className="text-sm font-bold uppercase tracking-wider" style={{ color: verdictColor }}>{verdict}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-base font-bold text-foreground leading-tight break-words">{pick.player_name}</p>
+                  <p className="text-sm text-foreground/80">{propLabel}</p>
+                  <p className="text-xs text-muted-foreground/60">
+                    Odds {pick.odds || '—'} · {(pick.sport || '').toUpperCase()}
+                  </p>
+                </div>
+
+                {pick.reasoning && (
+                  <div
+                    className="rounded-xl p-3.5"
+                    style={{
+                      background: `${verdictColor}10`,
+                      border: `1px solid ${verdictColor}20`,
+                    }}
+                  >
+                    <p className="text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: verdictColor }}>
+                      Why
+                    </p>
+                    <p className="text-[13px] text-foreground/85 leading-relaxed italic">
+                      {pick.reasoning.replace(/NaN%/g, 'N/A')}
+                    </p>
+                  </div>
+                )}
+
+                <p className="text-[10px] text-muted-foreground/40 text-center pt-1">
+                  Locked at scan time · matches the card badge
+                </p>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
     </div>
   );
 }
