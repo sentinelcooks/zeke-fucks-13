@@ -349,49 +349,23 @@ Deno.serve(async (req) => {
     }
 
     if (path === "generate") {
-      const today = new Date().toISOString().slice(0, 10);
-
-      console.log("Generating free props...");
-      const [nbaProps, mlbProps, ufcProps] = await Promise.all([
-        fetchSportProps(supabase, "basketball_nba", NBA_PROP_MARKETS, "nba", 6, 40),
-        fetchSportProps(supabase, "baseball_mlb", MLB_PROP_MARKETS, "mlb", 6, 40),
-        fetchUfcProps(supabase),
-      ]);
-      console.log(`NBA: ${nbaProps.length}, MLB: ${mlbProps.length}, UFC: ${ufcProps.length}`);
-
-      const allProps = [...nbaProps, ...mlbProps, ...ufcProps];
-
-      // Delete today's existing
-      await supabase.from("free_props").delete().eq("prop_date", today);
-
-      // Insert in batches
-      if (allProps.length > 0) {
-        const rows = allProps.map(p => ({
-          player_name: p.player,
-          team: p.team,
-          opponent: p.opponent,
-          prop_type: p.prop,
-          line: p.line,
-          direction: p.direction,
-          odds: p.odds,
-          edge: p.edge,
-          confidence: p.confidence,
-          sport: p.sport,
-          book: p.book,
-          prop_date: today,
-        }));
-
-        // Insert in chunks of 50
-        for (let i = 0; i < rows.length; i += 50) {
-          await supabase.from("free_props").insert(rows.slice(i, i + 50));
-        }
-      }
-
-      return new Response(JSON.stringify({
-        success: true,
-        count: allProps.length,
-        breakdown: { nba: nbaProps.length, mlb: mlbProps.length, ufc: ufcProps.length },
-      }), {
+      // Single source of truth: delegate to daily-picks (full-slate deterministic scan)
+      // which writes both daily_picks AND free_props in one pass with strict gating.
+      console.log("free-props/generate → proxying to daily-picks");
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const resp = await fetch(`${supabaseUrl}/functions/v1/daily-picks`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${serviceKey}`,
+          apikey: serviceKey,
+        },
+        body: JSON.stringify({}),
+      });
+      const body = await resp.text();
+      return new Response(body, {
+        status: resp.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
