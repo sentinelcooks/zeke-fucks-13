@@ -1,4 +1,4 @@
-// Generate a hero image via WaveSpeed.ai Flux-dev (async polling).
+// Generate an image via WaveSpeed.ai (async polling).
 // Public endpoint — onboarding is pre-auth.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,7 +7,14 @@ const corsHeaders = {
 };
 
 const WAVESPEED_API_KEY = Deno.env.get("WAVESPEED_API_KEY");
-const SUBMIT_URL = "https://api.wavespeed.ai/api/v3/wavespeed-ai/flux-dev";
+
+const ALLOWED_MODELS = new Set<string>([
+  "wavespeed-ai/flux-dev",
+  "wavespeed-ai/nano-banana-pro",
+  "wavespeed-ai/flux-dev/lora/krea",
+  "wavespeed-ai/flux-dev/image-to-image/ultra-fast",
+]);
+const DEFAULT_MODEL = "wavespeed-ai/flux-dev";
 
 function ok(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -17,7 +24,7 @@ function ok(body: unknown, status = 200) {
 }
 
 async function pollForResult(resultUrl: string): Promise<string | null> {
-  const deadline = Date.now() + 30_000;
+  const deadline = Date.now() + 45_000;
   while (Date.now() < deadline) {
     const r = await fetch(resultUrl, {
       headers: { Authorization: `Bearer ${WAVESPEED_API_KEY}` },
@@ -61,8 +68,11 @@ Deno.serve(async (req) => {
     if (!prompt || prompt.length > 1000) {
       return ok({ imageUrl: null, error: "invalid_prompt" }, 400);
     }
+    const requestedModel = typeof body?.model === "string" ? body.model.trim() : DEFAULT_MODEL;
+    const model = ALLOWED_MODELS.has(requestedModel) ? requestedModel : DEFAULT_MODEL;
 
-    const submit = await fetch(SUBMIT_URL, {
+    const submitUrl = `https://api.wavespeed.ai/api/v3/${model}`;
+    const submit = await fetch(submitUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${WAVESPEED_API_KEY}`,
@@ -73,7 +83,7 @@ Deno.serve(async (req) => {
 
     if (!submit.ok) {
       const t = await submit.text().catch(() => "");
-      console.error("[generate-image] submit failed", submit.status, t);
+      console.error("[generate-image] submit failed", submit.status, t, "model=", model);
       return ok({ imageUrl: null, error: `submit_${submit.status}` });
     }
 
