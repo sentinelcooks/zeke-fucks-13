@@ -220,6 +220,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const { addLeg } = useParlaySlip();
   const [slipSheetOpen, setSlipSheetOpen] = useState(false);
   const [slipSheetPick, setSlipSheetPick] = useState<import("@/components/AddToSlipSheet").SlipSheetPick | null>(null);
+  const [seeWhyPick, setSeeWhyPick] = useState<DailyPick | null>(null);
   const { user, profile } = useAuth();
   const [todayPicks, setTodayPicks] = useState<DailyPick[]>([]);
   const [dailyTierPicks, setDailyTierPicks] = useState<DailyPick[]>([]);
