@@ -2187,19 +2187,26 @@ const NbaPropsPage = () => {
                                 <motion.button
                                   whileTap={{ scale: 0.85 }}
                                   onClick={() => {
+                                    const corrLine = String(c.correlated_line ?? "");
+                                    const lineNum = parseFloat(corrLine);
+                                    // Sync UI state for visual feedback
                                     setPlayer(c.correlated_player);
                                     setPropType(c.correlated_prop);
                                     setOverUnder("over");
-                                    const corrLine = String(c.correlated_line || "");
                                     setLine(corrLine);
                                     const cats = NBA_PROP_CATEGORIES;
                                     const matchCat = cats.find(cat => cat.props.some(p => p.value === c.correlated_prop));
                                     if (matchCat) setActiveCategory(matchCat.category);
-                                    setTimeout(() => {
-                                      const l = parseFloat(corrLine);
-                                      if (l > 0) handleAnalyze();
-                                    }, 150);
                                     resultsRef.current?.scrollIntoView({ behavior: "smooth" });
+                                    // Fire analyze with explicit overrides — bypasses stale React state
+                                    if (!isNaN(lineNum) && lineNum > 0) {
+                                      handleAnalyze({
+                                        player: c.correlated_player,
+                                        propType: c.correlated_prop,
+                                        line: corrLine,
+                                        overUnder: "over",
+                                      });
+                                    }
                                   }}
                                   className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors bg-white/5 text-muted-foreground/65 hover:text-primary hover:bg-primary/10"
                                 >
@@ -2208,11 +2215,12 @@ const NbaPropsPage = () => {
                                 <motion.button
                                   whileTap={{ scale: 0.85 }}
                                   onClick={() => {
+                                    const corrLineStr = String(c.correlated_line ?? "");
                                     if (isInSlip) {
-                                      const leg = globalSlip.legs.find(l => l.player === c.correlated_player && l.propType === c.correlated_prop);
+                                      const leg = globalSlip.legs.find(l => l.player === c.correlated_player && l.propType === c.correlated_prop && l.line === corrLineStr);
                                       if (leg) globalSlip.removeLeg(leg.id);
                                     } else {
-                                      globalSlip.addLeg({ sport: "NBA", player: c.correlated_player, propType: c.correlated_prop, line: String(c.correlated_line || ""), overUnder: "over", odds: -110 });
+                                      globalSlip.addLeg({ sport: "NBA", player: c.correlated_player, propType: c.correlated_prop, line: corrLineStr, overUnder: "over", odds: -110 });
                                     }
                                   }}
                                   className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
