@@ -588,6 +588,8 @@ Deno.serve(async (req) => {
 
   const dailyRows = dailyPicks.map((p) => {
     const key = `${p.sport}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`;
+    const isEdge = edgeKeys.has(key);
+    const tier = isEdge ? "edge" : (p.confidence >= 0.70 ? "daily" : "value");
     return {
       pick_date: today,
       sport: p.sport, bet_type: p.bet_type,
@@ -596,10 +598,10 @@ Deno.serve(async (req) => {
       home_team: p.home_team ?? null, away_team: p.away_team ?? null,
       prop_type: p.prop_type, line: p.line,
       spread_line: p.spread_line ?? null, total_line: p.total_line ?? null,
-      direction: p.direction, hit_rate: p.confidence,
+      direction: p.direction, hit_rate: Math.round(p.confidence * 100),
       last_n_games: 10, avg_value: p.ev_pct,
       odds: String(p.odds), reasoning: p.reasoning,
-      tier: edgeKeys.has(key) ? "edge" : "daily",
+      tier,
     };
   });
 
