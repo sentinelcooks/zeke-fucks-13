@@ -146,62 +146,68 @@ function Sparkline({ color = "#00FF6A", down = false, className = "" }: { color?
   const last = points[points.length - 1];
   const fillPath = `M${points[0][0]},40 L${polyPts.split(" ").join(" L")} L${last[0]},40 Z`;
   const gradId = `sg-${color.replace("#", "")}-${down ? "d" : "u"}`;
+  const clipId = `sc-${color.replace("#", "")}-${down ? "d" : "u"}`;
   return (
-    <svg viewBox="0 0 54 40" className={className} fill="none" preserveAspectRatio="none">
+    <svg viewBox="0 0 54 40" className={className} fill="none" preserveAspectRatio="none" overflow="hidden">
       <defs>
         <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.35" />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
+        <clipPath id={clipId}>
+          <rect x="0" y="0" width="54" height="40" />
+        </clipPath>
       </defs>
-      {/* Subtle grid */}
-      {[10, 20, 30].map((y) => (
-        <line key={y} x1="0" y1={y} x2="54" y2={y} stroke="#FFFFFF" strokeOpacity="0.04" strokeWidth="0.5" />
-      ))}
-      {/* Gradient fill under line */}
-      <motion.path
-        d={fillPath}
-        fill={`url(#${gradId})`}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.6, delay: 0.3 }}
-      />
-      {/* Glowing polyline */}
-      <motion.polyline
-        points={polyPts}
-        stroke={color}
-        strokeWidth={1.8}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        style={{ filter: `drop-shadow(0 0 4px ${color}) drop-shadow(0 0 8px ${color}80)` }}
-        initial={{ pathLength: 0 }}
-        animate={{ pathLength: 1 }}
-        transition={{ duration: 1.1, ease: "easeOut" }}
-      />
-      {/* Dot nodes */}
-      {points.slice(0, -1).map(([x, y], i) => (
-        <motion.circle
-          key={i}
-          cx={x}
-          cy={y}
-          r={1.4}
-          fill={color}
-          initial={{ opacity: 0, scale: 0 }}
-          animate={{ opacity: 0.85, scale: 1 }}
-          transition={{ duration: 0.25, delay: 0.5 + i * 0.08 }}
+      <g clipPath={`url(#${clipId})`}>
+        {/* Subtle grid */}
+        {[10, 20, 30].map((y) => (
+          <line key={y} x1="0" y1={y} x2="54" y2={y} stroke="#FFFFFF" strokeOpacity="0.04" strokeWidth="0.5" />
+        ))}
+        {/* Gradient fill under line */}
+        <motion.path
+          d={fillPath}
+          fill={`url(#${gradId})`}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
         />
-      ))}
-      {/* Bright endpoint */}
-      <motion.circle
-        cx={last[0]}
-        cy={last[1]}
-        r={2.4}
-        fill={color}
-        style={{ filter: `drop-shadow(0 0 4px ${color}) drop-shadow(0 0 10px ${color})` }}
-        initial={{ opacity: 0, scale: 0 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.35, delay: 1.0 }}
-      />
+        {/* Glowing polyline */}
+        <motion.polyline
+          points={polyPts}
+          stroke={color}
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ filter: `drop-shadow(0 0 4px ${color}) drop-shadow(0 0 8px ${color}80)` }}
+          initial={{ pathLength: 0 }}
+          animate={{ pathLength: 1 }}
+          transition={{ duration: 1.1, ease: "easeOut" }}
+        />
+        {/* Dot nodes */}
+        {points.slice(0, -1).map(([x, y], i) => (
+          <motion.circle
+            key={i}
+            cx={x}
+            cy={y}
+            r={1.4}
+            fill={color}
+            initial={{ opacity: 0, scale: 0 }}
+            animate={{ opacity: 0.85, scale: 1 }}
+            transition={{ duration: 0.25, delay: 0.5 + i * 0.08 }}
+          />
+        ))}
+        {/* Bright endpoint */}
+        <motion.circle
+          cx={last[0]}
+          cy={last[1]}
+          r={2.4}
+          fill={color}
+          style={{ filter: `drop-shadow(0 0 4px ${color}) drop-shadow(0 0 10px ${color})` }}
+          initial={{ opacity: 0, scale: 0 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.35, delay: 1.0 }}
+        />
+      </g>
     </svg>
   );
 }
