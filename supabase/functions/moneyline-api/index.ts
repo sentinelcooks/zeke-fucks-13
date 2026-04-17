@@ -279,7 +279,7 @@ function computeHomeAwaySplits(events: any[], teamId: string) {
 }
 
 // ── Back-to-back detection ──
-function detectBackToBack(events: any[], teamId: string) {
+async function detectBackToBack(events: any[], teamId: string, sport = "nba") {
   const now = new Date();
   const todayStr = now.toISOString().slice(0, 10);
 
@@ -296,18 +296,47 @@ function detectBackToBack(events: any[], teamId: string) {
     }
   }
 
-  if (!nextGameDate) return { isB2B: false, lastGameDate: null };
+  if (!nextGameDate) return { isB2B: false, lastGameDate: null, b2bRisk: null as null | "low" | "medium" | "high" };
 
   const dayBefore = new Date(nextGameDate);
   dayBefore.setDate(dayBefore.getDate() - 1);
   const dayBeforeStr = dayBefore.toISOString().slice(0, 10);
 
-  const hadGameDayBefore = sorted.some(ev => {
+  const prevGame = sorted.find(ev => {
     const evDate = new Date(ev.date).toISOString().slice(0, 10);
     return evDate === dayBeforeStr;
   });
+  const isB2B = !!prevGame;
 
-  return { isB2B: hadGameDayBefore, lastGameDate: dayBeforeStr, nextGameDate };
+  let b2bRisk: "low" | "medium" | "high" | null = null;
+  if (isB2B) {
+    b2bRisk = "medium"; // default
+    // Only NBA tracks starter minutes meaningfully via boxscore
+    if (sport === "nba" && prevGame?.id) {
+      try {
+        const base = getEspnBase(sport);
+        const summary = await fetchJSON(`${base}/summary?event=${prevGame.id}`);
+        const boxTeams = summary?.boxscore?.players || [];
+        const teamBox = boxTeams.find((t: any) => String(t?.team?.id) === String(teamId));
+        const athletes = teamBox?.statistics?.[0]?.athletes || [];
+        const labels: string[] = teamBox?.statistics?.[0]?.labels || [];
+        const minIdx = labels.findIndex(l => /^min$/i.test(l));
+        let heavyStarters = 0;
+        for (const a of athletes) {
+          if (!a?.starter) continue;
+          const mins = parseInt(a?.stats?.[minIdx >= 0 ? minIdx : 0] ?? "0") || 0;
+          if (mins > 35) heavyStarters++;
+        }
+        if (heavyStarters >= 3) b2bRisk = "high";
+        else if (heavyStarters >= 1) b2bRisk = "medium";
+        else b2bRisk = "low";
+      } catch (_e) {
+        // keep default medium
+      }
+    }
+  }
+
+  return { isB2B, lastGameDate: dayBeforeStr, nextGameDate, b2bRisk };
 }
 
 // ── Pace of play ──
@@ -1023,8 +1052,10 @@ Deno.serve(async (req) => {
 
       const splits1 = computeHomeAwaySplits(schedule1, team1.id);
       const splits2 = computeHomeAwaySplits(schedule2, team2.id);
-      const b2b1 = detectBackToBack(schedule1, team1.id);
-      const b2b2 = detectBackToBack(schedule2, team2.id);
+      const [b2b1, b2b2] = await Promise.all([
+        detectBackToBack(schedule1, team1.id, sport),
+        detectBackToBack(schedule2, team2.id, sport),
+      ]);
       const pace1 = computePace(team1Stats, schedule1, team1.id);
       const pace2 = computePace(team2Stats, schedule2, team2.id);
 
