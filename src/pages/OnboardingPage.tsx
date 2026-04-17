@@ -595,13 +595,13 @@ function ScreenComparison({ onBack, onNext }: { onBack: () => void; onNext: () =
         {/* WITH */}
         <motion.div
           initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.18 }}
-          className="rounded-2xl border border-[#00FF6A]/40 bg-[#141414] p-3"
+          className="rounded-2xl border border-[#00FF6A]/40 bg-[#141414] p-2.5"
           style={{ boxShadow: "inset 0 0 30px rgba(0,255,106,0.08), 0 0 24px rgba(0,255,106,0.12)" }}
         >
           <div className="text-[9px] font-black tracking-wider text-[#00FF6A] mb-2">WITH SENTINEL</div>
           <div className="text-2xl font-extrabold text-[#00FF6A] tabular-nums leading-none">+18.47%</div>
-          <div className="text-[10px] text-white/50 mt-1">ROI After 90 Days</div>
-          <Sparkline color="#00FF6A" className="w-full h-10 mt-2" />
+          <div className="text-[10px] text-white/50 mt-1">ROI After 30 Days</div>
+          <div className="mt-2 flex justify-center"><Sparkline color="#00FF6A" className="h-12 w-full max-w-[120px]" /></div>
           <div className="mt-3 space-y-1.5">
             {["AI-Powered Picks", "High Confidence & +EV", "Track & Improve", "Smarter Parlays"].map((t) => (
               <div key={t} className="flex items-center gap-1.5">
