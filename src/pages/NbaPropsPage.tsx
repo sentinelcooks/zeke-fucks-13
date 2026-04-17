@@ -2197,7 +2197,6 @@ const NbaPropsPage = () => {
                                     const cats = NBA_PROP_CATEGORIES;
                                     const matchCat = cats.find(cat => cat.props.some(p => p.value === c.correlated_prop));
                                     if (matchCat) setActiveCategory(matchCat.category);
-                                    resultsRef.current?.scrollIntoView({ behavior: "smooth" });
                                     // Fire analyze with explicit overrides — bypasses stale React state
                                     if (!isNaN(lineNum) && lineNum > 0) {
                                       handleAnalyze({
@@ -2207,6 +2206,9 @@ const NbaPropsPage = () => {
                                         overUnder: "over",
                                       });
                                     }
+                                    // Scroll to top so user sees the new results header
+                                    document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+                                    window.scrollTo({ top: 0, behavior: 'smooth' });
                                   }}
                                   className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors bg-white/5 text-muted-foreground/65 hover:text-primary hover:bg-primary/10"
                                 >
