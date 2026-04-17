@@ -91,10 +91,21 @@ const OnboardingPage = () => {
   const [extraSports, setExtraSports] = useState<string[]>([]);
   const [style, setStyle] = useState<string | null>(null);
 
-  // Preload paywall on experience screen
+  // Preload paywall + next-screen hero image
   useEffect(() => {
     if (screen === "experience" || screen === "value") {
       import("./PaywallPage").catch(() => {});
+    }
+    // Preload next screen's hero so it's ready by the time user advances
+    const order: Screen[] = ["welcome", "edge", "odds", "sports", "experience", "value"];
+    const idx = order.indexOf(screen);
+    const next = order[idx + 1];
+    if (next && HERO_PROMPTS[next]) {
+      preloadGeneratedImage(HERO_PROMPTS[next].prompt, HERO_PROMPTS[next].key);
+    }
+    // Always make sure current screen's image is preloaded
+    if (HERO_PROMPTS[screen]) {
+      preloadGeneratedImage(HERO_PROMPTS[screen].prompt, HERO_PROMPTS[screen].key);
     }
   }, [screen]);
 
