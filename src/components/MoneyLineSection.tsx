@@ -1792,7 +1792,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
             <Section title="Injury Report">
               <div className="space-y-4">
                 {results.injuries.fetchedAt && (
-                  <p className="text-[10px] text-muted-foreground -mt-2">
+                  <p className="text-[10px] text-muted-foreground">
                     As of {new Date(results.injuries.fetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ESPN
                   </p>
                 )}
