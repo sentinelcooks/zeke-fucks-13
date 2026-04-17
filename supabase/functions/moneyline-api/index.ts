@@ -1137,8 +1137,9 @@ Deno.serve(async (req) => {
 
               return json({
                 bet_type, sport, model: "mlb-20-factor",
-                team1: { ...team1, stats: team1Stats },
-                team2: { ...team2, stats: team2Stats },
+                team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
+                team2: { ...team2, stats: team2Stats, homeAway: team2HomeAway },
+                matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue },
                 head_to_head: h2h,
                 injuries: { team1: injuries1, team2: injuries2 },
                 splits: { team1: splits1, team2: splits2 },
@@ -1193,8 +1194,9 @@ Deno.serve(async (req) => {
 
               return json({
                 bet_type, sport, model: "nhl-20-factor",
-                team1: { ...team1, stats: team1Stats },
-                team2: { ...team2, stats: team2Stats },
+                team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
+                team2: { ...team2, stats: team2Stats, homeAway: team2HomeAway },
+                matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue },
                 head_to_head: h2h,
                 injuries: { team1: injuries1, team2: injuries2 },
                 splits: { team1: splits1, team2: splits2 },
@@ -1259,8 +1261,9 @@ Deno.serve(async (req) => {
         bet_type,
         sport,
         model: `${sport}-20-factor`,
-        team1: { ...team1, stats: team1Stats },
-        team2: { ...team2, stats: team2Stats },
+        team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
+        team2: { ...team2, stats: team2Stats, homeAway: team2HomeAway },
+        matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue },
         head_to_head: h2h,
         injuries: { team1: injuries1, team2: injuries2 },
         splits: { team1: splits1, team2: splits2 },
