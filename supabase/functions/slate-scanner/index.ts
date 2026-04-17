@@ -500,17 +500,71 @@ Deno.serve(async (req) => {
 
   const { all, stats } = await runScan();
 
-  // Defensive hard cap before ranking
-  const filtered = all.filter((p) => {
+  // Defensive hard cap before analyzer validation
+  const prefiltered = all.filter((p) => {
     if (p.odds >= 500) return false;
     if (p.odds <= -350) return false;
-    if (p.confidence < 0.65) return false;
+    if (p.confidence < 0.62) return false; // slightly looser pre-floor; analyzer will tighten
     if (p.edge <= 0) return false;
     return true;
   });
-  console.log(`Pre-rank filter: ${all.length} → ${filtered.length} (dropped ${all.length - filtered.length})`);
+  console.log(`Pre-rank filter: ${all.length} → ${prefiltered.length} (dropped ${all.length - prefiltered.length})`);
 
-  const { todaysEdge, dailyPicks, freePicks, sorted } = rankAndDistribute(filtered);
+  // ── Analyzer validation pass: replace de-vig projection with live model ──
+  // Cap analyzer calls per sport to keep wall-time bounded.
+  const ANALYZER_CAP_PER_SPORT = 40;
+  const ANALYZER_CHUNK = 4;
+  const bySport = new Map<string, ScoredPlay[]>();
+  for (const p of prefiltered) {
+    const arr = bySport.get(p.sport) || [];
+    arr.push(p);
+    bySport.set(p.sport, arr);
+  }
+
+  const analyzerCache = new Map<string, any>();
+  const validated: ScoredPlay[] = [];
+  for (const [sport, arr] of bySport.entries()) {
+    // Sort by raw edge desc and cap to top N per sport before analyzer
+    const top = arr.sort((a, b) => b.edge - a.edge).slice(0, ANALYZER_CAP_PER_SPORT);
+    let kept = 0;
+    for (let i = 0; i < top.length; i += ANALYZER_CHUNK) {
+      const slice = top.slice(i, i + ANALYZER_CHUNK);
+      const results = await Promise.all(slice.map((p) => validateWithAnalyzer(p, analyzerCache)));
+      for (let j = 0; j < results.length; j++) {
+        const r = results[j];
+        if (!r) continue;
+        // Re-score with edge_scoring so reliability/verdict are recomputed against analyzer projection
+        const rescored = score({
+          sport: r.sport,
+          bet_type: r.bet_type,
+          player_name: r.player_name,
+          team: r.team ?? null,
+          opponent: r.opponent ?? null,
+          home_team: r.home_team ?? null,
+          away_team: r.away_team ?? null,
+          prop_type: r.prop_type,
+          line: r.line,
+          spread_line: r.spread_line ?? null,
+          total_line: r.total_line ?? null,
+          direction: r.direction,
+          odds: r.odds,
+          projected_prob: r.projected_prob,
+          implied_prob: r.implied_prob,
+          edge: r.edge,
+          ev_pct: r.ev_pct,
+          confidence: r.confidence,
+        });
+        // Preserve analyzer reasoning (edge_scoring's buildReasoning would overwrite with generic text)
+        rescored.reasoning = r.reasoning || rescored.reasoning;
+        validated.push(rescored);
+        kept++;
+      }
+    }
+    console.log(`[${sport}] analyzer-validated ${kept}/${top.length} candidates`);
+  }
+  console.log(`Analyzer validation: ${prefiltered.length} → ${validated.length}`);
+
+  const { todaysEdge, dailyPicks, freePicks, sorted } = rankAndDistribute(validated);
 
   console.log(`Distribution → todaysEdge:${todaysEdge.length} daily:${dailyPicks.length} free:${freePicks.length}`);
   console.log(`Today's Edge sports: ${[...new Set(todaysEdge.map(p => p.sport))].join(",")}`);
