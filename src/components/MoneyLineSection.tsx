@@ -1783,7 +1783,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
             </Section>
           )}
 
-          <Section title="Past Meetings">
+          <Section title={getPastMeetingsLabel(results.sport || sport)}>
             <H2HTable h2h={results.head_to_head || []} team1={results.team1} team2={results.team2} />
           </Section>
 
