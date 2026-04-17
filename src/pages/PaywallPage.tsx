@@ -187,7 +187,7 @@ export default function PaywallPage() {
         <div className="absolute bottom-0 right-0 w-[360px] h-[320px] rounded-full bg-[#00FF6A]/[0.05] blur-[120px]" />
       </div>
 
-      <div className="relative z-10 mx-auto max-w-md px-5 py-6 pb-32">
+      <div className="relative z-10 mx-auto max-w-md px-5 py-6 pb-36">
         <ProgressDots current={5} total={6} />
 
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
@@ -200,76 +200,138 @@ export default function PaywallPage() {
           <CountdownBanner />
         </motion.div>
 
-        {/* Pricing cards */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mt-5 grid grid-cols-3 gap-2">
-          {PLANS.map((plan) => {
-            const isSelected = selectedPlan === plan.id;
-            const isMonthly = plan.id === "monthly";
+        {/* Pricing — Monthly hero + Weekly/Yearly side-by-side */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mt-5"
+        >
+          {(() => {
+            const monthly = PLANS.find((p) => p.id === "monthly")!;
+            const isSelected = selectedPlan === "monthly";
             return (
               <motion.button
-                key={plan.id}
-                onClick={() => setSelectedPlan(plan.id)}
-                whileTap={{ scale: 0.97 }}
-                className={`relative rounded-2xl border-2 px-2 pt-4 pb-2.5 text-center transition-all flex flex-col items-center ${
-                  isSelected
-                    ? isMonthly
-                      ? "border-[#00FF6A] bg-[#141414] shadow-[0_0_0_3px_rgba(0,255,106,0.15),0_0_24px_rgba(0,255,106,0.25)]"
-                      : "border-[#00FF6A] bg-[#141414] shadow-[0_0_18px_rgba(0,255,106,0.18)]"
-                    : "border-[#2A2A2A] bg-[#141414]"
-                }`}
+                onClick={() => setSelectedPlan("monthly")}
+                whileTap={{ scale: 0.98 }}
+                className="relative w-full rounded-2xl border-2 border-[#00FF6A] bg-[#141414] px-4 py-4 mb-3 text-left overflow-hidden block"
+                style={{
+                  boxShadow:
+                    "0 0 0 1px rgba(0,255,106,0.3), 0 0 30px rgba(0,255,106,0.18), inset 0 0 20px rgba(0,255,106,0.04)",
+                }}
               >
-                {plan.badge && (
-                  <div
-                    className={`absolute -top-2 left-1/2 -translate-x-1/2 text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider whitespace-nowrap ${
-                      plan.badge === "MOST POPULAR" ? "bg-[#FFC93C] text-black" : "bg-[#00FF6A] text-black"
-                    }`}
-                  >
-                    {plan.badge}
-                  </div>
-                )}
-
-                <span className="text-[10px] font-bold text-white/80 uppercase tracking-wider">{plan.label}</span>
-
-                {plan.trialText && (
-                  <span className="mt-1 px-1.5 py-0.5 rounded bg-[#00FF6A]/20 text-[#00FF6A] text-[8px] font-black tracking-wider whitespace-nowrap">
-                    7-DAY TRIAL
-                  </span>
-                )}
-
-                <div className={`mt-2 text-base font-extrabold tabular-nums leading-none ${isMonthly ? "text-[#00FF6A]" : "text-white"}`}>
-                  {plan.price}
+                <div className="absolute -top-px left-1/2 -translate-x-1/2 bg-[#FFC93C] text-black text-[9px] font-black px-3 py-0.5 rounded-b-lg tracking-widest uppercase">
+                  MOST POPULAR
                 </div>
-                <div className="text-[9px] text-white/50 mt-0.5">{plan.perDay}</div>
 
-                {plan.saving ? (
-                  <div className="mt-1 flex items-center gap-0.5 justify-center">
-                    <Check className="w-2.5 h-2.5 text-[#00FF6A]" strokeWidth={3} />
-                    <span className="text-[8px] font-semibold text-[#00FF6A] leading-tight">{plan.saving}</span>
+                <div className="flex items-center justify-between mt-3">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-base font-extrabold text-white">{monthly.label}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-[#00FF6A]/20 text-[#00FF6A] text-[8px] font-black tracking-wider">
+                        7-DAY FREE TRIAL
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-white/50 mt-0.5">{monthly.perDay}</div>
                   </div>
-                ) : (
-                  <div className="mt-1 h-3" />
-                )}
+                  <div className="text-right pr-7">
+                    <div className="text-[28px] font-black text-[#00FF6A] tabular-nums leading-none">
+                      {monthly.price}
+                    </div>
+                    {monthly.saving && (
+                      <div className="flex items-center gap-1 mt-1 justify-end">
+                        <Check className="w-3 h-3 text-[#00FF6A]" strokeWidth={3} />
+                        <span className="text-[10px] font-semibold text-[#00FF6A]">{monthly.saving}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-                <div
-                  className={`mt-2 w-full py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                    isSelected
-                      ? "bg-[#00FF6A] text-black"
-                      : "bg-white/10 text-white"
-                  }`}
-                >
-                  {isMonthly ? "Try Free" : "Subscribe"}
+                <div className="absolute top-3.5 right-3">
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-[#00FF6A]" : "border-white/30"}`}>
+                    {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-[#00FF6A]" />}
+                  </div>
                 </div>
               </motion.button>
             );
-          })}
+          })()}
+
+          <div className="grid grid-cols-2 gap-2.5">
+            {PLANS.filter((p) => p.id !== "monthly").map((plan) => {
+              const isSelected = selectedPlan === plan.id;
+              return (
+                <motion.button
+                  key={plan.id}
+                  onClick={() => setSelectedPlan(plan.id)}
+                  whileTap={{ scale: 0.97 }}
+                  className={`relative rounded-2xl border-2 px-3 py-3.5 text-left transition-all overflow-hidden ${
+                    isSelected
+                      ? "border-[#00FF6A] bg-[#141414] shadow-[0_0_16px_rgba(0,255,106,0.15)]"
+                      : "border-[#2A2A2A] bg-[#141414]"
+                  }`}
+                >
+                  {plan.badge && (
+                    <div className="absolute -top-px right-2 bg-[#00FF6A] text-black text-[8px] font-black px-2 py-0.5 rounded-b-md tracking-wider uppercase">
+                      {plan.badge}
+                    </div>
+                  )}
+
+                  <div className="mt-2">
+                    <div className="text-[11px] font-extrabold text-white mb-1">{plan.label}</div>
+                    {plan.trialText && (
+                      <span className="px-1.5 py-0.5 rounded bg-[#00FF6A]/15 text-[#00FF6A] text-[7px] font-black tracking-wider">
+                        {plan.trialText}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className={`text-[20px] font-extrabold tabular-nums leading-none mt-2 ${isSelected ? "text-[#00FF6A]" : "text-white"}`}>
+                    {plan.price}
+                  </div>
+                  <div className="text-[9px] text-white/50 mt-0.5">{plan.perDay}</div>
+
+                  {plan.saving && (
+                    <div className="mt-1.5 flex items-start gap-0.5">
+                      <Check className="w-2.5 h-2.5 text-[#00FF6A] flex-shrink-0 mt-px" strokeWidth={3} />
+                      <span className="text-[8px] font-semibold text-[#00FF6A] leading-tight">{plan.saving}</span>
+                    </div>
+                  )}
+                  {plan.perMonthText && (
+                    <div className="text-[8px] text-white/40 mt-0.5">{plan.perMonthText}</div>
+                  )}
+
+                  <div className={`absolute top-3 right-3 w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-[#00FF6A]" : "border-white/30"}`}>
+                    {isSelected && <div className="w-2 h-2 rounded-full bg-[#00FF6A]" />}
+                  </div>
+                </motion.button>
+              );
+            })}
+          </div>
         </motion.div>
+
+        {/* Social proof */}
+        <div className="mt-4 mb-2 flex items-center justify-center gap-2">
+          <div className="flex -space-x-1.5">
+            {[11, 12, 13].map((i) => (
+              <img
+                key={i}
+                src={`https://i.pravatar.cc/32?img=${i}`}
+                alt=""
+                className="w-6 h-6 rounded-full border border-[#0A0A0A] object-cover"
+              />
+            ))}
+          </div>
+          <span className="text-[11px] text-white/60">
+            <span className="text-white font-bold">10,000+</span> bettors already winning
+          </span>
+        </div>
 
         {/* Features accordion */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="mt-6 space-y-2">
           {FEATURES.map((f) => {
             const isExpanded = expandedFeature === f.label;
             return (
-              <div key={f.label}>
+              <div key={f.label} className="relative z-10">
                 <button
                   onClick={() => setExpandedFeature(isExpanded ? null : f.label)}
                   className={`flex items-center gap-3 w-full rounded-xl px-3.5 py-3 border text-left transition-colors ${
@@ -301,23 +363,30 @@ export default function PaywallPage() {
             );
           })}
         </motion.div>
+        {/* Trust signal row */}
+        <div className="mt-5 flex items-center gap-3 justify-center text-[10px] text-white/40">
+          <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Secure & Encrypted</span>
+          <span className="w-1 h-1 rounded-full bg-white/20" />
+          <span>18+ Bet Responsibly</span>
+          <span className="w-1 h-1 rounded-full bg-white/20" />
+          <span>Cancel Anytime</span>
+        </div>
       </div>
 
-      {/* Sticky bottom CTA footer */}
+      {/* Sticky bottom CTA footer — gradient passes clicks through */}
       <div
-        className="fixed bottom-0 left-0 right-0 z-50 pt-8 pb-5 px-5"
-        style={{ background: "linear-gradient(to top, #0A0A0A 60%, rgba(10,10,10,0.85) 85%, transparent)" }}
+        className="fixed bottom-0 left-0 right-0 z-50 pt-8 pb-6 px-5"
+        style={{
+          background: "linear-gradient(to top, #0A0A0A 55%, rgba(10,10,10,0.95) 75%, transparent)",
+          pointerEvents: "none",
+        }}
       >
-        <div className="mx-auto max-w-md">
-          <div className="mb-2 flex items-center justify-between text-[10px] text-white/40">
-            <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Secure & Encrypted</span>
-            <span>18+ Bet Responsibly</span>
-          </div>
+        <div className="mx-auto max-w-md" style={{ pointerEvents: "auto" }}>
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={handleSubscribe}
             style={{ animation: "pulse-cta 2.5s ease-in-out infinite" }}
-            className="w-full py-4 rounded-full bg-[#00FF6A] text-black font-extrabold text-base shadow-lg shadow-[#00FF6A]/20"
+            className="w-full py-4 rounded-full bg-[#00FF6A] text-black font-extrabold text-[17px] shadow-[0_0_30px_rgba(0,255,106,0.4)]"
           >
             Start Free Trial
           </motion.button>
