@@ -500,30 +500,29 @@ function adjustForInjuries(injuries: any[], factors: Record<string, number>): { 
   return { adjustedFactors: adjusted, warnings };
 }
 
-// ── Main Analysis Engine (identical structure to MLB) ──
-function runModel(
+// ── v2.0 Main Analysis Engine — uses WEIGHTS_V2 ──
+function runModelV2(
   betType: string,
   team1Factors: Record<string, number>,
   team2Factors: Record<string, number>,
   sharedFactors: Record<string, number>,
-): { confidence: number; verdict: string; factorBreakdown: any[] } {
-  const weights = WEIGHTS[betType] || WEIGHTS.moneyline;
+): { confidence: number; verdict: string; tier: string; factorBreakdown: any[] } {
+  const weights = WEIGHTS_V2[betType] || WEIGHTS_V2.moneyline;
 
   const factorBreakdown: any[] = [];
   let weightedSum = 0;
   let totalWeight = 0;
 
   for (const [factor, weight] of Object.entries(weights)) {
-    if (weight === 0) continue;
+    if (weight === 0) continue; // explicit zeros excluded by design
 
     const t1Score = team1Factors[factor] ?? sharedFactors[factor] ?? 50;
     const t2Score = team2Factors[factor] ?? 50;
-
     const safe1 = isNaN(t1Score) ? 50 : t1Score;
     const safe2 = isNaN(t2Score) ? 50 : t2Score;
 
     let advantageScore: number;
-    if (["line_movement", "public_pct"].includes(factor)) {
+    if (["line_movement", "public_pct", "rlm", "arena", "pace"].includes(factor)) {
       advantageScore = sharedFactors[factor] ?? 50;
     } else {
       advantageScore = 50 + (safe1 - safe2) / 2;
@@ -533,12 +532,12 @@ function runModel(
 
     factorBreakdown.push({
       factor,
-      label: formatFactorLabel(factor),
-      weight: Math.round(weight * 100),
+      label: FACTOR_LABELS[factor] || factor,
+      weight: Math.round(weight * 1000) / 10,
       team1Score: Math.round(safe1),
       team2Score: Math.round(safe2),
       advantageScore: Math.round(advantageScore),
-      contribution: Math.round(advantageScore * weight),
+      contribution: Math.round(advantageScore * weight * 10) / 10,
     });
 
     weightedSum += advantageScore * weight;
@@ -546,14 +545,13 @@ function runModel(
   }
 
   const confidence = Math.round(totalWeight > 0 ? weightedSum / totalWeight : 50);
+  let verdict: string, tier: string;
+  if (confidence >= 75) { verdict = "STRONG PICK"; tier = "S"; }
+  else if (confidence >= 65) { verdict = "LEAN"; tier = "A"; }
+  else if (confidence >= 55) { verdict = "RISKY"; tier = "B"; }
+  else { verdict = "FADE"; tier = "C"; }
 
-  let verdict: string;
-  if (confidence >= 75) verdict = "STRONG PICK";
-  else if (confidence >= 62) verdict = "LEAN";
-  else if (confidence >= 42) verdict = "RISKY";
-  else verdict = "FADE";
-
-  return { confidence, verdict, factorBreakdown };
+  return { confidence, verdict, tier, factorBreakdown };
 }
 
 function formatFactorLabel(factor: string): string {
