@@ -220,15 +220,16 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
             } else {
               projected = impliedSide;
             }
-            // Confidence bump: short-priced sides (favored by market) carry stronger signal.
-            // -150 ≈ +5pp, -200 ≈ +8pp, -250 ≈ +10pp, +120 ≈ 0
-            if (pick.bestPrice < 0) {
-              const bump = Math.min(0.12, (Math.abs(pick.bestPrice) - 100) / 1500);
-              projected = Math.min(0.95, projected + bump);
-            }
+            // Universal sharp-side bump: market consensus carries signal beyond pure de-vig.
+            // Bigger bump for shorter-priced (more confident) markets.
+            // -200 → +8pp, -150 → +6pp, -110 → +4pp, +110 → +3pp, +200 → +2pp
+            const baseBump = pick.bestPrice < 0
+              ? Math.min(0.10, 0.04 + (Math.abs(pick.bestPrice) - 100) / 2000)
+              : Math.max(0.02, 0.04 - (pick.bestPrice - 100) / 4000);
+            projected = Math.min(0.95, projected + baseBump);
             projected = Math.max(0.35, Math.min(0.95, projected));
             const edge = projected - impliedSide;
-            if (edge <= 0) continue;
+            if (edge <= 0.005) continue;
             plays.push(score({
               sport,
               bet_type: "prop",
