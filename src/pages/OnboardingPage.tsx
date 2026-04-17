@@ -461,7 +461,11 @@ function ScreenPersonalize({ onBack, onNext }: { onBack: () => void; onNext: () 
                   </div>
                 )}
                 <div className="flex justify-center mb-2">
-                  {SPORT_ICONS[s.id](active ? "#00FF6A" : "#666666")}
+                  <img
+                    src={SPORT_LOGOS[s.id]}
+                    alt={s.label}
+                    className={`w-12 h-12 object-contain transition-all ${active ? "" : "opacity-60 grayscale"}`}
+                  />
                 </div>
                 <div className={`text-center text-sm font-bold ${active ? "text-[#00FF6A]" : "text-white"}`}>{s.label}</div>
               </motion.button>
