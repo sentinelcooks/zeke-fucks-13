@@ -179,7 +179,13 @@ export default function PaywallPage() {
 
   return (
     <div className="relative min-h-screen w-full bg-[#0A0A0A] text-white overflow-x-hidden">
-      <style>{`@keyframes pulse-cta { 0%,100% { box-shadow: 0 0 0 0 rgba(0,255,106,0.35) } 50% { box-shadow: 0 0 24px 6px rgba(0,255,106,0.45) } }`}</style>
+      <style>{`
+        @keyframes pulse-cta { 0%,100% { box-shadow: 0 0 0 0 rgba(0,255,106,0.35) } 50% { box-shadow: 0 0 24px 6px rgba(0,255,106,0.45) } }
+        @keyframes card-pulse {
+          0%,100% { box-shadow: 0 0 0 2px #00FF6A, 0 0 40px rgba(0,255,106,0.35), 0 0 80px rgba(0,255,106,0.15), inset 0 0 30px rgba(0,255,106,0.05); }
+          50% { box-shadow: 0 0 0 2px #00FF6A, 0 0 55px rgba(0,255,106,0.5), 0 0 110px rgba(0,255,106,0.22), inset 0 0 30px rgba(0,255,106,0.07); }
+        }
+      `}</style>
       {/* Atmospheric glows */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[520px] h-[420px] rounded-full bg-[#7B2FFF]/30 blur-[120px]" />
