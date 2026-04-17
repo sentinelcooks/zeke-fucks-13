@@ -572,13 +572,10 @@ function ScreenComparison({ onBack, onNext }: { onBack: () => void; onNext: () =
         initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.26 }}
         className="mt-5 rounded-2xl border border-[#2A2A2A] bg-[#141414] p-4 flex items-start gap-3"
       >
-        <WaveImage
-          prompt={ASSETS.testimonialMike.prompt}
-          cacheKey={ASSETS.testimonialMike.key}
-          model={ASSETS.testimonialMike.model}
+        <img
+          src="https://i.pravatar.cc/100?img=11"
           alt="Mike R."
-          rounded="full"
-          className="w-12 h-12 flex-shrink-0 border border-[#2A2A2A]"
+          className="w-12 h-12 rounded-full flex-shrink-0 border border-[#2A2A2A] object-cover bg-[#1a1a1a]"
         />
         <div className="flex-1 min-w-0">
           <p className="text-xs text-white/80 italic leading-snug">
