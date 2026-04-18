@@ -17,6 +17,49 @@ const SPORT_KEYS: Record<string, string> = {
   nhl: "icehockey_nhl",
 };
 
+// Sport-aware mapping from Odds-API market keys → analyzer prop_type.
+// Must match cases in nba-api/index.ts getStatValue(). Unmapped → skip.
+const NBA_MAP: Record<string, string> = {
+  player_points: "points",
+  player_rebounds: "rebounds",
+  player_assists: "assists",
+  player_threes: "3-pointers",
+  player_blocks: "blocks",
+  player_steals: "steals",
+  player_turnovers: "turnovers",
+  player_points_rebounds_assists: "pts+reb+ast",
+  player_points_rebounds: "pts+reb",
+  player_points_assists: "pts+ast",
+  player_rebounds_assists: "reb+ast",
+  player_blocks_steals: "stl+blk",
+};
+const MLB_MAP: Record<string, string> = {
+  batter_hits: "hits",
+  batter_runs_scored: "runs",
+  batter_rbis: "rbi",
+  batter_home_runs: "home_runs",
+  batter_total_bases: "total_bases",
+  batter_walks: "walks",
+  batter_stolen_bases: "stolen_bases",
+  batter_hits_runs_rbis: "h+r+rbi",
+  pitcher_strikeouts: "strikeouts",
+};
+const NHL_MAP: Record<string, string> = {
+  player_goals: "goals",
+  player_points: "nhl_points",
+  player_assists: "nhl_assists",
+  player_shots_on_goal: "sog",
+  player_total_saves: "saves",
+};
+
+function mapMarketToProp(sport: string, rawMarketKey: string): string | null {
+  const key = rawMarketKey.replace(/_alternate$/, "");
+  if (sport === "nba") return NBA_MAP[key] ?? null;
+  if (sport === "mlb") return MLB_MAP[key] ?? null;
+  if (sport === "nhl") return NHL_MAP[key] ?? null;
+  return null;
+}
+
 const FN_BASE = `${Deno.env.get("SUPABASE_URL")}/functions/v1`;
 const SVC_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
