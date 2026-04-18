@@ -2,74 +2,57 @@
 
 ## Diagnosis
 
-Two real bugs producing the screenshots — not just NHL/MLB; even the NBA "97% under 1.5 threes" cards on Draymond/McDaniels/Goodwin are fake.
+The "❌ NO BET RECOMMENDED — 0 vs 0, 0 neutral" verdict on UFC matchups is a frontend bug, not bad data.
 
-### Bug A — Scanner uses wrong `prop_type` keys, analyzer silently scores everything as 0
-`sport_scan.ts` strips Odds-API market keys with regex:
-```
-player_threes  →  threes
-player_points  →  points        // OK for NBA, WRONG for NHL (NHL "points" = goals+assists)
-batter_hits    →  hits
-nhl_assists    →  assists       // analyzer expects "nhl_assists"
-```
-But `nba-api/analyze`'s `getStatValue()` switch uses canonical keys: `"3-pointers"`, `"nhl_points"`, `"nhl_assists"`, `"goals"`. There is **no case for `"threes"` or `"assists"` (NHL)** — the switch falls through to `default: 0`.
+`WrittenAnalysis.tsx` — `generateOverallSummary` for `type="moneyline"` runs `computeMoneylineTier(props)`, which counts factors from `props.factorBreakdown` (the team-sport per-factor team1/team2 score array). UFC never passes `factorBreakdown` and never passes a `decision` object, so the loop sees zero factors → `winnerCount=0` → `tier="noBet"` → the canned "Factors split too evenly (0 vs 0, 0 neutral)" message.
 
-Result: every game scores 0 → "Season avg 0 / hit rate 100% under 1.5" → projects 95% confidence → passes the floor → stored as edge. That's why every "Under 1.5 threes" card says 97% with identical bogus reasoning ("Season avg (0)…73/73 games"). The live analyzer (image #15) sends `"3-pointers"` and gets the real 76% / season avg 1.4.
+Meanwhile the in-depth analysis above it correctly shows 77% confidence and "Strong pick on Yannis at -150" because that section is generated from `verdict`/`confidence` directly via the AI narrative, not from `factorBreakdown`.
 
-`free-props/index.ts` already has the correct `MARKET_TO_PROP` map — the scanner just needs to use the same one.
+The UFC backend (`ufc-api`) already returns everything we need to build a real decision: `ml_pick.pick`, `ml_pick.probability`, `ml_pick.confidence` ("strong" | "lean" | "avoid"), `ml_pick.reasoning`, plus `best_bet.probability`/`best_bet.confidence`. We just need to forward this into `WrittenAnalysis` as a `decision` object so it takes the "single source of truth" path that already exists at lines 170–186.
 
-### Bug B — Stale stored reasoning shown on Picks tab
-Even when the keys are right, the stored `reasoning` string can drift from a fresh analyzer call, so the user sees one number on the carousel/Picks card and a different one when they tap "See Why". Already partially solved by passing player+line via state to live `/dashboard/analyze`, but the displayed `hit_rate` on the card itself must equal the analyzer's `confidence`.
+## Fix — UfcPage.tsx only
 
-## Fix
-
-### 1. `supabase/functions/_shared/sport_scan.ts`
-Replace the regex-based marketKey normalization with an explicit map that matches what the analyzer expects:
+In `MatchupResults` (`src/pages/UfcPage.tsx` ~line 504), add a derived `ufcDecision` and pass it via the `decision` prop:
 
 ```ts
-const MARKET_TO_PROP: Record<string, string> = {
-  // NBA
-  player_points: "points", player_rebounds: "rebounds", player_assists: "assists",
-  player_threes: "3-pointers", player_blocks: "blocks", player_steals: "steals",
-  player_turnovers: "turnovers",
-  player_points_rebounds_assists: "pts+reb+ast",
-  player_points_rebounds: "pts+reb",
-  player_points_assists: "pts+ast",
-  player_rebounds_assists: "reb+ast",
-  // MLB
-  batter_hits: "hits", batter_runs_scored: "runs", batter_rbis: "rbi",
-  batter_home_runs: "home_runs", batter_total_bases: "total_bases",
-  batter_walks: "walks", batter_stolen_bases: "stolen_bases",
-  pitcher_strikeouts: "strikeouts",
-  // NHL
-  player_goals: "goals", player_shots_on_goal: "sog",
-  player_total_saves: "saves",
-  player_points_q: "nhl_points",   // NHL points
-  player_assists_q: "nhl_assists", // NHL assists
-};
+const ufcDecision = ml_pick ? {
+  winning_side: ml_pick.pick === fighter1?.name ? "team1" : "team2",
+  winning_team_name: ml_pick.pick,                       // e.g. "John Yannis"
+  win_probability: ml_pick.probability ?? confidenceNum, // 77
+  edge: typeof ml_pick.probability === "number"
+    ? Math.max(0, ml_pick.probability - 50)              // crude edge vs 50/50
+    : null,
+  conviction_tier:                                       // map to WrittenAnalysis tiers
+    ml_pick.confidence === "avoid" ? "noBet" :
+    (ml_pick.probability ?? 0) >= 75 ? "veryHigh" :
+    ml_pick.confidence === "strong" ? "high" :
+    ml_pick.confidence === "lean"   ? "medium" : "low",
+  recommended_units:
+    ml_pick.confidence === "avoid" ? 0 :
+    (ml_pick.probability ?? 0) >= 75 ? 3 :
+    ml_pick.confidence === "strong" ? 2 :
+    ml_pick.confidence === "lean"   ? 1 : 0.5,
+  verdict_text: ml_pick.reasoning ?? "",
+} : null;
 ```
 
-Use sport-aware mapping: in NHL the Odds-API key for skater points is `player_points` and for assists is `player_assists` — but those collide with NBA. Solution: branch on `sport` so `player_points` → `nhl_points` for NHL, `points` for NBA; same for `player_assists`.
+Pass to `<WrittenAnalysis ... decision={ufcDecision} team1Name={fighter1?.name} team2Name={fighter2?.name} />`.
 
-If a market isn't in the map, **skip it** (don't guess). This guarantees nothing reaches the analyzer with a key it doesn't understand.
+This routes UFC into the existing `decision`-honoring branch (lines 170–186 of `WrittenAnalysis.tsx`), which produces clean output like:
+> "Strong play on John Yannis. 77% win probability, 27% edge. Recommended sizing: 1.5–2 units."
 
-### 2. Confidence-fidelity check
-After `validateWithAnalyzer` returns, store `hit_rate = Math.round(analyzed.confidence)` (already doing this) AND store the analyzer's exact reasoning. Add a sanity reject: if the analyzer's reported `propAvg` (or equivalent in the stat block) is `0` AND the prop is one where `0` is implausible for a starter (points/threes/rebounds for NBA starters who play >15min), drop the pick — it's a sign the prop_type still didn't resolve.
+When `ml_pick.confidence === "avoid"` (true toss-up from the model), it correctly shows "No bet recommended. Edge does not justify a play on Toss-up." — matching the model's actual signal instead of the false "0 vs 0, 0 neutral" message.
 
-### 3. Verification
-- `supabase--deploy_edge_functions ["slate-scanner-nba","slate-scanner-mlb","slate-scanner-nhl","slate-scanner-ufc","slate-scanner"]`
-- `curl POST /slate-scanner?debug=true` — paste perSport stats
-- ```sql
-  SELECT player_name, sport, prop_type, line, direction, hit_rate
-  FROM daily_picks WHERE pick_date = CURRENT_DATE
-  ORDER BY sport, hit_rate DESC;
-  ```
-- For top 3 picks: `POST /nba-api/analyze` with the **stored** prop_type/line/direction → confirm returned `confidence` equals stored `hit_rate` (within 1%). Paste the comparison.
-- Confirm zero rows where `prop_type` is `threes`, `assists` (NHL), or any unmapped raw market key.
+No backend changes. No edge function deploy. No schema changes.
 
-### Out of scope
-Analyzer model internals, edge_scoring, frontend, onboarding, paywall.
+### Verification
+- Re-open `/dashboard/ufc` Yannis vs Siraj matchup → confirm Overall Verdict reads "Strong play on John Yannis…" with sizing line, green ✅ Take This Pick badge.
+- Pick a known toss-up (`ml_pick.confidence === "avoid"`) and confirm it still says "No bet recommended" but with the *real* reason, not "0 vs 0".
 
 ### Files touched
-1. `supabase/functions/_shared/sport_scan.ts` only.
+1. `src/pages/UfcPage.tsx` — add `ufcDecision` derivation + pass `decision`/`team1Name`/`team2Name` props.
+
+### Out of scope
+- `WrittenAnalysis.tsx` logic (already correct; just needs the right props).
+- UFC backend, edge_scoring, NBA/MLB/NHL flows (unchanged — they pass `factorBreakdown` or `decision` already).
 
