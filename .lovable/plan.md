@@ -1,58 +1,54 @@
 
-
 ## Diagnosis
 
-The "❌ NO BET RECOMMENDED — 0 vs 0, 0 neutral" verdict on UFC matchups is a frontend bug, not bad data.
+The UFC page has two different sources of truth:
 
-`WrittenAnalysis.tsx` — `generateOverallSummary` for `type="moneyline"` runs `computeMoneylineTier(props)`, which counts factors from `props.factorBreakdown` (the team-sport per-factor team1/team2 score array). UFC never passes `factorBreakdown` and never passes a `decision` object, so the loop sees zero factors → `winnerCount=0` → `tier="noBet"` → the canned "Factors split too evenly (0 vs 0, 0 neutral)" message.
+- The center "Top Pick" card is driven by `best_bet`
+- The "Overall Verdict" inside `WrittenAnalysis` is still being driven by a moneyline-style `decision` from `ml_pick`
 
-Meanwhile the in-depth analysis above it correctly shows 77% confidence and "Strong pick on Yannis at -150" because that section is generated from `verdict`/`confidence` directly via the AI narrative, not from `factorBreakdown`.
+So when the actual top pick is something like `Over 1.5 Rounds 77%`, the overall verdict still behaves like a moneyline summary, which is why it can show the wrong result.
 
-The UFC backend (`ufc-api`) already returns everything we need to build a real decision: `ml_pick.pick`, `ml_pick.probability`, `ml_pick.confidence` ("strong" | "lean" | "avoid"), `ml_pick.reasoning`, plus `best_bet.probability`/`best_bet.confidence`. We just need to forward this into `WrittenAnalysis` as a `decision` object so it takes the "single source of truth" path that already exists at lines 170–186.
+## Plan
 
-## Fix — UfcPage.tsx only
+1. Read `best_bet` as the canonical UFC overall pick
+   - Treat `best_bet` as the single source of truth for the UFC overall verdict
+   - Only fall back to `ml_pick` when the top pick itself is actually moneyline
 
-In `MatchupResults` (`src/pages/UfcPage.tsx` ~line 504), add a derived `ufcDecision` and pass it via the `decision` prop:
+2. Build a UFC top-pick adapter in `src/pages/UfcPage.tsx`
+   - Parse `best_bet.bet` into a normalized shape:
+     - Moneyline: `ML Fighter Name`
+     - Round totals: `Over/Under 1.5 Rounds`
+     - Totals like sig strikes / takedowns
+     - Binary props like `Fight goes to Decision` / `Fight ends by KO/TKO` / `Yes — Goes the Distance`
+   - Map that parsed result into the correct `WrittenAnalysis` props
 
-```ts
-const ufcDecision = ml_pick ? {
-  winning_side: ml_pick.pick === fighter1?.name ? "team1" : "team2",
-  winning_team_name: ml_pick.pick,                       // e.g. "John Yannis"
-  win_probability: ml_pick.probability ?? confidenceNum, // 77
-  edge: typeof ml_pick.probability === "number"
-    ? Math.max(0, ml_pick.probability - 50)              // crude edge vs 50/50
-    : null,
-  conviction_tier:                                       // map to WrittenAnalysis tiers
-    ml_pick.confidence === "avoid" ? "noBet" :
-    (ml_pick.probability ?? 0) >= 75 ? "veryHigh" :
-    ml_pick.confidence === "strong" ? "high" :
-    ml_pick.confidence === "lean"   ? "medium" : "low",
-  recommended_units:
-    ml_pick.confidence === "avoid" ? 0 :
-    (ml_pick.probability ?? 0) >= 75 ? 3 :
-    ml_pick.confidence === "strong" ? 2 :
-    ml_pick.confidence === "lean"   ? 1 : 0.5,
-  verdict_text: ml_pick.reasoning ?? "",
-} : null;
-```
+3. Render `WrittenAnalysis` from the top pick, not always from moneyline
+   - If top pick is moneyline: keep `type="moneyline"` and pass a proper `decision`
+   - If top pick is not moneyline: switch to `type="prop"` and pass parsed `playerOrTeam`, `propDisplay`, `overUnder`, `line`, `confidence`, and `reasoning`
+   - This makes the Overall Verdict always describe the same pick shown in the Top Pick card
 
-Pass to `<WrittenAnalysis ... decision={ufcDecision} team1Name={fighter1?.name} team2Name={fighter2?.name} />`.
+4. Add a safe fallback
+   - If a UFC market can’t be parsed cleanly, still show the overall verdict from `best_bet.bet` text instead of dropping into the wrong moneyline/no-bet path
 
-This routes UFC into the existing `decision`-honoring branch (lines 170–186 of `WrittenAnalysis.tsx`), which produces clean output like:
-> "Strong play on John Yannis. 77% win probability, 27% edge. Recommended sizing: 1.5–2 units."
+## Files likely touched
 
-When `ml_pick.confidence === "avoid"` (true toss-up from the model), it correctly shows "No bet recommended. Edge does not justify a play on Toss-up." — matching the model's actual signal instead of the false "0 vs 0, 0 neutral" message.
+- `src/pages/UfcPage.tsx`
+- Possibly `src/components/WrittenAnalysis.tsx` only if a tiny fallback label improvement is needed for non-numeric UFC props
 
-No backend changes. No edge function deploy. No schema changes.
+## Verification after implementation
 
-### Verification
-- Re-open `/dashboard/ufc` Yannis vs Siraj matchup → confirm Overall Verdict reads "Strong play on John Yannis…" with sizing line, green ✅ Take This Pick badge.
-- Pick a known toss-up (`ml_pick.confidence === "avoid"`) and confirm it still says "No bet recommended" but with the *real* reason, not "0 vs 0".
+I will not mark it complete until I verify it live in the preview and paste the observed output.
 
-### Files touched
-1. `src/pages/UfcPage.tsx` — add `ufcDecision` derivation + pass `decision`/`team1Name`/`team2Name` props.
+Checks:
+1. Re-test the same UFC matchup from your screenshot
+   - Confirm the Top Pick card still shows `Over 1.5 Rounds 77%`
+   - Confirm the Overall Verdict now references that same top pick, not moneyline and not `0 vs 0`
 
-### Out of scope
-- `WrittenAnalysis.tsx` logic (already correct; just needs the right props).
-- UFC backend, edge_scoring, NBA/MLB/NHL flows (unchanged — they pass `factorBreakdown` or `decision` already).
+2. Test one matchup where moneyline is the top pick
+   - Confirm the Overall Verdict still correctly summarizes the moneyline side
 
+3. Paste the exact live verdict text seen in the preview in the final summary
+
+## Technical detail
+
+This is a frontend state-mapping bug, not a model bug. The fix is to unify UFC summary rendering around `best_bet`, because that is what the UI already presents as the top recommendation.
