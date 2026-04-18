@@ -420,6 +420,15 @@ async function validateWithAnalyzer(play: ScoredPlay, cache: Map<string, any>): 
   if (!conf || conf <= 0) return null;
   const verdict = String(analyzed.verdict || "").toUpperCase();
   if (verdict === "PASS" || verdict === "FADE") return null;
+
+  // Sanity: if analyzer's reported season/recent average is 0 for a stat where
+  // 0 is implausible, the prop_type didn't resolve in the analyzer — drop it.
+  const seasonAvg = Number(
+    analyzed.seasonAvg ?? analyzed.propAvg ?? analyzed.avg ??
+    analyzed.stats?.seasonAvg ?? analyzed.stats?.avg ?? NaN
+  );
+  if (Number.isFinite(seasonAvg) && seasonAvg === 0) return null;
+
   const projected = Math.max(0, Math.min(1, conf / 100));
   const implied = play.implied_prob;
   const edge = projected - implied;
