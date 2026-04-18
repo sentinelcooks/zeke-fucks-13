@@ -261,10 +261,8 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
       playerSet.add(playerName);
       for (const [rawMarketKey, outcomes] of Object.entries(markets as Record<string, any[]>)) {
         if (/_alternate$/.test(rawMarketKey)) continue;
-        const marketKey = rawMarketKey
-          .replace(/^(player|batter|pitcher)_/, "")
-          .replace(/_alternate$/, "")
-          .replace(/^(?:nba_|mlb_|nhl_)/, "");
+        const marketKey = mapMarketToProp(sport, rawMarketKey);
+        if (!marketKey) continue; // skip unmapped markets — analyzer wouldn't understand them
         const grouped = new Map<string, { side: string; line: number; bestPrice: number }>();
         const lineBookCount = new Map<number, number>();
         const lineJuiceSum = new Map<number, { sum: number; n: number }>();
