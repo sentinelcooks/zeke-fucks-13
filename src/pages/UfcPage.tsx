@@ -500,44 +500,92 @@ function MatchupResults({ data }: { data: any }) {
         ))}
       </div>
 
-      {/* Written Analysis */}
+      {/* Written Analysis — driven by best_bet (the actual Top Pick shown in the card above) */}
       {(() => {
-        const ufcDecision = ml_pick ? {
-          winning_side: ml_pick.pick === fighter1?.name ? "team1" : "team2",
-          winning_team_name: ml_pick.pick,
-          win_probability: ml_pick.probability ?? confidenceNum,
-          edge: typeof ml_pick.probability === "number"
-            ? Math.max(0, ml_pick.probability - 50)
-            : null,
-          conviction_tier:
-            ml_pick.confidence === "avoid" ? "noBet" :
-            (ml_pick.probability ?? 0) >= 75 ? "veryHigh" :
-            ml_pick.confidence === "strong" ? "high" :
-            ml_pick.confidence === "lean" ? "medium" : "low",
-          recommended_units:
-            ml_pick.confidence === "avoid" ? 0 :
-            (ml_pick.probability ?? 0) >= 75 ? 3 :
-            ml_pick.confidence === "strong" ? 2 :
-            ml_pick.confidence === "lean" ? 1 : 0.5,
-          verdict_text: ml_pick.reasoning ?? "",
-        } : null;
+        const betText: string = (best_bet?.bet ?? "").toString().trim();
+        const prob: number = typeof best_bet?.probability === "number" ? best_bet.probability : confidenceNum;
+        const conf: string = (best_bet?.confidence ?? "").toString().toLowerCase();
+        const reasoning: string = best_bet?.reasoning ?? ml_pick?.reasoning ?? "";
+
+        const tier: "noBet" | "low" | "medium" | "high" | "veryHigh" =
+          conf === "avoid" ? "noBet" :
+          prob >= 75 ? "veryHigh" :
+          conf === "strong" ? "high" :
+          conf === "lean" ? "medium" : "low";
+        const units: 0 | 0.5 | 1 | 2 | 3 =
+          tier === "noBet" ? 0 :
+          tier === "veryHigh" ? 3 :
+          tier === "high" ? 2 :
+          tier === "medium" ? 1 : 0.5;
+
+        // Parse best_bet.bet into moneyline vs prop
+        // Examples: "Over 1.5 Rounds", "Under 2.5 Rounds", "Fight goes to Decision",
+        //           "Fight ends by KO/TKO", "John Yannis ML", or just a fighter name (ML)
+        const lower = betText.toLowerCase();
+        const overUnderMatch = betText.match(/^\s*(over|under)\s+(\d+(?:\.\d+)?)\s+(.+?)\s*$/i);
+        const isMlPhrase = /\bml\b|moneyline/i.test(betText);
+        const matchesFighter1 = fighter1?.name && betText.toLowerCase().includes(String(fighter1.name).toLowerCase());
+        const matchesFighter2 = fighter2?.name && betText.toLowerCase().includes(String(fighter2.name).toLowerCase());
+        const isMoneylineTopPick = isMlPhrase || (!overUnderMatch && (matchesFighter1 || matchesFighter2));
+
+        if (isMoneylineTopPick) {
+          const winnerName = matchesFighter2 && !matchesFighter1 ? fighter2?.name : fighter1?.name;
+          const decision = {
+            winning_side: matchesFighter2 && !matchesFighter1 ? "team2" : "team1",
+            winning_team_name: winnerName ?? betText.replace(/\b(ml|moneyline)\b/gi, "").trim(),
+            win_probability: prob,
+            edge: typeof prob === "number" ? Math.max(0, prob - 50) : null,
+            conviction_tier: tier,
+            recommended_units: units,
+            verdict_text: reasoning,
+          };
+          return (
+            <WrittenAnalysis
+              type="moneyline"
+              sport="ufc"
+              verdict={verdictText}
+              confidence={prob}
+              playerOrTeam={decision.winning_team_name as string}
+              team1Name={fighter1?.name}
+              team2Name={fighter2?.name}
+              decision={decision as any}
+              factors={[best_bet?.reasoning, ml_pick?.reasoning].filter(Boolean)}
+              ev={typeof prob === "number" ? prob - 50 : undefined}
+              edge={typeof prob === "number" ? prob - 50 : undefined}
+            />
+          );
+        }
+
+        // Prop-style top pick (rounds total, sig strikes, takedowns, method, distance, etc.)
+        let overUnder: string | undefined;
+        let line: number | undefined;
+        let propDisplay: string = betText;
+        let playerOrTeam: string = `${fighter1?.name ?? "Fighter 1"} vs ${fighter2?.name ?? "Fighter 2"}`;
+
+        if (overUnderMatch) {
+          overUnder = overUnderMatch[1].toUpperCase();
+          line = parseFloat(overUnderMatch[2]);
+          propDisplay = overUnderMatch[3];
+        } else if (/decision|distance/.test(lower)) {
+          propDisplay = "Fight Goes to Decision";
+        } else if (/ko|tko|submission|finish/.test(lower)) {
+          propDisplay = betText;
+        }
+
         return (
           <WrittenAnalysis
-            type="moneyline"
+            type="prop"
             sport="ufc"
             verdict={verdictText}
-            confidence={confidenceNum}
-            playerOrTeam={primaryFighter}
-            team1Name={fighter1?.name}
-            team2Name={fighter2?.name}
-            decision={ufcDecision as any}
-            factors={[
-              ml_pick?.reasoning,
-              best_bet?.reasoning,
-              ...(round_predictions || []).map((rp: any) => `${rp.bet}: ${rp.probability}% (${rp.confidence})`),
-            ].filter(Boolean)}
-            ev={best_bet?.probability ? best_bet.probability - 50 : undefined}
-            edge={best_bet?.probability ? best_bet.probability - 50 : undefined}
+            confidence={prob}
+            playerOrTeam={playerOrTeam}
+            propDisplay={propDisplay}
+            overUnder={overUnder}
+            line={line}
+            reasoning={[reasoning].filter(Boolean) as string[]}
+            factors={[best_bet?.reasoning, ml_pick?.reasoning].filter(Boolean)}
+            ev={typeof prob === "number" ? prob - 50 : undefined}
+            edge={typeof prob === "number" ? prob - 50 : undefined}
           />
         );
       })()}
