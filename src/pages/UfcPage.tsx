@@ -501,20 +501,46 @@ function MatchupResults({ data }: { data: any }) {
       </div>
 
       {/* Written Analysis */}
-      <WrittenAnalysis
-        type="moneyline"
-        sport="ufc"
-        verdict={verdictText}
-        confidence={confidenceNum}
-        playerOrTeam={primaryFighter}
-        factors={[
-          ml_pick?.reasoning,
-          best_bet?.reasoning,
-          ...(round_predictions || []).map((rp: any) => `${rp.bet}: ${rp.probability}% (${rp.confidence})`),
-        ].filter(Boolean)}
-        ev={best_bet?.probability ? best_bet.probability - 50 : undefined}
-        edge={best_bet?.probability ? best_bet.probability - 50 : undefined}
-      />
+      {(() => {
+        const ufcDecision = ml_pick ? {
+          winning_side: ml_pick.pick === fighter1?.name ? "team1" : "team2",
+          winning_team_name: ml_pick.pick,
+          win_probability: ml_pick.probability ?? confidenceNum,
+          edge: typeof ml_pick.probability === "number"
+            ? Math.max(0, ml_pick.probability - 50)
+            : null,
+          conviction_tier:
+            ml_pick.confidence === "avoid" ? "noBet" :
+            (ml_pick.probability ?? 0) >= 75 ? "veryHigh" :
+            ml_pick.confidence === "strong" ? "high" :
+            ml_pick.confidence === "lean" ? "medium" : "low",
+          recommended_units:
+            ml_pick.confidence === "avoid" ? 0 :
+            (ml_pick.probability ?? 0) >= 75 ? 3 :
+            ml_pick.confidence === "strong" ? 2 :
+            ml_pick.confidence === "lean" ? 1 : 0.5,
+          verdict_text: ml_pick.reasoning ?? "",
+        } : null;
+        return (
+          <WrittenAnalysis
+            type="moneyline"
+            sport="ufc"
+            verdict={verdictText}
+            confidence={confidenceNum}
+            playerOrTeam={primaryFighter}
+            team1Name={fighter1?.name}
+            team2Name={fighter2?.name}
+            decision={ufcDecision as any}
+            factors={[
+              ml_pick?.reasoning,
+              best_bet?.reasoning,
+              ...(round_predictions || []).map((rp: any) => `${rp.bet}: ${rp.probability}% (${rp.confidence})`),
+            ].filter(Boolean)}
+            ev={best_bet?.probability ? best_bet.probability - 50 : undefined}
+            edge={best_bet?.probability ? best_bet.probability - 50 : undefined}
+          />
+        );
+      })()}
     </motion.div>
   );
 }
