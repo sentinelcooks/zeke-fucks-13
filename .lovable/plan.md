@@ -2,94 +2,66 @@
 
 ## Goal
 
-Make the Picks tab scan **every game on the Games-tab schedule**, not a 16-event slice. The Games tab data source (`games-schedule` edge function) already returns the full ESPN-derived list — the scanner must iterate over all of it for both game-line and player-prop evaluation.
+Fix three issues so Today's Edge and the Picks tab show a multi-sport variety again:
 
-## Root cause (confirmed in `supabase/functions/_shared/sport_scan.ts`)
+1. **MLB & NHL produce zero picks** because the analyzer (`nba-api/analyze`, Lovable AI Gateway) is being **rate-limited** when all 4 sports fan out in parallel. Logs show ~30+ consecutive `RateLimitError: Retry after 34803ms` for NHL alone.
+2. **Today's Edge is empty** because the orchestrator re-scores from rounded `hit_rate` + applies a strict reliability floor (≥0.70). All 6 NBA picks today fail it → `edge:0 daily:0 free:0`.
+3. **UFC** is missing from `SPORT_KEYS`, so its scanner can't read the games schedule.
 
-1. **Player-prop scan is capped at 16 events** — `evaluatePlayerProps()` lines 263–271:
-   - Pulls upcoming events from `nba-odds/events` (Odds-API), not from `games-schedule`.
-   - Applies a 36-hour cutoff (line 263) that excludes later-in-the-week games visible on the Games tab.
-   - Hard-caps to `.slice(0, 16)` (line 271).
-2. **Game-line scan silently drops schedule games without an Odds-API event match** — `evaluateGameLines()` lines 181–204:
-   - Reads the full Games-tab schedule via `games-schedule?sport=...` (good).
-   - Builds `oddsMap` keyed by exact lowercase `home|away` names — any name mismatch (ESPN vs Odds-API naming) means the game is skipped, never scored.
-3. **Analyzer cap of 20 across the entire sport** — line 488: `ANALYZER_CAP = 20` further bottlenecks how many candidates from a fully-expanded slate actually get validated into picks.
+## Root cause evidence
 
-## Fix — `supabase/functions/_shared/sport_scan.ts` only
+- `slate-scanner` log: `Per-sport results: nba=6 inserted, mlb=0, nhl=0, ufc=0` then `Distribution → edge:0 daily:0 free:0`.
+- `slate-scanner-nhl` log: 30+ stack traces of `RateLimitError ... nba-api/analyze ... Retry after 34803ms`.
+- DB confirms today empty: `SELECT sport, tier, COUNT(*) FROM daily_picks WHERE pick_date = CURRENT_DATE` → no rows.
+- `_shared/edge_scoring.ts` `rankAndDistribute` floor: `confidence ≥ 0.65 AND reliability ≥ 0.70 AND edge > 0` — strict enough that mid-reliability NBA props (threes/steals/blocks at 0.55–0.75) get dropped before they ever reach a tier.
 
-### 1. Drive player-prop scanning off the Games-tab schedule (lines 254–272)
+## Fix — three files
 
-Replace the 16-event Odds-API slice with the full upcoming game list from `games-schedule?sport=<sportKey>` — the same source `evaluateGameLines` and the Games tab use. Then match each scheduled game to its Odds-API event by `home|away` name key (with both name orderings as a fallback) so we know which `eventId` to fetch player props for. No 36h cutoff, no hard cap.
+### 1. `supabase/functions/slate-scanner/index.ts` — serialize sports + insurance retry
 
-```ts
-// fetch the full Games-tab schedule (same source as Live/Games tab)
-const gamesRes = await fnFetch(`games-schedule?sport=${sportKey}`);
-const games = Array.isArray(gamesRes.data) ? gamesRes.data : [];
-const upcomingGames = games.filter(
-  (g: any) => g.status !== "STATUS_FINAL" && g.status !== "STATUS_IN_PROGRESS"
-);
+- **Sequential dispatch instead of parallel** so the analyzer rate limit only sees one sport at a time. Replace `Promise.allSettled(sports.map(...))` with a `for` loop that awaits each `invokeSport` in turn. This eliminates the 18-in-flight pile-up and lets MLB/NHL actually validate.
+- Order: `nba → mlb → nhl → ufc` (largest slate first benefits from a warm gateway).
 
-// fetch odds events once, build name→eventId map
-const eventsRes = await fnFetch(`nba-odds/events?sport=${sport}&markets=h2h`);
-const oddsEvents = Array.isArray(eventsRes.data?.events) ? eventsRes.data.events : [];
-const eventByMatchup = new Map<string, any>();
-for (const ev of oddsEvents) {
-  eventByMatchup.set(`${(ev.home_team||"").toLowerCase()}|${(ev.away_team||"").toLowerCase()}`, ev);
-  eventByMatchup.set(`${(ev.away_team||"").toLowerCase()}|${(ev.home_team||"").toLowerCase()}`, ev);
-}
+### 2. `supabase/functions/_shared/sport_scan.ts` — gentler analyzer fan-out + UFC key + retry on 429
 
-// for each scheduled game, find its odds event; iterate ALL games, no slice
-const upcoming = upcomingGames
-  .map((g: any) => eventByMatchup.get(`${(g.home_team||"").toLowerCase()}|${(g.away_team||"").toLowerCase()}`))
-  .filter(Boolean);
-stats.events = upcoming.length;
-stats.scheduled_games = upcomingGames.length; // expose for verification
-```
+- `ANALYZER_CHUNK = 6` → `3` (6 parallel analyzer calls is what's tripping the per-trace rate limit).
+- `ANALYZER_CAP = 75` → `45` (still a full slate, but cuts wall-time and 429 surface area).
+- Add `SPORT_KEYS.ufc = "mma_mixed_martial_arts"` so UFC's `games-schedule` lookup succeeds.
+- In `validateWithAnalyzer`, on `r.status === 429` (or text contains "Rate limit"), wait `min(retryAfterMs, 4000)` and retry once. Currently a 429 silently returns `null` → the candidate is permanently lost.
 
-Remove `.slice(0, 16)` and the 36h cutoff. Keep the 5-event chunked parallel fetch (`CHUNK = 5`) so wall-time stays bounded.
+### 3. `supabase/functions/_shared/edge_scoring.ts` — slightly loosen the orchestrator floor
 
-### 2. Loosen game-line matching so no scheduled game is silently dropped (lines 194–204)
+The analyzer already enforces `confidence ≥ 0.65 AND edge > 0.025` per-pick. The redundant orchestrator floor is what's silently zeroing the slate when reliability is mid-tier. Change `rankAndDistribute`:
 
-Add the reverse-key lookup to `oddsMap` so an away/home swap in naming still matches:
+- Floor: `confidence ≥ 0.62 AND reliability ≥ 0.55 AND edge > 0` (was `0.65 / 0.70 / 0`).
+- Keep verdict tiering and the 5-pick `TODAYS_EDGE_CAP` per sport-diversity rule unchanged — `Strong` and `Lean` survive, only true `Pass` is dropped.
 
-```ts
-for (const ev of oddsEvents) {
-  const home = (ev.home_team || "").toLowerCase();
-  const away = (ev.away_team || "").toLowerCase();
-  oddsMap.set(`${home}|${away}`, ev);
-  oddsMap.set(`${away}|${home}`, ev);
-}
-```
-
-This guarantees every scheduled game with odds available is evaluated.
-
-### 3. Raise the analyzer cap to match a full slate (line 488)
-
-Change `ANALYZER_CAP = 20` → `ANALYZER_CAP = 75`. This lets the top candidates from a full ~16-game NBA slate (or 15-game MLB / 14-game NHL slate) actually reach the analyzer instead of being discarded after prefilter. `ANALYZER_CHUNK = 6` stays the same to keep wall-time safe.
-
-### 4. Surface the new counts in the per-sport return (line 464)
-
-Extend `stats` to include `scheduled_games` and keep `events`, `lines`, `candidates`. This lets us verify via the orchestrator's `perSport` JSON that `scheduled_games` matches what `games-schedule?sport=...` returns.
+This restores the previous behavior where validated picks reach the Picks tab and the top 5 surface to Today's Edge with sport diversity (max 2/sport).
 
 ## Files changed
 
-- `supabase/functions/_shared/sport_scan.ts` — only file touched.
-  - Lines 177–251 (`evaluateGameLines`): add reverse-key entries to `oddsMap`.
-  - Lines 254–272 (`evaluatePlayerProps`): swap 16-event Odds-API slice for full `games-schedule` iteration with name-key match.
-  - Line 488 (`scanSport`): `ANALYZER_CAP = 20` → `75`.
-  - Line 464 (`stats`): add `scheduled_games`.
+- `supabase/functions/slate-scanner/index.ts` — parallel → sequential dispatch.
+- `supabase/functions/_shared/sport_scan.ts` — `ANALYZER_CHUNK 6→3`, `ANALYZER_CAP 75→45`, add UFC SPORT_KEY, 429 retry-once in `validateWithAnalyzer`.
+- `supabase/functions/_shared/edge_scoring.ts` — relax `rankAndDistribute` floor to `0.62 / 0.55 / 0`.
 
 ## Non-goals
 
-- No changes to the Games tab, `games-schedule` edge function, the Picks UI, the pick card design, the analyzer (`nba-api/analyze`), the scoring/EV math, or the `daily_picks` schema.
-- No changes to `slate-scanner-{nba,mlb,nhl,ufc}` per-sport wrappers — they automatically pick up the new `scanSport()` behavior.
+- No changes to the Picks tab UI, Today's Edge carousel UI, the analyzer (`nba-api/analyze`), the `daily_picks` schema, or the Games tab.
 - No DB migration.
+- Not changing the verdict tiering thresholds (`Strong`/`Lean`/`Pass`) — only the redundant orchestrator floor that was double-gating analyzer output.
 
-## Verification (will be run after the edit)
+## Verification (after deploy)
 
-1. Deploy `slate-scanner-nba`, `slate-scanner-mlb`, `slate-scanner-nhl`, `slate-scanner-ufc`, and `slate-scanner` (orchestrator unchanged but redeployed so it picks up the shared module).
-2. `curl` `games-schedule?sport=basketball_nba` → record total upcoming game count `G`.
-3. `curl` `slate-scanner` → confirm `perSport.nba.stats.scheduled_games === G` (proves the Picks tab is now driven by the same schedule the Games tab shows).
-4. `psql -c "SELECT COUNT(DISTINCT (home_team || '|' || away_team)) FROM daily_picks WHERE pick_date = CURRENT_DATE AND sport='nba';"` → confirm distinct game count is in the same order of magnitude as `G` (every scheduled NBA game with edge had a chance to surface a pick), instead of the previous ≤16 ceiling.
-5. Paste all three outputs (`games-schedule` count, scanner JSON `scheduled_games`, SQL distinct count) verbatim in the summary.
+1. Deploy `slate-scanner`, `slate-scanner-nba`, `slate-scanner-mlb`, `slate-scanner-nhl`, `slate-scanner-ufc`.
+2. `curl` `slate-scanner` → confirm `perSport.{mlb,nhl}.validated > 0` AND `tiers.edge > 0` (was 0/0/0 before).
+3. `psql` 
+   ```sql
+   SELECT sport, tier, COUNT(*) 
+   FROM daily_picks 
+   WHERE pick_date = CURRENT_DATE 
+   GROUP BY sport, tier ORDER BY sport, tier;
+   ```
+   → expect rows for **nba, mlb, nhl** across `edge` / `daily` / `value` tiers.
+4. `psql SELECT sport, COUNT(*) FROM free_props WHERE prop_date = CURRENT_DATE GROUP BY sport;` → expect multi-sport rows.
+5. Paste all three outputs (scanner JSON `perSport` + `tiers`, daily_picks SQL, free_props SQL) verbatim in the summary before marking complete.
 
