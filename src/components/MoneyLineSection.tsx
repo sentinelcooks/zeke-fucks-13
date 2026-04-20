@@ -780,9 +780,17 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
   if (!isLive || Object.keys(allMarketData).length === 0) {
     return (
       <div className="vision-card p-4">
-        <div className="flex items-center gap-2 text-muted-foreground/65">
-          <AlertTriangle className="w-4 h-4 text-nba-yellow shrink-0" />
-          <p className="text-[11px]">Live odds temporarily unavailable for this matchup. Analysis is still fully powered by our model data.</p>
+        <div className="flex items-start gap-2 text-muted-foreground/65">
+          <AlertTriangle className="w-4 h-4 text-nba-yellow shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-[11px]">Live odds for {team1.shortName || team1.name} vs {team2.shortName || team2.name} aren't posted yet. Analysis still uses our model — odds will appear once books publish them.</p>
+            <button
+              onClick={loadOdds}
+              className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-bold text-accent hover:text-accent/80 transition-colors"
+            >
+              <RefreshCw className="w-3 h-3" /> Retry
+            </button>
+          </div>
         </div>
       </div>
     );
