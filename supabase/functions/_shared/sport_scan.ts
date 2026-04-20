@@ -480,7 +480,7 @@ export async function scanSport(sport: string): Promise<{
   stats: any;
   error?: string;
 }> {
-  const stats: any = { games: 0, events: 0, players: 0, propLines: 0, lines: 0, candidates: 0 };
+  const stats: any = { games: 0, scheduled_games: 0, events: 0, players: 0, propLines: 0, lines: 0, candidates: 0 };
   let lines: ScoredPlay[] = [];
   let props: ScoredPlay[] = [];
   try {
@@ -504,7 +504,7 @@ export async function scanSport(sport: string): Promise<{
   });
 
   // Analyzer validation — cap per sport
-  const ANALYZER_CAP = 20;
+  const ANALYZER_CAP = 75;
   const ANALYZER_CHUNK = 6;
   const top = prefiltered.sort((a, b) => b.edge - a.edge).slice(0, ANALYZER_CAP);
   const cache = new Map<string, any>();
