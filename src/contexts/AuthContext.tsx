@@ -33,18 +33,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchProfile = useCallback(async (userId: string) => {
+  const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     const { data } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", userId)
       .single();
     if (data) {
-      setProfile(data as unknown as Profile);
+      const p = data as unknown as Profile;
+      setProfile(p);
       // Sync onboarding_complete flag to local storage for offline resilience
       if ((data as any).onboarding_complete) {
         localStorage.setItem("sentinel_onboarding_complete", "true");
       }
+      // Mirror odds_format to localStorage so useOddsFormat has a fallback
+      // during the brief window between auth and profile fetch.
+      if (p.odds_format === "american" || p.odds_format === "decimal") {
+        localStorage.setItem("sentinel_odds_format", p.odds_format);
+      }
+      return p;
     } else {
       // Profile missing (e.g. trigger didn't fire) — create it from user metadata
       const { data: { user: currentUser } } = await supabase.auth.getUser();
