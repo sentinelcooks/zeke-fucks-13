@@ -566,6 +566,34 @@ Deno.serve(async (req) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceKey);
 
+  // ── Run lock: prevent concurrent invocations from creating duplicates ──
+  const lockDate = new Date().toISOString().slice(0, 10);
+  let acquiredLock = false;
+  try {
+    // Stale-lock recovery: clear locks older than 10 minutes
+    await supabase
+      .from("daily_picks_runs")
+      .delete()
+      .lt("started_at", new Date(Date.now() - 10 * 60 * 1000).toISOString());
+
+    const { data: lockRow, error: lockErr } = await supabase
+      .from("daily_picks_runs")
+      .insert({ date: lockDate })
+      .select()
+      .maybeSingle();
+
+    if (lockErr || !lockRow) {
+      console.log(`🔒 Another daily-picks run is in flight for ${lockDate} — exiting early`);
+      return new Response(
+        JSON.stringify({ message: "Another run in progress", skipped: true }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    acquiredLock = true;
+  } catch (e) {
+    console.error("Lock acquisition error (continuing without lock):", e);
+  }
+
   try {
     const startTime = Date.now();
     const TIMEOUT_MS = 140_000;
@@ -765,8 +793,13 @@ Deno.serve(async (req) => {
           tier,
         };
       });
-      const { error: insertErr } = await supabase.from("daily_picks").insert(rows);
-      if (insertErr) console.error("daily_picks insert error:", insertErr);
+      const { error: insertErr } = await supabase
+        .from("daily_picks")
+        .upsert(rows, {
+          onConflict: "pick_date,sport,tier,player_name,prop_type,direction,line",
+          ignoreDuplicates: true,
+        });
+      if (insertErr) console.error("daily_picks upsert error:", insertErr);
     }
 
     if (freePicks.length > 0) {
@@ -808,5 +841,13 @@ Deno.serve(async (req) => {
       JSON.stringify({ error: err instanceof Error ? err.message : "Internal error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+  } finally {
+    if (acquiredLock) {
+      try {
+        await supabase.from("daily_picks_runs").delete().eq("date", lockDate);
+      } catch (e) {
+        console.error("Lock release error:", e);
+      }
+    }
   }
 });

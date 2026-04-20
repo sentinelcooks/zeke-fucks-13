@@ -286,9 +286,17 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       return Math.abs(n) < 500;
     };
     // STRICT: today only. No 3-day stale fallback — show empty state if no picks today.
-    const allToday = ((todayRes.data as DailyPick[]) || []).filter(
+    const rawToday = ((todayRes.data as DailyPick[]) || []).filter(
       p => hrOk(p.hit_rate) && oddsOk(p.odds) && p.tier !== "pass"
     );
+    // Defensive client-side dedupe (in case duplicate rows still exist in DB)
+    const seenKeys = new Set<string>();
+    const allToday = rawToday.filter(p => {
+      const k = `${p.sport}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}|${p.tier}`;
+      if (seenKeys.has(k)) return false;
+      seenKeys.add(k);
+      return true;
+    });
 
     const sortByPref = (arr: DailyPick[]) => {
       if (userSports.length > 0) {
