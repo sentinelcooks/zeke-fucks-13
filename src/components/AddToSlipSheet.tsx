@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Drawer, DrawerContent } from "@/components/ui/drawer";
 import { useParlaySlip, type ParlaySlipLeg } from "@/contexts/ParlaySlipContext";
 import { americanToDecimal } from "@/utils/oddsFormat";
+import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { fetchPlayerOdds } from "@/services/oddsApi";
 import { getSportsbookInfo } from "@/utils/sportsbookLogos";
 import { toast } from "@/hooks/use-toast";
@@ -26,6 +27,7 @@ interface Props {
 
 export function AddToSlipSheet({ open, onOpenChange, pick }: Props) {
   const { addLeg } = useParlaySlip();
+  const { fmt } = useOddsFormat();
   const [stake, setStake] = useState("");
   const [liveOdds, setLiveOdds] = useState<number | null>(null);
   const [bestBook, setBestBook] = useState<string | null>(null);
@@ -69,7 +71,7 @@ export function AddToSlipSheet({ open, onOpenChange, pick }: Props) {
   const decOdds = americanToDecimal(displayOdds);
   const stakeNum = parseFloat(stake) || 0;
   const payout = (stakeNum * decOdds).toFixed(2);
-  const oddsLabel = displayOdds > 0 ? `+${displayOdds}` : `${displayOdds}`;
+  const oddsLabel = fmt(displayOdds);
   const bookInfo = bestBook ? getSportsbookInfo(bestBook) : null;
 
   const handleConfirm = () => {

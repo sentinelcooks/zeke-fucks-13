@@ -52,7 +52,13 @@ const AuthPage = () => {
   const { signIn, signUp, isAuthenticated, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
+  const [savingOnboarding, setSavingOnboarding] = useState(false);
+  const savedForUser = useState(() => new Set<string>())[0];
+
   const saveOnboardingToDb = useCallback(async (userId: string) => {
+    if (savedForUser.has(userId)) return;
+    savedForUser.add(userId);
+    setSavingOnboarding(true);
     try {
       const referral = localStorage.getItem("sentinel_onboarding_referral") || null;
       const sports = JSON.parse(localStorage.getItem("sentinel_onboarding_sports") || "[]");
@@ -83,19 +89,34 @@ const AuthPage = () => {
       const profileUpdate: Record<string, unknown> = { onboarding_complete: true };
       if (oddsFormat) profileUpdate.odds_format = oddsFormat;
       await supabase.from("profiles").update(profileUpdate as any).eq("id", userId);
-      if (oddsFormat) localStorage.removeItem("sentinel_onboarding_odds_format");
-      await refreshProfile();
+
+      // Mirror to localStorage immediately so useOddsFormat picks it up
+      // even before the profile context refreshes.
+      if (oddsFormat) {
+        localStorage.setItem("sentinel_odds_format", oddsFormat);
+        localStorage.removeItem("sentinel_onboarding_odds_format");
+      }
+
+      // Read the row back to confirm persistence, then refresh context.
+      await supabase
+        .from("profiles")
+        .select("id, odds_format, onboarding_complete")
+        .eq("id", userId)
+        .single();
+      await refreshProfile(userId);
     } catch (err) {
       console.error("Failed to save onboarding:", err);
       localStorage.setItem("sentinel_onboarding_complete", "true");
+    } finally {
+      setSavingOnboarding(false);
     }
-  }, [refreshProfile]);
+  }, [refreshProfile, savedForUser]);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !savingOnboarding) {
       navigate("/dashboard", { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, savingOnboarding]);
 
   // After OAuth redirect lands us back on this page already authenticated,
   // capture the user and save onboarding. The useEffect above will then route to /dashboard.
