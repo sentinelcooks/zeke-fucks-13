@@ -422,7 +422,7 @@ async function validateWithAnalyzer(play: ScoredPlay, cache: Map<string, any>): 
       play.opponent ||
       (play.home_team && play.away_team ? play.away_team : "") ||
       "";
-    const r = await fnPost("nba-api/analyze", {
+    const body = {
       player: play.player_name,
       prop_type: play.prop_type,
       line: play.line,
@@ -430,7 +430,14 @@ async function validateWithAnalyzer(play: ScoredPlay, cache: Map<string, any>): 
       opponent,
       sport: play.sport,
       bet_type: "player_prop",
-    });
+    };
+    let r = await fnPost("nba-api/analyze", body);
+    // Retry once on 429 / rate-limit
+    if (r.status === 429 || (typeof r.data === "string" && /rate limit/i.test(r.data))) {
+      const waitMs = 3000;
+      await new Promise((res) => setTimeout(res, waitMs));
+      r = await fnPost("nba-api/analyze", body);
+    }
     if (!r.ok || !r.data) return null;
     analyzed = r.data;
     cache.set(cacheKey, analyzed);
