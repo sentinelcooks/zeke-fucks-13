@@ -193,8 +193,10 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
 
   const oddsMap = new Map<string, any>();
   for (const ev of oddsEvents) {
-    const key = `${(ev.home_team || "").toLowerCase()}|${(ev.away_team || "").toLowerCase()}`;
-    oddsMap.set(key, ev);
+    const home = (ev.home_team || "").toLowerCase();
+    const away = (ev.away_team || "").toLowerCase();
+    oddsMap.set(`${home}|${away}`, ev);
+    oddsMap.set(`${away}|${home}`, ev);
   }
 
   const plays: ScoredPlay[] = [];
@@ -259,16 +261,33 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
   const r = await fnFetch(`nba-odds/events?sport=${sport}&markets=h2h`);
   events = Array.isArray(r.data?.events) ? r.data.events : [];
 
-  const now = Date.now();
-  const cutoff = now + 36 * 3600 * 1000;
-  const upcoming = events
-    .filter((e: any) => {
-      if (!e.commence_time) return true;
-      const t = new Date(e.commence_time).getTime();
-      return t > now && t < cutoff;
-    })
-    .sort((a: any, b: any) => new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime())
-    .slice(0, 16);
+  // Drive scanning off the Games-tab schedule so EVERY scheduled game gets a chance.
+  let upcoming: any[] = events;
+  if (sportKey) {
+    const gamesRes = await fnFetch(`games-schedule?sport=${sportKey}`);
+    const games = Array.isArray(gamesRes.data) ? gamesRes.data : [];
+    const upcomingGames = games.filter(
+      (g: any) => g.status !== "STATUS_FINAL" && g.status !== "STATUS_IN_PROGRESS"
+    );
+    stats.scheduled_games = upcomingGames.length;
+
+    const eventByMatchup = new Map<string, any>();
+    for (const ev of events) {
+      const home = (ev.home_team || "").toLowerCase();
+      const away = (ev.away_team || "").toLowerCase();
+      eventByMatchup.set(`${home}|${away}`, ev);
+      eventByMatchup.set(`${away}|${home}`, ev);
+    }
+    upcoming = upcomingGames
+      .map((g: any) =>
+        eventByMatchup.get(
+          `${(g.home_team || "").toLowerCase()}|${(g.away_team || "").toLowerCase()}`
+        )
+      )
+      .filter(Boolean);
+  } else {
+    stats.scheduled_games = events.length;
+  }
   stats.events = upcoming.length;
 
   const plays: ScoredPlay[] = [];
@@ -461,7 +480,7 @@ export async function scanSport(sport: string): Promise<{
   stats: any;
   error?: string;
 }> {
-  const stats: any = { games: 0, events: 0, players: 0, propLines: 0, lines: 0, candidates: 0 };
+  const stats: any = { games: 0, scheduled_games: 0, events: 0, players: 0, propLines: 0, lines: 0, candidates: 0 };
   let lines: ScoredPlay[] = [];
   let props: ScoredPlay[] = [];
   try {
@@ -485,7 +504,7 @@ export async function scanSport(sport: string): Promise<{
   });
 
   // Analyzer validation — cap per sport
-  const ANALYZER_CAP = 20;
+  const ANALYZER_CAP = 75;
   const ANALYZER_CHUNK = 6;
   const top = prefiltered.sort((a, b) => b.edge - a.edge).slice(0, ANALYZER_CAP);
   const cache = new Map<string, any>();
