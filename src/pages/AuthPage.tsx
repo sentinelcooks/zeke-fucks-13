@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable";
 import sentinelLogo from "@/assets/sentinel-lock.jpg";
 
 // Sentinel purple brand
@@ -162,18 +163,20 @@ const AuthPage = () => {
     setError("");
     setOauthLoading(provider);
     try {
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: window.location.origin + "/auth",
-        },
+      const result = await lovable.auth.signInWithOAuth(provider, {
+        redirect_uri: window.location.origin + "/auth",
       });
-      if (oauthError) {
-        setError(oauthError.message || `${provider} sign-in failed`);
+      if (result.redirected) {
+        // Browser navigates away to provider; onAuthStateChange handles return.
+        return;
+      }
+      if (result.error) {
+        setError(result.error.message || `${provider} sign-in failed`);
         setOauthLoading(null);
         return;
       }
-      // Browser navigates away to provider; onAuthStateChange handles return.
+      // Tokens received and session set — refresh and continue.
+      await refreshProfile?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : `${provider} sign-in failed`);
       setOauthLoading(null);
