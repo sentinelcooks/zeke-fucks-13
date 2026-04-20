@@ -849,7 +849,7 @@ function FeatureCard({
     >
       <div className="flex items-center justify-between">
         <div className="text-[11px] font-bold text-white">{title}</div>
-        <Icon className="w-3 h-3 text-nba-green/70" />
+        <Icon className="w-3 h-3" style={{ color: "hsl(var(--nba-green) / 0.7)" }} />
       </div>
       <div className="min-h-[48px] flex items-center">{children}</div>
     </motion.button>
