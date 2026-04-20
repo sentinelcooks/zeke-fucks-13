@@ -107,11 +107,13 @@ const AuthPage = () => {
     } catch (err) {
       console.error("Failed to save onboarding:", err);
       localStorage.setItem("sentinel_onboarding_complete", "true");
+    } finally {
+      setSavingOnboarding(false);
     }
-  }, [refreshProfile]);
+  }, [refreshProfile, savedForUser]);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !savingOnboarding) {
       navigate("/dashboard", { replace: true });
     }
   }, [isAuthenticated, navigate]);
