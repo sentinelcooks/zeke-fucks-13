@@ -657,9 +657,6 @@ function ScreenPersonalize({ onBack, onNext }: { onBack: () => void; onNext: () 
               autoFocus
               className="w-full rounded-xl border border-[#2A2A2A] bg-[#141414] px-3 py-3 text-sm text-white placeholder:text-white/30 focus:border-[#00FF6A] focus:outline-none focus:ring-1 focus:ring-[#00FF6A]/40"
             />
-            {customSport.trim().length === 0 && (
-              <p className="mt-1.5 text-[11px] text-white/40">Type the sport you bet on so we can tailor your picks.</p>
-            )}
           </motion.div>
         )}
       </div>
