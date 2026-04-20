@@ -27,6 +27,7 @@ interface Props {
 
 export function AddToSlipSheet({ open, onOpenChange, pick }: Props) {
   const { addLeg } = useParlaySlip();
+  const { fmt } = useOddsFormat();
   const [stake, setStake] = useState("");
   const [liveOdds, setLiveOdds] = useState<number | null>(null);
   const [bestBook, setBestBook] = useState<string | null>(null);
