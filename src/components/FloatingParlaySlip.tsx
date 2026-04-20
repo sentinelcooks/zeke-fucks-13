@@ -21,7 +21,8 @@ export function FloatingParlaySlip() {
         initial={{ y: 80, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 80, opacity: 0 }}
-        className="fixed bottom-24 right-4 z-40 max-w-[320px]"
+        className="fixed right-4 z-40 max-w-[320px]"
+        style={{ bottom: "calc(env(safe-area-inset-bottom) + 6rem)" }}
       >
         {/* Expanded view */}
         <AnimatePresence>
