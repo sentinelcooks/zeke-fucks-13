@@ -707,12 +707,28 @@ function analyzeMoneyline(
   addFactor("Recent Form (L10 Net)", Math.round(rfScore1), Math.round(100 - rfScore1), 7,
     `${team1.shortName} recent: ${extras.pace1.recentPpg} PPG, ${extras.pace1.recentOppPpg} opp | ${team2.shortName}: ${extras.pace2.recentPpg} PPG, ${extras.pace2.recentOppPpg} opp`);
 
-  // Factor 6: Home/Away Splits (6%)
-  const homeAdv1 = extras.splits1.home.winPct;
-  const awayAdv2 = extras.splits2.away.winPct;
-  const splitsScore1 = homeAdv1 > 0 || awayAdv2 > 0 ? Math.round(Math.max(20, Math.min(80, 50 + (homeAdv1 - awayAdv2) * 40))) : 50;
-  addFactor("Home/Away Splits", splitsScore1, 100 - splitsScore1, 6,
-    `🏠 ${team1.shortName} ${extras.splits1.home.wins}-${extras.splits1.home.losses} at home (${(homeAdv1 * 100).toFixed(0)}%), ${team2.shortName} ${extras.splits2.away.wins}-${extras.splits2.away.losses} on road (${(awayAdv2 * 100).toFixed(0)}%)`);
+  // Factor 6: Home/Away Splits (6%) — role-aware (uses real venue, falls back to overall)
+  const t1HomeSplit = team1IsHome === true ? extras.splits1.home : team1IsHome === false ? extras.splits1.away : null;
+  const t2AwaySplit = team1IsHome === true ? extras.splits2.away : team1IsHome === false ? extras.splits2.home : null;
+  let splitsScore1 = 50;
+  let splitsDesc = "Home/away split data unavailable";
+  if (t1HomeSplit && t2AwaySplit) {
+    const adv1 = t1HomeSplit.winPct;
+    const adv2 = t2AwaySplit.winPct;
+    splitsScore1 = adv1 > 0 || adv2 > 0 ? Math.round(Math.max(20, Math.min(80, 50 + (adv1 - adv2) * 40))) : 50;
+    const t1Label = team1IsHome ? `🏠 ${team1.shortName} ${t1HomeSplit.wins}-${t1HomeSplit.losses} at home` : `✈️ ${team1.shortName} ${t1HomeSplit.wins}-${t1HomeSplit.losses} on road`;
+    const t2Label = team1IsHome ? `${team2.shortName} ${t2AwaySplit.wins}-${t2AwaySplit.losses} on road` : `${team2.shortName} ${t2AwaySplit.wins}-${t2AwaySplit.losses} at home`;
+    splitsDesc = `${t1Label} (${(adv1 * 100).toFixed(0)}%), ${t2Label} (${(adv2 * 100).toFixed(0)}%)`;
+  } else {
+    // Neutral fallback: overall winPct from combined home+away
+    const t1G = (extras.splits1.home.games || 0) + (extras.splits1.away.games || 0);
+    const t2G = (extras.splits2.home.games || 0) + (extras.splits2.away.games || 0);
+    const t1Pct = t1G > 0 ? (extras.splits1.home.wins + extras.splits1.away.wins) / t1G : 0;
+    const t2Pct = t2G > 0 ? (extras.splits2.home.wins + extras.splits2.away.wins) / t2G : 0;
+    splitsScore1 = t1Pct > 0 || t2Pct > 0 ? Math.round(Math.max(20, Math.min(80, 50 + (t1Pct - t2Pct) * 40))) : 50;
+    splitsDesc = `Overall: ${team1.shortName} ${(t1Pct * 100).toFixed(0)}%, ${team2.shortName} ${(t2Pct * 100).toFixed(0)}% (no scheduled venue)`;
+  }
+  addFactor("Home/Away Splits", splitsScore1, 100 - splitsScore1, 6, splitsDesc);
 
   // Factor 7: Injuries Impact (8%)
   const majorStatuses = ["out", "doubtful"];
