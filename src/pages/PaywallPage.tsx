@@ -182,10 +182,10 @@ export default function PaywallPage() {
 
   const ctaLabel =
     selectedPlan === "monthly"
-      ? "Start Monthly Trial"
+      ? "Start Your Monthly Trial"
       : selectedPlan === "yearly"
-      ? "Start Yearly Trial"
-      : "Start Free Trial";
+      ? "Start Your Yearly Trial"
+      : "Start Your Weekly Trial";
 
   const monthlyValueStack = [
     "Full AI prop access",
