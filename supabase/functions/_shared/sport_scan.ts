@@ -470,7 +470,8 @@ async function validateWithAnalyzer(play: ScoredPlay, cache: Map<string, any>): 
   const implied = play.implied_prob;
   const edge = projected - implied;
   if (edge <= 0.025) return null;
-  if (projected < 0.65) return null;
+  const minConf = ANALYZER_MIN_CONF[play.sport] ?? 0.55;
+  if (projected < minConf) return null;
   const reasoningArr = Array.isArray(analyzed.reasoning) ? analyzed.reasoning : [];
   const reasoning = reasoningArr.length
     ? reasoningArr.slice(0, 3).join(" ")
