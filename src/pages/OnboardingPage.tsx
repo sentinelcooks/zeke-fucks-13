@@ -577,7 +577,52 @@ function ScreenPersonalize({ onBack, onNext }: { onBack: () => void; onNext: () 
               </motion.button>
             );
           })}
+          {/* Other tile */}
+          <motion.button
+            type="button"
+            onClick={toggleOther}
+            whileTap={{ scale: 0.97 }}
+            className={`relative rounded-xl border p-3 transition-all ${
+              otherActive
+                ? "border-[#00FF6A] bg-[#00FF6A]/5 shadow-[0_0_18px_rgba(0,255,106,0.15)]"
+                : "border-[#2A2A2A] bg-[#141414]"
+            }`}
+          >
+            {otherActive && (
+              <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[#00FF6A] flex items-center justify-center">
+                <Check className="w-3 h-3 text-black" strokeWidth={3} />
+              </div>
+            )}
+            <div className="flex justify-center mb-2">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-black ${otherActive ? "bg-[#00FF6A]/15 text-[#00FF6A]" : "bg-white/5 text-white/60"}`}>
+                +
+              </div>
+            </div>
+            <div className={`text-center text-sm font-bold ${otherActive ? "text-[#00FF6A]" : "text-white"}`}>Other</div>
+          </motion.button>
         </div>
+
+        {otherActive && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+            className="mt-3"
+          >
+            <input
+              type="text"
+              value={customSport}
+              onChange={(e) => updateCustomSport(e.target.value)}
+              placeholder="e.g. Esports, Soccer, Tennis…"
+              maxLength={40}
+              autoFocus
+              className="w-full rounded-xl border border-[#2A2A2A] bg-[#141414] px-3 py-3 text-sm text-white placeholder:text-white/30 focus:border-[#00FF6A] focus:outline-none focus:ring-1 focus:ring-[#00FF6A]/40"
+            />
+            {customSport.trim().length === 0 && (
+              <p className="mt-1.5 text-[11px] text-white/40">Type the sport you bet on so we can tailor your picks.</p>
+            )}
+          </motion.div>
+        )}
       </div>
 
       {/* Sports */}
