@@ -193,8 +193,10 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
 
   const oddsMap = new Map<string, any>();
   for (const ev of oddsEvents) {
-    const key = `${(ev.home_team || "").toLowerCase()}|${(ev.away_team || "").toLowerCase()}`;
-    oddsMap.set(key, ev);
+    const home = (ev.home_team || "").toLowerCase();
+    const away = (ev.away_team || "").toLowerCase();
+    oddsMap.set(`${home}|${away}`, ev);
+    oddsMap.set(`${away}|${home}`, ev);
   }
 
   const plays: ScoredPlay[] = [];
