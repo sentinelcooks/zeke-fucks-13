@@ -71,7 +71,7 @@ export function AddToSlipSheet({ open, onOpenChange, pick }: Props) {
   const decOdds = americanToDecimal(displayOdds);
   const stakeNum = parseFloat(stake) || 0;
   const payout = (stakeNum * decOdds).toFixed(2);
-  const oddsLabel = displayOdds > 0 ? `+${displayOdds}` : `${displayOdds}`;
+  const oddsLabel = fmt(displayOdds);
   const bookInfo = bestBook ? getSportsbookInfo(bestBook) : null;
 
   const handleConfirm = () => {
