@@ -224,7 +224,7 @@ const LegalPage = () => {
   const active = LEGAL_SECTIONS.find((s) => s.id === activeSection);
 
   return (
-    <div className="min-h-screen pb-28">
+    <div className="min-h-screen pb-28 pt-safe">
       {/* Header */}
       <div className="px-5 pt-6 pb-4 flex items-center gap-3">
         <button

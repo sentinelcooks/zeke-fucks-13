@@ -71,11 +71,19 @@
     --sidebar-border: 228 20% 16%;
     --sidebar-ring: 142 100% 50%;
 
-    /* Mobile safe areas */
+  /* Mobile safe areas */
     --safe-top: env(safe-area-inset-top, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --tab-height: 56px;
   }
+}
+
+@layer utilities {
+  .pt-safe { padding-top: max(env(safe-area-inset-top), 0px); }
+  .pt-safe-plus-2 { padding-top: calc(env(safe-area-inset-top) + 0.5rem); }
+  .pt-safe-plus-4 { padding-top: calc(env(safe-area-inset-top) + 1rem); }
+  .pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
+  .min-h-screen-safe { min-height: 100dvh; }
 }
 
 @layer base {

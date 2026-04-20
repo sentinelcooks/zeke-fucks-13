@@ -292,7 +292,7 @@ const AdminPage = () => {
 
   if (!isAuthed) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background bg-grid relative overflow-hidden">
+      <div className="flex min-h-screen items-center justify-center bg-background bg-grid relative overflow-hidden pt-safe pb-safe">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-destructive/10 blur-[120px] pointer-events-none" />
         <div className="glass-card rounded-2xl p-10 w-full max-w-md mx-4 relative z-10">
           <div className="flex flex-col items-center mb-8">
@@ -336,7 +336,7 @@ const AdminPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background bg-grid p-6">
+    <div className="min-h-screen bg-background bg-grid p-6 pt-safe-plus-4 pb-safe">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">

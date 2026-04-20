@@ -21,7 +21,7 @@ export default function WelcomeConfirmationPage() {
   }, [navigate]);
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-[#050508] text-white">
+    <div className="relative min-h-screen w-full overflow-hidden bg-[#050508] text-white pt-safe pb-safe">
       <style>{`
         @keyframes ken-burns { from { transform: scale(1) } to { transform: scale(1.06) } }
         @keyframes float-particle {

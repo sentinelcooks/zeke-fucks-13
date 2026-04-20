@@ -11,10 +11,7 @@ export function MobileHeader({ title }: MobileHeaderProps) {
   const dateStr = time.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
   return (
-    <header
-      className="sticky top-0 z-40"
-      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
-    >
+    <header className="sticky top-0 z-40 pt-safe">
       {/* Solid background — no frosted glass gap at top */}
       <div className="absolute inset-0" style={{
         background: 'hsl(228, 30%, 6%)',
@@ -24,7 +21,7 @@ export function MobileHeader({ title }: MobileHeaderProps) {
         style={{ background: 'linear-gradient(90deg, transparent, hsla(250, 76%, 62%, 0.15), hsla(210, 100%, 60%, 0.08), transparent)' }} />
 
       {/* Single compact row */}
-      <div className="relative z-10 flex items-center justify-between px-4 py-2.5">
+      <div className="relative z-10 flex items-center justify-between px-4 pt-1 pb-2.5">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="relative shrink-0">
             <img
