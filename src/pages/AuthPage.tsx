@@ -52,7 +52,13 @@ const AuthPage = () => {
   const { signIn, signUp, isAuthenticated, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
+  const [savingOnboarding, setSavingOnboarding] = useState(false);
+  const savedForUser = useState(() => new Set<string>())[0];
+
   const saveOnboardingToDb = useCallback(async (userId: string) => {
+    if (savedForUser.has(userId)) return;
+    savedForUser.add(userId);
+    setSavingOnboarding(true);
     try {
       const referral = localStorage.getItem("sentinel_onboarding_referral") || null;
       const sports = JSON.parse(localStorage.getItem("sentinel_onboarding_sports") || "[]");
