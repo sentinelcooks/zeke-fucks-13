@@ -182,10 +182,10 @@ export default function PaywallPage() {
 
   const ctaLabel =
     selectedPlan === "monthly"
-      ? "Start Monthly Trial"
+      ? "Start Your Monthly Trial"
       : selectedPlan === "yearly"
-      ? "Start Yearly Trial"
-      : "Start Free Trial";
+      ? "Start Your Yearly Trial"
+      : "Start Your Weekly Trial";
 
   const monthlyValueStack = [
     "Full AI prop access",
@@ -200,6 +200,10 @@ export default function PaywallPage() {
         @keyframes card-pulse {
           0%,100% { box-shadow: 0 0 0 2px #00FF6A, 0 0 30px rgba(0,255,106,0.26), 0 0 60px rgba(0,255,106,0.11), inset 0 0 24px rgba(0,255,106,0.04); }
           50% { box-shadow: 0 0 0 2px #00FF6A, 0 0 42px rgba(0,255,106,0.38), 0 0 84px rgba(0,255,106,0.16), inset 0 0 24px rgba(0,255,106,0.05); }
+        }
+        @keyframes card-pulse-sm {
+          0%,100% { box-shadow: 0 0 0 2px #00FF6A, 0 0 18px rgba(0,255,106,0.24), 0 0 36px rgba(0,255,106,0.10), inset 0 0 16px rgba(0,255,106,0.04); }
+          50% { box-shadow: 0 0 0 2px #00FF6A, 0 0 28px rgba(0,255,106,0.36), 0 0 56px rgba(0,255,106,0.16), inset 0 0 16px rgba(0,255,106,0.05); }
         }
       `}</style>
       {/* Atmospheric glows */}
@@ -257,11 +261,10 @@ export default function PaywallPage() {
               <motion.button
                 onClick={() => setSelectedPlan("monthly")}
                 whileTap={{ scale: 0.98 }}
-                className="relative w-full rounded-[20px] border-2 border-[#00FF6A] bg-[#141414] pl-11 pr-5 py-6 mb-3 text-left overflow-hidden block"
+                className={`relative w-full rounded-[20px] border-2 bg-[#141414] pl-11 pr-5 py-6 mb-3 text-left overflow-hidden block transition-colors ${
+                  isSelected ? "border-[#00FF6A]" : "border-[#2A2A2A]"
+                }`}
                 style={{
-                  boxShadow: isSelected
-                    ? "0 0 0 2px #00FF6A, 0 0 30px rgba(0,255,106,0.26), 0 0 60px rgba(0,255,106,0.11), inset 0 0 24px rgba(0,255,106,0.04)"
-                    : "0 0 0 1px rgba(0,255,106,0.4), 0 0 16px rgba(0,255,106,0.12)",
                   animation: isSelected ? "card-pulse 3s ease-in-out infinite" : undefined,
                 }}
               >
@@ -321,6 +324,9 @@ export default function PaywallPage() {
                       ? "border-[#00FF6A] bg-[#141414]"
                       : "border-[#2A2A2A] bg-[#141414]"
                   } ${isWeekly && !isSelected ? "opacity-70" : ""}`}
+                  style={{
+                    animation: isSelected ? "card-pulse-sm 3s ease-in-out infinite" : undefined,
+                  }}
                 >
                   {plan.badge && (
                     <div className="absolute -top-px left-1/2 -translate-x-1/2 bg-[#1F1F1F] text-amber-400 text-[8px] font-black px-2 py-0.5 rounded-b-md tracking-wider uppercase border-x border-b border-[#2A2A2A] whitespace-nowrap">
