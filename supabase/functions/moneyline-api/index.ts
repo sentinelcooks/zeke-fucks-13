@@ -658,8 +658,9 @@ function factorToInsight(f: Factor, team1Name: string, team2Name: string): strin
 function analyzeMoneyline(
   team1: any, team2: any, h2h: any[],
   team1Stats: any, team2Stats: any,
-  extras: { injuries1: any[]; injuries2: any[]; splits1: any; splits2: any; b2b1: any; b2b2: any; pace1: any; pace2: any }
+  extras: { injuries1: any[]; injuries2: any[]; splits1: any; splits2: any; b2b1: any; b2b2: any; pace1: any; pace2: any; team1IsHome?: boolean | null }
 ) {
+  const team1IsHome = extras.team1IsHome ?? null;
   const factors: string[] = [];
   const factorBreakdown: Factor[] = [];
 
