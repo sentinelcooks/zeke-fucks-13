@@ -778,10 +778,10 @@ Deno.serve(async (req) => {
       const workload2 = startsIn7d(schedule2);
 
       const team1Factors: Record<string, number> = {
-        goalie_sv: scoreGoalieSvPct(homeGoalie.savePct),
-        goalie_gaa: scoreGoalieGAA(homeGoalie.gaa),
-        goalie_l5: scoreGoalieL5SvPct(homeGoalie.savePct),
-        goalie_l10: scoreGoalieL10Weighted([homeGoalie.savePct]),
+        goalie_sv: scoreGoalieSvPct(team1Goalie.savePct),
+        goalie_gaa: scoreGoalieGAA(team1Goalie.gaa),
+        goalie_l5: scoreGoalieL5SvPct(team1Goalie.savePct),
+        goalie_l10: scoreGoalieL10Weighted([team1Goalie.savePct]),
         backup_goalie: scoreBackupGoalie(0.900),
         shots_against: scoreShotsAgainst(stats1.shotsAgainstPerGame || stats1.shotsAgainst || 30),
         goals_game: scoreGoalsPerGame(stats1.goalsPerGame || stats1.goalsFor / Math.max(stats1.gamesPlayed || 1, 1) || 3.1),
@@ -794,7 +794,7 @@ Deno.serve(async (req) => {
         blocks_hits: scoreBlocksHits((stats1.blockedShots || 15) + (stats1.hits || 25)),
         goals_allowed: scoreGoalsAllowed(stats1.goalsAgainstPerGame || stats1.goalsAgainst / Math.max(stats1.gamesPlayed || 1, 1) || 3.0),
         hd_chances: scoreHDChancesAgainst(stats1.shotsAgainstPerGame ? stats1.shotsAgainstPerGame * 0.35 : 10),
-        home_away: scoreHomeAway(splits1.home, true),
+        home_away: team1IsHome === null ? scoreHomeAway({ wins: 0, losses: 0 }, false) : scoreHomeAway(team1IsHome ? splits1.home : splits1.away, team1IsHome),
         rest_days: scoreRestDaysV2(rest1, false),
         momentum: scoreMomentum(last5_1),
         h2h: scoreH2H(h2h.wins, h2h.total),
@@ -805,10 +805,10 @@ Deno.serve(async (req) => {
       };
 
       const team2Factors: Record<string, number> = {
-        goalie_sv: scoreGoalieSvPct(awayGoalie.savePct),
-        goalie_gaa: scoreGoalieGAA(awayGoalie.gaa),
-        goalie_l5: scoreGoalieL5SvPct(awayGoalie.savePct),
-        goalie_l10: scoreGoalieL10Weighted([awayGoalie.savePct]),
+        goalie_sv: scoreGoalieSvPct(team2Goalie.savePct),
+        goalie_gaa: scoreGoalieGAA(team2Goalie.gaa),
+        goalie_l5: scoreGoalieL5SvPct(team2Goalie.savePct),
+        goalie_l10: scoreGoalieL10Weighted([team2Goalie.savePct]),
         backup_goalie: scoreBackupGoalie(0.900),
         shots_against: scoreShotsAgainst(stats2.shotsAgainstPerGame || stats2.shotsAgainst || 30),
         goals_game: scoreGoalsPerGame(stats2.goalsPerGame || stats2.goalsFor / Math.max(stats2.gamesPlayed || 1, 1) || 3.1),
@@ -821,7 +821,7 @@ Deno.serve(async (req) => {
         blocks_hits: scoreBlocksHits((stats2.blockedShots || 15) + (stats2.hits || 25)),
         goals_allowed: scoreGoalsAllowed(stats2.goalsAgainstPerGame || stats2.goalsAgainst / Math.max(stats2.gamesPlayed || 1, 1) || 3.0),
         hd_chances: scoreHDChancesAgainst(stats2.shotsAgainstPerGame ? stats2.shotsAgainstPerGame * 0.35 : 10),
-        home_away: scoreHomeAway(splits2.away, false),
+        home_away: team1IsHome === null ? scoreHomeAway({ wins: 0, losses: 0 }, false) : scoreHomeAway(team1IsHome ? splits2.away : splits2.home, !team1IsHome),
         rest_days: scoreRestDaysV2(rest2, false),
         momentum: scoreMomentum(last5_2),
         h2h: scoreH2H(h2h.total - h2h.wins, h2h.total),
@@ -862,8 +862,8 @@ Deno.serve(async (req) => {
       }
 
       // ── v2 injury adjustments ──
-      const inj1 = await nhlInjuryAdjustments(team1_id, injuries1, team1Factors, homeGoalie?.name, 0.905);
-      const inj2 = await nhlInjuryAdjustments(team2_id, injuries2, team2Factors, awayGoalie?.name, 0.905);
+      const inj1 = await nhlInjuryAdjustments(team1_id, injuries1, team1Factors, team1Goalie?.name, 0.905);
+      const inj2 = await nhlInjuryAdjustments(team2_id, injuries2, team2Factors, team2Goalie?.name, 0.905);
 
       if (bet_type === "player_prop" && player_name) {
         const pInj = [...injuries1, ...injuries2].find((i) =>
