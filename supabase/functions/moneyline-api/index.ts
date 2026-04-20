@@ -1275,7 +1275,7 @@ Deno.serve(async (req) => {
       const pace1 = computePace(team1Stats, schedule1, team1.id);
       const pace2 = computePace(team2Stats, schedule2, team2.id);
 
-      const extras = { injuries1, injuries2, splits1, splits2, b2b1, b2b2, pace1, pace2 };
+      const extras = { injuries1, injuries2, splits1, splits2, b2b1, b2b2, pace1, pace2, team1IsHome: venue ? venue.team1IsHome : null };
 
       // Fetch live odds for all sports (using rotating key pool)
       const masterUrl = Deno.env.get("MASTER_SUPABASE_URL");
@@ -1300,6 +1300,8 @@ Deno.serve(async (req) => {
                 team2_id: team2.id,
                 bet_type: mlbBetType,
                 over_under,
+                team1_is_home: venue ? venue.team1IsHome : null,
+                game_date: venue?.gameDate ?? null,
               }),
             });
 
@@ -1368,6 +1370,8 @@ Deno.serve(async (req) => {
                 team2_id: team2.id,
                 bet_type: nhlBetType,
                 over_under,
+                team1_is_home: venue ? venue.team1IsHome : null,
+                game_date: venue?.gameDate ?? null,
               }),
             });
 
