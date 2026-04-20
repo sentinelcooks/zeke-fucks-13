@@ -605,6 +605,9 @@ export type Database = {
           ai_recommendations: Json | null
           betting_style: string | null
           created_at: string
+          daily_tip_generated_at: string | null
+          daily_tip_seed: number
+          daily_tip_text: string | null
           id: string
           referral: string | null
           sports: string[] | null
@@ -615,6 +618,9 @@ export type Database = {
           ai_recommendations?: Json | null
           betting_style?: string | null
           created_at?: string
+          daily_tip_generated_at?: string | null
+          daily_tip_seed?: number
+          daily_tip_text?: string | null
           id?: string
           referral?: string | null
           sports?: string[] | null
@@ -625,6 +631,9 @@ export type Database = {
           ai_recommendations?: Json | null
           betting_style?: string | null
           created_at?: string
+          daily_tip_generated_at?: string | null
+          daily_tip_seed?: number
+          daily_tip_text?: string | null
           id?: string
           referral?: string | null
           sports?: string[] | null
