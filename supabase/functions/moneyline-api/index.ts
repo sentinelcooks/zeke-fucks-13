@@ -1042,10 +1042,10 @@ async function fetchOddsForMatchup(team1Name: string, team2Name: string, sport: 
   try {
     const sb = supabaseClient || createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const sportKey = SPORT_ODDS_KEYS[sport] || SPORT_ODDS_KEYS.nba;
-    const url = `https://api.the-odds-api.com/v4/sports/${sportKey}/odds/?apiKey=__API_KEY__&regions=us,us2&markets=h2h,spreads,totals&oddsFormat=american`;
+    const url = `https://api.the-odds-api.com/v4/sports/${sportKey}/odds/?apiKey=__API_KEY__&regions=us,us2,us_dfs,us_ex&markets=h2h,spreads,totals&oddsFormat=american`;
 
     const resp = await fetchOddsWithRotation(sb, url);
-    if (!resp) return null;
+    if (!resp) return { __unavailable: true, reason: "fetch_failed" } as any;
     const events = await resp.json();
 
     const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
@@ -1070,7 +1070,7 @@ async function fetchOddsForMatchup(team1Name: string, team2Name: string, sport: 
              (matchesTeam(h, t2) && matchesTeam(a, t1));
     });
 
-    if (!match) return null;
+    if (!match) return { __unavailable: true, reason: "no_match" } as any;
 
     const result: Record<string, any[]> = {};
     for (const bm of match.bookmakers || []) {
@@ -1082,7 +1082,7 @@ async function fetchOddsForMatchup(team1Name: string, team2Name: string, sport: 
       }
     }
     return result;
-  } catch { return null; }
+  } catch { return { __unavailable: true, reason: "fetch_failed" } as any; }
 }
 
 function americanToDecimal(american: number): number {
@@ -1104,11 +1104,22 @@ function buildOddsPayload(
   team2Name: string,
   overUnder?: string,
 ) {
-  if (!oddsData) return null;
-
   const marketKey = betType === "moneyline" ? "h2h" : betType === "spread" ? "spreads" : "totals";
+  const unavailable = (reason: string) => ({
+    market: marketKey,
+    bestLine: null,
+    impliedProb: modelConfidence,
+    ev: 0,
+    allBooks: [],
+    unavailable: true,
+    reason,
+  });
+
+  if (!oddsData) return unavailable("no_data");
+  if ((oddsData as any).__unavailable) return unavailable((oddsData as any).reason || "no_data");
+
   const entries = oddsData[marketKey] || [];
-  if (entries.length === 0) return null;
+  if (entries.length === 0) return unavailable("no_entries");
 
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
   const t1n = norm(team1Name);

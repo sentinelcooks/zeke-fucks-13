@@ -25,6 +25,7 @@ import {
   X,
   Check,
   Lightbulb,
+  RefreshCw,
 } from "lucide-react";
 import { Bar } from "react-chartjs-2";
 import {
@@ -649,6 +650,10 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
   const [showExplainer, setShowExplainer] = useState(false);
   const [showOddsSection, setShowOddsSection] = useState(true);
 
+  const [loadKey, setLoadKey] = useState(0);
+
+  const loadOdds = useCallback(() => setLoadKey((k) => k + 1), []);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -668,9 +673,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
           if (et.includes(tn) || tn.includes(et)) return true;
           if (ts && (et.includes(ts) || ts.includes(et))) return true;
           if (ta && ta.length >= 2 && et.includes(ta)) return true;
-          // Nickname suffix matching (e.g. "losangeleslakers" ends with "lakers")
           if (ts.length >= 4 && (et.endsWith(ts) || ts.endsWith(et.slice(-Math.min(et.length, 10))))) return true;
-          // Check aliases if available
           const aliases: string[] = (team as any).aliases || [];
           for (const alias of aliases) {
             const na = normalize(alias);
@@ -748,12 +751,15 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
             setAllMarketData(result);
             setIsLive(true);
           } else {
+            setAllMarketData({});
             setIsLive(false);
           }
         } else {
+          setAllMarketData({});
           setIsLive(false);
         }
       } catch {
+        setAllMarketData({});
         setIsLive(false);
       } finally {
         if (!cancelled) setLoading(false);
@@ -761,7 +767,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
     }
     load();
     return () => { cancelled = true; };
-  }, [team1.name, team2.name, oddsFormat, sport]);
+  }, [team1.name, team2.name, team1.id, team2.id, oddsFormat, sport, loadKey]);
 
   if (loading) {
     return (
@@ -775,9 +781,17 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
   if (!isLive || Object.keys(allMarketData).length === 0) {
     return (
       <div className="vision-card p-4">
-        <div className="flex items-center gap-2 text-muted-foreground/65">
-          <AlertTriangle className="w-4 h-4 text-nba-yellow shrink-0" />
-          <p className="text-[11px]">Live odds temporarily unavailable for this matchup. Analysis is still fully powered by our model data.</p>
+        <div className="flex items-start gap-2 text-muted-foreground/65">
+          <AlertTriangle className="w-4 h-4 text-nba-yellow shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-[11px]">Live odds for {team1.shortName || team1.name} vs {team2.shortName || team2.name} aren't posted yet. Analysis still uses our model — odds will appear once books publish them.</p>
+            <button
+              onClick={loadOdds}
+              className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-bold text-accent hover:text-accent/80 transition-colors"
+            >
+              <RefreshCw className="w-3 h-3" /> Retry
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -1613,6 +1627,22 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
         <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-center text-destructive text-sm">{error}</div>
       )}
 
+      {/* ═══ Live Odds Preview (before analysis) ═══ */}
+      {!results && !loading && team1 && team2 && team1 !== team2 && (() => {
+        const t1Obj = teams.find((t) => t.abbr === team1);
+        const t2Obj = teams.find((t) => t.abbr === team2);
+        if (!t1Obj || !t2Obj) return null;
+        return (
+          <MoneylinePlatformOdds
+            team1={t1Obj}
+            team2={t2Obj}
+            sport={sport}
+            activeBetType={betType}
+            activeOverUnder={overUnder}
+          />
+        );
+      })()}
+
       {/* ═══ Results ═══ */}
       {results && (
         <motion.div
@@ -1667,7 +1697,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
           </div>
 
           {/* Odds & Value Card */}
-          {results.odds && (
+          {results.odds && !results.odds.unavailable && results.odds.bestLine ? (
             <div className="vision-card p-4 relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(158,64%,52%,0.2), transparent)' }} />
               <div className="flex items-center gap-2 mb-4">
@@ -1739,6 +1769,15 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
               <p className="text-[8px] text-muted-foreground/40 text-center mt-3 pt-2" style={{ borderTop: '1px solid hsla(228, 18%, 18%, 0.2)' }}>
                 EV = (Model Prob × Decimal Odds − 1) × 100 · Positive EV = edge over the market
               </p>
+            </div>
+          ) : (
+            <div className="vision-card p-4">
+              <div className="flex items-start gap-2 text-muted-foreground/70">
+                <AlertTriangle className="w-4 h-4 text-nba-yellow shrink-0 mt-0.5" />
+                <p className="text-[11px]">
+                  Live odds for {results.team1?.shortName || results.team1?.name} vs {results.team2?.shortName || results.team2?.name} aren't posted yet. Analysis still uses our model — odds will appear once books publish them.
+                </p>
+              </div>
             </div>
           )}
 
