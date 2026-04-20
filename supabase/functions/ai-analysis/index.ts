@@ -476,7 +476,17 @@ ${formatRule}
     }
 
     const aiData = await aiResponse.json();
-    const content = aiData.choices?.[0]?.message?.content || "";
+    let content = aiData.choices?.[0]?.message?.content || "";
+
+    // ── Hard scrub: never leak internal model labels or robotic "0 units on X" copy ──
+    const passLabel = decision && decision.winning_team_name && team1Name && team2Name
+      ? `pass on ${team1Name} vs ${team2Name}`
+      : "pass on this line";
+    content = content
+      .replace(/\bnoBet tier\b/gi, "below our confidence threshold")
+      .replace(/\bnoBet\b/gi, "pass")
+      .replace(/\b0\s*units?\s+on\s+[A-Za-z .'-]+/gi, passLabel)
+      .replace(/\bstick with 0 units\b/gi, passLabel);
 
     // Parse sections using multi-format parser
     const sections = parseSections(content).slice(0, 3);
