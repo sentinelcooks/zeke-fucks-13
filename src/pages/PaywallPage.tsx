@@ -324,6 +324,9 @@ export default function PaywallPage() {
                       ? "border-[#00FF6A] bg-[#141414]"
                       : "border-[#2A2A2A] bg-[#141414]"
                   } ${isWeekly && !isSelected ? "opacity-70" : ""}`}
+                  style={{
+                    animation: isSelected ? "card-pulse-sm 3s ease-in-out infinite" : undefined,
+                  }}
                 >
                   {plan.badge && (
                     <div className="absolute -top-px left-1/2 -translate-x-1/2 bg-[#1F1F1F] text-amber-400 text-[8px] font-black px-2 py-0.5 rounded-b-md tracking-wider uppercase border-x border-b border-[#2A2A2A] whitespace-nowrap">
