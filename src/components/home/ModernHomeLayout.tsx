@@ -230,6 +230,26 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [headshots, setHeadshots] = useState<Record<string, string>>({});
+  const [rotatingTip, setRotatingTip] = useState<{ tip: string; focus_area: string } | null>(null);
+  const [rotatingTipLoading, setRotatingTipLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) { setRotatingTipLoading(false); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("rotating-tip");
+        if (!cancelled && !error && data?.tip) {
+          setRotatingTip({ tip: data.tip, focus_area: data.focus_area });
+        }
+      } catch (e) {
+        console.error("rotating-tip fetch failed", e);
+      } finally {
+        if (!cancelled) setRotatingTipLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
