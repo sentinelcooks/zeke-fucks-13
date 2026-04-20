@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Drawer, DrawerContent } from "@/components/ui/drawer";
 import { useParlaySlip, type ParlaySlipLeg } from "@/contexts/ParlaySlipContext";
 import { americanToDecimal } from "@/utils/oddsFormat";
+import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { fetchPlayerOdds } from "@/services/oddsApi";
 import { getSportsbookInfo } from "@/utils/sportsbookLogos";
 import { toast } from "@/hooks/use-toast";
