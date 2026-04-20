@@ -261,11 +261,10 @@ export default function PaywallPage() {
               <motion.button
                 onClick={() => setSelectedPlan("monthly")}
                 whileTap={{ scale: 0.98 }}
-                className="relative w-full rounded-[20px] border-2 border-[#00FF6A] bg-[#141414] pl-11 pr-5 py-6 mb-3 text-left overflow-hidden block"
+                className={`relative w-full rounded-[20px] border-2 bg-[#141414] pl-11 pr-5 py-6 mb-3 text-left overflow-hidden block transition-colors ${
+                  isSelected ? "border-[#00FF6A]" : "border-[#2A2A2A]"
+                }`}
                 style={{
-                  boxShadow: isSelected
-                    ? "0 0 0 2px #00FF6A, 0 0 30px rgba(0,255,106,0.26), 0 0 60px rgba(0,255,106,0.11), inset 0 0 24px rgba(0,255,106,0.04)"
-                    : "0 0 0 1px rgba(0,255,106,0.4), 0 0 16px rgba(0,255,106,0.12)",
                   animation: isSelected ? "card-pulse 3s ease-in-out infinite" : undefined,
                 }}
               >
