@@ -298,7 +298,7 @@ function generateOverallSummary(props: WrittenAnalysisProps): { rating: "take" |
   const signalText = signals.length > 0 ? " " + signals.slice(0, 4).join(". ") + "." : "";
 
   if (tier === "noBet") {
-    return { rating, summary: `No bet recommended. The data doesn't strongly support ${pickLabel}.${signalText}`, unitSize: null };
+    return { rating, summary: `Passing on ${pickLabel}. The data doesn't strongly support this play.${signalText}`, unitSize: null };
   }
 
   let summaryIntro: string;
@@ -389,6 +389,8 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
             overallRating: overallSummary.rating,
             overallSummary: overallSummary.summary,
             decision: props.decision || null,
+            team1Name: props.team1Name,
+            team2Name: props.team2Name,
           },
         });
 
