@@ -65,9 +65,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .upsert({ id: userId, email: currentUser.email, display_name: displayName, timezone: deviceTz || "America/New_York" }, { onConflict: "id" })
           .select()
           .single();
-        if (newProfile) setProfile(newProfile as unknown as Profile);
+        if (newProfile) {
+          const p = newProfile as unknown as Profile;
+          setProfile(p);
+          return p;
+        }
       }
     }
+    return null;
   }, []);
 
   useEffect(() => {
