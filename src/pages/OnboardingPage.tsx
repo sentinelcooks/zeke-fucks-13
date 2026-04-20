@@ -351,7 +351,7 @@ function ScreenHero({ onNext }: { onNext: () => void }) {
       {/* Feature pills — living micro-previews */}
       <motion.div
         initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.18 }}
-        className="mt-4 grid grid-cols-3 gap-2"
+        className="mt-4 grid grid-cols-3 gap-2.5"
       >
         <FeatureCard title="Live Games" icon={Calendar} ariaLabel="Preview of Live Games feature">
           <LiveGameMini />
@@ -845,13 +845,13 @@ function FeatureCard({
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.98 }}
       transition={{ type: "spring", stiffness: 380, damping: 28 }}
-      className="rounded-xl border border-border/40 bg-card/80 p-2.5 text-left flex flex-col gap-1.5 overflow-hidden focus:outline-none"
+      className="rounded-xl border border-border/40 bg-card/80 p-3 text-left flex flex-col gap-2 overflow-hidden focus:outline-none shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]"
     >
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between border-b border-border/20 pb-1.5 mb-0.5">
         <div className="text-[11px] font-bold text-white">{title}</div>
-        <Icon className="w-3 h-3" style={{ color: "hsl(var(--nba-green) / 0.7)" }} />
+        <Icon className="w-3.5 h-3.5 opacity-50" style={{ color: "hsl(var(--nba-green) / 0.7)" }} />
       </div>
-      <div className="min-h-[48px] flex items-center">{children}</div>
+      <div className="min-h-[56px] flex items-center">{children}</div>
     </motion.button>
   );
 }
@@ -868,28 +868,28 @@ function LiveGameMini() {
   const s = (seconds % 60).toString().padStart(2, "0");
 
   return (
-    <div className="w-full flex flex-col gap-1">
+    <div className="w-full flex flex-col gap-1.5">
       <div className="flex items-center gap-1">
         <motion.span
-          className="w-1 h-1 rounded-full bg-nba-red"
+          className="w-1.5 h-1.5 rounded-full bg-nba-red"
           animate={reduce ? undefined : { opacity: [1, 0.3, 1] }}
           transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
         />
-        <span className="text-[7px] font-black uppercase tracking-wider text-nba-red">LIVE</span>
+        <span className="text-[8px] font-black uppercase tracking-wider text-nba-red">LIVE</span>
         <span className="ml-auto text-[8px] text-muted-foreground/55 tabular-nums">Q4 · {m}:{s}</span>
       </div>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between bg-white/[0.03] rounded-md px-1.5 py-1">
         <div className="flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-[#FDB927]" />
-          <span className="text-[9px] font-bold text-white/90">LAL</span>
+          <span className="text-[10px] font-bold text-white/90">LAL</span>
         </div>
-        <span className="text-[11px] font-extrabold tabular-nums text-white">108–112</span>
+        <span className="text-[12px] font-extrabold tabular-nums text-white">108–112</span>
         <div className="flex items-center gap-1">
-          <span className="text-[9px] font-bold text-white/90">BOS</span>
+          <span className="text-[10px] font-bold text-white/90">BOS</span>
           <span className="w-1.5 h-1.5 rounded-full bg-[#007A33]" />
         </div>
       </div>
-      <div className="text-[8px] text-muted-foreground/55">NBA · MLB · NHL</div>
+      <div className="text-[7px] text-muted-foreground/55 mt-0.5">NBA · MLB · NHL</div>
     </div>
   );
 }
@@ -902,9 +902,9 @@ function AIPickMini() {
   const offset = c - (pct / 100) * c;
 
   return (
-    <div className="w-full flex flex-col gap-1.5">
-      <div className="flex items-center gap-1.5">
-        <div className="relative w-5 h-5 flex-shrink-0">
+    <div className="w-full flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <div className="relative w-6 h-6 flex-shrink-0">
           <svg className="w-full h-full -rotate-90" viewBox="0 0 22 22">
             <circle cx="11" cy="11" r={radius} fill="none" stroke="hsl(var(--muted) / 0.3)" strokeWidth="2" />
             <motion.circle
@@ -920,20 +920,22 @@ function AIPickMini() {
             />
           </svg>
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-[7px] font-black tabular-nums text-nba-green">{pct}</span>
+            <span className="text-[8px] font-black tabular-nums text-nba-green">{pct}</span>
           </div>
         </div>
         <div className="flex flex-col leading-tight min-w-0">
-          <span className="text-[8px] font-bold text-white/90 truncate">OVER 32.5</span>
-          <span className="text-[7px] font-bold uppercase tracking-wider text-muted-foreground/55">PTS</span>
+          <span className="text-[9px] font-bold text-white/90 truncate">OVER 32.5</span>
+          <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/55">PTS</span>
         </div>
       </div>
-      <span
-        className="self-start text-nba-green text-[8px] font-extrabold tabular-nums px-1.5 py-0.5 rounded"
-        style={{ backgroundColor: "hsl(var(--nba-green) / 0.15)" }}
-      >
-        +EV 7.2%
-      </span>
+      <div className="border-t border-border/20 pt-1.5">
+        <span
+          className="self-start text-nba-green text-[9px] font-extrabold tabular-nums px-2 py-0.5 rounded"
+          style={{ backgroundColor: "hsl(var(--nba-green) / 0.15)" }}
+        >
+          +EV 7.2%
+        </span>
+      </div>
     </div>
   );
 }
@@ -945,8 +947,8 @@ function ProfitTrackerMini() {
   const lastY = 2;
 
   return (
-    <div className="w-full flex flex-col gap-1">
-      <svg viewBox="0 0 92 24" className="w-full h-6 overflow-visible">
+    <div className="w-full flex flex-col gap-1.5">
+      <svg viewBox="0 0 92 24" className="w-full h-7 overflow-visible">
         <motion.polyline
           points={points}
           fill="none"
@@ -969,8 +971,10 @@ function ProfitTrackerMini() {
           style={{ filter: "drop-shadow(0 0 3px hsl(var(--nba-green)))" }}
         />
       </svg>
-      <div className="text-[12px] font-extrabold tabular-nums text-nba-green leading-none">+$1,284</div>
-      <div className="text-[8px] uppercase tracking-wider text-muted-foreground/55">30D · ROI +18%</div>
+      <div className="inline-block rounded px-1.5 py-0.5" style={{ backgroundColor: "hsl(var(--nba-green) / 0.06)" }}>
+        <div className="text-[13px] font-extrabold tabular-nums text-nba-green leading-none">+$1,284</div>
+      </div>
+      <div className="text-[8px] uppercase tracking-wider text-muted-foreground/55 mt-0.5">30D · ROI +18%</div>
     </div>
   );
 }
