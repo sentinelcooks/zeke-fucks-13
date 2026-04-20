@@ -25,10 +25,12 @@ import {
   Database,
   Zap,
   AlertTriangle,
+  History,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png";
+import { EdgeHistoryTab } from "@/components/admin/EdgeHistoryTab";
 
 interface LicenseKey {
   id: string;
