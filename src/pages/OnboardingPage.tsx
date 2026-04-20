@@ -1,6 +1,7 @@
 import { useState, useEffect, type JSX } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import type { ComponentType, ReactNode } from "react";
 import { ArrowLeft, Lock, TrendingUp, Brain, BarChart3, Calendar, Check, X, Sparkles, ShieldCheck, Swords, CheckCircle2 } from "lucide-react";
 import logo from "@/assets/sentinel-lock.jpg";
 import { preloadGeneratedImage } from "@/hooks/useGeneratedImage";
@@ -347,23 +348,20 @@ function ScreenHero({ onNext }: { onNext: () => void }) {
         </div>
       </motion.div>
 
-      {/* Feature pills */}
+      {/* Feature pills — living micro-previews */}
       <motion.div
         initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.18 }}
         className="mt-4 grid grid-cols-3 gap-2"
       >
-        {[
-          { icon: Calendar, title: "Live Games", l1: "NBA · MLB · NHL", l2: "More Coming" },
-          { icon: Brain, title: "AI Picks", l1: "High Confidence", l2: "+EV Daily" },
-          { icon: BarChart3, title: "Profit Tracker", l1: "Track, Build &", l2: "Win Smarter" },
-        ].map((f) => (
-          <div key={f.title} className="rounded-xl border border-[#2A2A2A] bg-[#141414] p-2.5">
-            <f.icon className="w-4 h-4 text-[#00FF6A] mb-1.5" />
-            <div className="text-[11px] font-bold text-white">{f.title}</div>
-            <div className="text-[9px] text-white/50 leading-tight">{f.l1}</div>
-            <div className="text-[9px] text-white/50 leading-tight">{f.l2}</div>
-          </div>
-        ))}
+        <FeatureCard title="Live Games" icon={Calendar} ariaLabel="Preview of Live Games feature">
+          <LiveGameMini />
+        </FeatureCard>
+        <FeatureCard title="AI Picks" icon={Brain} ariaLabel="Preview of AI Picks feature">
+          <AIPickMini />
+        </FeatureCard>
+        <FeatureCard title="Profit Tracker" icon={BarChart3} ariaLabel="Preview of Profit Tracker feature">
+          <ProfitTrackerMini />
+        </FeatureCard>
       </motion.div>
 
       {/* CTA */}
@@ -821,5 +819,158 @@ export default function OnboardingPage() {
         {screens[step]}
       </motion.div>
     </AnimatePresence>
+  );
+}
+
+/* ───────────────────────────────────────────────
+   Feature micro-preview subcomponents
+   ─────────────────────────────────────────────── */
+const microEase = [0.32, 0.72, 0, 1] as const;
+
+function FeatureCard({
+  title,
+  icon: Icon,
+  ariaLabel,
+  children,
+}: {
+  title: string;
+  icon: ComponentType<{ className?: string; style?: React.CSSProperties }>;
+  ariaLabel: string;
+  children: ReactNode;
+}) {
+  return (
+    <motion.button
+      type="button"
+      aria-label={ariaLabel}
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ type: "spring", stiffness: 380, damping: 28 }}
+      className="rounded-xl border border-border/40 bg-card/80 p-2.5 text-left flex flex-col gap-1.5 overflow-hidden focus:outline-none"
+    >
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] font-bold text-white">{title}</div>
+        <Icon className="w-3 h-3" style={{ color: "hsl(var(--nba-green) / 0.7)" }} />
+      </div>
+      <div className="min-h-[48px] flex items-center">{children}</div>
+    </motion.button>
+  );
+}
+
+function LiveGameMini() {
+  const reduce = useReducedMotion();
+  const [seconds, setSeconds] = useState(134);
+  useEffect(() => {
+    if (reduce) return;
+    const id = setInterval(() => setSeconds((s) => (s <= 1 ? 134 : s - 1)), 1000);
+    return () => clearInterval(id);
+  }, [reduce]);
+  const m = Math.floor(seconds / 60);
+  const s = (seconds % 60).toString().padStart(2, "0");
+
+  return (
+    <div className="w-full flex flex-col gap-1">
+      <div className="flex items-center gap-1">
+        <motion.span
+          className="w-1 h-1 rounded-full bg-nba-red"
+          animate={reduce ? undefined : { opacity: [1, 0.3, 1] }}
+          transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <span className="text-[7px] font-black uppercase tracking-wider text-nba-red">LIVE</span>
+        <span className="ml-auto text-[8px] text-muted-foreground/55 tabular-nums">Q4 · {m}:{s}</span>
+      </div>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#FDB927]" />
+          <span className="text-[9px] font-bold text-white/90">LAL</span>
+        </div>
+        <span className="text-[11px] font-extrabold tabular-nums text-white">108–112</span>
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] font-bold text-white/90">BOS</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-[#007A33]" />
+        </div>
+      </div>
+      <div className="text-[8px] text-muted-foreground/55">NBA · MLB · NHL</div>
+    </div>
+  );
+}
+
+function AIPickMini() {
+  const reduce = useReducedMotion();
+  const radius = 9;
+  const c = 2 * Math.PI * radius;
+  const pct = 64;
+  const offset = c - (pct / 100) * c;
+
+  return (
+    <div className="w-full flex flex-col gap-1.5">
+      <div className="flex items-center gap-1.5">
+        <div className="relative w-5 h-5 flex-shrink-0">
+          <svg className="w-full h-full -rotate-90" viewBox="0 0 22 22">
+            <circle cx="11" cy="11" r={radius} fill="none" stroke="hsl(var(--muted) / 0.3)" strokeWidth="2" />
+            <motion.circle
+              cx="11" cy="11" r={radius}
+              fill="none"
+              stroke="hsl(var(--nba-green))"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeDasharray={c}
+              initial={{ strokeDashoffset: reduce ? offset : c }}
+              animate={{ strokeDashoffset: offset }}
+              transition={{ duration: 0.6, ease: microEase }}
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-[7px] font-black tabular-nums text-nba-green">{pct}</span>
+          </div>
+        </div>
+        <div className="flex flex-col leading-tight min-w-0">
+          <span className="text-[8px] font-bold text-white/90 truncate">OVER 32.5</span>
+          <span className="text-[7px] font-bold uppercase tracking-wider text-muted-foreground/55">PTS</span>
+        </div>
+      </div>
+      <span
+        className="self-start text-nba-green text-[8px] font-extrabold tabular-nums px-1.5 py-0.5 rounded"
+        style={{ backgroundColor: "hsl(var(--nba-green) / 0.15)" }}
+      >
+        +EV 7.2%
+      </span>
+    </div>
+  );
+}
+
+function ProfitTrackerMini() {
+  const reduce = useReducedMotion();
+  const points = "0,20 10,17 20,18 30,13 40,14 50,9 60,10 70,5 80,6 90,2";
+  const lastX = 90;
+  const lastY = 2;
+
+  return (
+    <div className="w-full flex flex-col gap-1">
+      <svg viewBox="0 0 92 24" className="w-full h-6 overflow-visible">
+        <motion.polyline
+          points={points}
+          fill="none"
+          stroke="hsl(var(--nba-green))"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          initial={{ pathLength: reduce ? 1 : 0 }}
+          animate={{ pathLength: 1 }}
+          transition={{ duration: 0.9, ease: microEase }}
+        />
+        <motion.circle
+          cx={lastX}
+          cy={lastY}
+          r="1.5"
+          fill="hsl(var(--nba-green))"
+          initial={{ opacity: reduce ? 1 : 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: reduce ? 0 : 0.9, duration: 0.2 }}
+          style={{ filter: "drop-shadow(0 0 3px hsl(var(--nba-green)))" }}
+        />
+      </svg>
+      <div className="text-[12px] font-extrabold tabular-nums text-nba-green leading-none">+$1,284</div>
+      <div className="text-[8px] uppercase tracking-wider text-muted-foreground/55">30D · ROI +18%</div>
+    </div>
   );
 }
