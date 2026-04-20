@@ -814,52 +814,85 @@ export default function OnboardingPage() {
    ─────────────────────────────────────────────── */
 const microEase = [0.32, 0.72, 0, 1] as const;
 
+function FeatureAccordion() {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const toggle = (id: string) => setExpanded((cur) => (cur === id ? null : id));
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: 0.18 }}
+      className="mt-4 space-y-2"
+    >
+      <FeatureCard id="live" title="Live Games" icon={Calendar}
+        isExpanded={expanded === "live"} onToggle={() => toggle("live")}>
+        <LiveGameMini />
+      </FeatureCard>
+      <FeatureCard id="ai" title="AI Picks" icon={Brain}
+        isExpanded={expanded === "ai"} onToggle={() => toggle("ai")}>
+        <AIPickMini />
+      </FeatureCard>
+      <FeatureCard id="profit" title="Profit Tracker" icon={BarChart3}
+        isExpanded={expanded === "profit"} onToggle={() => toggle("profit")}>
+        <ProfitTrackerMini />
+      </FeatureCard>
+    </motion.div>
+  );
+}
+
 function FeatureCard({
+  id,
   title,
   icon: Icon,
-  ariaLabel,
+  isExpanded,
+  onToggle,
   children,
 }: {
+  id: string;
   title: string;
   icon: ComponentType<{ className?: string; style?: React.CSSProperties }>;
-  ariaLabel: string;
+  isExpanded: boolean;
+  onToggle: () => void;
   children: ReactNode;
 }) {
   const reduce = useReducedMotion();
-  const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-xl border border-border/40 bg-card/80 overflow-hidden shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
-      <motion.button
+    <div
+      className={`rounded-xl border bg-[#141414] transition-colors ${
+        isExpanded ? "border-[#00FF6A]/40" : "border-[#2A2A2A]"
+      }`}
+    >
+      <button
         type="button"
-        aria-label={ariaLabel}
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        whileTap={{ scale: 0.98 }}
-        className="w-full flex items-center justify-between gap-2 p-3 text-left focus:outline-none"
+        aria-expanded={isExpanded}
+        aria-controls={`feature-${id}`}
+        onClick={onToggle}
+        className="w-full flex items-center gap-3 px-3.5 py-3 text-left focus:outline-none"
       >
-        <div className="flex items-center gap-2 min-w-0">
-          <Icon className="w-3.5 h-3.5 opacity-60 flex-shrink-0" style={{ color: "hsl(var(--nba-green) / 0.8)" }} />
-          <div className="text-[11px] font-bold text-white truncate">{title}</div>
-        </div>
+        <Icon className="w-4 h-4 flex-shrink-0" style={{ color: "hsl(var(--nba-green))" }} />
+        <div className="text-sm font-semibold text-white flex-1">{title}</div>
         <motion.span
-          animate={{ rotate: open ? 180 : 0 }}
-          transition={{ duration: reduce ? 0 : 0.28, ease: microEase }}
+          animate={{ rotate: isExpanded ? 180 : 0 }}
+          transition={{ duration: reduce ? 0 : 0.2, ease: microEase }}
           className="flex-shrink-0"
         >
-          <ChevronDown className="w-3.5 h-3.5 opacity-50 text-white" />
+          <ChevronDown className="w-4 h-4 text-white/50" />
         </motion.span>
-      </motion.button>
+      </button>
       <AnimatePresence initial={false}>
-        {open && (
+        {isExpanded && (
           <motion.div
             key="content"
+            id={`feature-${id}`}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: reduce ? 0 : 0.28, ease: microEase }}
+            transition={{ duration: reduce ? 0 : 0.2, ease: microEase }}
             className="overflow-hidden"
           >
-            <div className="px-3 pb-3 pt-1 border-t border-border/20">{children}</div>
+            <div className="mx-1 mb-1 mt-0 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3">
+              {children}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
