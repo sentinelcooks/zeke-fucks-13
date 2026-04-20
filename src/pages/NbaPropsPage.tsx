@@ -2152,10 +2152,12 @@ const NbaPropsPage = () => {
                   ) : corrProps.length > 0 ? (
                     <div className="space-y-1.5">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-accent/50 mb-2">
-                        When {player.split(" ").pop()} {propType.toUpperCase()} hits, these also hit:
+                        When {player.split(" ").pop()} {propType.toUpperCase()} goes {(results.over_under || "over").toUpperCase()}, these also tend to go {(results.over_under || "over").toUpperCase()}:
                       </p>
                       {corrProps.map((c, ci) => {
-                        const isInSlip = globalSlip.isInSlip(c.correlated_player, c.correlated_prop, "");
+                        const corrLineStr = String(c.correlated_line ?? "");
+                        const analyzedDir: "over" | "under" = (results.over_under === "under" ? "under" : "over");
+                        const isInSlip = globalSlip.isInSlip(c.correlated_player, c.correlated_prop, corrLineStr);
                         return (
                           <motion.div
                             key={ci}
@@ -2176,7 +2178,7 @@ const NbaPropsPage = () => {
                                 <div className="flex items-center gap-1.5 mt-0.5">
                                   {c.correlated_team && <span className="text-[10px] text-muted-foreground/50">{c.correlated_team}</span>}
                                   <span className="text-[10px] text-muted-foreground/55">·</span>
-                                  <span className="text-[10px] text-muted-foreground/50">OVER {c.correlated_line || "?"} {c.correlated_prop.toUpperCase()}</span>
+                                  <span className="text-[10px] text-muted-foreground/50">{analyzedDir.toUpperCase()} {c.correlated_line || "?"} {c.correlated_prop.toUpperCase()}</span>
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
@@ -2187,13 +2189,12 @@ const NbaPropsPage = () => {
                                 <motion.button
                                   whileTap={{ scale: 0.85 }}
                                   onClick={() => {
-                                    const corrLine = String(c.correlated_line ?? "");
-                                    const lineNum = parseFloat(corrLine);
+                                    const lineNum = parseFloat(corrLineStr);
                                     // Sync UI state for visual feedback
                                     setPlayer(c.correlated_player);
                                     setPropType(c.correlated_prop);
-                                    setOverUnder("over");
-                                    setLine(corrLine);
+                                    setOverUnder(analyzedDir);
+                                    setLine(corrLineStr);
                                     const cats = NBA_PROP_CATEGORIES;
                                     const matchCat = cats.find(cat => cat.props.some(p => p.value === c.correlated_prop));
                                     if (matchCat) setActiveCategory(matchCat.category);
@@ -2202,8 +2203,8 @@ const NbaPropsPage = () => {
                                       handleAnalyze({
                                         player: c.correlated_player,
                                         propType: c.correlated_prop,
-                                        line: corrLine,
-                                        overUnder: "over",
+                                        line: corrLineStr,
+                                        overUnder: analyzedDir,
                                       });
                                     }
                                     // Scroll to top so user sees the new results header
@@ -2217,12 +2218,11 @@ const NbaPropsPage = () => {
                                 <motion.button
                                   whileTap={{ scale: 0.85 }}
                                   onClick={() => {
-                                    const corrLineStr = String(c.correlated_line ?? "");
                                     if (isInSlip) {
                                       const leg = globalSlip.legs.find(l => l.player === c.correlated_player && l.propType === c.correlated_prop && l.line === corrLineStr);
                                       if (leg) globalSlip.removeLeg(leg.id);
                                     } else {
-                                      globalSlip.addLeg({ sport: "NBA", player: c.correlated_player, propType: c.correlated_prop, line: corrLineStr, overUnder: "over", odds: -110 });
+                                      globalSlip.addLeg({ sport: "NBA", player: c.correlated_player, propType: c.correlated_prop, line: corrLineStr, overUnder: analyzedDir, odds: -110 });
                                     }
                                   }}
                                   className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
