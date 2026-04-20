@@ -223,6 +223,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const [slipSheetPick, setSlipSheetPick] = useState<import("@/components/AddToSlipSheet").SlipSheetPick | null>(null);
   
   const { user, profile } = useAuth();
+  const { fmt: formatOddsFn } = useOddsFormat();
   const [todayPicks, setTodayPicks] = useState<DailyPick[]>([]);
   const [dailyTierPicks, setDailyTierPicks] = useState<DailyPick[]>([]);
   const [yesterdayPicks, setYesterdayPicks] = useState<DailyPick[]>([]);
@@ -769,7 +770,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       </span>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontSize: 9, letterSpacing: 1.5, color: '#555272', textTransform: 'uppercase', fontWeight: 600 }}>ODDS</div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: '#f0eeff' }}>{pick.odds || "—"}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#f0eeff' }}>{pick.odds ? formatOddsFn(pick.odds) : "—"}</div>
                       </div>
                     </div>
 
