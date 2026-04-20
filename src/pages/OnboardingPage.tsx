@@ -347,23 +347,20 @@ function ScreenHero({ onNext }: { onNext: () => void }) {
         </div>
       </motion.div>
 
-      {/* Feature pills */}
+      {/* Feature pills — living micro-previews */}
       <motion.div
         initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.18 }}
         className="mt-4 grid grid-cols-3 gap-2"
       >
-        {[
-          { icon: Calendar, title: "Live Games", l1: "NBA · MLB · NHL", l2: "More Coming" },
-          { icon: Brain, title: "AI Picks", l1: "High Confidence", l2: "+EV Daily" },
-          { icon: BarChart3, title: "Profit Tracker", l1: "Track, Build &", l2: "Win Smarter" },
-        ].map((f) => (
-          <div key={f.title} className="rounded-xl border border-[#2A2A2A] bg-[#141414] p-2.5">
-            <f.icon className="w-4 h-4 text-[#00FF6A] mb-1.5" />
-            <div className="text-[11px] font-bold text-white">{f.title}</div>
-            <div className="text-[9px] text-white/50 leading-tight">{f.l1}</div>
-            <div className="text-[9px] text-white/50 leading-tight">{f.l2}</div>
-          </div>
-        ))}
+        <FeatureCard title="Live Games" icon={Calendar} ariaLabel="Preview of Live Games feature">
+          <LiveGameMini />
+        </FeatureCard>
+        <FeatureCard title="AI Picks" icon={Brain} ariaLabel="Preview of AI Picks feature">
+          <AIPickMini />
+        </FeatureCard>
+        <FeatureCard title="Profit Tracker" icon={BarChart3} ariaLabel="Preview of Profit Tracker feature">
+          <ProfitTrackerMini />
+        </FeatureCard>
       </motion.div>
 
       {/* CTA */}
