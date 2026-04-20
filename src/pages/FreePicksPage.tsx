@@ -431,7 +431,7 @@ const FreePicksPage = () => {
                         <span className="text-[13px] text-foreground/80 tabular-nums">
                           {pick.line} {getPropLabel(pick.prop_type)}
                         </span>
-                        {pick.odds && <span className="text-[11px] text-muted-foreground tabular-nums">{pick.odds}</span>}
+                        {pick.odds && <span className="text-[11px] text-muted-foreground tabular-nums">{formatOdds(pick.odds)}</span>}
                       </div>
                       {pick.opponent && (
                         <div className="pl-3.5 mt-0.5">
