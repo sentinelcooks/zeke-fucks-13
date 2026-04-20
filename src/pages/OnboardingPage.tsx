@@ -500,11 +500,38 @@ function ScreenPersonalize({ onBack, onNext }: { onBack: () => void; onNext: () 
   const [sports, setSports] = useState<string[]>(() => {
     try { const r = localStorage.getItem(STORAGE.sports); return r ? JSON.parse(r) : ["nba"]; } catch { return ["nba"]; }
   });
+  const [customSport, setCustomSport] = useState<string>(() => {
+    const existing = sports.find((s) => s.startsWith("other:"));
+    return existing ? existing.slice(6) : "";
+  });
+  const [otherActive, setOtherActive] = useState<boolean>(() => sports.some((s) => s.startsWith("other:")));
 
   const toggleSport = (id: string) =>
     setSports((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
-  const canContinue = !!oddsFormat && sports.length > 0;
+  const toggleOther = () => {
+    setOtherActive((prev) => {
+      const next = !prev;
+      if (!next) {
+        setSports((s) => s.filter((x) => !x.startsWith("other:")));
+        setCustomSport("");
+      }
+      return next;
+    });
+  };
+
+  const updateCustomSport = (value: string) => {
+    const trimmed = value.slice(0, 40);
+    setCustomSport(trimmed);
+    setSports((s) => {
+      const without = s.filter((x) => !x.startsWith("other:"));
+      const clean = trimmed.trim();
+      return clean ? [...without, `other:${clean}`] : without;
+    });
+  };
+
+  const otherValid = !otherActive || customSport.trim().length > 0;
+  const canContinue = !!oddsFormat && sports.length > 0 && otherValid;
 
   const handleNext = () => {
     if (!canContinue) return;
