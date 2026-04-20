@@ -276,15 +276,22 @@ function GameChart({ data }: { data: any }) {
 
 function GamesTable({ games, line, overUnder, propType }: { games: any[]; line: number; overUnder: string; propType: string }) {
   const is1Q = propType.startsWith("1q_");
-  
+  const MLB_HITTING = new Set(["hits","runs","rbi","home_runs","total_bases","walks","stolen_bases","h+r+rbi","hits+runs","fantasy_score"]);
+  const MLB_PITCHING = new Set(["strikeouts","hits_allowed","earned_runs","walks_allowed","outs_recorded","pitcher_strikeouts"]);
+  const NHL_PROPS = new Set(["goals","nhl_assists","nhl_points","sog","pim","ppg","toi","g+a"]);
+  const isMlbHit = MLB_HITTING.has(propType);
+  const isMlbPitch = MLB_PITCHING.has(propType);
+  const isNhl = NHL_PROPS.has(propType);
+
   const getStatVal = (g: any) => {
+    // Prefer server-provided canonical stat_value (single source of truth)
+    if (typeof g.stat_value === "number" && Number.isFinite(g.stat_value)) return g.stat_value;
+    // Legacy fallback for NBA combo/single props
     if (propType === "pts+reb+ast") return (g.PTS || 0) + (g.REB || 0) + (g.AST || 0);
     if (propType === "pts+reb") return (g.PTS || 0) + (g.REB || 0);
     if (propType === "pts+ast") return (g.PTS || 0) + (g.AST || 0);
     if (propType === "reb+ast") return (g.REB || 0) + (g.AST || 0);
     if (propType === "stl+blk") return (g.STL || 0) + (g.BLK || 0);
-    // 1Q props use stat_value which is already computed server-side
-    if (is1Q) return g.stat_value ?? 0;
     const map: any = {
       points: "PTS", rebounds: "REB", assists: "AST", "3-pointers": "FG3M",
       steals: "STL", blocks: "BLK", turnovers: "TOV", free_throws: "FTM",
@@ -297,7 +304,15 @@ function GamesTable({ games, line, overUnder, propType }: { games: any[]; line: 
 
   const headers = is1Q
     ? ["Date", "OPP", "W/L", "Q1 PTS", "Q1 REB", "Q1 AST", "Q1 3PM", "Prop", ""]
-    : ["Date", "OPP", "W/L", "MIN", "PTS", "REB", "AST", "Prop", ""];
+    : isMlbHit
+      ? ["Date", "OPP", "W/L", "AB", "H", "R", "RBI", "Prop", ""]
+      : isMlbPitch
+        ? ["Date", "OPP", "W/L", "IP", "K", "ER", "BB", "Prop", ""]
+        : isNhl
+          ? ["Date", "OPP", "W/L", "TOI", "G", "A", "SOG", "Prop", ""]
+          : ["Date", "OPP", "W/L", "MIN", "PTS", "REB", "AST", "Prop", ""];
+
+  const cell = (v: any) => (v === undefined || v === null || v === "" ? "—" : v);
 
   return (
     <div className="overflow-x-auto scrollbar-hide -mx-5 px-5">
@@ -320,17 +335,38 @@ function GamesTable({ games, line, overUnder, propType }: { games: any[]; line: 
                 <td className={`text-center py-2.5 px-1 font-bold ${g.result === "W" ? "text-nba-green" : "text-nba-red"}`}>{g.result}</td>
                 {is1Q ? (
                   <>
-                    <td className="text-center py-2.5 px-1 text-foreground/70">{g.Q1_PTS ?? "—"}</td>
-                    <td className="text-center py-2.5 px-1 text-foreground/70">{g.Q1_REB ?? "—"}</td>
-                    <td className="text-center py-2.5 px-1 text-foreground/70">{g.Q1_AST ?? "—"}</td>
-                    <td className="text-center py-2.5 px-1 text-foreground/70">{g.Q1_FG3M ?? "—"}</td>
+                    <td className="text-center py-2.5 px-1 text-foreground/70">{cell(g.Q1_PTS)}</td>
+                    <td className="text-center py-2.5 px-1 text-foreground/70">{cell(g.Q1_REB)}</td>
+                    <td className="text-center py-2.5 px-1 text-foreground/70">{cell(g.Q1_AST)}</td>
+                    <td className="text-center py-2.5 px-1 text-foreground/70">{cell(g.Q1_FG3M)}</td>
+                  </>
+                ) : isMlbHit ? (
+                  <>
+                    <td className="text-center py-2.5 px-1 text-muted-foreground/50">{cell(g.AB)}</td>
+                    <td className="text-center py-2.5 px-1 text-foreground/70">{cell(g.H)}</td>
+                    <td className="text-center py-2.5 px-1 text-foreground/70">{cell(g.R)}</td>
+                    <td className="text-center py-2.5 px-1 text-foreground/70">{cell(g.RBI)}</td>
+                  </>
+                ) : isMlbPitch ? (
+                  <>
+                    <td className="text-center py-2.5 px-1 text-muted-foreground/50">{cell(g.IP)}</td>
+                    <td className="text-center py-2.5 px-1 text-foreground/70">{cell(g.K)}</td>
+                    <td className="text-center py-2.5 px-1 text-foreground/70">{cell(g.ER)}</td>
+                    <td className="text-center py-2.5 px-1 text-foreground/70">{cell(g.BB)}</td>
+                  </>
+                ) : isNhl ? (
+                  <>
+                    <td className="text-center py-2.5 px-1 text-muted-foreground/50">{cell(g.TOI)}</td>
+                    <td className="text-center py-2.5 px-1 text-foreground/70">{cell(g.G)}</td>
+                    <td className="text-center py-2.5 px-1 text-foreground/70">{cell(g.A)}</td>
+                    <td className="text-center py-2.5 px-1 text-foreground/70">{cell(g.SOG)}</td>
                   </>
                 ) : (
                   <>
-                    <td className="text-center py-2.5 px-1 text-muted-foreground/50">{g.MIN}</td>
-                    <td className="text-center py-2.5 px-1 text-foreground/70">{g.PTS}</td>
-                    <td className="text-center py-2.5 px-1 text-foreground/70">{g.REB}</td>
-                    <td className="text-center py-2.5 px-1 text-foreground/70">{g.AST}</td>
+                    <td className="text-center py-2.5 px-1 text-muted-foreground/50">{cell(g.MIN)}</td>
+                    <td className="text-center py-2.5 px-1 text-foreground/70">{cell(g.PTS)}</td>
+                    <td className="text-center py-2.5 px-1 text-foreground/70">{cell(g.REB)}</td>
+                    <td className="text-center py-2.5 px-1 text-foreground/70">{cell(g.AST)}</td>
                   </>
                 )}
                 <td className="text-center py-2.5 px-1 font-bold text-foreground">{sv}</td>

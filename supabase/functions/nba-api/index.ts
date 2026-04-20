@@ -3114,23 +3114,27 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
   if (h2hOpp) {
     const h2hGamesList = analysisGames.filter(g => g.opponent.toUpperCase().includes(h2hOpp));
     const h2hVals = h2hGamesList.map(g => getStatValue(g, propType));
-    const h2hGameLog = h2hGamesList.map((g, i) => ({
+    const buildRow = (g: any, sv: number) => ({
       date: g.date ? new Date(g.date).toLocaleDateString("en-US", { year: "numeric", month: "2-digit", day: "2-digit" }) : "",
       matchup: g.matchup, result: g.wl,
+      stat_value: sv,
       MIN: g.min, PTS: g.pts, REB: g.reb, AST: g.ast,
       FG3M: g.fg3m, STL: g.stl, BLK: g.blk,
-    }));
+      // MLB
+      H: g.hits, R: g.runs, RBI: g.rbi, HR: g.home_runs,
+      K: g.strikeouts, TB: g.total_bases, BB: g.walks, SB: g.stolen_bases,
+      AB: g.at_bats, IP: g.innings_pitched, ER: g.earned_runs,
+      // NHL
+      G: g.goals, A: g.nhl_assists, SOG: g.sog, PIM: g.pim,
+      PM: g.plus_minus, PPG: g.ppg, TOI: g.toi,
+    });
+    const h2hGameLog = h2hGamesList.map((g, i) => buildRow(g, h2hVals[i]));
     headToHead = { games: h2hGameLog, ...hitRate(h2hVals, line, overUnder), avg: avg(h2hVals), opponent: h2hOpp };
 
     // Other games (excluding H2H opponent)
     const nonH2hGames = analysisGames.filter(g => !g.opponent.toUpperCase().includes(h2hOpp));
     const nonH2hVals = nonH2hGames.map(g => getStatValue(g, propType));
-    const nonH2hGameLog = nonH2hGames.map((g, i) => ({
-      date: g.date ? new Date(g.date).toLocaleDateString("en-US", { year: "numeric", month: "2-digit", day: "2-digit" }) : "",
-      matchup: g.matchup, result: g.wl,
-      MIN: g.min, PTS: g.pts, REB: g.reb, AST: g.ast,
-      FG3M: g.fg3m, STL: g.stl, BLK: g.blk,
-    }));
+    const nonH2hGameLog = nonH2hGames.map((g, i) => buildRow(g, nonH2hVals[i]));
     otherGames = { games: nonH2hGameLog, ...hitRate(nonH2hVals, line, overUnder), avg: avg(nonH2hVals), opponent: h2hOpp };
   }
 
@@ -3177,7 +3181,19 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
   if (cfg.searchLeague === "mlb" && prevSeasonGames.length > 0 && h2hOpp) {
     const prevH2hGames = prevSeasonGames.filter(g => g.opponent.toUpperCase().includes(h2hOpp));
     const prevH2hVals = prevH2hGames.map(g => getStatValue(g, propType));
-    prevSeasonH2H = { ...hitRate(prevH2hVals, line, overUnder), avg: avg(prevH2hVals), opponent: h2hOpp, total: prevH2hVals.length };
+    const prevH2hGameLog = prevH2hGames.map((g, i) => ({
+      date: g.date ? new Date(g.date).toLocaleDateString("en-US", { year: "numeric", month: "2-digit", day: "2-digit" }) : "",
+      matchup: g.matchup, result: g.wl,
+      stat_value: prevH2hVals[i],
+      MIN: g.min, PTS: g.pts, REB: g.reb, AST: g.ast,
+      FG3M: g.fg3m, STL: g.stl, BLK: g.blk,
+      H: g.hits, R: g.runs, RBI: g.rbi, HR: g.home_runs,
+      K: g.strikeouts, TB: g.total_bases, BB: g.walks, SB: g.stolen_bases,
+      AB: g.at_bats, IP: g.innings_pitched, ER: g.earned_runs,
+      G: g.goals, A: g.nhl_assists, SOG: g.sog, PIM: g.pim,
+      PM: g.plus_minus, PPG: g.ppg, TOI: g.toi,
+    }));
+    prevSeasonH2H = { games: prevH2hGameLog, ...hitRate(prevH2hVals, line, overUnder), avg: avg(prevH2hVals), opponent: h2hOpp, total: prevH2hVals.length };
   }
 
   const result: any = {
