@@ -201,6 +201,10 @@ export default function PaywallPage() {
           0%,100% { box-shadow: 0 0 0 2px #00FF6A, 0 0 30px rgba(0,255,106,0.26), 0 0 60px rgba(0,255,106,0.11), inset 0 0 24px rgba(0,255,106,0.04); }
           50% { box-shadow: 0 0 0 2px #00FF6A, 0 0 42px rgba(0,255,106,0.38), 0 0 84px rgba(0,255,106,0.16), inset 0 0 24px rgba(0,255,106,0.05); }
         }
+        @keyframes card-pulse-sm {
+          0%,100% { box-shadow: 0 0 0 2px #00FF6A, 0 0 18px rgba(0,255,106,0.24), 0 0 36px rgba(0,255,106,0.10), inset 0 0 16px rgba(0,255,106,0.04); }
+          50% { box-shadow: 0 0 0 2px #00FF6A, 0 0 28px rgba(0,255,106,0.36), 0 0 56px rgba(0,255,106,0.16), inset 0 0 16px rgba(0,255,106,0.05); }
+        }
       `}</style>
       {/* Atmospheric glows */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
