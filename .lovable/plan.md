@@ -2,61 +2,54 @@
 
 ## Goal
 
-Fix the contradiction in the **VS** (Head-to-Head) section of the Analyze tab where the rate cards say e.g. **"100% (3 games)"** but every row in the games table below shows **✗ (never hit)**. Affects **all non-NBA props** (MLB, NHL, plus NBA combo props like `pts+reb+ast`).
+Fix the Lines tab in the Analyze section so live odds reliably appear next to the moneyline / spread / total for any team a user searches — and when odds genuinely can't be fetched, show a clear "odds unavailable" state instead of a blank UI.
 
-## Root cause (verified)
+## Root cause (verified against backend + frontend)
 
-Two separate hit calculations look at the same games but use **different stat sources**:
+After analyzing a matchup in the Lines tab (`MoneyLineSection`), the UI is supposed to show two odds blocks:
 
-1. **Rate cards** (`This Season / Last Season / Combined`) come from the backend's `head_to_head.rate`, which is computed via `getStatValue(g, propType)` server-side and correctly knows that `propType: "hits"` → `game.hits`, `propType: "goals"` → `game.goals`, etc. (`supabase/functions/nba-api/index.ts` lines 3115–3123, 1748–1768).
+1. **"Odds & Value" card** — uses `results.odds`, computed server-side in `moneyline-api/index.ts` by `fetchOddsForMatchup` → `buildOddsPayload`.
+2. **`MoneylinePlatformOdds` panel** — fetches live odds **client-side** via `fetchNbaOdds()` → `nba-odds/events`.
 
-2. **Games table rows** are re-derived **client-side** by `GamesTable.getStatVal` (`src/pages/NbaPropsPage.tsx` lines 280–294). Its lookup map only contains NBA keys (`PTS, REB, AST, FG3M, STL, BLK, TOV, FTM, FGM, FGA, FTA, MIN`). For any MLB prop (`hits`, `runs`, `rbi`, `home_runs`, `total_bases`, `walks`, `strikeouts`, `hits_allowed`, `earned_runs`, `walks_allowed`, `h+r+rbi`, `hits+runs`, `fantasy_score`) or NHL prop (`goals`, `nhl_assists`, `nhl_points`, `sog`, `pim`, `ppg`, `toi`, `g+a`), the lookup returns `undefined`, so `g[undefined] || 0` = **0** for every game → every row reads 0 vs the line → all ✗.
+I confirmed the `nba-odds/events` endpoint is healthy (Cavs vs Raptors comes back with DraftKings / FanDuel / BetOnlineAG odds for h2h, spreads, totals). So the data is there — the bugs are in how it's matched, rendered, and how failures are surfaced:
 
-The backend already attaches the correctly-computed per-game value to the **main** game log as `g.stat_value` (line 3028), and `GamesTable` already reads `g.stat_value` for 1Q props (line 287). The H2H/prev-H2H game logs simply **don't include `stat_value`** in the row payload.
+- **Bug 1 — Card silently disappears.** `MoneyLineSection.tsx` line ~1670 wraps the entire "Odds & Value" card in `{results.odds && (...)}`. When `fetchOddsForMatchup` returns `null` (no event match — common for tip-off-imminent games or when only `us`/`us2` regions are queried), the card just vanishes. No "odds unavailable" message, no retry, nothing — exactly the "blank/broken UI" the user is reporting.
+- **Bug 2 — Backend uses fewer regions than frontend.** `fetchOddsForMatchup` (`moneyline-api` line 1045) only queries `regions=us,us2`. The client `nba-odds/events` queries all 4 regions (`us`, `us2`, `us_dfs`, `us_ex`). Result: server `results.odds` can be `null` for a matchup where the client's `MoneylinePlatformOdds` finds odds. Inconsistent. Worse, the server short-circuits with `if (!match) return null` — so a single fuzzy-match miss kills the entire Odds & Value card.
+- **Bug 3 — `MoneylinePlatformOdds` is hidden until after Analyze.** It only renders inside `{results && (...)}` (line 1745). Users who land on Lines mode and search a team see no live odds at all until they hit the Analyze button — feels like odds are "not working."
+- **Bug 4 — `useEffect` doesn't refetch on team-object identity change.** Deps are `[team1.name, team2.name, oddsFormat, sport]`. If the analyzer returns the same team name with a different casing or a refetch is needed on retry, the panel won't re-trigger. Also, no manual retry control when load fails.
+- **Bug 5 — Loading/error UX is incomplete on the "Odds & Value" card.** Zero feedback. The `MoneylinePlatformOdds` block has a loading spinner + a yellow "temporarily unavailable" alert, but the upstream card has neither.
 
-## Fix — 2 files, focused
+## Fix — 2 files
 
-### 1. `supabase/functions/nba-api/index.ts`
+### 1. `supabase/functions/moneyline-api/index.ts`
 
-Attach `stat_value` to every per-game row in the H2H, "other games", and prev-season H2H lists so the client never has to re-derive it:
+- **Widen the regions** in `fetchOddsForMatchup` (line 1045) from `regions=us,us2` to `regions=us,us2,us_dfs,us_ex` so it matches what the client + the rest of the app uses. This alone resolves the "no match" cases for matchups whose lines only post on DFS/exchange books first.
+- **Return a structured "no-data" payload** instead of `null` when matching fails: `{ market, bestLine: null, impliedProb, ev: 0, allBooks: [], unavailable: true, reason: "no_match" | "no_entries" | "fetch_failed" }`. This lets the frontend distinguish "haven't fetched yet" from "we tried, no odds exist for this matchup yet."
+- Same pattern in `buildOddsPayload`: when `entries.length === 0`, return the same structured `{ unavailable: true, reason: "no_entries", ... }` object instead of `null`.
 
-- **Lines ~3117–3122** (H2H gameLog): include `stat_value: h2hVals[i]` on each row, and add raw MLB/NHL columns (`HITS, RUNS, RBI, HR, TB, BB, SO, GOALS, ASSISTS_NHL, SOG, PIM, TOI, FPTS`) the same way the main game log does (around line 3024).
-- **Lines ~3128–3133** (`otherGames` gameLog): same treatment.
-- **Lines ~3176–3181** (`prevSeasonH2H`): build a real `games` array with `stat_value` and the same enriched columns (currently `prevSeasonH2H.games` is never populated, so the "Last Season" rows in the combined H2H table silently disappear).
+### 2. `src/components/MoneyLineSection.tsx`
 
-This guarantees the client receives one canonical `stat_value` per game, computed by the same `getStatValue(game, propType)` that drives the rate cards. Single source of truth.
-
-### 2. `src/pages/NbaPropsPage.tsx`
-
-Make `GamesTable` (lines 277–344) prefer the server-provided `stat_value` and broaden the headers:
-
-- In `getStatVal`, **always return `g.stat_value` when it is a finite number** (not just for 1Q). Fall back to the existing NBA map only when `stat_value` is missing (legacy safety).
-- Make the headers sport-aware so MLB/NHL show meaningful columns instead of empty `PTS/REB/AST` cells:
-  - **MLB hitting** (`hits, runs, rbi, home_runs, total_bases, walks, h+r+rbi, hits+runs`): `Date · OPP · W/L · AB · H · R · RBI · Prop · ✓/✗`
-  - **MLB pitching** (`strikeouts, hits_allowed, earned_runs, walks_allowed`): `Date · OPP · W/L · IP · K · ER · BB · Prop · ✓/✗`
-  - **NHL** (`goals, nhl_assists, nhl_points, sog, g+a, pim, toi, ppg`): `Date · OPP · W/L · TOI · G · A · SOG · Prop · ✓/✗`
-  - **NBA / 1Q** (default): unchanged.
-- Read those columns from the enriched per-game payload (HITS / RUNS / RBI / GOALS / ASSISTS_NHL / SOG / TOI etc.), with `—` fallback if missing.
-
-Computing `isHit` already uses `sv` (now reliably `stat_value`), so the ✓/✗ column will perfectly match the H2H rate card percentages.
+- **Render `MoneylinePlatformOdds` before analysis** when both `team1` and `team2` are selected. Move the component out of the `{results && (...)}` branch and also render it (in a lighter "preview" state with `modelProb={undefined}`) once teams are picked. So the user sees live odds the moment they pick two teams — no Analyze click required.
+- **Replace `{results.odds && (...)}` (line ~1670)** with `{results.odds ? (<OddsValueCard … />) : (<OddsUnavailableCard team1={results.team1} team2={results.team2} />)}`. The unavailable card shows the same yellow "AlertTriangle" treatment as `MoneylinePlatformOdds` with copy: *"Live odds for {team1.shortName} vs {team2.shortName} aren't posted yet. Analysis still uses our model — odds will appear once books publish them."*
+- **Honor the new `unavailable: true` flag** from `buildOddsPayload`: treat `results.odds?.unavailable === true` as the "show unavailable card" branch.
+- **Add a retry button to `MoneylinePlatformOdds`** in its existing "Live odds temporarily unavailable" state — clicking it re-runs the load function. Trivially implemented by wrapping the `useEffect` body in a `loadOdds` callback and exposing it via a refresh button.
+- **Improve `useEffect` deps** to also depend on `team1.id`/`team2.id` so a re-pick of the same team name (different objects) triggers a refetch.
+- **Loading skeleton on the Odds & Value card** while `loading === true` (mirror the existing `MoneylinePlatformOdds` spinner so both blocks feel consistent).
 
 ## Files changed
 
-- `supabase/functions/nba-api/index.ts` — H2H gameLog, otherGames gameLog, and prevSeasonH2H now include `stat_value` plus MLB/NHL raw stat columns; prevSeasonH2H now actually builds a `games` array.
-- `src/pages/NbaPropsPage.tsx` — `GamesTable.getStatVal` prefers `g.stat_value` for all sports; sport-aware headers/rows for MLB hitting, MLB pitching, and NHL.
+- `supabase/functions/moneyline-api/index.ts` — broaden odds regions to all 4 us regions, return structured `unavailable` payload instead of `null` from `fetchOddsForMatchup` and `buildOddsPayload`.
+- `src/components/MoneyLineSection.tsx` — render `MoneylinePlatformOdds` once both teams are selected (not gated on analysis), add an "Odds Unavailable" fallback card when `results.odds` is missing or `unavailable`, add a retry button + better loading state to `MoneylinePlatformOdds`, expand `useEffect` deps for reliable refetch.
 
 ## Non-goals
 
-- No changes to the rate calculation (`hitRate()` in the backend) — already correct, that's the source of truth we're aligning to.
-- No changes to NBA single-stat props (PTS/REB/AST/etc.) — they continue to work, now via `stat_value` instead of the per-stat map (functionally identical, since `stat_value === g.pts` for `propType="points"`, etc.).
-- No DB migration. No changes to UFC (no game-log table). No changes to the Picks/Slip/Trends tabs.
+- No backend schema/migration. No changes to the props analyzer or the props "VS" tab. No changes to GamesPage (its odds work fine — confirmed by curl). No changes to `nba-odds/events` itself (already healthy).
 
 ## Verification
 
-1. Analyze **MLB** Vladimir Guerrero Jr. **Over 0.5 Hits** vs the upcoming opponent → confirm:
-   - "This Season" h2h rate card and the per-game ✓/✗ column **agree** (e.g. 3/3 cards == three ✓ rows).
-   - The `Prop` column shows actual hit counts (1, 2, 0, …) instead of all zeros.
-2. Analyze an **NHL** prop (e.g. Auston Matthews **Over 2.5 SOG**) → table shows TOI/G/A/SOG columns and ✓/✗ matches the rate card.
-3. Analyze an **NBA** prop (e.g. Jokic **Over 25.5 Points**) → table is unchanged from today, ✓/✗ still correct.
-4. Analyze an **NBA combo** prop (e.g. SGA **Over 39.5 PRA**) → ✓/✗ now matches the H2H rate card (this combo path was also broken since `pts+reb+ast` was the only combo handled inline; via `stat_value` all combos now line up).
+1. Open Analyze → Lines → NBA → pick **Cleveland Cavaliers vs Toronto Raptors** (without clicking Analyze): the live odds panel should now appear immediately with DraftKings / FanDuel / etc. odds for moneyline, spread, total.
+2. Click **Analyze Matchup** → confirm the "Odds & Value" card shows best book + EV, AND the platform odds panel still displays.
+3. Pick two teams that don't have a scheduled game tonight (e.g. two random teams) → confirm both blocks show the new "Live odds for X vs Y aren't posted yet" yellow alert instead of disappearing.
+4. Repeat for **MLB** and **NHL** in Lines mode → live odds render the same way.
+5. In `MoneylinePlatformOdds`'s unavailable state, click the new **Retry** button → confirm it re-fetches.
 
