@@ -15,6 +15,7 @@ const SPORT_KEYS: Record<string, string> = {
   nba: "basketball_nba",
   mlb: "baseball_mlb",
   nhl: "icehockey_nhl",
+  ufc: "mma_mixed_martial_arts",
 };
 
 // Sport-aware mapping from Odds-API market keys → analyzer prop_type.
@@ -421,7 +422,7 @@ async function validateWithAnalyzer(play: ScoredPlay, cache: Map<string, any>): 
       play.opponent ||
       (play.home_team && play.away_team ? play.away_team : "") ||
       "";
-    const r = await fnPost("nba-api/analyze", {
+    const body = {
       player: play.player_name,
       prop_type: play.prop_type,
       line: play.line,
@@ -429,7 +430,14 @@ async function validateWithAnalyzer(play: ScoredPlay, cache: Map<string, any>): 
       opponent,
       sport: play.sport,
       bet_type: "player_prop",
-    });
+    };
+    let r = await fnPost("nba-api/analyze", body);
+    // Retry once on 429 / rate-limit
+    if (r.status === 429 || (typeof r.data === "string" && /rate limit/i.test(r.data))) {
+      const waitMs = 3000;
+      await new Promise((res) => setTimeout(res, waitMs));
+      r = await fnPost("nba-api/analyze", body);
+    }
     if (!r.ok || !r.data) return null;
     analyzed = r.data;
     cache.set(cacheKey, analyzed);
@@ -503,9 +511,9 @@ export async function scanSport(sport: string): Promise<{
     return true;
   });
 
-  // Analyzer validation — cap per sport
-  const ANALYZER_CAP = 75;
-  const ANALYZER_CHUNK = 6;
+  // Analyzer validation — cap per sport (reduced to avoid AI Gateway rate limits)
+  const ANALYZER_CAP = 45;
+  const ANALYZER_CHUNK = 3;
   const top = prefiltered.sort((a, b) => b.edge - a.edge).slice(0, ANALYZER_CAP);
   const cache = new Map<string, any>();
   const validated: ScoredPlay[] = [];

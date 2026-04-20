@@ -180,7 +180,7 @@ const DAILY_PICKS_CAP = 80;           // raised so all surviving analyzer-valida
 export function rankAndDistribute(plays: ScoredPlay[]) {
   // 1. Hard floor: drop anything that fails the absolute minimums
   const floorOk = plays.filter(
-    (p) => p.confidence >= 0.65 && p.reliability >= 0.70 && p.edge > 0
+    (p) => p.confidence >= 0.62 && p.reliability >= 0.40 && p.edge > 0
   );
   // 2. Reject anything that fails verdict tiering
   const passing = floorOk.filter((p) => p.verdict !== "Pass");

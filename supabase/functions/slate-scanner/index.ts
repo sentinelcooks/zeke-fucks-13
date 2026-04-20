@@ -64,15 +64,16 @@ Deno.serve(async (req) => {
   await supabase.from("daily_picks").delete().eq("pick_date", today);
   await supabase.from("free_props").delete().eq("prop_date", today);
 
-  // 2. Invoke all sport scanners in parallel
-  console.log("Dispatching per-sport scanners in parallel...");
+  // 2. Invoke per-sport scanners SEQUENTIALLY to avoid AI Gateway rate limits
+  console.log("Dispatching per-sport scanners sequentially...");
   const sports = ["nba", "mlb", "nhl", "ufc"];
-  const settled = await Promise.allSettled(sports.map((s) => invokeSport(s)));
   const perSport: Record<string, any> = {};
-  for (let i = 0; i < sports.length; i++) {
-    const s = sports[i];
-    const res = settled[i];
-    perSport[s] = res.status === "fulfilled" ? res.value : { error: String(res.reason) };
+  for (const s of sports) {
+    try {
+      perSport[s] = await invokeSport(s);
+    } catch (e) {
+      perSport[s] = { error: String(e) };
+    }
   }
   console.log("Per-sport results:", JSON.stringify(perSport));
 
