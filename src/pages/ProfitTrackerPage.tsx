@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -9,7 +9,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 
-import ProfitCharts from "@/components/ProfitCharts";
+const ProfitCharts = lazy(() => import("@/components/ProfitCharts"));
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { PlayerAutocomplete, getLinePlaceholder } from "@/components/tracker/PlayerAutocomplete";
 import { BetTypeDropdown } from "@/components/tracker/BetTypeDropdown";
@@ -450,7 +450,9 @@ const ProfitTrackerPage = () => {
 
               {/* Charts */}
               <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                <ProfitCharts plays={allPlays} />
+                <Suspense fallback={<div className="h-64 rounded-2xl bg-secondary/20 animate-pulse" />}>
+                  <ProfitCharts plays={allPlays} />
+                </Suspense>
               </motion.div>
 
               {/* Action Buttons */}
