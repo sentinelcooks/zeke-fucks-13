@@ -284,7 +284,7 @@ function ScreenHero({ onNext }: { onNext: () => void }) {
             <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Win Rate</div>
             <div className="text-base font-black text-foreground tabular-nums">58.3%</div>
           </div>
-          <Sparkline className="w-14 h-10" />
+          <Sparkline color="hsl(var(--nba-green))" className="w-14 h-10" />
         </div>
 
         {/* AI Analysis Preview */}
