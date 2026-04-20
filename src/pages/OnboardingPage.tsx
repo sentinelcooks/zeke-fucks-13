@@ -1,6 +1,7 @@
 import { useState, useEffect, type JSX } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion, type LucideProps } from "framer-motion";
+import type { ComponentType, ReactNode } from "react";
 import { ArrowLeft, Lock, TrendingUp, Brain, BarChart3, Calendar, Check, X, Sparkles, ShieldCheck, Swords, CheckCircle2 } from "lucide-react";
 import logo from "@/assets/sentinel-lock.jpg";
 import { preloadGeneratedImage } from "@/hooks/useGeneratedImage";
