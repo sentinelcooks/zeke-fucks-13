@@ -1627,6 +1627,22 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
         <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-center text-destructive text-sm">{error}</div>
       )}
 
+      {/* ═══ Live Odds Preview (before analysis) ═══ */}
+      {!results && !loading && team1 && team2 && team1 !== team2 && (() => {
+        const t1Obj = teams.find((t) => t.abbr === team1);
+        const t2Obj = teams.find((t) => t.abbr === team2);
+        if (!t1Obj || !t2Obj) return null;
+        return (
+          <MoneylinePlatformOdds
+            team1={t1Obj}
+            team2={t2Obj}
+            sport={sport}
+            activeBetType={betType}
+            activeOverUnder={overUnder}
+          />
+        );
+      })()}
+
       {/* ═══ Results ═══ */}
       {results && (
         <motion.div
