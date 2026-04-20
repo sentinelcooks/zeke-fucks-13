@@ -658,8 +658,9 @@ function factorToInsight(f: Factor, team1Name: string, team2Name: string): strin
 function analyzeMoneyline(
   team1: any, team2: any, h2h: any[],
   team1Stats: any, team2Stats: any,
-  extras: { injuries1: any[]; injuries2: any[]; splits1: any; splits2: any; b2b1: any; b2b2: any; pace1: any; pace2: any }
+  extras: { injuries1: any[]; injuries2: any[]; splits1: any; splits2: any; b2b1: any; b2b2: any; pace1: any; pace2: any; team1IsHome?: boolean | null }
 ) {
+  const team1IsHome = extras.team1IsHome ?? null;
   const factors: string[] = [];
   const factorBreakdown: Factor[] = [];
 
@@ -706,12 +707,28 @@ function analyzeMoneyline(
   addFactor("Recent Form (L10 Net)", Math.round(rfScore1), Math.round(100 - rfScore1), 7,
     `${team1.shortName} recent: ${extras.pace1.recentPpg} PPG, ${extras.pace1.recentOppPpg} opp | ${team2.shortName}: ${extras.pace2.recentPpg} PPG, ${extras.pace2.recentOppPpg} opp`);
 
-  // Factor 6: Home/Away Splits (6%)
-  const homeAdv1 = extras.splits1.home.winPct;
-  const awayAdv2 = extras.splits2.away.winPct;
-  const splitsScore1 = homeAdv1 > 0 || awayAdv2 > 0 ? Math.round(Math.max(20, Math.min(80, 50 + (homeAdv1 - awayAdv2) * 40))) : 50;
-  addFactor("Home/Away Splits", splitsScore1, 100 - splitsScore1, 6,
-    `🏠 ${team1.shortName} ${extras.splits1.home.wins}-${extras.splits1.home.losses} at home (${(homeAdv1 * 100).toFixed(0)}%), ${team2.shortName} ${extras.splits2.away.wins}-${extras.splits2.away.losses} on road (${(awayAdv2 * 100).toFixed(0)}%)`);
+  // Factor 6: Home/Away Splits (6%) — role-aware (uses real venue, falls back to overall)
+  const t1HomeSplit = team1IsHome === true ? extras.splits1.home : team1IsHome === false ? extras.splits1.away : null;
+  const t2AwaySplit = team1IsHome === true ? extras.splits2.away : team1IsHome === false ? extras.splits2.home : null;
+  let splitsScore1 = 50;
+  let splitsDesc = "Home/away split data unavailable";
+  if (t1HomeSplit && t2AwaySplit) {
+    const adv1 = t1HomeSplit.winPct;
+    const adv2 = t2AwaySplit.winPct;
+    splitsScore1 = adv1 > 0 || adv2 > 0 ? Math.round(Math.max(20, Math.min(80, 50 + (adv1 - adv2) * 40))) : 50;
+    const t1Label = team1IsHome ? `🏠 ${team1.shortName} ${t1HomeSplit.wins}-${t1HomeSplit.losses} at home` : `✈️ ${team1.shortName} ${t1HomeSplit.wins}-${t1HomeSplit.losses} on road`;
+    const t2Label = team1IsHome ? `${team2.shortName} ${t2AwaySplit.wins}-${t2AwaySplit.losses} on road` : `${team2.shortName} ${t2AwaySplit.wins}-${t2AwaySplit.losses} at home`;
+    splitsDesc = `${t1Label} (${(adv1 * 100).toFixed(0)}%), ${t2Label} (${(adv2 * 100).toFixed(0)}%)`;
+  } else {
+    // Neutral fallback: overall winPct from combined home+away
+    const t1G = (extras.splits1.home.games || 0) + (extras.splits1.away.games || 0);
+    const t2G = (extras.splits2.home.games || 0) + (extras.splits2.away.games || 0);
+    const t1Pct = t1G > 0 ? (extras.splits1.home.wins + extras.splits1.away.wins) / t1G : 0;
+    const t2Pct = t2G > 0 ? (extras.splits2.home.wins + extras.splits2.away.wins) / t2G : 0;
+    splitsScore1 = t1Pct > 0 || t2Pct > 0 ? Math.round(Math.max(20, Math.min(80, 50 + (t1Pct - t2Pct) * 40))) : 50;
+    splitsDesc = `Overall: ${team1.shortName} ${(t1Pct * 100).toFixed(0)}%, ${team2.shortName} ${(t2Pct * 100).toFixed(0)}% (no scheduled venue)`;
+  }
+  addFactor("Home/Away Splits", splitsScore1, 100 - splitsScore1, 6, splitsDesc);
 
   // Factor 7: Injuries Impact (8%)
   const majorStatuses = ["out", "doubtful"];
@@ -813,12 +830,23 @@ function analyzeMoneyline(
   addFactor("Strength of Schedule", Math.round(sos1), Math.round(100 - sos1), 3,
     `Opponent quality based on recent PPG allowed: ${team1.shortName} face ~${extras.pace1.recentOppPpg} vs ${team2.shortName} ~${extras.pace2.recentOppPpg}`);
 
-  // Factor 20: Home PPG Advantage (2%)
-  const homePpg1 = extras.splits1.home.ppg;
-  const awayPpg2 = extras.splits2.away.ppg;
+  // Factor 20: Home PPG vs Away PPG (2%) — role-aware
+  let homePpg1: number, awayPpg2: number, hpDesc: string;
+  if (team1IsHome === true) {
+    homePpg1 = extras.splits1.home.ppg;
+    awayPpg2 = extras.splits2.away.ppg;
+    hpDesc = `${team1.shortName} ${homePpg1.toFixed(1)} PPG at home vs ${team2.shortName} ${awayPpg2.toFixed(1)} PPG on road`;
+  } else if (team1IsHome === false) {
+    homePpg1 = extras.splits1.away.ppg;
+    awayPpg2 = extras.splits2.home.ppg;
+    hpDesc = `${team1.shortName} ${homePpg1.toFixed(1)} PPG on road vs ${team2.shortName} ${awayPpg2.toFixed(1)} PPG at home`;
+  } else {
+    homePpg1 = (extras.splits1.home.ppg + extras.splits1.away.ppg) / 2;
+    awayPpg2 = (extras.splits2.home.ppg + extras.splits2.away.ppg) / 2;
+    hpDesc = `${team1.shortName} ${homePpg1.toFixed(1)} PPG combined vs ${team2.shortName} ${awayPpg2.toFixed(1)} PPG combined`;
+  }
   const hpScore = homePpg1 + awayPpg2 > 0 ? Math.round((homePpg1 / (homePpg1 + awayPpg2)) * 100) : 50;
-  addFactor("Home PPG vs Away PPG", hpScore, 100 - hpScore, 2,
-    `${team1.shortName} ${homePpg1.toFixed(1)} PPG at home vs ${team2.shortName} ${awayPpg2.toFixed(1)} PPG on road`);
+  addFactor("Home PPG vs Away PPG", hpScore, 100 - hpScore, 2, hpDesc);
 
   // Calculate weighted composite
   let team1Score = 0;
@@ -1247,7 +1275,7 @@ Deno.serve(async (req) => {
       const pace1 = computePace(team1Stats, schedule1, team1.id);
       const pace2 = computePace(team2Stats, schedule2, team2.id);
 
-      const extras = { injuries1, injuries2, splits1, splits2, b2b1, b2b2, pace1, pace2 };
+      const extras = { injuries1, injuries2, splits1, splits2, b2b1, b2b2, pace1, pace2, team1IsHome: venue ? venue.team1IsHome : null };
 
       // Fetch live odds for all sports (using rotating key pool)
       const masterUrl = Deno.env.get("MASTER_SUPABASE_URL");
@@ -1272,6 +1300,8 @@ Deno.serve(async (req) => {
                 team2_id: team2.id,
                 bet_type: mlbBetType,
                 over_under,
+                team1_is_home: venue ? venue.team1IsHome : null,
+                game_date: venue?.gameDate ?? null,
               }),
             });
 
@@ -1340,6 +1370,8 @@ Deno.serve(async (req) => {
                 team2_id: team2.id,
                 bet_type: nhlBetType,
                 over_under,
+                team1_is_home: venue ? venue.team1IsHome : null,
+                game_date: venue?.gameDate ?? null,
               }),
             });
 
