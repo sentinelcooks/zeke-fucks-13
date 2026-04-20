@@ -841,5 +841,13 @@ Deno.serve(async (req) => {
       JSON.stringify({ error: err instanceof Error ? err.message : "Internal error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+  } finally {
+    if (acquiredLock) {
+      try {
+        await supabase.from("daily_picks_runs").delete().eq("date", lockDate);
+      } catch (e) {
+        console.error("Lock release error:", e);
+      }
+    }
   }
 });
