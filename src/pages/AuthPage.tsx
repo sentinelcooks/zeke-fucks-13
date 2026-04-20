@@ -116,7 +116,7 @@ const AuthPage = () => {
     if (isAuthenticated && !savingOnboarding) {
       navigate("/dashboard", { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, savingOnboarding]);
 
   // After OAuth redirect lands us back on this page already authenticated,
   // capture the user and save onboarding. The useEffect above will then route to /dashboard.
