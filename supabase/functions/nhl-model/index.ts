@@ -682,7 +682,7 @@ Deno.serve(async (req) => {
     // ─── POST /analyze — Full 20-factor analysis ───
     if (path === "analyze" && req.method === "POST") {
       const body = await req.json();
-      const { game_id, bet_type = "moneyline", team1_id, team2_id, over_under, player_name, prop_type, line } = body;
+      const { game_id, bet_type = "moneyline", team1_id, team2_id, over_under, player_name, prop_type, line, team1_is_home } = body;
 
       if (!team1_id || !team2_id) return json({ error: "team1_id and team2_id are required" }, 400);
       if (!["moneyline", "puckline", "total", "player_prop"].includes(bet_type)) {
@@ -729,8 +729,15 @@ Deno.serve(async (req) => {
         }
       }
 
-      const homeGoalie = goalies.home || { savePct: 0.908, gaa: 2.90, stats: {} };
-      const awayGoalie = goalies.away || { savePct: 0.908, gaa: 2.90, stats: {} };
+      // Resolve real home/away role for each team (orchestrator-supplied venue)
+      const team1IsHome: boolean | null = typeof team1_is_home === "boolean" ? team1_is_home : null;
+      const neutralGoalie = { savePct: 0.908, gaa: 2.90, stats: {}, name: undefined as string | undefined };
+      const team1Goalie = team1IsHome === true ? (goalies.home || neutralGoalie)
+                        : team1IsHome === false ? (goalies.away || neutralGoalie)
+                        : neutralGoalie;
+      const team2Goalie = team1IsHome === true ? (goalies.away || neutralGoalie)
+                        : team1IsHome === false ? (goalies.home || neutralGoalie)
+                        : neutralGoalie;
 
       // Compute context
       const splits1 = computeHomeAwaySplits(schedule1, team1_id);
