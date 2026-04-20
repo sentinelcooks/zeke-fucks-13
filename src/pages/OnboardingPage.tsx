@@ -834,7 +834,7 @@ function FeatureCard({
   children,
 }: {
   title: string;
-  icon: ComponentType<{ className?: string }>;
+  icon: ComponentType<{ className?: string; style?: React.CSSProperties }>;
   ariaLabel: string;
   children: ReactNode;
 }) {
