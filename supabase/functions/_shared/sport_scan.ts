@@ -261,16 +261,33 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
   const r = await fnFetch(`nba-odds/events?sport=${sport}&markets=h2h`);
   events = Array.isArray(r.data?.events) ? r.data.events : [];
 
-  const now = Date.now();
-  const cutoff = now + 36 * 3600 * 1000;
-  const upcoming = events
-    .filter((e: any) => {
-      if (!e.commence_time) return true;
-      const t = new Date(e.commence_time).getTime();
-      return t > now && t < cutoff;
-    })
-    .sort((a: any, b: any) => new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime())
-    .slice(0, 16);
+  // Drive scanning off the Games-tab schedule so EVERY scheduled game gets a chance.
+  let upcoming: any[] = events;
+  if (sportKey) {
+    const gamesRes = await fnFetch(`games-schedule?sport=${sportKey}`);
+    const games = Array.isArray(gamesRes.data) ? gamesRes.data : [];
+    const upcomingGames = games.filter(
+      (g: any) => g.status !== "STATUS_FINAL" && g.status !== "STATUS_IN_PROGRESS"
+    );
+    stats.scheduled_games = upcomingGames.length;
+
+    const eventByMatchup = new Map<string, any>();
+    for (const ev of events) {
+      const home = (ev.home_team || "").toLowerCase();
+      const away = (ev.away_team || "").toLowerCase();
+      eventByMatchup.set(`${home}|${away}`, ev);
+      eventByMatchup.set(`${away}|${home}`, ev);
+    }
+    upcoming = upcomingGames
+      .map((g: any) =>
+        eventByMatchup.get(
+          `${(g.home_team || "").toLowerCase()}|${(g.away_team || "").toLowerCase()}`
+        )
+      )
+      .filter(Boolean);
+  } else {
+    stats.scheduled_games = events.length;
+  }
   stats.events = upcoming.length;
 
   const plays: ScoredPlay[] = [];
