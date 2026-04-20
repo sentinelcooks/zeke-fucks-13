@@ -1748,7 +1748,16 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                     </div>
                   ))}
                 </div>
-              )}
+          ) : (
+            <div className="vision-card p-4">
+              <div className="flex items-start gap-2 text-muted-foreground/70">
+                <AlertTriangle className="w-4 h-4 text-nba-yellow shrink-0 mt-0.5" />
+                <p className="text-[11px]">
+                  Live odds for {results.team1?.shortName || results.team1?.name} vs {results.team2?.shortName || results.team2?.name} aren't posted yet. Analysis still uses our model — odds will appear once books publish them.
+                </p>
+              </div>
+            </div>
+          )}
 
               <p className="text-[8px] text-muted-foreground/40 text-center mt-3 pt-2" style={{ borderTop: '1px solid hsla(228, 18%, 18%, 0.2)' }}>
                 EV = (Model Prob × Decimal Odds − 1) × 100 · Positive EV = edge over the market
