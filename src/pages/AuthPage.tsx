@@ -49,7 +49,7 @@ const AuthPage = () => {
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<"google" | "apple" | null>(null);
   const [remember, setRemember] = useState(true);
-  const { signIn, signUp, isAuthenticated } = useAuth();
+  const { signIn, signUp, isAuthenticated, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
   const saveOnboardingToDb = useCallback(async (userId: string) => {
@@ -57,6 +57,8 @@ const AuthPage = () => {
       const referral = localStorage.getItem("sentinel_onboarding_referral") || null;
       const sports = JSON.parse(localStorage.getItem("sentinel_onboarding_sports") || "[]");
       const style = localStorage.getItem("sentinel_onboarding_style") || null;
+      const oddsFormatRaw = localStorage.getItem("sentinel_onboarding_odds_format");
+      const oddsFormat = oddsFormatRaw === "american" || oddsFormatRaw === "decimal" ? oddsFormatRaw : null;
 
       if (referral || sports.length || style) {
         const { data: aiData } = await supabase.functions.invoke("personalize", {
@@ -78,12 +80,16 @@ const AuthPage = () => {
       }
 
       localStorage.setItem("sentinel_onboarding_complete", "true");
-      await supabase.from("profiles").update({ onboarding_complete: true } as any).eq("id", userId);
+      const profileUpdate: Record<string, unknown> = { onboarding_complete: true };
+      if (oddsFormat) profileUpdate.odds_format = oddsFormat;
+      await supabase.from("profiles").update(profileUpdate as any).eq("id", userId);
+      if (oddsFormat) localStorage.removeItem("sentinel_onboarding_odds_format");
+      await refreshProfile();
     } catch (err) {
       console.error("Failed to save onboarding:", err);
       localStorage.setItem("sentinel_onboarding_complete", "true");
     }
-  }, []);
+  }, [refreshProfile]);
 
   useEffect(() => {
     if (isAuthenticated) {
