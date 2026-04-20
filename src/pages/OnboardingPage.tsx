@@ -265,21 +265,24 @@ function ScreenHero({ onNext }: { onNext: () => void }) {
             <div className="text-[11px] text-white mt-0.5 font-semibold">OVER 32.5 Points</div>
           </div>
           <div className="flex flex-col items-end gap-0.5">
-            <span className="px-1.5 py-0.5 rounded bg-[#00FF6A]/15 text-[#00FF6A] text-[8px] font-black tracking-wider">HIGH CONF</span>
-            <span className="text-[#00FF6A] text-sm font-extrabold leading-none">64%</span>
-            <span className="text-[#00FF6A] text-[9px] font-bold">+EV: 7.2%</span>
+            <span className="px-1.5 py-0.5 rounded bg-nba-green/15 text-nba-green text-[8px] font-bold uppercase tracking-wider">HIGH CONF</span>
+            <span className="text-nba-green text-[16px] font-extrabold tabular-nums leading-none">64%</span>
+            <span className="text-[8px] text-muted-foreground/55 uppercase tracking-wider">Confidence</span>
+            <span className="text-[11px] font-extrabold tabular-nums text-nba-green mt-0.5">
+              <span className="text-muted-foreground/55 font-bold">+EV:</span> 7.2%
+            </span>
           </div>
         </div>
 
         {/* Stats row */}
-        <div className="mt-4 pt-3 border-t border-[#2A2A2A] flex items-center justify-between">
+        <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between">
           <div>
-            <div className="text-[9px] tracking-wider text-white/50">YTD ROI</div>
-            <div className="text-lg font-extrabold text-[#00FF6A] tabular-nums">+18.47%</div>
+            <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">YTD ROI</div>
+            <div className="text-base font-black text-nba-green tabular-nums">+18.47%</div>
           </div>
           <div>
-            <div className="text-[9px] tracking-wider text-white/50">WIN RATE</div>
-            <div className="text-lg font-extrabold text-white tabular-nums">58.3%</div>
+            <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Win Rate</div>
+            <div className="text-base font-black text-foreground tabular-nums">58.3%</div>
           </div>
           <Sparkline className="w-14 h-10" />
         </div>
