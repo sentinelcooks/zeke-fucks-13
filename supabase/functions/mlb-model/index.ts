@@ -621,7 +621,7 @@ Deno.serve(async (req) => {
     // ─── POST /analyze — Full 20-factor analysis ───
     if (path === "analyze" && req.method === "POST") {
       const body = await req.json();
-      const { game_id, bet_type = "moneyline", team1_id, team2_id, over_under, player_name, prop_type, line } = body;
+      const { game_id, bet_type = "moneyline", team1_id, team2_id, over_under, player_name, prop_type, line, team1_is_home } = body;
       
       if (!team1_id || !team2_id) return json({ error: "team1_id and team2_id are required" }, 400);
       if (!["moneyline", "runline", "total", "player_prop"].includes(bet_type)) {
@@ -673,9 +673,11 @@ Deno.serve(async (req) => {
       const homePitcher = pitchers.home || { era: 4.50, whip: 1.30, k9: 8.0 };
       const awayPitcher = pitchers.away || { era: 4.50, whip: 1.30, k9: 8.0 };
 
-      // Determine actual home/away from game data, not input order (order-independent)
+      // Determine actual home/away from explicit orchestrator hint, then game data, last-resort default
       let team1IsHome = true;
-      if (eventData) {
+      if (typeof team1_is_home === "boolean") {
+        team1IsHome = team1_is_home;
+      } else if (eventData) {
         const comp = eventData.competitions?.[0];
         const homeComp = comp?.competitors?.find((c: any) => c.homeAway === "home");
         const awayComp = comp?.competitors?.find((c: any) => c.homeAway === "away");
