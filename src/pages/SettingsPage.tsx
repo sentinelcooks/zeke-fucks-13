@@ -257,7 +257,7 @@ const SettingsPage = () => {
                 onClick={() => handleOddsFormatChange(fmt.value as "american" | "decimal")}
                 className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 rounded-lg text-center transition-all duration-300 ${
                   oddsFormat === fmt.value
-                    ? "text-accent-foreground"
+                    ? "text-[hsl(228_30%_8%)]"
                     : "text-muted-foreground/65 hover:text-foreground/50"
                 }`}
                 style={oddsFormat === fmt.value ? {
@@ -266,7 +266,7 @@ const SettingsPage = () => {
                 } : {}}
               >
                 <span className="text-[11px] font-bold tracking-wider">{fmt.label}</span>
-                <span className={`text-[9px] font-medium ${oddsFormat === fmt.value ? "text-white/60" : "text-muted-foreground/50"}`}>{fmt.example}</span>
+                <span className={`text-[9px] font-semibold ${oddsFormat === fmt.value ? "text-[hsl(228_30%_8%)]/75" : "text-muted-foreground/50"}`}>{fmt.example}</span>
               </button>
             ))}
           </div>
