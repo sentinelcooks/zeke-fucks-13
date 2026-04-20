@@ -965,9 +965,9 @@ function analyzeTotal(team1: any, team2: any, totalLine: number, overUnder: stri
   const confidence = Math.max(15, Math.min(90, Math.round(basePct)));
 
   const verdict =
-    confidence >= 65 ? `STRONG ${overUnder.toUpperCase()}` :
-    confidence >= 55 ? `LEAN ${overUnder.toUpperCase()}` :
-    confidence <= 35 ? `LEAN ${overUnder === "over" ? "UNDER" : "OVER"}` :
+    confidence >= 60 ? `STRONG ${overUnder.toUpperCase()}` :
+    confidence >= 53 ? `LEAN ${overUnder.toUpperCase()}` :
+    confidence <= 40 ? `LEAN ${overUnder === "over" ? "UNDER" : "OVER"}` :
     "TOSS-UP";
 
   return { confidence, verdict, factors, totals, factorBreakdown: mlResult.factorBreakdown };
