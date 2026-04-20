@@ -845,7 +845,7 @@ function FeatureCard({
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.98 }}
       transition={{ type: "spring", stiffness: 380, damping: 28 }}
-      className="rounded-xl border border-border/40 bg-card/80 p-2.5 text-left flex flex-col gap-1.5 overflow-hidden focus:outline-none focus-visible:ring-1 focus-visible:ring-nba-green/50"
+      className="rounded-xl border border-border/40 bg-card/80 p-2.5 text-left flex flex-col gap-1.5 overflow-hidden focus:outline-none"
     >
       <div className="flex items-center justify-between">
         <div className="text-[11px] font-bold text-white">{title}</div>
