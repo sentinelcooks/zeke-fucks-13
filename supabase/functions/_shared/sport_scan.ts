@@ -511,9 +511,9 @@ export async function scanSport(sport: string): Promise<{
     return true;
   });
 
-  // Analyzer validation — cap per sport
-  const ANALYZER_CAP = 75;
-  const ANALYZER_CHUNK = 6;
+  // Analyzer validation — cap per sport (reduced to avoid AI Gateway rate limits)
+  const ANALYZER_CAP = 45;
+  const ANALYZER_CHUNK = 3;
   const top = prefiltered.sort((a, b) => b.edge - a.edge).slice(0, ANALYZER_CAP);
   const cache = new Map<string, any>();
   const validated: ScoredPlay[] = [];
