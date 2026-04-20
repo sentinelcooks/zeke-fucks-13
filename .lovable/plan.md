@@ -2,82 +2,67 @@
 
 ## Goal
 
-Add a **"Today's Edge History"** section to the Admin dashboard that logs every `tier="edge"` pick generated, shows running performance metrics (hit rate, wins/losses/pushes, streak), and lets admins manually update results. Persisted in the existing `daily_picks` table — no schema changes beyond adding a `push` result option.
+Stop "Today's Edge" from showing duplicates of the same pick (e.g. Josh Hart Under 0.5 Blocks appearing 3×). Verified in DB: today there are 3 identical rows for Josh Hart and 3 for Christian Braun — exact same `sport / player_name / prop_type / line / direction / pick_date / tier`.
 
-## Why this is mostly free
+## Root cause (verified)
 
-The `daily_picks` table already stores every required field (`pick_date`, `sport`, `home_team`, `away_team`, `player_name`, `prop_type`, `line`, `direction`, `hit_rate` (=confidence at pick time), `odds`, `result`, `tier`, `created_at`). The `daily-picks` edge function already persists every Today's Edge pick with `tier="edge"`, and `grade-picks` already auto-updates `result` to `"hit"`/`"miss"`. So the data is already being logged — we just need to surface it.
+Three layers all fail to enforce uniqueness:
 
-## Changes
+1. **No DB-level unique constraint.** `daily_picks` only has a `PRIMARY KEY (id)`. Nothing in Postgres prevents identical rows.
+2. **`daily-picks` edge function uses `DELETE then INSERT` (not transactional)** — `supabase/functions/daily-picks/index.ts` lines 735 + 768. If the function gets invoked twice in parallel (e.g. cron + manual `regenerate` from admin, or two browsers refreshing the home page during a regen), Run B deletes after Run A inserts, then both insert their own copies. With 3 duplicates we likely had 3 overlapping invocations.
+3. **The home carousel reads everything raw** — `src/components/home/ModernHomeLayout.tsx` line 275/308 just `.select("*")` and filters by tier, so any duplicate row in the table renders as a duplicate card.
 
-### 1. `supabase/functions/admin-onboarding/index.ts` — add 2 actions
-Extend the existing admin endpoint (already password-gated by `ADMIN_SECRET_PASSWORD`):
+The in-function dedupe at line 680–686 (keyed by `sport|player|prop_type`) only protects within a single run; it can't protect against parallel runs.
 
-- **`list_edge_history`** — accepts optional `{ start_date, end_date, sport }` filters. Returns all `daily_picks` rows where `tier = 'edge'`, ordered by `pick_date` desc, plus an aggregate block:
-  ```
-  { picks: [...], stats: { total, resolved, wins, losses, pushes, pending,
-    hit_rate, current_streak: { type: 'W'|'L', count } } }
-  ```
-  Streak computed from resolved picks in chronological order (`hit`→W, `miss`→L, `push` ignored).
+## Fix (defense in depth)
 
-- **`update_edge_result`** — accepts `{ pick_id, result }` where `result ∈ {"hit","miss","push","pending"}`. Updates the row's `result` column. Used by the manual override UI.
+### 1. DB migration — add unique index
+Add a partial unique index on the natural identity of a pick so the database itself rejects duplicates:
 
-### 2. `src/pages/AdminPage.tsx` — add new tab
-- Add a third tab next to the existing **Keys** and **Onboarding** tabs: **"Edge History"** (icon: `History` from lucide-react).
-- Tab content layout:
-
-```text
-┌─────────────────────────────────────────────────────────┐
-│  HIT RATE   TOTAL   W / L / P   PENDING   STREAK        │
-│   62.5%      48      30/18/0      6        🔥 W4        │
-└─────────────────────────────────────────────────────────┘
-
-[Date range: ▾ Today | 7d | 30d | All | Custom ]   [Sport ▾]
-
-┌──────────────────────────────────────────────────────────┐
-│ Date       Sport  Matchup           Pick           Conf  │
-│                                     Line   Odds   Result │
-├──────────────────────────────────────────────────────────┤
-│ Apr 19     NBA   LAL @ GSW          LeBron O 24.5 67%    │
-│                                     -110          [W][L][P][↺] │
-└──────────────────────────────────────────────────────────┘
+```sql
+CREATE UNIQUE INDEX IF NOT EXISTS daily_picks_unique_per_day
+ON public.daily_picks (
+  pick_date, sport, tier,
+  COALESCE(player_name,''),
+  COALESCE(prop_type,''),
+  COALESCE(direction,''),
+  COALESCE(line, -9999)
+);
 ```
+Then de-dupe existing rows (keep oldest `id` per group) before creating the index, in the same migration.
 
-- **Stat cards row** at top: large number for **Hit Rate %** (green if ≥55%, yellow 50-54%, red <50%), then small tiles for Total, Wins, Losses, Pushes, Pending, and a streak chip (🔥 W4 in green for win streak ≥3, ❄️ L3 in red for loss streak).
-- **Date range filter**: 4 quick presets (Today / 7d / 30d / All) + a custom range using shadcn `DatePicker` (two `Popover`+`Calendar` with `pointer-events-auto`).
-- **Sport filter**: dropdown with `All / NBA / MLB / NHL / UFC`.
-- **Table row**: shows `pick_date`, sport pill (reuses `SPORT_COLORS`), matchup (`away_team @ home_team` for moneyline, or `player_name (team vs opponent)` for props), pick (`prop_type direction line` or `bet_type team`), confidence %, odds, and result badge:
-  - `hit` → green ✓ Win
-  - `miss` → red ✗ Loss
-  - `push` → gray Push
-  - `pending` → yellow Pending
-- Each row has a small inline action menu: **W / L / P / Reset** buttons that call `update_edge_result`. Single click → optimistic update + reload stats.
-- Loading + empty states; client-side filter applied after fetch (server returns all, frontend re-filters on date preset change without refetch unless custom range crosses fetched window).
+### 2. `supabase/functions/daily-picks/index.ts`
+- Replace the `INSERT` at line 768 with `upsert(rows, { onConflict: 'pick_date,sport,tier,player_name,prop_type,direction,line', ignoreDuplicates: true })`. With the new unique index, any concurrent run becomes a no-op for already-persisted rows instead of a duplicate.
+- Keep the existing `DELETE` at line 735 (still wipes stale rows from earlier runs of the day) but wrap the delete+upsert sequence behind a simple in-process guard: store a row in a tiny `daily_picks_runs(date PRIMARY KEY, started_at)` table with `INSERT ... ON CONFLICT DO NOTHING` at the start of the function — if the insert returns no row, another run is already in flight and we exit early.
 
-### 3. No DB migration needed
-- `result` column is `text` with no CHECK constraint — `"push"` is already storable.
-- `tier="edge"` already populated by `daily-picks`.
-- RLS on `daily_picks` allows service role full access — the edge function uses service key, so reads + updates work without policy changes.
+### 3. `src/components/home/ModernHomeLayout.tsx` (defensive client dedupe)
+After line 289 (`allToday = …`), collapse to one entry per natural key so any pre-existing duplicate rows still in the DB render once:
+
+```ts
+const seen = new Set<string>();
+const dedupedToday = allToday.filter(p => {
+  const k = `${p.sport}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}|${p.tier}`;
+  if (seen.has(k)) return false;
+  seen.add(k);
+  return true;
+});
+```
+Use `dedupedToday` for the subsequent `edgeTier`/`dailyTier` split.
 
 ## Files changed
 
-- `supabase/functions/admin-onboarding/index.ts` — add `list_edge_history` and `update_edge_result` actions.
-- `src/pages/AdminPage.tsx` — add **Edge History** tab with stats header, date+sport filters, results table, inline result-update buttons.
+- New migration: add unique index + de-dupe existing rows + create `daily_picks_runs` lock table.
+- `supabase/functions/daily-picks/index.ts` — switch insert→upsert, add run-lock guard.
+- `src/components/home/ModernHomeLayout.tsx` — client-side dedupe before rendering carousel.
 
 ## Non-goals
 
-- No schema changes, no new tables.
-- No backfill (history starts from whatever's already in `daily_picks` with `tier='edge'`).
-- No changes to `daily-picks`, `grade-picks`, or the user-facing Today's Edge carousel.
-- No CSV export (can be added later).
+- No changes to the scoring model, tier thresholds, grade-picks, or admin Edge History tab.
+- No backfill of yesterday's data (we'll just dedupe today and forward).
 
 ## Verification
 
-1. Authenticate to `/dashboard/admin` → see new **Edge History** tab.
-2. Switch to it: stats header shows correct totals; table lists every `daily_picks` row with `tier='edge'` newest first.
-3. Apply **7d** preset → table + stats narrow to the last 7 days; switch to **All** → returns full set.
-4. Apply **Sport: NBA** filter → only NBA edge picks shown; stats recompute.
-5. Click **W** on a `pending` row → row instantly shows green Win, hit rate + wins increment, streak updates. Refresh page → change persisted.
-6. Click **Reset** on a resolved row → reverts to Pending, stats recompute.
-7. Pick a custom date range covering yesterday → confirm yesterday's `daily_picks` rows appear with whatever result `grade-picks` assigned.
+1. Open Home → Today's Edge: Josh Hart Under 0.5 Blocks appears **once**, Christian Braun Under 0.5 Blocks appears **once** (immediate fix from client dedupe).
+2. Trigger `daily-picks` regen twice in quick succession from the admin tab → DB still has exactly one row per natural key (verified via `SELECT pick_date, player_name, prop_type, line, direction, COUNT(*) FROM daily_picks WHERE pick_date = CURRENT_DATE GROUP BY 1,2,3,4,5 HAVING COUNT(*) > 1` returning zero rows).
+3. Edge History tab in Admin: counts and hit rate now reflect deduped reality, not inflated by triplicates.
 
