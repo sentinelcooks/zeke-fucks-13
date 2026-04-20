@@ -367,6 +367,9 @@ function ScreenHero({ onNext }: { onNext: () => void }) {
    Screen 2 — Value Prop
    ─────────────────────────────────────────────── */
 function ScreenValue({ onNext }: { onNext: () => void }) {
+  const [activeTab, setActiveTab] = useState<"Dashboard" | "Picks" | "Tracker" | "Parlay">("Dashboard");
+  const reduce = useReducedMotion();
+  const tabT = { duration: reduce ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] as const };
   return (
     <SectionContainer>
       <ProgressDots current={2} total={5} />
@@ -391,62 +394,179 @@ function ScreenValue({ onNext }: { onNext: () => void }) {
         </div>
         {/* Tabs */}
         <div className="flex items-center gap-1 mb-3 overflow-hidden">
-          {["Dashboard", "Picks", "Tracker", "Parlay"].map((t, i) => (
-            <span
-              key={t}
-              className={`px-2 py-1 rounded-full text-[9px] font-bold whitespace-nowrap ${
-                i === 0 ? "bg-[#00FF6A] text-black" : "text-white/50"
-              }`}
+          {(["Dashboard", "Picks", "Tracker", "Parlay"] as const).map((t) => {
+            const active = activeTab === t;
+            return (
+              <motion.button
+                key={t}
+                onClick={() => setActiveTab(t)}
+                whileTap={{ scale: 0.96 }}
+                aria-pressed={active}
+                className={`px-2 py-1 rounded-full text-[9px] font-bold whitespace-nowrap transition-colors ${
+                  active ? "bg-[#00FF6A] text-black" : "text-white/50 hover:text-white/80"
+                }`}
+              >
+                {t}
+              </motion.button>
+            );
+          })}
+        </div>
+
+        {/* Tab body */}
+        <div className="min-h-[260px]">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={tabT}
             >
-              {t}
-            </span>
-          ))}
-        </div>
+              {activeTab === "Dashboard" && (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[9px] font-black tracking-wider text-white/60">TODAY'S TOP PICKS</span>
+                    <span className="text-[9px] font-semibold text-[#00FF6A]">View All</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {SCREEN2_PICKS.map((p) => (
+                      <div key={p.name} className="flex items-center gap-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] px-2 py-1.5">
+                        <img src={p.img} alt={p.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0 bg-[#1a1a1a]" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[11px] font-bold text-white truncate">{p.name}</div>
+                          <div className="text-[9px] text-white/50">{p.pick}</div>
+                        </div>
+                        <span className="text-[#00FF6A] text-xs font-extrabold tabular-nums">{p.conf}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-[#00FF6A]/15 text-[#00FF6A] text-[8px] font-black tracking-wider">+EV {p.ev}%</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] p-2.5 flex items-center justify-between">
+                    <div>
+                      <div className="text-[9px] tracking-wider text-white/50">YTD PERFORMANCE</div>
+                      <div className="text-lg font-extrabold text-[#00FF6A] tabular-nums">+18.47%</div>
+                    </div>
+                    <Sparkline className="w-16 h-10" />
+                  </div>
+                  <div className="mt-2 relative rounded-lg overflow-hidden border border-[#2A2A2A]">
+                    <div className="absolute inset-0 backdrop-blur-sm bg-[#0A0A0A]/80" />
+                    <div className="relative px-3 py-3 flex items-center gap-2">
+                      <Lock className="w-3.5 h-3.5 text-white/60" />
+                      <div className="flex-1">
+                        <div className="text-[10px] font-bold text-white">Advanced Projections & Line Movement</div>
+                        <div className="text-[9px] text-white/50">Upgrade to Unlock</div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
 
-        {/* Top picks header */}
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[9px] font-black tracking-wider text-white/60">TODAY'S TOP PICKS</span>
-          <span className="text-[9px] font-semibold text-[#00FF6A]">View All</span>
-        </div>
+              {activeTab === "Picks" && (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[9px] font-black tracking-wider text-white/60">FREE PICKS · TODAY</span>
+                      <span className="px-1.5 py-0.5 rounded bg-[#00FF6A]/15 text-[#00FF6A] text-[8px] font-black tracking-wider">FREE</span>
+                    </div>
+                    <span className="text-[9px] font-semibold text-[#00FF6A]">View All</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {SCREEN2_PICKS.map((p) => (
+                      <div key={p.name} className="flex items-center gap-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] px-2 py-1.5">
+                        <img src={p.img} alt={p.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0 bg-[#1a1a1a]" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[11px] font-bold text-white truncate">{p.name}</div>
+                          <div className="text-[9px] text-white/50">{p.pick}</div>
+                        </div>
+                        <span className="text-[#00FF6A] text-xs font-extrabold tabular-nums">{p.conf}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-[#00FF6A]/15 text-[#00FF6A] text-[8px] font-black tracking-wider">HIGH CONF</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] p-2.5 flex items-center justify-between">
+                    <div>
+                      <div className="text-[9px] tracking-wider text-white/50">REFRESHES DAILY · 8AM ET</div>
+                      <div className="text-[11px] font-bold text-white mt-0.5">3 free plays available</div>
+                    </div>
+                    <span className="px-2 py-1 rounded bg-[#00FF6A]/15 text-[#00FF6A] text-[9px] font-black tracking-wider">LIVE</span>
+                  </div>
+                </>
+              )}
 
-        {/* Picks rows */}
-        <div className="space-y-1.5">
-          {SCREEN2_PICKS.map((p) => (
-            <div key={p.name} className="flex items-center gap-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] px-2 py-1.5">
-              <img
-                src={p.img}
-                alt={p.name}
-                className="w-7 h-7 rounded-full object-cover flex-shrink-0 bg-[#1a1a1a]"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="text-[11px] font-bold text-white truncate">{p.name}</div>
-                <div className="text-[9px] text-white/50">{p.pick}</div>
-              </div>
-              <span className="text-[#00FF6A] text-xs font-extrabold tabular-nums">{p.conf}%</span>
-              <span className="px-1.5 py-0.5 rounded bg-[#00FF6A]/15 text-[#00FF6A] text-[8px] font-black tracking-wider">+EV {p.ev}%</span>
-            </div>
-          ))}
-        </div>
+              {activeTab === "Tracker" && (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[9px] font-black tracking-wider text-white/60">PROFIT TRACKER · 30D</span>
+                    <span className="px-1.5 py-0.5 rounded bg-[#00FF6A]/15 text-[#00FF6A] text-[9px] font-black tabular-nums">+18.0%</span>
+                  </div>
+                  <div className="rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] p-3">
+                    <div className="flex items-end justify-between mb-2">
+                      <div>
+                        <div className="text-[9px] tracking-wider text-white/50">BANKROLL</div>
+                        <div className="text-2xl font-extrabold text-[#00FF6A] tabular-nums leading-none">+$1,284</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[9px] tracking-wider text-white/50">UNITS</div>
+                        <div className="text-sm font-bold text-white tabular-nums">+12.84u</div>
+                      </div>
+                    </div>
+                    <Sparkline className="w-full h-12" />
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-1.5">
+                    {[
+                      { label: "RECORD", value: "42-18" },
+                      { label: "WIN RATE", value: "70%" },
+                      { label: "STREAK", value: "W6" },
+                    ].map((s) => (
+                      <div key={s.label} className="rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] p-2 text-center">
+                        <div className="text-[8px] tracking-wider text-white/50">{s.label}</div>
+                        <div className="text-sm font-extrabold text-white tabular-nums mt-0.5">{s.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] px-2.5 py-2 flex items-center justify-between">
+                    <span className="text-[9px] tracking-wider text-white/50">BEST SPORT</span>
+                    <span className="text-[10px] font-bold text-white">NBA · 73% Win</span>
+                  </div>
+                </>
+              )}
 
-        {/* YTD performance */}
-        <div className="mt-3 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] p-2.5 flex items-center justify-between">
-          <div>
-            <div className="text-[9px] tracking-wider text-white/50">YTD PERFORMANCE</div>
-            <div className="text-lg font-extrabold text-[#00FF6A] tabular-nums">+18.47%</div>
-          </div>
-          <Sparkline className="w-16 h-10" />
-        </div>
-
-        {/* Locked blurred area */}
-        <div className="mt-2 relative rounded-lg overflow-hidden border border-[#2A2A2A]">
-          <div className="absolute inset-0 backdrop-blur-sm bg-[#0A0A0A]/80" />
-          <div className="relative px-3 py-3 flex items-center gap-2">
-            <Lock className="w-3.5 h-3.5 text-white/60" />
-            <div className="flex-1">
-              <div className="text-[10px] font-bold text-white">Advanced Projections & Line Movement</div>
-              <div className="text-[9px] text-white/50">Upgrade to Unlock</div>
-            </div>
-          </div>
+              {activeTab === "Parlay" && (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[9px] font-black tracking-wider text-white/60">SLIP BUILDER · 3 LEGS</span>
+                    <span className="text-[9px] font-semibold text-[#00FF6A]">Edit</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {[
+                      { img: ESPN_HEADSHOTS.jaysonTatum, name: "J. Tatum", pick: "OVER 28.5 PTS", conf: 64 },
+                      { img: ESPN_HEADSHOTS.lukaDoncic, name: "L. Doncic", pick: "OVER 8.5 AST", conf: 61 },
+                      { img: ESPN_HEADSHOTS.austinMatthews, name: "A. Matthews", pick: "OVER 3.5 SOG", conf: 59 },
+                    ].map((p) => (
+                      <div key={p.name} className="flex items-center gap-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] px-2 py-1.5">
+                        <img src={p.img} alt={p.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0 bg-[#1a1a1a]" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[11px] font-bold text-white truncate">{p.name}</div>
+                          <div className="text-[9px] text-white/50">{p.pick}</div>
+                        </div>
+                        <span className="text-[#00FF6A] text-xs font-extrabold tabular-nums">{p.conf}%</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] p-2.5 flex items-center justify-between">
+                    <div>
+                      <div className="text-[9px] tracking-wider text-white/50">3-LEG PARLAY</div>
+                      <div className="text-lg font-extrabold text-[#00FF6A] tabular-nums leading-none">+650</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[9px] tracking-wider text-white/50">GRADE</div>
+                      <div className="text-base font-extrabold text-[#00FF6A] leading-none mt-0.5">A−</div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </motion.div>
 
