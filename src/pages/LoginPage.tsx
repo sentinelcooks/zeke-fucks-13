@@ -105,7 +105,7 @@ const LoginPage = () => {
   if (isAuthenticated) return null;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background bg-grid relative overflow-hidden">
+    <div className="flex min-h-screen items-center justify-center bg-background bg-grid relative overflow-hidden pt-safe pb-safe">
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-primary/10 blur-[120px] pointer-events-none" />
       <div className="absolute bottom-0 right-0 w-[400px] h-[400px] rounded-full bg-accent/8 blur-[100px] pointer-events-none" />
 

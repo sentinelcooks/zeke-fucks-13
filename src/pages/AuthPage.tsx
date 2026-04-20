@@ -185,7 +185,7 @@ const AuthPage = () => {
   const isSignup = mode === "signup";
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background relative overflow-hidden px-4 py-8">
+    <div className="flex min-h-screen items-center justify-center bg-background relative overflow-hidden px-4 py-8 pt-safe-plus-4 pb-safe">
       {/* Animated stars */}
       {STARS.map((star) => (
         <motion.div

@@ -8,6 +8,12 @@ const config: CapacitorConfig = {
     url: 'https://ff3b6bc4-afe4-4d49-8f17-a01aa6a30a64.lovableproject.com?forceHideBadge=true',
     cleartext: true,
   },
+  plugins: {
+    StatusBar: {
+      overlaysWebView: true,
+      style: 'DARK',
+    },
+  },
 };
 
 export default config;

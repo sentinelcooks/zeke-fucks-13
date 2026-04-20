@@ -194,7 +194,7 @@ export default function PaywallPage() {
   ];
 
   return (
-    <div className="relative min-h-screen w-full bg-[#0A0A0A] text-white overflow-x-hidden">
+    <div className="relative min-h-screen w-full bg-[#0A0A0A] text-white overflow-x-hidden pt-safe pb-safe">
       <style>{`
         @keyframes pulse-cta { 0%,100% { box-shadow: 0 0 0 0 rgba(0,255,106,0.22) } 50% { box-shadow: 0 0 18px 4px rgba(0,255,106,0.28) } }
         @keyframes card-pulse {
