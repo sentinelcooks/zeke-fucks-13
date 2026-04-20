@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { motion } from "framer-motion";
 
 interface StatPillProps {
@@ -16,7 +17,7 @@ const colorMap = {
   default: "text-accent",
 };
 
-export function StatPill({ label, value, subtext, color = "default", delay = 0 }: StatPillProps) {
+export const StatPill = memo(function StatPill({ label, value, subtext, color = "default", delay = 0 }: StatPillProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -31,4 +32,4 @@ export function StatPill({ label, value, subtext, color = "default", delay = 0 }
       {subtext && <span className="block text-[9px] text-muted-foreground/50 mt-0.5">{subtext}</span>}
     </motion.div>
   );
-}
+});

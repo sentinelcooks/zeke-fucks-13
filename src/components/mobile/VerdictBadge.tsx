@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { motion } from "framer-motion";
 
 interface VerdictBadgeProps {
@@ -55,7 +56,7 @@ function getVerdictTheme(v: string) {
   }
 }
 
-export function VerdictBadge({ confidence, verdict, overUnder, line, propDisplay }: VerdictBadgeProps) {
+export const VerdictBadge = memo(function VerdictBadge({ confidence, verdict, overUnder, line, propDisplay }: VerdictBadgeProps) {
   const theme = getVerdictTheme(verdict);
 
   return (
@@ -87,4 +88,4 @@ export function VerdictBadge({ confidence, verdict, overUnder, line, propDisplay
       </div>
     </motion.div>
   );
-}
+});
