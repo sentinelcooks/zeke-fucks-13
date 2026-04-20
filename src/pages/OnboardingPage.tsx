@@ -944,65 +944,112 @@ function LiveGameMini() {
 
 function AIPickMini() {
   const reduce = useReducedMotion();
-  const radius = 9;
-  const c = 2 * Math.PI * radius;
-  const pct = 64;
-  const offset = c - (pct / 100) * c;
-
+  const picks = [
+    { name: "J. Tatum", matchup: "BOS vs MIA", line: "Over 24.5 Pts", conf: 78, ev: "+7.2%" },
+    { name: "L. Doncic", matchup: "DAL vs PHX", line: "Over 8.5 Ast", conf: 72, ev: "+5.8%" },
+    { name: "S. Curry", matchup: "GSW vs LAL", line: "Over 4.5 3PM", conf: 68, ev: "+4.1%" },
+  ];
   return (
-    <div className="w-full flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <div className="relative w-6 h-6 flex-shrink-0">
-          <svg className="w-full h-full -rotate-90" viewBox="0 0 22 22">
-            <circle cx="11" cy="11" r={radius} fill="none" stroke="hsl(var(--muted) / 0.3)" strokeWidth="2" />
-            <motion.circle
-              cx="11" cy="11" r={radius}
-              fill="none"
-              stroke="hsl(var(--nba-green))"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeDasharray={c}
-              initial={{ strokeDashoffset: reduce ? offset : c }}
-              animate={{ strokeDashoffset: offset }}
-              transition={{ duration: 0.6, ease: microEase }}
-            />
-          </svg>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-[8px] font-black tabular-nums text-nba-green">{pct}</span>
-          </div>
-        </div>
-        <div className="flex flex-col leading-tight min-w-0">
-          <span className="text-[9px] font-bold text-foreground/90 truncate">J. Tatum</span>
-          <span className="text-[7px] text-muted-foreground/55">BOS vs MIA</span>
-          <span className="text-[8px] font-bold text-foreground/70 mt-0.5">Over 24.5 Pts</span>
-        </div>
-      </div>
-      <div className="border-t border-border/20 pt-1.5">
-        <span
-          className="self-start text-nba-green text-[9px] font-extrabold tabular-nums px-2 py-0.5 rounded"
-          style={{ backgroundColor: "hsl(var(--nba-green) / 0.15)" }}
-        >
-          +EV 7.2%
-        </span>
+    <div className="w-full flex flex-col gap-1.5">
+      {picks.map((p, i) => (
+        <PickRow key={p.name} pick={p} delay={reduce ? 0 : 0.05 * i} />
+      ))}
+      <div className="flex items-center justify-between pt-1.5 mt-0.5 border-t border-border/15">
+        <span className="text-[9px] uppercase tracking-wider text-muted-foreground/60">Today's Edge</span>
+        <span className="text-[9px] font-bold text-nba-green">3 of 12 picks</span>
       </div>
     </div>
   );
 }
 
+function PickRow({ pick, delay }: { pick: { name: string; matchup: string; line: string; conf: number; ev: string }; delay: number }) {
+  const reduce = useReducedMotion();
+  const radius = 9;
+  const c = 2 * Math.PI * radius;
+  const offset = c - (pick.conf / 100) * c;
+  return (
+    <motion.div
+      initial={{ opacity: reduce ? 1 : 0, y: reduce ? 0 : 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, delay, ease: microEase }}
+      className="flex items-center gap-2.5 bg-white/[0.03] rounded-md px-2.5 py-1.5"
+    >
+      <div className="relative w-7 h-7 flex-shrink-0">
+        <svg className="w-full h-full -rotate-90" viewBox="0 0 22 22">
+          <circle cx="11" cy="11" r={radius} fill="none" stroke="hsl(var(--muted) / 0.3)" strokeWidth="2.5" />
+          <motion.circle
+            cx="11" cy="11" r={radius}
+            fill="none"
+            stroke="hsl(var(--nba-green))"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeDasharray={c}
+            initial={{ strokeDashoffset: reduce ? offset : c }}
+            animate={{ strokeDashoffset: offset }}
+            transition={{ duration: 0.6, delay, ease: microEase }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-[9px] font-black tabular-nums text-nba-green">{pick.conf}</span>
+        </div>
+      </div>
+      <div className="flex flex-col leading-tight min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] font-bold text-white truncate">{pick.name}</span>
+          <span className="text-[9px] font-extrabold tabular-nums text-nba-green flex-shrink-0">{pick.ev}</span>
+        </div>
+        <span className="text-[9px] text-muted-foreground/60 truncate">{pick.matchup} · {pick.line}</span>
+      </div>
+    </motion.div>
+  );
+}
+
 function ProfitTrackerMini() {
   const reduce = useReducedMotion();
-  const points = "0,20 10,17 20,18 30,13 40,14 50,9 60,10 70,5 80,6 90,2";
-  const lastX = 90;
-  const lastY = 2;
+  // Polyline across 240x60 viewBox — left-to-right uptrend with realistic dips
+  const points = "0,48 20,44 40,46 60,38 80,40 100,32 120,30 140,22 160,26 180,16 200,18 220,10 240,6";
+  const lastX = 240;
+  const lastY = 6;
 
   return (
-    <div className="w-full flex flex-col gap-1.5">
-      <svg viewBox="0 0 92 24" className="w-full h-7 overflow-visible">
+    <div className="w-full flex flex-col gap-2.5">
+      {/* Top row: bankroll + ROI badge */}
+      <div className="flex items-end justify-between gap-2">
+        <div className="flex flex-col leading-none">
+          <span className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mb-1">Bankroll · 30D</span>
+          <span className="text-xl font-extrabold tabular-nums text-nba-green">+$1,284</span>
+        </div>
+        <div className="flex flex-col items-end gap-0.5">
+          <span className="text-[9px] uppercase tracking-wider text-muted-foreground/60">ROI</span>
+          <span
+            className="text-[11px] font-extrabold tabular-nums text-nba-green px-1.5 py-0.5 rounded"
+            style={{ backgroundColor: "hsl(var(--nba-green) / 0.15)" }}
+          >
+            +18.0%
+          </span>
+        </div>
+      </div>
+
+      {/* Sparkline with gradient fill */}
+      <svg viewBox="0 0 240 60" preserveAspectRatio="none" className="w-full h-14 overflow-visible">
+        <defs>
+          <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="hsl(var(--nba-green))" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="hsl(var(--nba-green))" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <motion.polygon
+          points={`0,60 ${points} 240,60`}
+          fill="url(#sparkFill)"
+          initial={{ opacity: reduce ? 1 : 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6, delay: reduce ? 0 : 0.3, ease: microEase }}
+        />
         <motion.polyline
           points={points}
           fill="none"
           stroke="hsl(var(--nba-green))"
-          strokeWidth="1.5"
+          strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
           initial={{ pathLength: reduce ? 1 : 0 }}
@@ -1010,20 +1057,30 @@ function ProfitTrackerMini() {
           transition={{ duration: 0.9, ease: microEase }}
         />
         <motion.circle
-          cx={lastX}
-          cy={lastY}
-          r="1.5"
+          cx={lastX} cy={lastY} r="3"
           fill="hsl(var(--nba-green))"
           initial={{ opacity: reduce ? 1 : 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: reduce ? 0 : 0.9, duration: 0.2 }}
-          style={{ filter: "drop-shadow(0 0 3px hsl(var(--nba-green)))" }}
+          style={{ filter: "drop-shadow(0 0 4px hsl(var(--nba-green)))" }}
         />
       </svg>
-      <div className="inline-block rounded px-1.5 py-0.5" style={{ backgroundColor: "hsl(var(--nba-green) / 0.06)" }}>
-        <div className="text-[13px] font-extrabold tabular-nums text-nba-green leading-none">+$1,284</div>
+
+      {/* Bottom stats grid */}
+      <div className="grid grid-cols-3 gap-2 pt-1.5 border-t border-border/15">
+        <div className="flex flex-col">
+          <span className="text-[9px] uppercase tracking-wider text-muted-foreground/55">Record</span>
+          <span className="text-[11px] font-bold text-white tabular-nums">42-18</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[9px] uppercase tracking-wider text-muted-foreground/55">Win Rate</span>
+          <span className="text-[11px] font-bold text-white tabular-nums">70%</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[9px] uppercase tracking-wider text-muted-foreground/55">Streak</span>
+          <span className="text-[11px] font-bold text-nba-green tabular-nums">W6</span>
+        </div>
       </div>
-      <div className="text-[8px] uppercase tracking-wider text-muted-foreground/55 mt-0.5">30D · ROI +18%</div>
     </div>
   );
 }
