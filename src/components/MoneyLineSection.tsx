@@ -649,6 +649,10 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
   const [showExplainer, setShowExplainer] = useState(false);
   const [showOddsSection, setShowOddsSection] = useState(true);
 
+  const [loadKey, setLoadKey] = useState(0);
+
+  const loadOdds = useCallback(() => setLoadKey((k) => k + 1), []);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -668,9 +672,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
           if (et.includes(tn) || tn.includes(et)) return true;
           if (ts && (et.includes(ts) || ts.includes(et))) return true;
           if (ta && ta.length >= 2 && et.includes(ta)) return true;
-          // Nickname suffix matching (e.g. "losangeleslakers" ends with "lakers")
           if (ts.length >= 4 && (et.endsWith(ts) || ts.endsWith(et.slice(-Math.min(et.length, 10))))) return true;
-          // Check aliases if available
           const aliases: string[] = (team as any).aliases || [];
           for (const alias of aliases) {
             const na = normalize(alias);
@@ -748,12 +750,15 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
             setAllMarketData(result);
             setIsLive(true);
           } else {
+            setAllMarketData({});
             setIsLive(false);
           }
         } else {
+          setAllMarketData({});
           setIsLive(false);
         }
       } catch {
+        setAllMarketData({});
         setIsLive(false);
       } finally {
         if (!cancelled) setLoading(false);
@@ -761,7 +766,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
     }
     load();
     return () => { cancelled = true; };
-  }, [team1.name, team2.name, oddsFormat, sport]);
+  }, [team1.name, team2.name, team1.id, team2.id, oddsFormat, sport, loadKey]);
 
   if (loading) {
     return (
