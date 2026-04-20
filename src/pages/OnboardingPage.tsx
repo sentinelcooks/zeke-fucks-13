@@ -614,30 +614,32 @@ function ScreenPersonalize({ onBack, onNext }: { onBack: () => void; onNext: () 
               </motion.button>
             );
           })}
-          {/* Other tile */}
-          <motion.button
-            type="button"
-            onClick={toggleOther}
-            whileTap={{ scale: 0.97 }}
-            className={`relative rounded-xl border p-3 transition-all ${
-              otherActive
-                ? "border-[#00FF6A] bg-[#00FF6A]/5 shadow-[0_0_18px_rgba(0,255,106,0.15)]"
-                : "border-[#2A2A2A] bg-[#141414]"
-            }`}
-          >
-            {otherActive && (
-              <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[#00FF6A] flex items-center justify-center">
-                <Check className="w-3 h-3 text-black" strokeWidth={3} />
-              </div>
-            )}
-            <div className="flex justify-center mb-2">
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-black ${otherActive ? "bg-[#00FF6A]/15 text-[#00FF6A]" : "bg-white/5 text-white/60"}`}>
-                +
-              </div>
-            </div>
-            <div className={`text-center text-sm font-bold ${otherActive ? "text-[#00FF6A]" : "text-white"}`}>Other</div>
-          </motion.button>
         </div>
+
+        {/* Other tile — full width */}
+        <motion.button
+          type="button"
+          onClick={toggleOther}
+          whileTap={{ scale: 0.98 }}
+          className={`mt-3 relative w-full rounded-xl border p-3 flex items-center gap-3 transition-all ${
+            otherActive
+              ? "border-[#00FF6A] bg-[#00FF6A]/5 shadow-[0_0_18px_rgba(0,255,106,0.15)]"
+              : "border-[#2A2A2A] bg-[#141414]"
+          }`}
+        >
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-black shrink-0 ${otherActive ? "bg-[#00FF6A]/15 text-[#00FF6A]" : "bg-white/5 text-white/60"}`}>
+            +
+          </div>
+          <div className="flex-1 text-left">
+            <div className={`text-sm font-bold ${otherActive ? "text-[#00FF6A]" : "text-white"}`}>Other</div>
+            <div className="text-[11px] text-white/50">Esports, Soccer, Tennis, and more</div>
+          </div>
+          {otherActive && (
+            <div className="w-5 h-5 rounded-full bg-[#00FF6A] flex items-center justify-center shrink-0">
+              <Check className="w-3 h-3 text-black" strokeWidth={3} />
+            </div>
+          )}
+        </motion.button>
 
         {otherActive && (
           <motion.div
