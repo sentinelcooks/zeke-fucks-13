@@ -25,10 +25,12 @@ import {
   Database,
   Zap,
   AlertTriangle,
+  History,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png";
+import { EdgeHistoryTab } from "@/components/admin/EdgeHistoryTab";
 
 interface LicenseKey {
   id: string;
@@ -91,7 +93,7 @@ const AdminPage = () => {
   const authTimeRef = useRef<number>(0);
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<"keys" | "onboarding">("keys");
+  const [activeTab, setActiveTab] = useState<"keys" | "onboarding" | "edge">("keys");
 
   // Onboarding state
   const [onboardingResponses, setOnboardingResponses] = useState<OnboardingResponse[]>([]);
@@ -370,7 +372,24 @@ const AdminPage = () => {
           >
             <Users className="w-4 h-4" /> Onboarding ({onboardingResponses.length})
           </button>
+          <button
+            onClick={() => setActiveTab("edge")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === "edge"
+                ? "bg-primary text-primary-foreground shadow-lg"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <History className="w-4 h-4" /> Edge History
+          </button>
         </div>
+
+        {/* ═══ EDGE HISTORY TAB ═══ */}
+        {activeTab === "edge" && (
+          <div className="space-y-4">
+            <EdgeHistoryTab password={password} />
+          </div>
+        )}
 
         {/* ═══ KEYS TAB ═══ */}
         {activeTab === "keys" && (
