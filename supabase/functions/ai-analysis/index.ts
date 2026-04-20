@@ -213,16 +213,40 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { type, verdict, confidence, playerOrTeam, line, propDisplay, overUnder, reasoning, factors, injuries, sport, withoutTeammatesData, overallRating, overallSummary: overallSummaryText, decision } = body;
+    const { type, verdict, confidence, playerOrTeam, line, propDisplay, overUnder, reasoning, factors, injuries, sport, withoutTeammatesData, overallRating, overallSummary: overallSummaryText, decision, team1Name, team2Name, oddsAmerican } = body;
 
     const dataPoints = (reasoning || factors || []).join("\n- ");
     const sportLower = (sport || "nba").toLowerCase();
 
+    // ── Humanize tier label so "noBet" never leaks to the LLM ──
+    const tierToHuman = (t: string): string => {
+      switch (t) {
+        case "veryHigh": return "very high conviction";
+        case "high": return "high conviction";
+        case "medium": return "medium conviction";
+        case "low": return "lean (small play)";
+        case "noBet": return "pass — line doesn't meet our confidence threshold";
+        default: return "neutral";
+      }
+    };
+
+    const passReasonToHuman = (r?: string | null): string => {
+      if (r === "toss_up") return "the matchup grades as a toss-up — neither side has a meaningful edge";
+      if (r === "negative_edge") return "the market price already implies more than our model gives this side";
+      return "the model's conviction does not clear our threshold for a sized play";
+    };
+
     // ── LOCKED PICK BLOCK — sport-agnostic, prepended to every prompt ──
+    const matchupLine = (team1Name && team2Name)
+      ? `${team1Name} vs ${team2Name}${line != null ? ` — line ${line}` : ""}${oddsAmerican != null ? ` at ${oddsAmerican > 0 ? "+" : ""}${oddsAmerican}` : ""}`
+      : (playerOrTeam || "");
+
     const lockedPickBlock = decision && decision.winning_team_name
-      ? `\n\nLOCKED PICK (DO NOT CONTRADICT — THIS IS THE FINAL DECISION):
+      ? (decision.recommended_units > 0
+          ? `\n\nLOCKED PICK (DO NOT CONTRADICT — THIS IS THE FINAL DECISION):
+- Matchup: ${matchupLine}
 - Side: ${decision.winning_team_name}
-- Conviction tier: ${decision.conviction_tier}
+- Conviction: ${tierToHuman(decision.conviction_tier)}
 - Recommended sizing: ${decision.recommended_units} units
 - Win probability: ${decision.win_probability}%
 - Edge over market: ${decision.edge ?? "n/a"}%
@@ -231,9 +255,21 @@ ABSOLUTE RULES:
 1. You MUST write rationale supporting THIS pick. Do NOT recommend the opposite side.
 2. Do NOT change the unit size. Use exactly ${decision.recommended_units} units.
 3. Your final "Verdict & Risk" section MUST explicitly say: "${decision.recommended_units} units on ${decision.winning_team_name}".
-4. If conviction is "noBet" or units = 0, recommend PASSING — do not push a side.
-5. Never reference the losing side as the recommended play.\n`
+4. Reference the specific matchup (${matchupLine}) by name — do NOT write generic copy.
+5. Never reference the losing side as the recommended play. Never use the phrase "noBet" or "noBet tier".\n`
+          : `\n\nLOCKED PICK (DO NOT CONTRADICT — THIS IS A PASS):
+- Matchup: ${matchupLine}
+- Recommendation: PASS on this line
+- Reason: ${passReasonToHuman(decision.pass_reason)}
+- Model probability: ${decision.win_probability}%${decision.edge != null ? `, edge: ${decision.edge}%` : ""}
+
+ABSOLUTE RULES:
+1. This is a PASS. Do NOT push either side. Do NOT write "0 units on [team]".
+2. In your final "Verdict & Risk" section, write a PASS recommendation that names BOTH teams (${team1Name || "team 1"} vs ${team2Name || "team 2"}) and the specific line. Use phrasing like "Passing on ${matchupLine} — [matchup-specific reason from the data points]".
+3. Never use the phrases "noBet", "noBet tier", "0 units on", or any internal model labels.
+4. Be specific to this matchup — reference team names, recent form, or injury state. Do NOT write generic template copy.\n`)
       : "";
+
 
     // Build injury context string
     let injuryContext = "";
@@ -440,7 +476,17 @@ ${formatRule}
     }
 
     const aiData = await aiResponse.json();
-    const content = aiData.choices?.[0]?.message?.content || "";
+    let content = aiData.choices?.[0]?.message?.content || "";
+
+    // ── Hard scrub: never leak internal model labels or robotic "0 units on X" copy ──
+    const passLabel = decision && decision.winning_team_name && team1Name && team2Name
+      ? `pass on ${team1Name} vs ${team2Name}`
+      : "pass on this line";
+    content = content
+      .replace(/\bnoBet tier\b/gi, "below our confidence threshold")
+      .replace(/\bnoBet\b/gi, "pass")
+      .replace(/\b0\s*units?\s+on\s+[A-Za-z .'-]+/gi, passLabel)
+      .replace(/\bstick with 0 units\b/gi, passLabel);
 
     // Parse sections using multi-format parser
     const sections = parseSections(content).slice(0, 3);

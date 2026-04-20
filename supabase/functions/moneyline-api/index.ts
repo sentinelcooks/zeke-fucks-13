@@ -15,6 +15,7 @@ interface Decision {
   conviction_tier: ConvictionTier;
   recommended_units: 0 | 0.5 | 1 | 2 | 3;
   verdict_text: string;
+  pass_reason?: "low_conviction" | "toss_up" | "negative_edge" | null;
 }
 
 function tierToUnits(tier: ConvictionTier): 0 | 0.5 | 1 | 2 | 3 {
@@ -100,8 +101,8 @@ function buildDecision(opts: {
     const total = favorWinner + favorLoser;
     const dominanceRatio = total > 0 ? favorWinner / total : 0;
 
-    if (favorWinner < 3 || dominanceRatio < 0.55) tier = "noBet";
-    else if (dominanceRatio < 0.65) tier = "low";
+    if (favorWinner < 2 || dominanceRatio < 0.50) tier = "noBet";
+    else if (dominanceRatio < 0.60) tier = "low";
     else if (dominanceRatio < 0.75) tier = "medium";
     else if (dominanceRatio < 0.90) tier = "high";
     else tier = "veryHigh";
@@ -109,10 +110,21 @@ function buildDecision(opts: {
     // Boost using edge if odds available
     if (edge != null && edge >= 8 && tier !== "noBet" && tier !== "veryHigh") {
       tier = tier === "low" ? "medium" : tier === "medium" ? "high" : "veryHigh";
+    } else if (edge != null && edge >= 4 && (tier === "noBet" || tier === "low")) {
+      // +EV upgrade — a clear edge always warrants at least a medium-sized play
+      tier = "medium";
     } else if (edge != null && edge < -3 && tier !== "noBet") {
       // Negative edge — downgrade
       tier = tier === "veryHigh" ? "high" : tier === "high" ? "medium" : tier === "medium" ? "low" : "noBet";
     }
+  }
+
+  // Determine pass_reason when units = 0
+  let pass_reason: Decision["pass_reason"] = null;
+  if (tier === "noBet") {
+    if (v === "TOSS-UP") pass_reason = "toss_up";
+    else if (edge != null && edge < 0) pass_reason = "negative_edge";
+    else pass_reason = "low_conviction";
   }
 
   return {
@@ -123,6 +135,7 @@ function buildDecision(opts: {
     conviction_tier: tier,
     recommended_units: tierToUnits(tier),
     verdict_text: verdict || "",
+    pass_reason,
   };
 }
 
@@ -818,10 +831,10 @@ function analyzeMoneyline(
   const team2Score = 100 - team1Score;
 
   const verdict =
-    team1Score >= 65 ? `STRONG ${team1.shortName}` :
-    team1Score >= 55 ? `LEAN ${team1.shortName}` :
-    team2Score >= 65 ? `STRONG ${team2.shortName}` :
-    team2Score >= 55 ? `LEAN ${team2.shortName}` :
+    team1Score >= 60 ? `STRONG ${team1.shortName}` :
+    team1Score >= 53 ? `LEAN ${team1.shortName}` :
+    team2Score >= 60 ? `STRONG ${team2.shortName}` :
+    team2Score >= 53 ? `LEAN ${team2.shortName}` :
     "TOSS-UP";
 
   return { team1_pct: team1Score, team2_pct: team2Score, verdict, factors, factorBreakdown };
@@ -891,9 +904,9 @@ function analyzeSpread(team1: any, team2: any, spreadTeam: string, spreadLine: n
   confidence = Math.max(15, Math.min(90, confidence));
 
   const verdict =
-    confidence >= 65 ? "STRONG COVER" :
-    confidence >= 55 ? "LEAN COVER" :
-    confidence <= 35 ? "FADE" :
+    confidence >= 60 ? "STRONG COVER" :
+    confidence >= 53 ? "LEAN COVER" :
+    confidence <= 40 ? "FADE" :
     "TOSS-UP";
 
   return { confidence, verdict, factors, factorBreakdown: mlResult.factorBreakdown };
@@ -952,9 +965,9 @@ function analyzeTotal(team1: any, team2: any, totalLine: number, overUnder: stri
   const confidence = Math.max(15, Math.min(90, Math.round(basePct)));
 
   const verdict =
-    confidence >= 65 ? `STRONG ${overUnder.toUpperCase()}` :
-    confidence >= 55 ? `LEAN ${overUnder.toUpperCase()}` :
-    confidence <= 35 ? `LEAN ${overUnder === "over" ? "UNDER" : "OVER"}` :
+    confidence >= 60 ? `STRONG ${overUnder.toUpperCase()}` :
+    confidence >= 53 ? `LEAN ${overUnder.toUpperCase()}` :
+    confidence <= 40 ? `LEAN ${overUnder === "over" ? "UNDER" : "OVER"}` :
     "TOSS-UP";
 
   return { confidence, verdict, factors, totals, factorBreakdown: mlResult.factorBreakdown };

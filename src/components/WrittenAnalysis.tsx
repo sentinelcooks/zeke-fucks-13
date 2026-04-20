@@ -120,12 +120,24 @@ function generateFallbackSections(data: WrittenAnalysisProps): AnalysisSection[]
 
 type Tier = "noBet" | "low" | "medium" | "high" | "veryHigh";
 
-function tierToSizing(tier: Tier): { rating: "take" | "lean" | "fade"; unitSize: string | null } {
+function unitsToLabel(u: number): string {
+  if (u <= 0) return "0 units";
+  if (u === 0.5) return "0.5 units";
+  if (u === 1) return "1 unit";
+  return `${u} units`;
+}
+
+function tierToSizing(tier: Tier, exactUnits?: number): { rating: "take" | "lean" | "fade"; unitSize: string | null } {
+  // When backend supplies exact units, use them as the single source of truth
+  if (exactUnits != null && exactUnits > 0) {
+    const rating = exactUnits >= 2 ? "take" : "lean";
+    return { rating, unitSize: unitsToLabel(exactUnits) };
+  }
   switch (tier) {
     case "veryHigh": return { rating: "take", unitSize: "3 units" };
-    case "high": return { rating: "take", unitSize: "1.5–2 units" };
+    case "high": return { rating: "take", unitSize: "2 units" };
     case "medium": return { rating: "lean", unitSize: "1 unit" };
-    case "low": return { rating: "lean", unitSize: "0.5 units max" };
+    case "low": return { rating: "lean", unitSize: "0.5 units" };
     case "noBet": default: return { rating: "fade", unitSize: null };
   }
 }
@@ -169,11 +181,20 @@ function generateOverallSummary(props: WrittenAnalysisProps): { rating: "take" |
   // ── SINGLE SOURCE OF TRUTH: if backend provided a decision, honor it. Never recompute. ──
   if (decision && decision.winning_team_name && type === "moneyline") {
     const tier = decision.conviction_tier;
-    const { rating, unitSize } = tierToSizing(tier);
+    const { rating, unitSize } = tierToSizing(tier, decision.recommended_units);
     const winner = decision.winning_team_name;
+    const t1 = props.team1Name || "Team 1";
+    const t2 = props.team2Name || "Team 2";
+    const matchup = `${t1} vs ${t2}`;
 
     if (tier === "noBet") {
-      return { rating, summary: `No bet recommended. Edge does not justify a play on ${winner}.`, unitSize: null };
+      const reason = (() => {
+        const r = (decision as any).pass_reason;
+        if (r === "toss_up") return `${matchup} grades as a toss-up — no meaningful edge for either side.`;
+        if (r === "negative_edge") return `Market price on ${winner} already implies more than our model gives (${decision.win_probability}% vs implied${decision.edge != null ? `, ${decision.edge}% edge` : ""}).`;
+        return `${matchup} doesn't clear our confidence threshold for a sized play (model: ${decision.win_probability}% on ${winner}).`;
+      })();
+      return { rating, summary: `Passing on ${matchup}. ${reason}`, unitSize: null };
     }
 
     let intro: string;
@@ -190,7 +211,8 @@ function generateOverallSummary(props: WrittenAnalysisProps): { rating: "take" |
     const { rating, unitSize } = tierToSizing(tier);
 
     if (tier === "noBet") {
-      const summary = `No bet recommended. Factors split too evenly (${favorTeam1} vs ${favorTeam2}, ${neutral} neutral) to bet with conviction.`;
+      const matchup = props.team1Name && props.team2Name ? `${props.team1Name} vs ${props.team2Name}` : pickLabel;
+      const summary = `Passing on ${matchup}. Factors split too evenly (${favorTeam1} vs ${favorTeam2}, ${neutral} neutral) to bet with conviction.`;
       return { rating, summary, unitSize: null };
     }
 
@@ -276,7 +298,7 @@ function generateOverallSummary(props: WrittenAnalysisProps): { rating: "take" |
   const signalText = signals.length > 0 ? " " + signals.slice(0, 4).join(". ") + "." : "";
 
   if (tier === "noBet") {
-    return { rating, summary: `No bet recommended. The data doesn't strongly support ${pickLabel}.${signalText}`, unitSize: null };
+    return { rating, summary: `Passing on ${pickLabel}. The data doesn't strongly support this play.${signalText}`, unitSize: null };
   }
 
   let summaryIntro: string;
@@ -367,6 +389,8 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
             overallRating: overallSummary.rating,
             overallSummary: overallSummary.summary,
             decision: props.decision || null,
+            team1Name: props.team1Name,
+            team2Name: props.team2Name,
           },
         });
 
