@@ -933,13 +933,29 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
           borderRadius: 20,
           padding: 16,
         }}>
-          <div className="flex items-center gap-1.5 mb-2">
-            <Zap className="w-3.5 h-3.5" style={{ color: 'hsl(142 100% 50%)' }} />
-            <p className="text-[10px] tracking-[0.15em] uppercase font-bold" style={{ color: 'hsl(142 100% 50%)' }}>AI Daily Tip</p>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5" style={{ color: 'hsl(142 100% 50%)' }} />
+              <p className="text-[10px] tracking-[0.15em] uppercase font-bold" style={{ color: 'hsl(142 100% 50%)' }}>AI Daily Tip</p>
+            </div>
+            {rotatingTip?.focus_area && (
+              <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full" style={{
+                background: 'hsl(142 100% 50% / 0.12)',
+                color: 'hsl(142 100% 50%)',
+                border: '1px solid hsl(142 100% 50% / 0.25)',
+              }}>{rotatingTip.focus_area}</span>
+            )}
           </div>
-          <p style={{ fontSize: 12, color: 'hsl(250 20% 62%)', lineHeight: 1.55 }}>
-            Prime-time props with 65%+ hit rates are today's strongest edges. Check the Parlay Builder for correlated plays.
-          </p>
+          {rotatingTipLoading ? (
+            <div className="space-y-1.5">
+              <div className="h-2.5 rounded animate-pulse" style={{ background: 'hsl(250 18% 18%)', width: '95%' }} />
+              <div className="h-2.5 rounded animate-pulse" style={{ background: 'hsl(250 18% 18%)', width: '70%' }} />
+            </div>
+          ) : (
+            <p style={{ fontSize: 12, color: 'hsl(250 20% 62%)', lineHeight: 1.55 }}>
+              {rotatingTip?.tip ?? "Prime-time props with 65%+ hit rates are today's strongest edges. Check the Parlay Builder for correlated plays."}
+            </p>
+          )}
         </motion.div>
 
         <div className="grid grid-cols-2 gap-3">
