@@ -1,4 +1,3 @@
-import { memo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, EyeOff, FileText, Gamepad2, CreditCard, Mail, Copyright, Trash2 } from "lucide-react";
 
@@ -47,4 +46,4 @@ const AppFooter = () => {
   );
 };
 
-export default memo(AppFooter);
+export default AppFooter;

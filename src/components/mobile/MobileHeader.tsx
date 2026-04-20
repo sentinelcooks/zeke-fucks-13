@@ -1,4 +1,3 @@
-import { memo } from "react";
 import { motion } from "framer-motion";
 import sentinelLogo from "@/assets/sentinel-logo.jpg";
 
@@ -7,7 +6,7 @@ interface MobileHeaderProps {
   subtitle?: string;
 }
 
-export const MobileHeader = memo(function MobileHeader({ title }: MobileHeaderProps) {
+export function MobileHeader({ title }: MobileHeaderProps) {
   const time = new Date();
   const dateStr = time.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
@@ -62,4 +61,4 @@ export const MobileHeader = memo(function MobileHeader({ title }: MobileHeaderPr
       </div>
     </header>
   );
-});
+}

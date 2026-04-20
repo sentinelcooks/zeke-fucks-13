@@ -1,4 +1,3 @@
-import { memo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { BarChart3, Home, Calendar, Settings, DollarSign, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
@@ -29,7 +28,7 @@ const ROUTE_TAB_MAP: Record<string, string> = {
   "/dashboard/legal": "/dashboard/settings",
 };
 
-export const BottomTabBar = memo(function BottomTabBar() {
+export function BottomTabBar() {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -114,4 +113,4 @@ export const BottomTabBar = memo(function BottomTabBar() {
       </div>
     </nav>
   );
-});
+}

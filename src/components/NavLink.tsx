@@ -1,5 +1,5 @@
 import { NavLink as RouterNavLink, NavLinkProps } from "react-router-dom";
-import { forwardRef, memo } from "react";
+import { forwardRef } from "react";
 import { cn } from "@/lib/utils";
 
 interface NavLinkCompatProps extends Omit<NavLinkProps, "className"> {
@@ -25,5 +25,4 @@ const NavLink = forwardRef<HTMLAnchorElement, NavLinkCompatProps>(
 
 NavLink.displayName = "NavLink";
 
-const MemoNavLink = memo(NavLink);
-export { MemoNavLink as NavLink };
+export { NavLink };

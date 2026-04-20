@@ -6,23 +6,24 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ParlaySlipProvider } from "@/contexts/ParlaySlipContext";
+import DashboardLayout from "./pages/DashboardLayout";
+import NbaPropsPage from "./pages/NbaPropsPage";
 
-// Lazy-load every route — initial bundle only ships LandingPage + shared chunks.
-const LandingPage = lazy(() => import("./pages/LandingPage"));
-const DashboardLayout = lazy(() => import("./pages/DashboardLayout"));
-const HomePage = lazy(() => import("./pages/HomePage"));
-const NbaPropsPage = lazy(() => import("./pages/NbaPropsPage"));
-const UfcPage = lazy(() => import("./pages/UfcPage"));
-const ParlayPage = lazy(() => import("./pages/ParlayPage"));
-const ProfitTrackerPage = lazy(() => import("./pages/ProfitTrackerPage"));
-const MoneyLinePage = lazy(() => import("./pages/MoneyLinePage"));
-const FreePicksPage = lazy(() => import("./pages/FreePicksPage"));
-const FreePropsPage = lazy(() => import("./pages/FreePropsPage"));
-const GamesPage = lazy(() => import("./pages/GamesPage"));
-const SettingsPage = lazy(() => import("./pages/SettingsPage"));
-const ArbitragePage = lazy(() => import("./pages/ArbitragePage"));
-const LegalPage = lazy(() => import("./pages/LegalPage"));
-const NotFound = lazy(() => import("./pages/NotFound"));
+import UfcPage from "./pages/UfcPage";
+import ParlayPage from "./pages/ParlayPage";
+import ProfitTrackerPage from "./pages/ProfitTrackerPage";
+import MoneyLinePage from "./pages/MoneyLinePage";
+import FreePicksPage from "./pages/FreePicksPage";
+import FreePropsPage from "./pages/FreePropsPage";
+import HomePage from "./pages/HomePage";
+import LegalPage from "./pages/LegalPage";
+
+import GamesPage from "./pages/GamesPage";
+import SettingsPage from "./pages/SettingsPage";
+import ArbitragePage from "./pages/ArbitragePage";
+
+import NotFound from "./pages/NotFound";
+import LandingPage from "./pages/LandingPage";
 
 const AuthPage = lazy(() => import("./pages/AuthPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
@@ -30,16 +31,7 @@ const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
 const PaywallPage = lazy(() => import("./pages/PaywallPage"));
 const WelcomeConfirmationPage = lazy(() => import("./pages/WelcomeConfirmationPage"));
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      staleTime: 30_000,
-      gcTime: 5 * 60_000,
-      retry: 1,
-    },
-  },
-});
+const queryClient = new QueryClient();
 
 function LoadingSpinner() {
   return (
@@ -84,49 +76,64 @@ function OnboardingGuard({ children }: { children: React.ReactNode }) {
 
 function AppRoutes() {
   return (
-    <Suspense fallback={<LoadingSpinner />}>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/auth" element={<AuthPage />} />
-        <Route path="/admin" element={<AdminPage />} />
-        <Route
-          path="/onboarding"
-          element={
-            <OnboardingGuard>
-              <OnboardingPage />
-            </OnboardingGuard>
-          }
-        />
-        <Route path="/paywall" element={<PaywallPage />} />
-        <Route path="/legal" element={<LegalPage />} />
-        <Route path="/welcome" element={<WelcomeConfirmationPage />} />
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Navigate to="home" replace />} />
-          <Route path="home" element={<HomePage />} />
-          <Route path="picks" element={<FreePicksPage />} />
-          <Route path="free-props" element={<FreePropsPage />} />
-          <Route path="analyze" element={<NbaPropsPage />} />
-          <Route path="moneyline" element={<MoneyLinePage />} />
-          <Route path="ufc" element={<UfcPage />} />
-          <Route path="parlay" element={<ParlayPage />} />
-          <Route path="tracker" element={<ProfitTrackerPage />} />
-          <Route path="games" element={<GamesPage />} />
-          <Route path="arbitrage" element={<ArbitragePage />} />
-          <Route path="mlb-predictions" element={<Navigate to="/dashboard/moneyline" replace />} />
-          <Route path="trends" element={<Navigate to="/dashboard/free-picks" replace />} />
-          <Route path="settings" element={<SettingsPage />} />
-          <Route path="legal" element={<LegalPage />} />
-        </Route>
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </Suspense>
+    <Routes>
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/auth" element={
+        <Suspense fallback={<LoadingSpinner />}>
+          <AuthPage />
+        </Suspense>
+      } />
+      <Route path="/admin" element={
+        <Suspense fallback={<LoadingSpinner />}>
+          <AdminPage />
+        </Suspense>
+      } />
+      <Route path="/onboarding" element={
+        <Suspense fallback={<LoadingSpinner />}>
+          <OnboardingGuard>
+            <OnboardingPage />
+          </OnboardingGuard>
+        </Suspense>
+      } />
+      <Route path="/paywall" element={
+        <Suspense fallback={<LoadingSpinner />}>
+          <PaywallPage />
+        </Suspense>
+      } />
+      <Route path="/legal" element={
+        <Suspense fallback={<LoadingSpinner />}>
+          <LegalPage />
+        </Suspense>
+      } />
+      <Route path="/welcome" element={
+        <Suspense fallback={<LoadingSpinner />}>
+          <WelcomeConfirmationPage />
+        </Suspense>
+      } />
+      <Route path="/dashboard" element={
+        <ProtectedRoute>
+          <DashboardLayout />
+        </ProtectedRoute>
+      }>
+        <Route index element={<Navigate to="home" replace />} />
+        <Route path="home" element={<HomePage />} />
+        <Route path="picks" element={<FreePicksPage />} />
+        <Route path="free-props" element={<FreePropsPage />} />
+        <Route path="analyze" element={<NbaPropsPage />} />
+        <Route path="moneyline" element={<MoneyLinePage />} />
+        <Route path="ufc" element={<UfcPage />} />
+        <Route path="parlay" element={<ParlayPage />} />
+        <Route path="tracker" element={<ProfitTrackerPage />} />
+        
+        <Route path="games" element={<GamesPage />} />
+        <Route path="arbitrage" element={<ArbitragePage />} />
+        <Route path="mlb-predictions" element={<Navigate to="/dashboard/moneyline" replace />} />
+        <Route path="trends" element={<Navigate to="/dashboard/free-picks" replace />} />
+        <Route path="settings" element={<SettingsPage />} />
+        <Route path="legal" element={<LegalPage />} />
+      </Route>
+      <Route path="*" element={<NotFound />} />
+    </Routes>
   );
 }
 

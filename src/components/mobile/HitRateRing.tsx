@@ -1,4 +1,3 @@
-import { memo } from "react";
 import { motion } from "framer-motion";
 
 interface HitRateRingProps {
@@ -23,7 +22,7 @@ function getTextColor(rate: number): string {
   return "text-nba-red";
 }
 
-export const HitRateRing = memo(function HitRateRing({ rate, hits, total, label, delay = 0 }: HitRateRingProps) {
+export function HitRateRing({ rate, hits, total, label, delay = 0 }: HitRateRingProps) {
   const radius = 26;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (rate / 100) * circumference;
@@ -59,4 +58,4 @@ export const HitRateRing = memo(function HitRateRing({ rate, hits, total, label,
       <span className="text-[9px] text-muted-foreground">{hits}/{total}</span>
     </motion.div>
   );
-});
+}
