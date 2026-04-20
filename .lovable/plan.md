@@ -2,49 +2,59 @@
 
 ## Goal
 
-Two targeted fixes to the onboarding feature preview cards: (1) loosen the Live Games card's internal spacing so it doesn't feel cramped, and (2) replace the generic "OVER 32.5 PTS" in AI Picks with a realistic player pick example that mirrors what users actually see in the app.
+Fix the Live Games onboarding preview card's cramped internal spacing. Only this card is touched.
+
+## Root cause
+
+The `FeatureCard` content slot (line 854) uses `min-h-[56px] flex items-center`, which vertically centers and compresses the three-row `LiveGameMini` layout. Combined with tight gaps inside `LiveGameMini`, everything feels mashed together.
 
 ## Changes — `src/pages/OnboardingPage.tsx`
 
-### LiveGameMini (~lines 870–894)
+### Line 854 — FeatureCard content slot
 
-- Increase outer column gap from `gap-1.5` to `gap-2`
-- Add `py-0.5` to the LIVE header row for vertical breathing room
-- Increase team matchup pill padding from `px-1.5 py-1` to `px-2 py-1.5` so scores aren't pressed against edges
-- Add `gap-1.5` between team name and score column (currently everything is `justify-between` in a tight row — add slight padding around the score)
-- Bump the sports sub-label from `mt-0.5` to `mt-1` for more separation from the matchup
+Change the content wrapper from vertically centering to top-aligning, so taller content like Live Games isn't squeezed:
 
-### AIPickMini (~lines 897–940)
-
-Replace the generic "OVER 32.5 / PTS" with a realistic player prop example that matches what the app actually shows:
-
-- Add a player name row above the pick line: `"J. Tatum"` in `text-[9px] font-bold text-white/90` — mirrors how picks appear in the Today's Edge carousel
-- Change pick label from `"OVER 32.5"` to `"Over 24.5 Pts"` — a realistic points prop with the stat type inline (matches the analyzer screen format)
-- Add a subtle team/matchup context line: `"BOS vs MIA"` in `text-[7px] text-muted-foreground/55` below the player name
-- Keep the confidence ring (64%) and `+EV 7.2%` chip unchanged — those are already correct
-
-The updated layout becomes:
 ```
-[Ring 64]  J. Tatum
-           BOS vs MIA
-           Over 24.5 Pts
-─────────────────────
-+EV 7.2%
+// Before
+<div className="min-h-[56px] flex items-center">{children}</div>
+
+// After
+<div className="min-h-[56px] flex items-start w-full">{children}</div>
+```
+
+### Lines 871–893 — LiveGameMini component
+
+1. **Outer gap**: increase from `gap-2` to `gap-2.5` (line 871)
+2. **LIVE header row**: increase vertical padding from `py-0.5` to `py-1` (line 872)
+3. **Score pill**: increase padding from `px-2 py-1.5` to `px-2.5 py-2` and add `gap-2` for internal spacing between team names and score (line 881)
+4. **Sport sub-label**: increase top margin from `mt-1` to `mt-1.5` (line 892)
+
+Updated LiveGameMini JSX:
+
+```tsx
+<div className="w-full flex flex-col gap-2.5">
+  <div className="flex items-center gap-1 py-1">
+    {/* LIVE dot + label + clock — unchanged content */}
+  </div>
+  <div className="flex items-center justify-between bg-white/[0.03] rounded-md px-2.5 py-2 gap-2">
+    {/* team dots, abbreviations, score — unchanged content */}
+  </div>
+  <div className="text-[7px] text-muted-foreground/55 mt-1.5">NBA · MLB · NHL</div>
+</div>
 ```
 
 ## Files to update
 
-- `src/pages/OnboardingPage.tsx` — `LiveGameMini` and `AIPickMini` subcomponents only
+- `src/pages/OnboardingPage.tsx` — lines 854, 871, 872, 881, 892
 
 ## Non-goals
 
-- No changes to ProfitTrackerMini, FeatureCard wrapper, grid, or any other part of the page
-- No animation or interaction changes
-- No new files or dependencies
+- No changes to AIPickMini, ProfitTrackerMini, FeatureCard structure, grid, or any other component
+- No animation or color changes
 
 ## Verification
 
-1. Open `/onboarding` at 390px — Live Games card should have visible breathing room between the LIVE row, matchup pill, and sports label
-2. AI Picks card should read as a real player prop pick (player name, matchup, specific stat line) not a generic "OVER 32.5"
-3. All animations still work — clock ticks, ring fills, sparkline draws
+1. Open `/onboarding` at 390px — Live Games card should have visible breathing room between LIVE row, score pill, and sport label
+2. AI Picks and Profit Tracker cards should look identical to before
+3. Clock still ticks, LIVE dot still pulses
 
