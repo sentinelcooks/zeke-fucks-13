@@ -851,7 +851,7 @@ function FeatureCard({
         <div className="text-[11px] font-bold text-white">{title}</div>
         <Icon className="w-3.5 h-3.5 opacity-50" style={{ color: "hsl(var(--nba-green) / 0.7)" }} />
       </div>
-      <div className="min-h-[56px] flex items-center">{children}</div>
+      <div className="min-h-[56px] flex items-start w-full">{children}</div>
     </motion.button>
   );
 }
@@ -868,8 +868,8 @@ function LiveGameMini() {
   const s = (seconds % 60).toString().padStart(2, "0");
 
   return (
-    <div className="w-full flex flex-col gap-2">
-      <div className="flex items-center gap-1 py-0.5">
+    <div className="w-full flex flex-col gap-2.5">
+      <div className="flex items-center gap-1 py-1">
         <motion.span
           className="w-1.5 h-1.5 rounded-full bg-nba-red"
           animate={reduce ? undefined : { opacity: [1, 0.3, 1] }}
@@ -878,7 +878,7 @@ function LiveGameMini() {
         <span className="text-[8px] font-black uppercase tracking-wider text-nba-red">LIVE</span>
         <span className="ml-auto text-[8px] text-muted-foreground/55 tabular-nums">Q4 · {m}:{s}</span>
       </div>
-      <div className="flex items-center justify-between bg-white/[0.03] rounded-md px-2 py-1.5">
+      <div className="flex items-center justify-between bg-white/[0.03] rounded-md px-2.5 py-2 gap-2">
         <div className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-[#FDB927]" />
           <span className="text-[10px] font-bold text-white/90">LAL</span>
@@ -889,7 +889,7 @@ function LiveGameMini() {
           <span className="w-1.5 h-1.5 rounded-full bg-[#007A33]" />
         </div>
       </div>
-      <div className="text-[7px] text-muted-foreground/55 mt-1">NBA · MLB · NHL</div>
+      <div className="text-[7px] text-muted-foreground/55 mt-1.5">NBA · MLB · NHL</div>
     </div>
   );
 }
