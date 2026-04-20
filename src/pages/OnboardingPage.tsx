@@ -902,15 +902,20 @@ function LiveGameMini() {
         <span className="text-[8px] font-black uppercase tracking-wider text-nba-red">LIVE</span>
         <span className="ml-auto text-[8px] text-muted-foreground/55 tabular-nums">Q4 · {m}:{s}</span>
       </div>
-      <div className="flex items-center justify-between bg-white/[0.03] rounded-md px-2.5 py-2 gap-2">
-        <div className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#FDB927]" />
-          <span className="text-[10px] font-bold text-white/90">LAL</span>
+      <div className="bg-white/[0.03] rounded-md px-2.5 py-2 flex flex-col gap-1.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#FDB927]" />
+            <span className="text-[11px] font-bold text-white/90">LAL</span>
+          </div>
+          <span className="text-[13px] font-extrabold tabular-nums text-white/90">108</span>
         </div>
-        <span className="text-[12px] font-extrabold tabular-nums text-white">108–112</span>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-bold text-white/90">BOS</span>
-          <span className="w-1.5 h-1.5 rounded-full bg-[#007A33]" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#007A33]" />
+            <span className="text-[11px] font-bold text-white">BOS</span>
+          </div>
+          <span className="text-[13px] font-extrabold tabular-nums text-nba-green">112</span>
         </div>
       </div>
       <div className="text-[7px] text-muted-foreground/55 mt-1.5">NBA · MLB · NHL</div>
