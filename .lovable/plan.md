@@ -2,54 +2,74 @@
 
 ## Goal
 
-Fix the Lines tab in the Analyze section so live odds reliably appear next to the moneyline / spread / total for any team a user searches — and when odds genuinely can't be fetched, show a clear "odds unavailable" state instead of a blank UI.
+Make the Lines analyzer **completely position-agnostic** for NBA, MLB, and NHL: putting Lakers in slot 1 vs slot 2 must produce identical confidence, identical verdict, and identical winning team. Today, three real bugs leak the slot order into the model output.
 
-## Root cause (verified against backend + frontend)
+## Root cause (verified per sport)
 
-After analyzing a matchup in the Lines tab (`MoneyLineSection`), the UI is supposed to show two odds blocks:
+### 1. NBA generic model — `supabase/functions/moneyline-api/index.ts`
+- **Factor 6 (line 709–714) "Home/Away Splits"** always reads `extras.splits1.home` and `extras.splits2.away` — i.e. it assumes **team1 is home, team2 is away**, regardless of the real venue. Swapping slots flips this from "Lakers home vs Warriors road" to "Warriors home vs Lakers road" and changes the score.
+- **Factor 20 (line 816–821) "Home PPG vs Away PPG"** has the identical bias — `splits1.home.ppg` vs `splits2.away.ppg`.
+- The function already has `team1HomeAway`/`team2HomeAway` resolved in the request handler (line 1227–1228) but never passes it down.
 
-1. **"Odds & Value" card** — uses `results.odds`, computed server-side in `moneyline-api/index.ts` by `fetchOddsForMatchup` → `buildOddsPayload`.
-2. **`MoneylinePlatformOdds` panel** — fetches live odds **client-side** via `fetchNbaOdds()` → `nba-odds/events`.
+### 2. NHL model — `supabase/functions/nhl-model/index.ts`
+This model never resolves real home/away at all. Multiple hardcoded biases:
+- **Line 732–733**: `homeGoalie = goalies.home`, `awayGoalie = goalies.away` — then assigns `homeGoalie` stats to the team1 factor block and `awayGoalie` stats to the team2 factor block (lines 774–778, 801–805). If team1 is actually the road team, team1 gets credit for the home goalie's numbers — total scrambling of starter assignments.
+- **Line 790**: `home_away: scoreHomeAway(splits1.home, true)` — hardcodes team1 as home.
+- **Line 817**: `home_away: scoreHomeAway(splits2.away, false)` — hardcodes team2 as away.
+- **Line 720 + 728**: `arenaFactor` is computed from the venue but baked into a single shared score, while the home-ice advantage in `scoreHomeAway(_, true/false)` is locked to slot 1.
+- **Line 858–859**: passes `homeGoalie?.name` to `nhlInjuryAdjustments` for **team1** and `awayGoalie?.name` for **team2** — same swap bug.
+- **moneyline-api line 1335–1344** never sends `game_id` to nhl-model, so even if nhl-model tried `eventData.competitors.homeAway`, it has nothing to read. Need to pass the venue resolution forward.
 
-I confirmed the `nba-odds/events` endpoint is healthy (Cavs vs Raptors comes back with DraftKings / FanDuel / BetOnlineAG odds for h2h, spreads, totals). So the data is there — the bugs are in how it's matched, rendered, and how failures are surfaced:
+### 3. MLB model — `supabase/functions/mlb-model/index.ts`
+The model **already has** correct logic (line 676–696: `team1IsHome` flag, swaps pitcher/split assignments). But because **moneyline-api never sends `game_id`** (line 1267–1276), `eventData` is `null`, the `if (eventData)` block at line 678 is skipped, and `team1IsHome` defaults to `true` (line 677). So for any Lines-tab MLB analysis, MLB silently behaves like NHL: team1 is always home.
 
-- **Bug 1 — Card silently disappears.** `MoneyLineSection.tsx` line ~1670 wraps the entire "Odds & Value" card in `{results.odds && (...)}`. When `fetchOddsForMatchup` returns `null` (no event match — common for tip-off-imminent games or when only `us`/`us2` regions are queried), the card just vanishes. No "odds unavailable" message, no retry, nothing — exactly the "blank/broken UI" the user is reporting.
-- **Bug 2 — Backend uses fewer regions than frontend.** `fetchOddsForMatchup` (`moneyline-api` line 1045) only queries `regions=us,us2`. The client `nba-odds/events` queries all 4 regions (`us`, `us2`, `us_dfs`, `us_ex`). Result: server `results.odds` can be `null` for a matchup where the client's `MoneylinePlatformOdds` finds odds. Inconsistent. Worse, the server short-circuits with `if (!match) return null` — so a single fuzzy-match miss kills the entire Odds & Value card.
-- **Bug 3 — `MoneylinePlatformOdds` is hidden until after Analyze.** It only renders inside `{results && (...)}` (line 1745). Users who land on Lines mode and search a team see no live odds at all until they hit the Analyze button — feels like odds are "not working."
-- **Bug 4 — `useEffect` doesn't refetch on team-object identity change.** Deps are `[team1.name, team2.name, oddsFormat, sport]`. If the analyzer returns the same team name with a different casing or a refetch is needed on retry, the panel won't re-trigger. Also, no manual retry control when load fails.
-- **Bug 5 — Loading/error UX is incomplete on the "Odds & Value" card.** Zero feedback. The `MoneylinePlatformOdds` block has a loading spinner + a yellow "temporarily unavailable" alert, but the upstream card has neither.
+## Fix
 
-## Fix — 2 files
+Single principle: **resolve real home/away once in the orchestrator (already done by `resolveMatchupVenue`), pass it into every model, and use it everywhere a home/away role is referenced.** Never index by slot.
 
-### 1. `supabase/functions/moneyline-api/index.ts`
+### A. `supabase/functions/moneyline-api/index.ts`
+1. Pass the venue downstream when delegating:
+   - In the MLB delegation body (~line 1270), include `team1_is_home: venue ? venue.team1IsHome : null` and `game_date: venue?.gameDate ?? null`.
+   - Same in the NHL delegation body (~line 1338).
+2. Pass `team1HomeAway`/`team2HomeAway` into the generic NBA analyzer:
+   - Extend `analyzeMoneyline(...)` signature with an `extras.team1IsHome: boolean | null`.
+   - **Factor 6 (line 709–714)**: pick `team1Split = team1IsHome ? splits1.home : splits1.away` and `team2Split = team1IsHome ? splits2.away : splits2.home`. When `team1IsHome` is `null` (no scheduled game found), fall back to a **role-neutral** comparison: `splits1.overall.winPct` vs `splits2.overall.winPct` (compute `overall` in `computeHomeAwaySplits` if not already present, or derive from existing home+away counts inline). Update the descriptor copy to read from the chosen split.
+   - **Factor 20 (line 816–821)**: identical role-aware swap; when no venue, use combined `(home.ppg + away.ppg)/2` for each side so the comparison is symmetric.
 
-- **Widen the regions** in `fetchOddsForMatchup` (line 1045) from `regions=us,us2` to `regions=us,us2,us_dfs,us_ex` so it matches what the client + the rest of the app uses. This alone resolves the "no match" cases for matchups whose lines only post on DFS/exchange books first.
-- **Return a structured "no-data" payload** instead of `null` when matching fails: `{ market, bestLine: null, impliedProb, ev: 0, allBooks: [], unavailable: true, reason: "no_match" | "no_entries" | "fetch_failed" }`. This lets the frontend distinguish "haven't fetched yet" from "we tried, no odds exist for this matchup yet."
-- Same pattern in `buildOddsPayload`: when `entries.length === 0`, return the same structured `{ unavailable: true, reason: "no_entries", ... }` object instead of `null`.
+### B. `supabase/functions/nhl-model/index.ts`
+1. Accept `team1_is_home: boolean | null` in the request body (line 685).
+2. Use it everywhere goalie/home/away role is referenced:
+   - **Line 732–733**: `const team1Goalie = team1IsHome ? goalies.home : goalies.away;` `const team2Goalie = team1IsHome ? goalies.away : goalies.home;`. When `team1_is_home` is `null` (no game found), fall back to a symmetric league-average baseline for both: `{ savePct: 0.908, gaa: 2.90 }` for both — better to be neutral than to mis-assign.
+   - Update lines 774–778 to use `team1Goalie.*` and lines 801–805 to use `team2Goalie.*`.
+   - **Line 790**: `home_away: scoreHomeAway(team1IsHome ? splits1.home : splits1.away, !!team1IsHome)`.
+   - **Line 817**: `home_away: scoreHomeAway(team1IsHome ? splits2.away : splits2.home, !team1IsHome)`. When venue unknown, both sides get `scoreHomeAway` with a neutral baseline (e.g. pass `{wins:0, losses:0}` and `false` so the function returns 50/50 via its existing "no data" branch).
+   - **Line 858–859**: pass `team1Goalie?.name` and `team2Goalie?.name` in injury adjustments.
+3. Keep `arenaFactor` (line 720, 728) — it's a shared environmental factor and applies equally to both sides; no change needed.
 
-### 2. `src/components/MoneyLineSection.tsx`
-
-- **Render `MoneylinePlatformOdds` before analysis** when both `team1` and `team2` are selected. Move the component out of the `{results && (...)}` branch and also render it (in a lighter "preview" state with `modelProb={undefined}`) once teams are picked. So the user sees live odds the moment they pick two teams — no Analyze click required.
-- **Replace `{results.odds && (...)}` (line ~1670)** with `{results.odds ? (<OddsValueCard … />) : (<OddsUnavailableCard team1={results.team1} team2={results.team2} />)}`. The unavailable card shows the same yellow "AlertTriangle" treatment as `MoneylinePlatformOdds` with copy: *"Live odds for {team1.shortName} vs {team2.shortName} aren't posted yet. Analysis still uses our model — odds will appear once books publish them."*
-- **Honor the new `unavailable: true` flag** from `buildOddsPayload`: treat `results.odds?.unavailable === true` as the "show unavailable card" branch.
-- **Add a retry button to `MoneylinePlatformOdds`** in its existing "Live odds temporarily unavailable" state — clicking it re-runs the load function. Trivially implemented by wrapping the `useEffect` body in a `loadOdds` callback and exposing it via a refresh button.
-- **Improve `useEffect` deps** to also depend on `team1.id`/`team2.id` so a re-pick of the same team name (different objects) triggers a refetch.
-- **Loading skeleton on the Odds & Value card** while `loading === true` (mirror the existing `MoneylinePlatformOdds` spinner so both blocks feel consistent).
+### C. `supabase/functions/mlb-model/index.ts`
+1. Accept `team1_is_home: boolean | null` in the request body (line 624) so the orchestrator can supply venue when `game_id` isn't present.
+2. In the `team1IsHome` resolution block (line 676–686), prefer the explicit `team1_is_home` argument when provided; fall back to the existing `eventData` check; only default to `true` if **both** are missing (last-resort, user did pick teams that aren't on the schedule).
+3. No factor-block changes needed — the per-factor pitcher/split swap (line 693–696, 753, 772) already honors `team1IsHome`.
 
 ## Files changed
 
-- `supabase/functions/moneyline-api/index.ts` — broaden odds regions to all 4 us regions, return structured `unavailable` payload instead of `null` from `fetchOddsForMatchup` and `buildOddsPayload`.
-- `src/components/MoneyLineSection.tsx` — render `MoneylinePlatformOdds` once both teams are selected (not gated on analysis), add an "Odds Unavailable" fallback card when `results.odds` is missing or `unavailable`, add a retry button + better loading state to `MoneylinePlatformOdds`, expand `useEffect` deps for reliable refetch.
+- `supabase/functions/moneyline-api/index.ts` — pass `team1_is_home`/`game_date` into MLB and NHL delegations; thread `team1IsHome` into `analyzeMoneyline` and use it in Factor 6 and Factor 20.
+- `supabase/functions/nhl-model/index.ts` — accept `team1_is_home`, derive `team1Goalie`/`team2Goalie` from real role, fix `home_away` factor for both teams, fix injury-adjustment goalie name passing.
+- `supabase/functions/mlb-model/index.ts` — accept `team1_is_home` and prefer it over the `game_id` lookup default.
 
 ## Non-goals
 
-- No backend schema/migration. No changes to the props analyzer or the props "VS" tab. No changes to GamesPage (its odds work fine — confirmed by curl). No changes to `nba-odds/events` itself (already healthy).
+- No frontend changes (the UI already shows the verdict's `winning_team_name` from `buildDecision`, which is already symmetric).
+- No DB migration. No changes to props analysis, Trends, GamesPage, or UFC.
+- No change to NBA's symmetric factors (1–5, 7–19) — they already are order-independent.
 
 ## Verification
 
-1. Open Analyze → Lines → NBA → pick **Cleveland Cavaliers vs Toronto Raptors** (without clicking Analyze): the live odds panel should now appear immediately with DraftKings / FanDuel / etc. odds for moneyline, spread, total.
-2. Click **Analyze Matchup** → confirm the "Odds & Value" card shows best book + EV, AND the platform odds panel still displays.
-3. Pick two teams that don't have a scheduled game tonight (e.g. two random teams) → confirm both blocks show the new "Live odds for X vs Y aren't posted yet" yellow alert instead of disappearing.
-4. Repeat for **MLB** and **NHL** in Lines mode → live odds render the same way.
-5. In `MoneylinePlatformOdds`'s unavailable state, click the new **Retry** button → confirm it re-fetches.
+1. NBA: analyze **Lakers (slot 1) vs Warriors (slot 2)** moneyline, then swap to **Warriors (slot 1) vs Lakers (slot 2)**. Confirm:
+   - `decision.win_probability` is identical (within rounding).
+   - `decision.winning_team_name` names the same franchise.
+   - Factor 6 "Home/Away Splits" reads "{actual home team} at home" in both runs.
+2. NHL: same swap test on **Maple Leafs vs Sabres** (a real upcoming game). Confirm verdict + win % match across slot orders, and Factor "Home/Away Record" applies the home-ice bonus to whichever team is actually home per ESPN.
+3. MLB: same swap test on a real upcoming MLB matchup. Confirm starting-pitcher stats in `factorBreakdown` are tied to the **correct team** in both orders (verifies `team1_is_home` reaches mlb-model even without `game_id`).
+4. Edge case: pick two teams **not playing each other today** (no venue resolvable). Confirm both slot orders still produce identical output (neutral fallback path).
 
