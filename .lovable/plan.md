@@ -2,67 +2,56 @@
 
 ## Goal
 
-Three concrete fixes across all sports (NBA / MLB / NHL / UFC):
+Fix two bugs in the NBA Analyze tab's **Correlated Props** section in `src/pages/NbaPropsPage.tsx`. Backend (`correlated-props` edge function) already filters by direction correctly and is already receiving `over_under` — no backend changes needed.
 
-1. **Single source of truth for unit sizing** so the in-depth body and the Overall Verdict card always agree.
-2. **Contextual, matchup-specific verdict copy** (no generic "stick with 0 units on Sabres" / "noBet tier" leakage).
-3. **Less aggressive moneyline floor** so clear favorites (e.g. Spurs vs Blazers with Wemby) stop defaulting to 0 units.
+## Root cause
 
-## Root cause (verified)
+**Issue 1 — direction display & propagation (frontend only):**
+The data is correct, but the UI hardcodes "OVER":
+- Line 2155: `When {player} {propType} hits, these also hit:` — neutral, OK.
+- Line 2179: `OVER {c.correlated_line}` — always says OVER.
+- Line 2195 / 2206: clicking the search (🔍) icon re-analyzes the correlated prop with `overUnder: "over"` hardcoded.
+- Line 2225: clicking `+` adds the leg with `overUnder: "over"` hardcoded.
 
-- `supabase/functions/moneyline-api/index.ts` already builds a canonical `Decision` (`recommended_units`, `conviction_tier`, `winning_team_name`). Good — this is the SSOT we'll standardize on.
-- `src/components/WrittenAnalysis.tsx` lines **133–204**: when `decision` is present it correctly honors `decision.conviction_tier` for the **Overall Verdict** card. ✅
-- But the **3-section body** comes from `ai-analysis` (LLM). The LLM prompt at `supabase/functions/ai-analysis/index.ts` lines **222–235** passes the raw tier string `"noBet"` and tells the model to literally write `"${decision.recommended_units} units on ${decision.winning_team_name}"`. When units = 0 this produces ugly copy like *"stick with 0 units on Sabres"* and the model echoes the internal label *"noBet tier"* (visible in screenshot 1). That's the inconsistency the user sees.
-- `analyzeMoneyline` (lines 645–828) verdict thresholds are too tight: needs `team1Score ≥ 65` for STRONG, `≥ 55` for LEAN. A clear favorite that grades 60 lands as LEAN, then `buildDecision`'s dominance gate at line **103** (`favorWinner < 3 || dominanceRatio < 0.55 → noBet`) downgrades it to noBet. The Spurs/Blazers case fails here.
+**Issue 2 — toggle never flips (the real bug):**
+Line 2158: `globalSlip.isInSlip(c.correlated_player, c.correlated_prop, "")` passes an empty string for `line`, but `addLeg` (line 2225) stores the leg with the actual `corrLineStr`. `useParlaySlip.isInSlip` matches on `player + propType + line` — empty string never matches the stored line, so `isInSlip` is always `false`. The button never switches to the X state, and clicking again hits the `addLeg` dedup path (silent no-op) instead of the remove branch.
 
-## Fix — 3 files
+## Fix — `src/pages/NbaPropsPage.tsx` only
 
-### 1. `supabase/functions/moneyline-api/index.ts`
+1. **Use the analyzed direction throughout the section.** Capture the direction the user analyzed (the `overUnder` state already in scope, which corresponds to what was sent to the edge function) and use it for:
+   - Header copy: `When {lastName} {propType.toUpperCase()} goes {OVER|UNDER}, these also tend to go {OVER|UNDER}:`
+   - Per-row line label: `{OVER|UNDER} {c.correlated_line} {c.correlated_prop.toUpperCase()}`
+   - Search-icon re-analyze (line 2195, 2206): pass `overUnder: <analyzed direction>` instead of hardcoded `"over"`.
+   - `+` button add (line 2225): `overUnder: <analyzed direction>`.
 
-- **Loosen the dominance floor** in `buildDecision` (around line 103) so a real favorite isn't silently zeroed:
-  - `favorWinner < 2 || dominanceRatio < 0.50 → noBet` (was `< 3 / < 0.55`).
-  - `< 0.60 → low` (was `< 0.65`).
-  - Keep medium/high/veryHigh boundaries.
-- **Loosen the verdict thresholds** in `analyzeMoneyline` (line 820):
-  - `≥ 60 → STRONG`, `≥ 53 → LEAN` (was 65 / 55). Same change for spread/total verdict builders.
-- **Edge boost**: keep the existing `edge ≥ 8 → upgrade` logic, but also add `edge ≥ 4 → upgrade noBet/low to medium` so a +EV favorite never lands at 0 units.
-- **Decision normalization**: when `recommended_units = 0`, also set a new `decision.pass_reason` field with one of: `"low_conviction"`, `"toss_up"`, `"negative_edge"` — used by the LLM prompt below for human copy.
+2. **Fix the toggle.** Change line 2158 from:
+   ```tsx
+   const isInSlip = globalSlip.isInSlip(c.correlated_player, c.correlated_prop, "");
+   ```
+   to use the same `corrLineStr` that `addLeg`/`removeLeg` use:
+   ```tsx
+   const corrLineStr = String(c.correlated_line ?? "");
+   const isInSlip = globalSlip.isInSlip(c.correlated_player, c.correlated_prop, corrLineStr);
+   ```
+   With this fix, the existing `isInSlip ? remove : add` branch (lines 2221–2226) and the existing Plus↔X icon swap (line 2234) immediately work as a true toggle.
 
-### 2. `supabase/functions/ai-analysis/index.ts` (locked-pick block, lines 222–235)
-
-Rewrite the locked-pick block so the LLM:
-
-- Never receives the literal string `"noBet"` — translate `conviction_tier` to human phrases (`"high conviction"`, `"lean"`, `"pass — line doesn't meet our confidence threshold"`).
-- When `recommended_units = 0`, instructs the model: *"Write a PASS recommendation that names BOTH teams and the specific line (e.g. moneyline price or spread number) the user analyzed. Do NOT write 'X units on [team]'. Use phrasing like 'Passing on [winning team] — [matchup-specific reason from the data points above]'."*
-- When `recommended_units > 0`, keeps the existing rule (`"${units} units on ${winning_team_name}"`).
-- Add a hard scrub on output: regex-replace `/\bnoBet tier\b/gi`, `/\b0 units on \w+/gi` → swap with deterministic phrasing before returning sections.
-- Pass through `team1Name`, `team2Name`, and the matchup line/odds in the user prompt body so the LLM has the data it needs to be specific.
-
-### 3. `src/components/WrittenAnalysis.tsx`
-
-- Add `team1Name`, `team2Name`, `line`, `propDisplay`, `overUnder` to the `ai-analysis` invoke body (line ~352) so the backend prompt can reference the exact matchup.
-- In `tierToSizing` (line 123): when `decision.recommended_units` is present, **use that exact number** to produce the unitSize label (`"3 units"`, `"2 units"`, `"1 unit"`, `"0.5 units"`) instead of the hardcoded `"1.5–2 units"` band — guarantees the Overall Verdict card unit number matches what the LLM is told to write in section 3.
-- In `generateOverallSummary` noBet branches (lines 175, 192, 278): swap any internal-label phrasing for natural language ("This line doesn't clear our confidence threshold for [team1] vs [team2].").
-- Forward `props.line` / `props.overUnder` into the noBet summary so the Overall Verdict card itself names the specific bet (e.g. *"Passing on Spurs ML at -180 — model gives 58% but the price already implies 64%"*).
+3. **Tiny safety:** lift `corrLineStr` to the top of the row map so both `isInSlip` and the two button handlers reference the same string (avoids redeclaration).
 
 ## Files changed
 
-- `supabase/functions/moneyline-api/index.ts` — loosen verdict + dominance thresholds, add `edge ≥ 4` upgrade, add `pass_reason` to Decision.
-- `supabase/functions/ai-analysis/index.ts` — rewrite locked-pick block to humanize tier, branch prompt on `units = 0` vs `> 0`, post-response scrub.
-- `src/components/WrittenAnalysis.tsx` — pass team names + line/odds to `ai-analysis`, derive unit label from `decision.recommended_units` directly, replace generic noBet copy with matchup-specific copy.
+- `src/pages/NbaPropsPage.tsx` — header/label copy uses analyzed direction; pass analyzed direction in re-analyze and `addLeg`; fix `isInSlip` to pass `corrLineStr` instead of `""`.
 
 ## Non-goals
 
-- No DB migration, no schema change.
-- No changes to Picks tab, Today's Edge, Games tab, props analyzer, or the slate-scanner.
-- Not touching the 20-factor weights themselves — only the verdict-bucketing thresholds.
+- No backend / edge function changes (`correlated-props` already correctly filters by `over_under` and caches per direction).
+- No changes to `ParlaySlipContext`, MLB/UFC/NHL paths, or the parlay UI.
+- No DB migration.
 
 ## Verification
 
-1. After deploy, `curl moneyline-api` for **Spurs vs Blazers** (NBA), **Diamondbacks** (MLB), **Sabres** (NHL): confirm `decision.recommended_units > 0` for the favorite case, and that even when `= 0` the `pass_reason` field is populated.
-2. Trigger the in-depth analysis in the UI for each of those three matchups and verify:
-   - The Overall Verdict card unit number == the unit number written inside the "Verdict & Risk" section.
-   - No occurrence of `"noBet"`, `"noBet tier"`, or `"0 units on [team]"` anywhere in the rendered text.
-   - The Verdict & Risk section names BOTH teams and the line.
-3. Paste the curl JSON `decision` object + the rendered three section bodies + Overall Verdict card text verbatim in the summary.
+1. Analyze an NBA player **OVER** prop → confirm correlated rows show `OVER X.5`, header reads "goes OVER, these also tend to go OVER".
+2. Click `+` on a correlated row → button switches to X (highlighted state); leg appears in the floating parlay slip.
+3. Click the same button again → leg is removed from the slip; button reverts to `+`.
+4. Re-analyze the same player as **UNDER** → confirm rows now show `UNDER`, header reads "goes UNDER, these also tend to go UNDER", and `+` adds the leg as `under` (visible in the slip leg's direction).
+5. Mixed: add an OVER leg, switch analysis to UNDER, add the UNDER version of the same prop — confirm both legs coexist in the slip and each `+` toggles its own state independently.
 
