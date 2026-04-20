@@ -93,7 +93,7 @@ const AdminPage = () => {
   const authTimeRef = useRef<number>(0);
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<"keys" | "onboarding">("keys");
+  const [activeTab, setActiveTab] = useState<"keys" | "onboarding" | "edge">("keys");
 
   // Onboarding state
   const [onboardingResponses, setOnboardingResponses] = useState<OnboardingResponse[]>([]);
