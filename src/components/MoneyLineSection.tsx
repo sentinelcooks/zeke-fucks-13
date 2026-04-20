@@ -1681,7 +1681,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
           </div>
 
           {/* Odds & Value Card */}
-          {results.odds && (
+          {results.odds && !results.odds.unavailable && results.odds.bestLine ? (
             <div className="vision-card p-4 relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(158,64%,52%,0.2), transparent)' }} />
               <div className="flex items-center gap-2 mb-4">
