@@ -348,21 +348,8 @@ function ScreenHero({ onNext }: { onNext: () => void }) {
         </div>
       </motion.div>
 
-      {/* Feature pills — living micro-previews */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.18 }}
-        className="mt-4 grid grid-cols-3 gap-2.5"
-      >
-        <FeatureCard title="Live Games" icon={Calendar} ariaLabel="Preview of Live Games feature">
-          <LiveGameMini />
-        </FeatureCard>
-        <FeatureCard title="AI Picks" icon={Brain} ariaLabel="Preview of AI Picks feature">
-          <AIPickMini />
-        </FeatureCard>
-        <FeatureCard title="Profit Tracker" icon={BarChart3} ariaLabel="Preview of Profit Tracker feature">
-          <ProfitTrackerMini />
-        </FeatureCard>
-      </motion.div>
+      {/* Feature pills — living micro-previews (accordion: one open at a time) */}
+      <FeatureAccordion />
 
       {/* CTA */}
       <div className="mt-6">
@@ -827,52 +814,85 @@ export default function OnboardingPage() {
    ─────────────────────────────────────────────── */
 const microEase = [0.32, 0.72, 0, 1] as const;
 
+function FeatureAccordion() {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const toggle = (id: string) => setExpanded((cur) => (cur === id ? null : id));
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: 0.18 }}
+      className="mt-4 space-y-2"
+    >
+      <FeatureCard id="live" title="Live Games" icon={Calendar}
+        isExpanded={expanded === "live"} onToggle={() => toggle("live")}>
+        <LiveGameMini />
+      </FeatureCard>
+      <FeatureCard id="ai" title="AI Picks" icon={Brain}
+        isExpanded={expanded === "ai"} onToggle={() => toggle("ai")}>
+        <AIPickMini />
+      </FeatureCard>
+      <FeatureCard id="profit" title="Profit Tracker" icon={BarChart3}
+        isExpanded={expanded === "profit"} onToggle={() => toggle("profit")}>
+        <ProfitTrackerMini />
+      </FeatureCard>
+    </motion.div>
+  );
+}
+
 function FeatureCard({
+  id,
   title,
   icon: Icon,
-  ariaLabel,
+  isExpanded,
+  onToggle,
   children,
 }: {
+  id: string;
   title: string;
   icon: ComponentType<{ className?: string; style?: React.CSSProperties }>;
-  ariaLabel: string;
+  isExpanded: boolean;
+  onToggle: () => void;
   children: ReactNode;
 }) {
   const reduce = useReducedMotion();
-  const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-xl border border-border/40 bg-card/80 overflow-hidden shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
-      <motion.button
+    <div
+      className={`rounded-xl border bg-[#141414] transition-colors ${
+        isExpanded ? "border-[#00FF6A]/40" : "border-[#2A2A2A]"
+      }`}
+    >
+      <button
         type="button"
-        aria-label={ariaLabel}
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        whileTap={{ scale: 0.98 }}
-        className="w-full flex items-center justify-between gap-2 p-3 text-left focus:outline-none"
+        aria-expanded={isExpanded}
+        aria-controls={`feature-${id}`}
+        onClick={onToggle}
+        className="w-full flex items-center gap-3 px-3.5 py-3 text-left focus:outline-none"
       >
-        <div className="flex items-center gap-2 min-w-0">
-          <Icon className="w-3.5 h-3.5 opacity-60 flex-shrink-0" style={{ color: "hsl(var(--nba-green) / 0.8)" }} />
-          <div className="text-[11px] font-bold text-white truncate">{title}</div>
-        </div>
+        <Icon className="w-4 h-4 flex-shrink-0" style={{ color: "hsl(var(--nba-green))" }} />
+        <div className="text-sm font-semibold text-white flex-1">{title}</div>
         <motion.span
-          animate={{ rotate: open ? 180 : 0 }}
-          transition={{ duration: reduce ? 0 : 0.28, ease: microEase }}
+          animate={{ rotate: isExpanded ? 180 : 0 }}
+          transition={{ duration: reduce ? 0 : 0.2, ease: microEase }}
           className="flex-shrink-0"
         >
-          <ChevronDown className="w-3.5 h-3.5 opacity-50 text-white" />
+          <ChevronDown className="w-4 h-4 text-white/50" />
         </motion.span>
-      </motion.button>
+      </button>
       <AnimatePresence initial={false}>
-        {open && (
+        {isExpanded && (
           <motion.div
             key="content"
+            id={`feature-${id}`}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: reduce ? 0 : 0.28, ease: microEase }}
+            transition={{ duration: reduce ? 0 : 0.2, ease: microEase }}
             className="overflow-hidden"
           >
-            <div className="px-3 pb-3 pt-1 border-t border-border/20">{children}</div>
+            <div className="mx-1 mb-1 mt-0 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3">
+              {children}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -893,32 +913,31 @@ function LiveGameMini() {
 
   return (
     <div className="w-full flex flex-col gap-2.5">
-      <div className="flex items-center gap-1 py-1">
-        <motion.span
-          className="w-1.5 h-1.5 rounded-full bg-nba-red"
-          animate={reduce ? undefined : { opacity: [1, 0.3, 1] }}
-          transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <span className="text-[8px] font-black uppercase tracking-wider text-nba-red">LIVE</span>
-        <span className="ml-auto text-[8px] text-muted-foreground/55 tabular-nums">Q4 · {m}:{s}</span>
-      </div>
-      <div className="bg-white/[0.03] rounded-md px-2.5 py-2 flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#FDB927]" />
-            <span className="text-[11px] font-bold text-white/90">LAL</span>
-          </div>
-          <span className="text-[13px] font-extrabold tabular-nums text-white/90">108</span>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <motion.span
+            className="w-1.5 h-1.5 rounded-full bg-nba-red"
+            animate={reduce ? undefined : { opacity: [1, 0.3, 1] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <span className="text-[10px] font-black uppercase tracking-wider text-nba-red">LIVE</span>
+          <span className="text-[10px] text-muted-foreground/60 tabular-nums ml-1">Q4 · {m}:{s}</span>
         </div>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#007A33]" />
-            <span className="text-[11px] font-bold text-white">BOS</span>
-          </div>
-          <span className="text-[13px] font-extrabold tabular-nums text-nba-green">112</span>
+        <span className="text-[9px] text-muted-foreground/55">NBA · MLB · NHL</span>
+      </div>
+      <div className="bg-white/[0.03] rounded-lg px-3 py-2.5 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="w-2 h-2 rounded-full bg-[#FDB927] flex-shrink-0" />
+          <span className="text-xs font-bold text-white/90">LAL</span>
+          <span className="text-base font-extrabold tabular-nums text-white/90 ml-auto">108</span>
+        </div>
+        <span className="text-[9px] text-muted-foreground/40 px-1">vs</span>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-base font-extrabold tabular-nums text-nba-green">112</span>
+          <span className="text-xs font-bold text-white ml-auto">BOS</span>
+          <span className="w-2 h-2 rounded-full bg-[#007A33] flex-shrink-0" />
         </div>
       </div>
-      <div className="text-[7px] text-muted-foreground/55 mt-1.5">NBA · MLB · NHL</div>
     </div>
   );
 }
