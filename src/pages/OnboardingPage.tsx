@@ -928,7 +928,10 @@ function AIPickMini() {
           <span className="text-[7px] font-bold uppercase tracking-wider text-muted-foreground/55">PTS</span>
         </div>
       </div>
-      <span className="self-start bg-nba-green/15 text-nba-green text-[8px] font-extrabold tabular-nums px-1.5 py-0.5 rounded">
+      <span
+        className="self-start text-nba-green text-[8px] font-extrabold tabular-nums px-1.5 py-0.5 rounded"
+        style={{ backgroundColor: "hsl(var(--nba-green) / 0.15)" }}
+      >
         +EV 7.2%
       </span>
     </div>
