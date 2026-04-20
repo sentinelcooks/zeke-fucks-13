@@ -120,12 +120,24 @@ function generateFallbackSections(data: WrittenAnalysisProps): AnalysisSection[]
 
 type Tier = "noBet" | "low" | "medium" | "high" | "veryHigh";
 
-function tierToSizing(tier: Tier): { rating: "take" | "lean" | "fade"; unitSize: string | null } {
+function unitsToLabel(u: number): string {
+  if (u <= 0) return "0 units";
+  if (u === 0.5) return "0.5 units";
+  if (u === 1) return "1 unit";
+  return `${u} units`;
+}
+
+function tierToSizing(tier: Tier, exactUnits?: number): { rating: "take" | "lean" | "fade"; unitSize: string | null } {
+  // When backend supplies exact units, use them as the single source of truth
+  if (exactUnits != null && exactUnits > 0) {
+    const rating = exactUnits >= 2 ? "take" : "lean";
+    return { rating, unitSize: unitsToLabel(exactUnits) };
+  }
   switch (tier) {
     case "veryHigh": return { rating: "take", unitSize: "3 units" };
-    case "high": return { rating: "take", unitSize: "1.5–2 units" };
+    case "high": return { rating: "take", unitSize: "2 units" };
     case "medium": return { rating: "lean", unitSize: "1 unit" };
-    case "low": return { rating: "lean", unitSize: "0.5 units max" };
+    case "low": return { rating: "lean", unitSize: "0.5 units" };
     case "noBet": default: return { rating: "fade", unitSize: null };
   }
 }
