@@ -15,6 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { searchPlayers } from "@/services/api";
 import { AddToSlipSheet } from "@/components/AddToSlipSheet";
 import { getTeamLogoUrl } from "@/utils/teamLogos";
+import { useOddsFormat } from "@/hooks/useOddsFormat";
 
 interface Play {
   id: string;
