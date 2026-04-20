@@ -149,8 +149,9 @@ export default function WelcomeConfirmationPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.6, duration: 0.4 }}
         onClick={() => navigate("/dashboard", { replace: true })}
-        className="fixed bottom-8 left-5 right-5 max-w-md mx-auto z-50 rounded-2xl px-4 py-3 flex items-center gap-3 text-left backdrop-blur-xl"
+        className="fixed left-5 right-5 max-w-md mx-auto z-50 rounded-2xl px-4 py-3 flex items-center gap-3 text-left backdrop-blur-xl"
         style={{
+          bottom: "calc(env(safe-area-inset-bottom) + 2rem)",
           background: "rgba(20,20,20,0.95)",
           border: "1px solid rgba(0,255,106,0.35)",
           boxShadow:

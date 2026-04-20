@@ -413,7 +413,7 @@ const SettingsPage = () => {
       </motion.div>
 
       {saving && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50">
+        <div className="fixed left-1/2 -translate-x-1/2 z-50" style={{ bottom: "calc(env(safe-area-inset-bottom) + 6rem)" }}>
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}

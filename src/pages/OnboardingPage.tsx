@@ -130,7 +130,7 @@ function SectionContainer({ children }: { children: React.ReactNode }) {
         <div className="absolute -bottom-32 -left-32 w-[420px] h-[420px] rounded-full bg-[#641EDC]/20 blur-[120px]" />
         <div className="absolute bottom-0 right-0 w-[360px] h-[320px] rounded-full bg-[#00FF6A]/[0.05] blur-[120px]" />
       </div>
-      <div className="relative z-10 mx-auto max-w-md px-5 py-6 pb-12 pt-safe-plus-4">
+      <div className="relative z-10 mx-auto max-w-md px-5 py-6 pb-safe-plus-4 pt-safe-plus-4">
         {children}
       </div>
     </div>

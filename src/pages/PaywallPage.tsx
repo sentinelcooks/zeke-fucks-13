@@ -415,7 +415,7 @@ export default function PaywallPage() {
 
       {/* Sticky bottom CTA footer — gradient passes clicks through */}
       <div
-        className="fixed bottom-0 left-0 right-0 z-50 pt-8 pb-6 px-5"
+        className="fixed bottom-0 left-0 right-0 z-50 pt-8 px-5 pb-safe-plus-4"
         style={{
           background: "linear-gradient(to top, #0A0A0A 55%, rgba(10,10,10,0.95) 75%, transparent)",
           pointerEvents: "none",
