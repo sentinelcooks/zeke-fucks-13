@@ -2,68 +2,92 @@
 
 ## Goal
 
-Align the typography, weights, and color tokens on the onboarding **Today's Picks** preview card so its confidence badge, EV figure, YTD ROI, and Win Rate stats look like they belong to the same design system as the full pick analysis screen (the model/edge tiles in `OddsProjection` and the `HitRateRing` averages). Layout stays the same — only type scale, weight, casing, and color treatments change.
+Spacing-only audit pass: every bottom-fixed element clears the iOS home indicator using `env(safe-area-inset-bottom)`, and every top-anchored title/header has confirmed status-bar clearance. No visual redesign — only padding/margin corrections.
 
-## Reference values pulled from the analysis screen
+## Findings
 
-- Big percentage display (Our Model / Implied / Edge tiles in `OddsProjection.tsx`):
-  - Value: `text-[16px] font-extrabold tabular-nums`
-  - Sub-label: `text-[8px] font-bold uppercase tracking-wider text-muted-foreground/55`
-- EV readout (Edge Projection row in `OddsProjection.tsx`):
-  - `text-[11px] font-extrabold tabular-nums` + `getEVColor()` token (`text-nba-green` for +EV)
-- Stat hierarchy (Hit Rates section / `HitRateRing.tsx`):
-  - Label: `text-[9px] font-bold uppercase tracking-wider text-muted-foreground`
-  - Value: `font-black tabular-nums` in a semantic color token (`text-nba-green`, `text-nba-blue`, etc.)
+### Bottom-fixed elements MISSING home-indicator clearance
 
-The onboarding card currently uses raw hex (`#00FF6A`, `#2A2A2A`, `#0A0A0A`) and inconsistent sizes (`text-sm`, `text-lg`, `text-[8px]`, `text-[9px]`). We'll align those without redesigning the card.
+| Element | File | Current | Issue |
+|---|---|---|---|
+| Paywall sticky CTA footer | `src/pages/PaywallPage.tsx` (~L416) | `pb-6 px-5` | Sits flush over home indicator |
+| Welcome glass toast button | `src/pages/WelcomeConfirmationPage.tsx` (~L152) | `fixed bottom-8` | `bottom-8` does not adapt to inset |
+| Onboarding Continue/Next/Back rows | `src/pages/OnboardingPage.tsx` (4 screens, end of `SectionContainer`) | inline, container has only `pb-12` | Last button can sit on the home indicator on tall pages |
+| Floating parlay slip | `src/components/FloatingParlaySlip.tsx` (~L24) | `fixed bottom-24` | Constant `24` ignores inset; on big-indicator devices it overlaps |
+| Settings "Saved" toast | `src/pages/SettingsPage.tsx` (~L416) | `fixed bottom-24` | Same as above — adequate today but should follow the pattern |
 
-## Changes — `src/pages/OnboardingPage.tsx` (Today's Picks preview block, lines ~250–285)
+### Bottom-fixed elements ALREADY safe (no change)
 
-### 1. Confidence badge + percent (right column of the pick row)
-- "HIGH CONF" pill → match the analysis tile sub-label rhythm:
-  - `text-[8px] font-bold uppercase tracking-wider`
-  - Background stays the green chip but use the same green token used elsewhere (`bg-nba-green/15 text-nba-green`).
-- Confidence number `64%` → match the big-percent treatment from the analysis tiles:
-  - `text-[16px] font-extrabold tabular-nums text-nba-green leading-none`
-- Add a tiny "Confidence" sub-label underneath at `text-[8px] text-muted-foreground/55` to mirror the "Hit Probability" sub-label on the analysis Model tile (keeps the same vertical rhythm).
+- `BottomTabBar` — uses `paddingBottom: env(safe-area-inset-bottom)` ✓
+- `NbaPropsPage` Analyze button — `sticky bottom-20` inside scroll container, sits above tab bar which already insets ✓
 
-### 2. EV figure (`+EV: 7.2%`)
-- Match the Edge Projection EV readout:
-  - `text-[11px] font-extrabold tabular-nums text-nba-green`
-- Keep the `+EV:` prefix muted (`text-muted-foreground/55`) so the number itself carries the color weight, exactly like the analysis screen.
+### Top-anchored headers / titles to verify
 
-### 3. YTD ROI + Win Rate stats row (bottom of card)
-Replace the current `text-[9px]` label / `text-lg` value pattern with the analysis-screen stat hierarchy:
-- Label: `text-[9px] font-bold uppercase tracking-wider text-muted-foreground` (was `text-white/50`)
-- Value: `text-base font-black tabular-nums` (was `text-lg font-extrabold`) with semantic color tokens:
-  - YTD ROI value → `text-nba-green` (positive)
-  - Win Rate value → `text-foreground` (neutral, like the Implied tile in analysis)
-- Sparkline stays as-is, stroke color updated to `hsl(var(--nba-green))` so it shares the token instead of `#00FF6A`.
+| Element | File | Status |
+|---|---|---|
+| Dashboard `MobileHeader` | `src/components/mobile/MobileHeader.tsx` | `pt-safe` ✓ |
+| Onboarding `SectionContainer` | `src/pages/OnboardingPage.tsx` (~L133) | `pt-safe-plus-4` ✓ |
+| Paywall hero | `src/pages/PaywallPage.tsx` (~L197) | `pt-safe` on root ✓ |
+| Welcome page hero | `src/pages/WelcomeConfirmationPage.tsx` (~L24) | `pt-safe` on root ✓ |
+| **Legal page header** | `src/pages/LegalPage.tsx` (~L227–229) | Root has `pt-safe`, but inner header uses `pt-6` extra. Screenshot shows status-bar overlap with title ("Terms of U…" clipped). The inner `px-5 pt-6 pb-4` row needs to start AFTER the safe inset, not add `pt-6` on top of `pt-safe` only on the wrapper — this works in browser but on real device the title still hugs the status bar. Add `pt-safe-plus-2` on the inner header row OR change root from `pt-safe` to `pt-safe-plus-2`. |
+| AdminPage authed | `src/pages/AdminPage.tsx` (~L339) | `pt-safe-plus-4` ✓ |
+| Auth page | `src/pages/AuthPage.tsx` (~L188) | `pt-safe-plus-4` ✓ |
+| Login page | `src/pages/LoginPage.tsx` (~L108) | `pt-safe pb-safe` ✓ |
+| Dashboard route shell | `src/pages/Dashboard.tsx` (~L105) | `pt-safe pb-safe` ✓ |
 
-### 4. Token swap (no visual redesign)
-Across this card only, replace the hardcoded hex with the design tokens already used on the analysis screen:
-- `#00FF6A` → `hsl(var(--nba-green))` / `text-nba-green` / `bg-nba-green/15`
-- `#2A2A2A` borders/dividers → `border-border/40`
-- `#141414` card bg → keep the visual but use `vision-card`-style token (`bg-card/80` with existing border) to match the analysis tile surface.
-- `text-white/50` muted text → `text-muted-foreground/55` (matches analysis sub-labels).
+## Fix
+
+### 1. Add a "plus" bottom utility in `src/index.css`
+Mirror the existing top utilities so bottom-fixed components can clear the home indicator AND keep their own visual bottom spacing:
+
+```css
+.pb-safe-plus-2 { padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem); }
+.pb-safe-plus-4 { padding-bottom: calc(env(safe-area-inset-bottom) + 1rem); }
+```
+
+(`.pb-safe` already exists.)
+
+### 2. `src/pages/PaywallPage.tsx` — sticky CTA footer (~L416–423)
+Replace `pt-8 pb-6 px-5` with `pt-8 px-5 pb-safe-plus-4`. Background gradient and pointer-events stay identical.
+
+### 3. `src/pages/WelcomeConfirmationPage.tsx` — fixed CTA toast (~L152)
+Replace `fixed bottom-8 left-5 right-5` with `fixed left-5 right-5` and add inline `style={{ bottom: 'calc(env(safe-area-inset-bottom) + 2rem)' }}` (preserves the existing 2rem visual gap on devices without an indicator). All other styles untouched.
+
+### 4. `src/pages/OnboardingPage.tsx` — `SectionContainer` content wrapper (~L133)
+Change `pb-12` on the inner content div to `pb-safe-plus-4` (still gives ~1rem visual padding plus the indicator clearance). Last button row will then sit above the home indicator on every onboarding screen.
+
+### 5. `src/components/FloatingParlaySlip.tsx` (~L24)
+Change `fixed bottom-24 right-4` to `fixed right-4` plus inline `style={{ bottom: 'calc(env(safe-area-inset-bottom) + 6rem)' }}` so it stays above the tab bar (which already has its own inset) regardless of indicator size.
+
+### 6. `src/pages/SettingsPage.tsx` (~L416)
+Same pattern as the parlay slip: replace `bottom-24` with inline `style={{ bottom: 'calc(env(safe-area-inset-bottom) + 6rem)' }}`. Keeps "Saved" toast above tab bar consistently.
+
+### 7. `src/pages/LegalPage.tsx` (~L227)
+Change root from `min-h-screen pb-28 pt-safe` to `min-h-screen pb-safe-plus-4 pt-safe-plus-2`. This adds a small breathing buffer below the status bar (fixes the title clipping in the uploaded screenshot) and replaces the static `pb-28` with proper home-indicator clearance for the bottom of the scroll content.
 
 ## Non-goals
 
-- No layout, spacing, icon, or content changes.
-- No changes to the actual Today's Edge carousel on the live home screen (`ModernHomeLayout.tsx`) — that one already uses the shared tokens. This is purely the onboarding preview card shown in the screenshot.
-- No changes to the AI Analysis Preview block beneath the stats row.
+- No layout, color, font, animation, icon, or copy changes.
+- `BottomTabBar`, `MobileHeader`, `NbaPropsPage` Analyze button, `Dashboard.tsx`, `AdminPage`, `AuthPage`, `LoginPage`, `OnboardingPage` `SectionContainer` top inset, `PaywallPage` top inset, `WelcomeConfirmationPage` top inset — all already correct, untouched.
+- No changes to in-flow (non-fixed/sticky) bottom content on regular dashboard pages — `<main className="pb-20">` in `DashboardLayout` already sits above the safely-inset tab bar.
 
 ## Files to update
 
-- `src/pages/OnboardingPage.tsx` (only the Today's Picks preview card markup, lines ~250–285)
+- `src/index.css`
+- `src/pages/PaywallPage.tsx`
+- `src/pages/WelcomeConfirmationPage.tsx`
+- `src/pages/OnboardingPage.tsx`
+- `src/components/FloatingParlaySlip.tsx`
+- `src/pages/SettingsPage.tsx`
+- `src/pages/LegalPage.tsx`
 
-## Verification
+## Verification (post-`npx cap sync` rebuild)
 
-1. Open `/onboarding` step 1 in the 390px preview.
-2. Confirm the Today's Picks card shows:
-   - "HIGH CONF" pill at the same micro-label scale used by analysis tile labels.
-   - `64%` rendered at the same weight/size as the big percentages on the analysis screen's Model/Implied/Edge tiles.
-   - `+EV: 7.2%` rendered with the same green + size as the Edge Projection EV readout in `OddsProjection`.
-   - YTD ROI and Win Rate values look like the stat tiles in the analysis Hit Rates section: small uppercase muted label paired with a bold tabular-nums number, ROI green, Win Rate neutral foreground.
-3. Side-by-side check vs. the live analyzer (`/dashboard/analyze` → run a player) — type sizes, weights, and color tokens should feel like the same family.
+1. **Paywall**: green "Start Free Trial" button sits visibly above the home indicator on iPhone 14/15.
+2. **Welcome**: glass toast button has clear gap from home indicator.
+3. **Onboarding** (all 4 screens): Continue/Next button rows are not overlapped by the home indicator after scrolling to bottom.
+4. **Floating parlay slip**: clears tab bar AND home indicator on devices with large indicators.
+5. **Settings "Saved" toast**: appears above tab bar consistently.
+6. **Legal**: page title and back button are no longer touching the iOS clock; bottom of scroll list clears the home indicator.
+7. **Browser preview at 390×844**: nothing visually regresses (insets resolve to 0; spacing matches today).
 
