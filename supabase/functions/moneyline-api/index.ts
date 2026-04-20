@@ -830,12 +830,23 @@ function analyzeMoneyline(
   addFactor("Strength of Schedule", Math.round(sos1), Math.round(100 - sos1), 3,
     `Opponent quality based on recent PPG allowed: ${team1.shortName} face ~${extras.pace1.recentOppPpg} vs ${team2.shortName} ~${extras.pace2.recentOppPpg}`);
 
-  // Factor 20: Home PPG Advantage (2%)
-  const homePpg1 = extras.splits1.home.ppg;
-  const awayPpg2 = extras.splits2.away.ppg;
+  // Factor 20: Home PPG vs Away PPG (2%) — role-aware
+  let homePpg1: number, awayPpg2: number, hpDesc: string;
+  if (team1IsHome === true) {
+    homePpg1 = extras.splits1.home.ppg;
+    awayPpg2 = extras.splits2.away.ppg;
+    hpDesc = `${team1.shortName} ${homePpg1.toFixed(1)} PPG at home vs ${team2.shortName} ${awayPpg2.toFixed(1)} PPG on road`;
+  } else if (team1IsHome === false) {
+    homePpg1 = extras.splits1.away.ppg;
+    awayPpg2 = extras.splits2.home.ppg;
+    hpDesc = `${team1.shortName} ${homePpg1.toFixed(1)} PPG on road vs ${team2.shortName} ${awayPpg2.toFixed(1)} PPG at home`;
+  } else {
+    homePpg1 = (extras.splits1.home.ppg + extras.splits1.away.ppg) / 2;
+    awayPpg2 = (extras.splits2.home.ppg + extras.splits2.away.ppg) / 2;
+    hpDesc = `${team1.shortName} ${homePpg1.toFixed(1)} PPG combined vs ${team2.shortName} ${awayPpg2.toFixed(1)} PPG combined`;
+  }
   const hpScore = homePpg1 + awayPpg2 > 0 ? Math.round((homePpg1 / (homePpg1 + awayPpg2)) * 100) : 50;
-  addFactor("Home PPG vs Away PPG", hpScore, 100 - hpScore, 2,
-    `${team1.shortName} ${homePpg1.toFixed(1)} PPG at home vs ${team2.shortName} ${awayPpg2.toFixed(1)} PPG on road`);
+  addFactor("Home PPG vs Away PPG", hpScore, 100 - hpScore, 2, hpDesc);
 
   // Calculate weighted composite
   let team1Score = 0;
