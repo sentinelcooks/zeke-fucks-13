@@ -467,25 +467,6 @@ export function OddsProjection({
               </div>
             </div>
 
-            {/* Model breakdown weights */}
-            <div className="rounded-xl p-3" style={{ background: 'hsla(228, 20%, 10%, 0.5)' }}>
-              <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/50 block mb-2">Model Weights</span>
-              <div className="grid grid-cols-4 gap-2">
-                {[
-                  { label: "L5", rate: last5HitRate, weight: "35%" },
-                  { label: "L10", rate: last10HitRate, weight: "25%" },
-                  { label: "Season", rate: seasonHitRate, weight: "20%" },
-                  { label: "H2H", rate: h2hHitRate, weight: "20%" },
-                ].map(w => (
-                  <div key={w.label} className="text-center">
-                    <span className={`block text-[12px] font-extrabold tabular-nums ${
-                      (w.rate || 0) >= 60 ? "text-nba-green" : (w.rate || 0) >= 45 ? "text-foreground/60" : "text-nba-red"
-                    }`}>{w.rate != null ? `${w.rate}%` : "—"}</span>
-                    <span className="block text-[8px] text-muted-foreground/55">{w.label} ({w.weight})</span>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         </motion.div>
       )}
