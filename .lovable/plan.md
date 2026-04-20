@@ -2,76 +2,48 @@
 
 ## Goal
 
-Replace the hardcoded "AI Daily Tip" card on the Home tab with a personalized, AI-generated tip that:
-1. Reads each user's onboarding answers (`referral`, `sports`, `betting_style`)
-2. Returns sharp, useful advice tailored to *that* user
-3. Rotates automatically every 12–13 hours (so each user sees a fresh tip twice a day)
-4. Is unique per user
+When a user picks "American" or "Decimal" in onboarding, persist that choice to their profile so the entire app (Games, Props, Slip, etc.) actually renders odds in their chosen format.
 
 ## Diagnosis
 
-`src/components/home/ModernHomeLayout.tsx` (lines 930–943) hardcodes:
-> "Prime-time props with 65%+ hit rates are today's strongest edges…"
+- `OnboardingPage.tsx` saves the odds format to `localStorage["sentinel_onboarding_odds_format"]` only.
+- `AuthPage.tsx` → `saveOnboardingToDb()` writes `referral`, `sports`, `betting_style` to `onboarding_responses`, but **never reads or persists `odds_format`**.
+- The whole app reads odds format from `profile.odds_format` via `useOddsFormat()`. That column stays at its default `'american'`, so decimal users always see American.
 
-It never reads `onboarding_responses` for that card. There's already a `personalize` edge function and an `ai_recommendations.daily_tip` field, but that one is generated **once** at onboarding and never rotates.
+## Fix
 
-## Plan
+### 1. `src/pages/AuthPage.tsx` — persist odds format on signup/login
 
-### 1. Database — add a rotating tip cache column
+Inside `saveOnboardingToDb()`:
+- Read `localStorage.getItem("sentinel_onboarding_odds_format")`.
+- If it's `"american"` or `"decimal"`, include it in the `profiles` update:
+  ```ts
+  await supabase.from("profiles")
+    .update({ onboarding_complete: true, odds_format: oddsFormat })
+    .eq("id", userId);
+  ```
+- Clear `sentinel_onboarding_odds_format` from localStorage after write (alongside the other onboarding keys).
 
-Add to `onboarding_responses`:
-- `daily_tip_text text` — current rotating tip
-- `daily_tip_generated_at timestamptz` — last refresh timestamp
-- `daily_tip_seed int` — rotation counter (used to push variety into the prompt)
+### 2. `src/contexts/AuthContext.tsx` — refresh profile after write
 
-Migration only adds nullable columns, no RLS changes (existing user-scoped policies cover them).
+After `saveOnboardingToDb` runs (already triggered via `onAuthStateChange` and post-submit), the existing `fetchProfile` call on `SIGNED_IN` will pick up the new value. Add an explicit `await refreshProfile()` call inside `AuthPage.handleSubmit` after `saveOnboardingToDb` so the user lands on `/dashboard` with the correct format already loaded (no flash of American).
 
-### 2. New edge function — `rotating-tip`
+### 3. `src/pages/SettingsPage.tsx` — already correct, no change
 
-`supabase/functions/rotating-tip/index.ts` (verify_jwt = true)
+Settings already calls `updateProfile({ odds_format })` which writes to `profiles`. That flow works; this fix just makes onboarding match it.
 
-Logic:
-- Read caller's `user_id` from JWT
-- Fetch their `onboarding_responses` row (`referral`, `sports`, `betting_style`, `daily_tip_text`, `daily_tip_generated_at`, `daily_tip_seed`)
-- If `daily_tip_generated_at` is within the last 12h → return cached `daily_tip_text` (no AI call, no cost)
-- Otherwise:
-  - Increment `daily_tip_seed`
-  - Call Lovable AI (`google/gemini-3-flash-preview`) with their profile + the seed (seed nudges the model toward a different angle each rotation: bankroll, line shopping, prop correlation, injury news, closing line value, hedging, etc.)
-  - Use **tool calling** for structured output: `{ tip: string, focus_area: string }`
-  - Tip rules: 1–2 complete sentences, references their sports + style, no generic "bet responsibly" filler, follows the existing `personalize` tone
-  - Persist new `daily_tip_text`, `daily_tip_generated_at = now()`, new seed
-  - Return the tip
-- Cache window is randomized per user between 12h and 13h (using `user_id` hash) so tips don't all refresh at once
+### 4. Defensive: also store odds format on `onboarding_responses` (optional column)
 
-### 3. Wire the Home card to the new function
-
-`src/components/home/ModernHomeLayout.tsx`:
-- Add `useEffect` that calls `supabase.functions.invoke('rotating-tip')` on mount when user is signed in
-- Replace the hardcoded `<p>` with the returned tip
-- Add a tiny skeleton/shimmer while loading
-- Fallback: if the function fails (rate limit, no onboarding), keep existing text so the card is never empty
-- Also surface a 1-line `focus_area` chip ("Bankroll" / "Line shopping" / "Correlation" / etc.) above the tip for visual variety as it rotates
-
-### 4. New-user safety
-
-If a user has no `onboarding_responses` row yet (signed up before onboarding finished), the function returns a generic-but-decent default tip and skips DB write.
+Not required for the fix. Skipping — `profiles.odds_format` is the single source of truth that `useOddsFormat` reads.
 
 ## Files touched
 
-- New migration: add 3 columns to `onboarding_responses`
-- New: `supabase/functions/rotating-tip/index.ts`
-- Edit: `src/components/home/ModernHomeLayout.tsx` (replace hardcoded tip block)
-
-## Out of scope
-
-- Existing onboarding `personalize` flow stays as-is (still powers the smaller "AI Tip" card on `HomePage.tsx` welcome state).
-- No paywall changes, no new tabs.
+- `src/pages/AuthPage.tsx` — read `sentinel_onboarding_odds_format`, include it in the profiles update, clear localStorage key, call `refreshProfile()` after save.
 
 ## Verification
 
-After build:
-1. `psql` SELECT to confirm the 3 new columns exist on `onboarding_responses`
-2. `curl` the deployed `rotating-tip` endpoint with a real session JWT and confirm response shape `{ tip, focus_area, generated_at }`
-3. Open `/dashboard` Home tab and confirm the AI Daily Tip card now shows a tip referencing the user's onboarding sports/style instead of the hardcoded line
-4. Manually update `daily_tip_generated_at` to >13h ago, reload, confirm a new tip generates and `daily_tip_seed` increments
+1. `psql` SELECT `id, odds_format, onboarding_complete FROM profiles WHERE id = '<test user>'` before and after a fresh signup that picks "Decimal" → confirm column flips from `american` to `decimal`.
+2. Sign up with a new account, pick Decimal in onboarding, land on `/dashboard` → confirm Games tab and Props tab render odds like `1.91` instead of `-110`.
+3. Sign up with another account, pick American → confirm odds render like `-110` / `+150`.
+4. Open Settings → confirm the active button matches what was selected during onboarding (proves the DB value, not localStorage, is driving the UI).
 
