@@ -348,21 +348,8 @@ function ScreenHero({ onNext }: { onNext: () => void }) {
         </div>
       </motion.div>
 
-      {/* Feature pills — living micro-previews */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.18 }}
-        className="mt-4 grid grid-cols-3 gap-2.5"
-      >
-        <FeatureCard title="Live Games" icon={Calendar} ariaLabel="Preview of Live Games feature">
-          <LiveGameMini />
-        </FeatureCard>
-        <FeatureCard title="AI Picks" icon={Brain} ariaLabel="Preview of AI Picks feature">
-          <AIPickMini />
-        </FeatureCard>
-        <FeatureCard title="Profit Tracker" icon={BarChart3} ariaLabel="Preview of Profit Tracker feature">
-          <ProfitTrackerMini />
-        </FeatureCard>
-      </motion.div>
+      {/* Feature pills — living micro-previews (accordion: one open at a time) */}
+      <FeatureAccordion />
 
       {/* CTA */}
       <div className="mt-6">
