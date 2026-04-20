@@ -18,6 +18,16 @@ const SPORT_KEYS: Record<string, string> = {
   ufc: "mma_mixed_martial_arts",
 };
 
+// Per-sport analyzer-output confidence floor. MLB/NHL models naturally
+// return lower confidence than NBA, so a single 0.65 gate dropped every
+// MLB/NHL candidate. Tuned per sport.
+const ANALYZER_MIN_CONF: Record<string, number> = {
+  nba: 0.65,
+  mlb: 0.45,
+  nhl: 0.50,
+  ufc: 0.50,
+};
+
 // Sport-aware mapping from Odds-API market keys → analyzer prop_type.
 // Must match cases in nba-api/index.ts getStatValue(). Unmapped → skip.
 const NBA_MAP: Record<string, string> = {
