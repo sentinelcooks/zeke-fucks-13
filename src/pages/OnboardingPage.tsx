@@ -838,21 +838,45 @@ function FeatureCard({
   ariaLabel: string;
   children: ReactNode;
 }) {
+  const reduce = useReducedMotion();
+  const [open, setOpen] = useState(false);
   return (
-    <motion.button
-      type="button"
-      aria-label={ariaLabel}
-      whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.98 }}
-      transition={{ type: "spring", stiffness: 380, damping: 28 }}
-      className="rounded-xl border border-border/40 bg-card/80 p-3 text-left flex flex-col gap-2 overflow-hidden focus:outline-none shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]"
-    >
-      <div className="flex items-center justify-between border-b border-border/20 pb-1.5 mb-0.5">
-        <div className="text-[11px] font-bold text-white">{title}</div>
-        <Icon className="w-3.5 h-3.5 opacity-50" style={{ color: "hsl(var(--nba-green) / 0.7)" }} />
-      </div>
-      <div className="min-h-[56px] flex items-start w-full">{children}</div>
-    </motion.button>
+    <div className="rounded-xl border border-border/40 bg-card/80 overflow-hidden shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
+      <motion.button
+        type="button"
+        aria-label={ariaLabel}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        whileTap={{ scale: 0.98 }}
+        className="w-full flex items-center justify-between gap-2 p-3 text-left focus:outline-none"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <Icon className="w-3.5 h-3.5 opacity-60 flex-shrink-0" style={{ color: "hsl(var(--nba-green) / 0.8)" }} />
+          <div className="text-[11px] font-bold text-white truncate">{title}</div>
+        </div>
+        <motion.span
+          animate={{ rotate: open ? 180 : 0 }}
+          transition={{ duration: reduce ? 0 : 0.28, ease: microEase }}
+          className="flex-shrink-0"
+        >
+          <ChevronDown className="w-3.5 h-3.5 opacity-50 text-white" />
+        </motion.span>
+      </motion.button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="content"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: reduce ? 0 : 0.28, ease: microEase }}
+            className="overflow-hidden"
+          >
+            <div className="px-3 pb-3 pt-1 border-t border-border/20">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
