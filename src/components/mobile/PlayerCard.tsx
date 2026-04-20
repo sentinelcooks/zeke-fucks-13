@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useState, memo } from "react";
 
 interface PlayerCardProps {
   name: string;
@@ -10,7 +10,7 @@ interface PlayerCardProps {
   teamLogoUrl?: string;
 }
 
-export function PlayerCard({ name, team, position, jersey, headshotUrl }: PlayerCardProps) {
+export const PlayerCard = memo(function PlayerCard({ name, team, position, jersey, headshotUrl }: PlayerCardProps) {
   const [imgError, setImgError] = useState(false);
   const initials = name.split(" ").map(n => n[0]).join("");
   const showImg = headshotUrl && !imgError;
@@ -31,6 +31,8 @@ export function PlayerCard({ name, team, position, jersey, headshotUrl }: Player
               <img
                 src={headshotUrl}
                 alt={name}
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-cover object-top"
                 onError={() => setImgError(true)}
               />
@@ -66,4 +68,4 @@ export function PlayerCard({ name, team, position, jersey, headshotUrl }: Player
       </div>
     </motion.div>
   );
-}
+});

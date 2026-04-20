@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 
@@ -45,7 +45,7 @@ interface Props {
   bgClass: string;
 }
 
-export function InjuryStatusBadge({ status, colorClass, bgClass }: Props) {
+export const InjuryStatusBadge = memo(function InjuryStatusBadge({ status, colorClass, bgClass }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const info = getInfo(status);
@@ -104,4 +104,4 @@ export function InjuryStatusBadge({ status, colorClass, bgClass }: Props) {
       </AnimatePresence>
     </div>
   );
-}
+});
