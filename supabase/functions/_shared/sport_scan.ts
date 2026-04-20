@@ -15,6 +15,7 @@ const SPORT_KEYS: Record<string, string> = {
   nba: "basketball_nba",
   mlb: "baseball_mlb",
   nhl: "icehockey_nhl",
+  ufc: "mma_mixed_martial_arts",
 };
 
 // Sport-aware mapping from Odds-API market keys → analyzer prop_type.
