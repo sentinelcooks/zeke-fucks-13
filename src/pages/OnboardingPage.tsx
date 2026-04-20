@@ -913,32 +913,31 @@ function LiveGameMini() {
 
   return (
     <div className="w-full flex flex-col gap-2.5">
-      <div className="flex items-center gap-1 py-1">
-        <motion.span
-          className="w-1.5 h-1.5 rounded-full bg-nba-red"
-          animate={reduce ? undefined : { opacity: [1, 0.3, 1] }}
-          transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <span className="text-[8px] font-black uppercase tracking-wider text-nba-red">LIVE</span>
-        <span className="ml-auto text-[8px] text-muted-foreground/55 tabular-nums">Q4 · {m}:{s}</span>
-      </div>
-      <div className="bg-white/[0.03] rounded-md px-2.5 py-2 flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#FDB927]" />
-            <span className="text-[11px] font-bold text-white/90">LAL</span>
-          </div>
-          <span className="text-[13px] font-extrabold tabular-nums text-white/90">108</span>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <motion.span
+            className="w-1.5 h-1.5 rounded-full bg-nba-red"
+            animate={reduce ? undefined : { opacity: [1, 0.3, 1] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <span className="text-[10px] font-black uppercase tracking-wider text-nba-red">LIVE</span>
+          <span className="text-[10px] text-muted-foreground/60 tabular-nums ml-1">Q4 · {m}:{s}</span>
         </div>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#007A33]" />
-            <span className="text-[11px] font-bold text-white">BOS</span>
-          </div>
-          <span className="text-[13px] font-extrabold tabular-nums text-nba-green">112</span>
+        <span className="text-[9px] text-muted-foreground/55">NBA · MLB · NHL</span>
+      </div>
+      <div className="bg-white/[0.03] rounded-lg px-3 py-2.5 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="w-2 h-2 rounded-full bg-[#FDB927] flex-shrink-0" />
+          <span className="text-xs font-bold text-white/90">LAL</span>
+          <span className="text-base font-extrabold tabular-nums text-white/90 ml-auto">108</span>
+        </div>
+        <span className="text-[9px] text-muted-foreground/40 px-1">vs</span>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-base font-extrabold tabular-nums text-nba-green">112</span>
+          <span className="text-xs font-bold text-white ml-auto">BOS</span>
+          <span className="w-2 h-2 rounded-full bg-[#007A33] flex-shrink-0" />
         </div>
       </div>
-      <div className="text-[7px] text-muted-foreground/55 mt-1.5">NBA · MLB · NHL</div>
     </div>
   );
 }
