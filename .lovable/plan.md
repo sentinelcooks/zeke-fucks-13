@@ -2,92 +2,67 @@
 
 ## Goal
 
-Spacing-only audit pass: every bottom-fixed element clears the iOS home indicator using `env(safe-area-inset-bottom)`, and every top-anchored title/header has confirmed status-bar clearance. No visual redesign — only padding/margin corrections.
+Turn the three static feature pills (Live Games, AI Picks, Profit Tracker) on the onboarding/marketing screen into **living micro-previews** — small in-card animations that mirror the real in-app screens. No layout overhaul, same 3-column grid and dark card styling, just real component DNA inside each card.
 
-## Findings
+## Source of truth (real in-app components mirrored)
 
-### Bottom-fixed elements MISSING home-indicator clearance
+- **Live Games** → `GamesPage` live game tile: team logo dots, score, pulsing red `LIVE` chip, period/clock.
+- **AI Picks** → `ModernHomeLayout` Today's Edge carousel + analyzer screen: confidence ring (`HitRateRing` style), `+EV` chip in `nba-green`, mini player row.
+- **Profit Tracker** → `ProfitCharts` / `PnLCalendar`: sparkline trending up, green ROI value, micro bar-chart day strip.
 
-| Element | File | Current | Issue |
-|---|---|---|---|
-| Paywall sticky CTA footer | `src/pages/PaywallPage.tsx` (~L416) | `pb-6 px-5` | Sits flush over home indicator |
-| Welcome glass toast button | `src/pages/WelcomeConfirmationPage.tsx` (~L152) | `fixed bottom-8` | `bottom-8` does not adapt to inset |
-| Onboarding Continue/Next/Back rows | `src/pages/OnboardingPage.tsx` (4 screens, end of `SectionContainer`) | inline, container has only `pb-12` | Last button can sit on the home indicator on tall pages |
-| Floating parlay slip | `src/components/FloatingParlaySlip.tsx` (~L24) | `fixed bottom-24` | Constant `24` ignores inset; on big-indicator devices it overlaps |
-| Settings "Saved" toast | `src/pages/SettingsPage.tsx` (~L416) | `fixed bottom-24` | Same as above — adequate today but should follow the pattern |
+## Design — `src/pages/OnboardingPage.tsx` (lines 350–367 only)
 
-### Bottom-fixed elements ALREADY safe (no change)
+Replace the current static pill content. **Layout, grid, card sizing, border, padding all stay the same.** Only the inside changes.
 
-- `BottomTabBar` — uses `paddingBottom: env(safe-area-inset-bottom)` ✓
-- `NbaPropsPage` Analyze button — `sticky bottom-20` inside scroll container, sits above tab bar which already insets ✓
+### Card 1 — Live Games (live game tile)
+- Top: pulsing red dot + "LIVE" in `text-[7px] font-black uppercase tracking-wider text-nba-red`, framer-motion `animate={{ opacity: [1, .4, 1] }}` 1.5s loop.
+- Middle: two team abbreviations (`LAL` vs `BOS`) with dots colored to team accents, score `108–112` in `text-[11px] font-extrabold tabular-nums`.
+- Bottom: `Q4 · 2:14` micro label, `text-[8px] text-muted-foreground/55 tabular-nums`. Clock seconds tick down via `useEffect` setInterval on a single `seconds` state (purely visual; pauses when off-screen via `IntersectionObserver` is overkill — just `setInterval` is fine here).
+- Title row "Live Games" stays, sub-line condenses to "NBA · MLB · NHL" in same `text-[8px] text-muted-foreground/55`.
 
-### Top-anchored headers / titles to verify
+### Card 2 — AI Picks (mini pick row + confidence ring)
+- Top: tiny SVG ring (20px) showing 64% in `text-nba-green`, animated stroke-dashoffset on mount (0.6s ease-out) — same look as `HitRateRing` shrunk down. Center number `64` at `text-[8px] font-black`.
+- Right of ring: stacked "OVER 32.5" / "PTS" mini label at `text-[8px] font-bold`.
+- Bottom: `+EV 7.2%` chip with `bg-nba-green/15 text-nba-green text-[8px] font-extrabold tabular-nums px-1.5 py-0.5 rounded`.
+- Subtle `motion.div` hover/tap: `whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}` on the whole card, easing 0.2s.
 
-| Element | File | Status |
-|---|---|---|
-| Dashboard `MobileHeader` | `src/components/mobile/MobileHeader.tsx` | `pt-safe` ✓ |
-| Onboarding `SectionContainer` | `src/pages/OnboardingPage.tsx` (~L133) | `pt-safe-plus-4` ✓ |
-| Paywall hero | `src/pages/PaywallPage.tsx` (~L197) | `pt-safe` on root ✓ |
-| Welcome page hero | `src/pages/WelcomeConfirmationPage.tsx` (~L24) | `pt-safe` on root ✓ |
-| **Legal page header** | `src/pages/LegalPage.tsx` (~L227–229) | Root has `pt-safe`, but inner header uses `pt-6` extra. Screenshot shows status-bar overlap with title ("Terms of U…" clipped). The inner `px-5 pt-6 pb-4` row needs to start AFTER the safe inset, not add `pt-6` on top of `pt-safe` only on the wrapper — this works in browser but on real device the title still hugs the status bar. Add `pt-safe-plus-2` on the inner header row OR change root from `pt-safe` to `pt-safe-plus-2`. |
-| AdminPage authed | `src/pages/AdminPage.tsx` (~L339) | `pt-safe-plus-4` ✓ |
-| Auth page | `src/pages/AuthPage.tsx` (~L188) | `pt-safe-plus-4` ✓ |
-| Login page | `src/pages/LoginPage.tsx` (~L108) | `pt-safe pb-safe` ✓ |
-| Dashboard route shell | `src/pages/Dashboard.tsx` (~L105) | `pt-safe pb-safe` ✓ |
+### Card 3 — Profit Tracker (sparkline + ROI)
+- Top: 24px-tall inline SVG sparkline polyline trending upward, stroke `hsl(var(--nba-green))` width 1.5, with a `motion.path` `pathLength` animation 0–1 over 0.9s on mount, then a glowing dot at the end-point (radius 1.5, `nba-green` fill, soft shadow).
+- Below: `+$1,284` in `text-[12px] font-extrabold tabular-nums text-nba-green`, sub `text-[8px] uppercase tracking-wider text-muted-foreground/55` reading `30D · ROI +18%`.
+- Title "Profit Tracker" stays.
 
-## Fix
+## Shared interaction polish
+- Wrap each card in `motion.div` with: `initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}` already there from the parent stagger; add `whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }}` and `transition={{ type: "spring", stiffness: 380, damping: 28 }}`.
+- Cards become `<button type="button">` (or `motion.button`) with `aria-label` describing the feature, so they're tappable. Tap currently does nothing visible (no nav) — this is a marketing surface; the tap feedback alone is the "alive" cue. (Confirm with user if a tap should scroll to a deeper section, but per request "not a tooltip or modal" — pure micro-demo.)
+- Replace remaining hex on these cards with tokens we already use elsewhere: `border-border/40`, `bg-card/80`, `text-muted-foreground/55`, `text-nba-green`, `text-nba-red`. No raw `#00FF6A`, `#2A2A2A`, `#141414` inside the new card content.
+- All animations under 1s, easing `[0.32, 0.72, 0, 1]` (matches existing `ease` const in this file). Respect `prefers-reduced-motion` by guarding the looping pulse + clock tick behind `useReducedMotion()` from framer-motion (no loops if reduced).
 
-### 1. Add a "plus" bottom utility in `src/index.css`
-Mirror the existing top utilities so bottom-fixed components can clear the home indicator AND keep their own visual bottom spacing:
+## Implementation notes
 
-```css
-.pb-safe-plus-2 { padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem); }
-.pb-safe-plus-4 { padding-bottom: calc(env(safe-area-inset-bottom) + 1rem); }
-```
-
-(`.pb-safe` already exists.)
-
-### 2. `src/pages/PaywallPage.tsx` — sticky CTA footer (~L416–423)
-Replace `pt-8 pb-6 px-5` with `pt-8 px-5 pb-safe-plus-4`. Background gradient and pointer-events stay identical.
-
-### 3. `src/pages/WelcomeConfirmationPage.tsx` — fixed CTA toast (~L152)
-Replace `fixed bottom-8 left-5 right-5` with `fixed left-5 right-5` and add inline `style={{ bottom: 'calc(env(safe-area-inset-bottom) + 2rem)' }}` (preserves the existing 2rem visual gap on devices without an indicator). All other styles untouched.
-
-### 4. `src/pages/OnboardingPage.tsx` — `SectionContainer` content wrapper (~L133)
-Change `pb-12` on the inner content div to `pb-safe-plus-4` (still gives ~1rem visual padding plus the indicator clearance). Last button row will then sit above the home indicator on every onboarding screen.
-
-### 5. `src/components/FloatingParlaySlip.tsx` (~L24)
-Change `fixed bottom-24 right-4` to `fixed right-4` plus inline `style={{ bottom: 'calc(env(safe-area-inset-bottom) + 6rem)' }}` so it stays above the tab bar (which already has its own inset) regardless of indicator size.
-
-### 6. `src/pages/SettingsPage.tsx` (~L416)
-Same pattern as the parlay slip: replace `bottom-24` with inline `style={{ bottom: 'calc(env(safe-area-inset-bottom) + 6rem)' }}`. Keeps "Saved" toast above tab bar consistently.
-
-### 7. `src/pages/LegalPage.tsx` (~L227)
-Change root from `min-h-screen pb-28 pt-safe` to `min-h-screen pb-safe-plus-4 pt-safe-plus-2`. This adds a small breathing buffer below the status bar (fixes the title clipping in the uploaded screenshot) and replaces the static `pb-28` with proper home-indicator clearance for the bottom of the scroll content.
-
-## Non-goals
-
-- No layout, color, font, animation, icon, or copy changes.
-- `BottomTabBar`, `MobileHeader`, `NbaPropsPage` Analyze button, `Dashboard.tsx`, `AdminPage`, `AuthPage`, `LoginPage`, `OnboardingPage` `SectionContainer` top inset, `PaywallPage` top inset, `WelcomeConfirmationPage` top inset — all already correct, untouched.
-- No changes to in-flow (non-fixed/sticky) bottom content on regular dashboard pages — `<main className="pb-20">` in `DashboardLayout` already sits above the safely-inset tab bar.
+- Add three small inline subcomponents at the bottom of `OnboardingPage.tsx` (or just inline JSX): `LiveGameMini`, `AIPickMini`, `ProfitTrackerMini`. Each ~40 lines, no external deps, no new files.
+- Sparkline = static `points` array, no recharts (keeps bundle untouched and matches the "small native preview" feel).
+- Ring = single `<svg>` with two circles + `strokeDasharray` math, animated via framer-motion `animate` on `strokeDashoffset`.
+- Live clock = `useState(134)` seconds + `setInterval(()=>set(s=>Math.max(0,s-1)),1000)` cleared on unmount; format `Q4 · M:SS`. Loops back to `134` when it hits 0 so it always feels live.
+- Icons stay (`Calendar`, `Brain`, `BarChart3`) but shrink to `w-3 h-3` as a corner accent so the title row reads identically; the demo content is the new visual focus.
 
 ## Files to update
 
-- `src/index.css`
-- `src/pages/PaywallPage.tsx`
-- `src/pages/WelcomeConfirmationPage.tsx`
-- `src/pages/OnboardingPage.tsx`
-- `src/components/FloatingParlaySlip.tsx`
-- `src/pages/SettingsPage.tsx`
-- `src/pages/LegalPage.tsx`
+- `src/pages/OnboardingPage.tsx` (only the feature-pills block, lines ~350–367, plus ~3 small inline subcomponents added in the same file).
 
-## Verification (post-`npx cap sync` rebuild)
+## Non-goals
 
-1. **Paywall**: green "Start Free Trial" button sits visibly above the home indicator on iPhone 14/15.
-2. **Welcome**: glass toast button has clear gap from home indicator.
-3. **Onboarding** (all 4 screens): Continue/Next button rows are not overlapped by the home indicator after scrolling to bottom.
-4. **Floating parlay slip**: clears tab bar AND home indicator on devices with large indicators.
-5. **Settings "Saved" toast**: appears above tab bar consistently.
-6. **Legal**: page title and back button are no longer touching the iOS clock; bottom of scroll list clears the home indicator.
-7. **Browser preview at 390×844**: nothing visually regresses (insets resolve to 0; spacing matches today).
+- No changes to the rest of the onboarding screen, the "Today's Picks" preview card above, or the AI Analysis Preview block.
+- No new routes, no nav on tap, no modals/tooltips.
+- No new dependencies. No new files.
+- No layout/grid/spacing changes around the cards.
+
+## Verification
+
+1. Open `/onboarding` step 1 in 390px preview.
+2. Live Games card: red `LIVE` dot pulses, clock ticks down each second, score is legible at the same size as before.
+3. AI Picks card: confidence ring fills to 64% on mount, `+EV 7.2%` chip is the same green token as the analyzer screen.
+4. Profit Tracker card: sparkline draws in over ~1s, ends with a glowing green dot, `+$1,284` matches the analyzer's stat-value typography.
+5. Tap each card → spring-scale tap feedback, no navigation, no modal.
+6. Toggle macOS "Reduce motion" → loops/animations stop, final states render statically.
+7. Side-by-side vs. live `GamesPage` live tile, `HitRateRing`, and `ProfitCharts` — visual language clearly belongs to the same family.
 
