@@ -2,79 +2,68 @@
 
 ## Goal
 
-Fix system-UI collisions (iOS notch/Dynamic Island/status bar, Android status bar) globally so no screen has content overlapping the device status bar.
+Align the typography, weights, and color tokens on the onboarding **Today's Picks** preview card so its confidence badge, EV figure, YTD ROI, and Win Rate stats look like they belong to the same design system as the full pick analysis screen (the model/edge tiles in `OddsProjection` and the `HitRateRing` averages). Layout stays the same — only type scale, weight, casing, and color treatments change.
 
-## Important note on stack
+## Reference values pulled from the analysis screen
 
-This is a **Vite + React + Capacitor** project, not React Native, so `react-native-safe-area-context` and `SafeAreaView` do not apply. The web equivalent — and the correct fix for Capacitor — is CSS `env(safe-area-inset-*)` plus the Capacitor `StatusBar` plugin so the WebView reports real insets and the status bar overlays consistently.
+- Big percentage display (Our Model / Implied / Edge tiles in `OddsProjection.tsx`):
+  - Value: `text-[16px] font-extrabold tabular-nums`
+  - Sub-label: `text-[8px] font-bold uppercase tracking-wider text-muted-foreground/55`
+- EV readout (Edge Projection row in `OddsProjection.tsx`):
+  - `text-[11px] font-extrabold tabular-nums` + `getEVColor()` token (`text-nba-green` for +EV)
+- Stat hierarchy (Hit Rates section / `HitRateRing.tsx`):
+  - Label: `text-[9px] font-bold uppercase tracking-wider text-muted-foreground`
+  - Value: `font-black tabular-nums` in a semantic color token (`text-nba-green`, `text-nba-blue`, etc.)
 
-## Diagnosis
+The onboarding card currently uses raw hex (`#00FF6A`, `#2A2A2A`, `#0A0A0A`) and inconsistent sizes (`text-sm`, `text-lg`, `text-[8px]`, `text-[9px]`). We'll align those without redesigning the card.
 
-- `index.html` already has `viewport-fit=cover` and `apple-mobile-web-app-status-bar-style=black-translucent` ✓
-- `MobileHeader` already pads `env(safe-area-inset-top)` but the status bar (e.g. iOS clock) visually touches the title because:
-  1. No Capacitor `StatusBar` plugin is installed/configured, so on native iOS/Android the WebView either hides the status bar or insets are reported as `0`.
-  2. Several full-screen pages (`AuthPage`, `OnboardingPage`, `PaywallPage`, `WelcomeConfirmationPage`, `LegalPage`, `AdminPage`, `Dashboard`, `LoginPage`) use `min-h-screen` with no top safe-area padding — content at the top collides with the status bar on these pages.
-  3. The `MobileHeader` content row has no extra top breathing room beyond the inset itself.
+## Changes — `src/pages/OnboardingPage.tsx` (Today's Picks preview block, lines ~250–285)
 
-## Fix
+### 1. Confidence badge + percent (right column of the pick row)
+- "HIGH CONF" pill → match the analysis tile sub-label rhythm:
+  - `text-[8px] font-bold uppercase tracking-wider`
+  - Background stays the green chip but use the same green token used elsewhere (`bg-nba-green/15 text-nba-green`).
+- Confidence number `64%` → match the big-percent treatment from the analysis tiles:
+  - `text-[16px] font-extrabold tabular-nums text-nba-green leading-none`
+- Add a tiny "Confidence" sub-label underneath at `text-[8px] text-muted-foreground/55` to mirror the "Hit Probability" sub-label on the analysis Model tile (keeps the same vertical rhythm).
 
-### 1. Add Capacitor StatusBar plugin
-- Install `@capacitor/status-bar`.
-- In `src/main.tsx` (or a small `setupNative.ts` imported once), on app boot when `Capacitor.isNativePlatform()`:
-  - `StatusBar.setOverlaysWebView({ overlay: true })` — makes the webview render under the status bar so `env(safe-area-inset-top)` returns a real value on Android.
-  - `StatusBar.setStyle({ style: Style.Dark })` for light icons on the dark theme.
-- iOS already overlays via `apple-mobile-web-app-status-bar-style=black-translucent`; this call ensures Android matches.
-- User will need to `npx cap sync` after pulling — note this in the chat reply.
+### 2. EV figure (`+EV: 7.2%`)
+- Match the Edge Projection EV readout:
+  - `text-[11px] font-extrabold tabular-nums text-nba-green`
+- Keep the `+EV:` prefix muted (`text-muted-foreground/55`) so the number itself carries the color weight, exactly like the analysis screen.
 
-### 2. Add global safe-area CSS utilities in `src/index.css`
-- Already has `--safe-top` / `--safe-bottom` tokens. Add reusable utility classes:
-  - `.pt-safe { padding-top: max(env(safe-area-inset-top), 0px); }`
-  - `.pt-safe-plus-2 { padding-top: calc(env(safe-area-inset-top) + 0.5rem); }`
-  - `.pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 0px); }`
-  - `.min-h-screen-safe { min-height: 100dvh; }` (use `dvh` instead of `vh` to avoid mobile-browser address-bar issues)
+### 3. YTD ROI + Win Rate stats row (bottom of card)
+Replace the current `text-[9px]` label / `text-lg` value pattern with the analysis-screen stat hierarchy:
+- Label: `text-[9px] font-bold uppercase tracking-wider text-muted-foreground` (was `text-white/50`)
+- Value: `text-base font-black tabular-nums` (was `text-lg font-extrabold`) with semantic color tokens:
+  - YTD ROI value → `text-nba-green` (positive)
+  - Win Rate value → `text-foreground` (neutral, like the Implied tile in analysis)
+- Sparkline stays as-is, stroke color updated to `hsl(var(--nba-green))` so it shares the token instead of `#00FF6A`.
 
-### 3. `src/components/mobile/MobileHeader.tsx`
-- Replace inline `paddingTop: env(safe-area-inset-top)` with the new `pt-safe` class.
-- Add a small extra `pt-1` on the inner content row so the title sits a few pixels below the status bar instead of flush against it.
+### 4. Token swap (no visual redesign)
+Across this card only, replace the hardcoded hex with the design tokens already used on the analysis screen:
+- `#00FF6A` → `hsl(var(--nba-green))` / `text-nba-green` / `bg-nba-green/15`
+- `#2A2A2A` borders/dividers → `border-border/40`
+- `#141414` card bg → keep the visual but use `vision-card`-style token (`bg-card/80` with existing border) to match the analysis tile surface.
+- `text-white/50` muted text → `text-muted-foreground/55` (matches analysis sub-labels).
 
-### 4. Patch full-screen page wrappers to respect the top inset
-Add `pt-safe` (or `style={{ paddingTop: 'env(safe-area-inset-top)' }}`) to the root container of each non-dashboard page so their headers/content clear the status bar:
+## Non-goals
 
-- `src/pages/AuthPage.tsx`
-- `src/pages/OnboardingPage.tsx` (`SectionContainer`)
-- `src/pages/PaywallPage.tsx`
-- `src/pages/WelcomeConfirmationPage.tsx`
-- `src/pages/LegalPage.tsx`
-- `src/pages/AdminPage.tsx` (both authed and unauthed wrappers)
-- `src/pages/LoginPage.tsx`
-- `src/pages/Dashboard.tsx`
-
-For pages with custom hero/background that must paint edge-to-edge (Onboarding, Paywall, Welcome), keep the background full-bleed and instead apply `pt-safe` only to the inner content wrapper so visuals still extend behind the notch but text/buttons clear it.
-
-### 5. Bottom inset (already handled, verify)
-- `BottomTabBar` already uses `env(safe-area-inset-bottom)` ✓.
-- `DashboardLayout`'s `<main>` uses `pb-20` — fine, no change.
+- No layout, spacing, icon, or content changes.
+- No changes to the actual Today's Edge carousel on the live home screen (`ModernHomeLayout.tsx`) — that one already uses the shared tokens. This is purely the onboarding preview card shown in the screenshot.
+- No changes to the AI Analysis Preview block beneath the stats row.
 
 ## Files to update
 
-- `package.json` (add `@capacitor/status-bar`)
-- `src/main.tsx` — initialize StatusBar plugin on native
-- `src/index.css` — add safe-area utility classes
-- `src/components/mobile/MobileHeader.tsx`
-- `src/pages/AuthPage.tsx`
-- `src/pages/OnboardingPage.tsx`
-- `src/pages/PaywallPage.tsx`
-- `src/pages/WelcomeConfirmationPage.tsx`
-- `src/pages/LegalPage.tsx`
-- `src/pages/AdminPage.tsx`
-- `src/pages/LoginPage.tsx`
-- `src/pages/Dashboard.tsx`
-- `capacitor.config.ts` — add `Plugins: { StatusBar: { overlaysWebView: true, style: 'DARK' } }` for native default
+- `src/pages/OnboardingPage.tsx` (only the Today's Picks preview card markup, lines ~250–285)
 
 ## Verification
 
-- In the in-browser preview at 430px, header and full-screen pages still look unchanged (insets resolve to 0).
-- After user runs `npx cap sync` and rebuilds the iOS app, status bar clock no longer overlaps "Sentinel Dashboard" title or any other screen's top content.
-- On Android, the status bar overlays the gradient background but text/buttons are pushed below it.
-- No screen shows a visible blank/white gap above the header — backgrounds extend behind the notch.
+1. Open `/onboarding` step 1 in the 390px preview.
+2. Confirm the Today's Picks card shows:
+   - "HIGH CONF" pill at the same micro-label scale used by analysis tile labels.
+   - `64%` rendered at the same weight/size as the big percentages on the analysis screen's Model/Implied/Edge tiles.
+   - `+EV: 7.2%` rendered with the same green + size as the Edge Projection EV readout in `OddsProjection`.
+   - YTD ROI and Win Rate values look like the stat tiles in the analysis Hit Rates section: small uppercase muted label paired with a bold tabular-nums number, ROI green, Win Rate neutral foreground.
+3. Side-by-side check vs. the live analyzer (`/dashboard/analyze` → run a player) — type sizes, weights, and color tokens should feel like the same family.
 
