@@ -25,6 +25,7 @@ import {
   X,
   Check,
   Lightbulb,
+  RefreshCw,
 } from "lucide-react";
 import { Bar } from "react-chartjs-2";
 import {
