@@ -944,48 +944,63 @@ function LiveGameMini() {
 
 function AIPickMini() {
   const reduce = useReducedMotion();
-  const radius = 9;
-  const c = 2 * Math.PI * radius;
-  const pct = 64;
-  const offset = c - (pct / 100) * c;
-
+  const picks = [
+    { name: "J. Tatum", matchup: "BOS vs MIA", line: "Over 24.5 Pts", conf: 78, ev: "+7.2%" },
+    { name: "L. Doncic", matchup: "DAL vs PHX", line: "Over 8.5 Ast", conf: 72, ev: "+5.8%" },
+    { name: "S. Curry", matchup: "GSW vs LAL", line: "Over 4.5 3PM", conf: 68, ev: "+4.1%" },
+  ];
   return (
-    <div className="w-full flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <div className="relative w-6 h-6 flex-shrink-0">
-          <svg className="w-full h-full -rotate-90" viewBox="0 0 22 22">
-            <circle cx="11" cy="11" r={radius} fill="none" stroke="hsl(var(--muted) / 0.3)" strokeWidth="2" />
-            <motion.circle
-              cx="11" cy="11" r={radius}
-              fill="none"
-              stroke="hsl(var(--nba-green))"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeDasharray={c}
-              initial={{ strokeDashoffset: reduce ? offset : c }}
-              animate={{ strokeDashoffset: offset }}
-              transition={{ duration: 0.6, ease: microEase }}
-            />
-          </svg>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-[8px] font-black tabular-nums text-nba-green">{pct}</span>
-          </div>
-        </div>
-        <div className="flex flex-col leading-tight min-w-0">
-          <span className="text-[9px] font-bold text-foreground/90 truncate">J. Tatum</span>
-          <span className="text-[7px] text-muted-foreground/55">BOS vs MIA</span>
-          <span className="text-[8px] font-bold text-foreground/70 mt-0.5">Over 24.5 Pts</span>
-        </div>
-      </div>
-      <div className="border-t border-border/20 pt-1.5">
-        <span
-          className="self-start text-nba-green text-[9px] font-extrabold tabular-nums px-2 py-0.5 rounded"
-          style={{ backgroundColor: "hsl(var(--nba-green) / 0.15)" }}
-        >
-          +EV 7.2%
-        </span>
+    <div className="w-full flex flex-col gap-1.5">
+      {picks.map((p, i) => (
+        <PickRow key={p.name} pick={p} delay={reduce ? 0 : 0.05 * i} />
+      ))}
+      <div className="flex items-center justify-between pt-1.5 mt-0.5 border-t border-border/15">
+        <span className="text-[9px] uppercase tracking-wider text-muted-foreground/60">Today's Edge</span>
+        <span className="text-[9px] font-bold text-nba-green">3 of 12 picks</span>
       </div>
     </div>
+  );
+}
+
+function PickRow({ pick, delay }: { pick: { name: string; matchup: string; line: string; conf: number; ev: string }; delay: number }) {
+  const reduce = useReducedMotion();
+  const radius = 9;
+  const c = 2 * Math.PI * radius;
+  const offset = c - (pick.conf / 100) * c;
+  return (
+    <motion.div
+      initial={{ opacity: reduce ? 1 : 0, y: reduce ? 0 : 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, delay, ease: microEase }}
+      className="flex items-center gap-2.5 bg-white/[0.03] rounded-md px-2.5 py-1.5"
+    >
+      <div className="relative w-7 h-7 flex-shrink-0">
+        <svg className="w-full h-full -rotate-90" viewBox="0 0 22 22">
+          <circle cx="11" cy="11" r={radius} fill="none" stroke="hsl(var(--muted) / 0.3)" strokeWidth="2.5" />
+          <motion.circle
+            cx="11" cy="11" r={radius}
+            fill="none"
+            stroke="hsl(var(--nba-green))"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeDasharray={c}
+            initial={{ strokeDashoffset: reduce ? offset : c }}
+            animate={{ strokeDashoffset: offset }}
+            transition={{ duration: 0.6, delay, ease: microEase }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-[9px] font-black tabular-nums text-nba-green">{pick.conf}</span>
+        </div>
+      </div>
+      <div className="flex flex-col leading-tight min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] font-bold text-white truncate">{pick.name}</span>
+          <span className="text-[9px] font-extrabold tabular-nums text-nba-green flex-shrink-0">{pick.ev}</span>
+        </div>
+        <span className="text-[9px] text-muted-foreground/60 truncate">{pick.matchup} · {pick.line}</span>
+      </div>
+    </motion.div>
   );
 }
 
