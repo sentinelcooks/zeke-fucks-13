@@ -179,6 +179,21 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_picks_runs: {
+        Row: {
+          date: string
+          started_at: string
+        }
+        Insert: {
+          date: string
+          started_at?: string
+        }
+        Update: {
+          date?: string
+          started_at?: string
+        }
+        Relationships: []
+      }
       fingerprint_log: {
         Row: {
           device_fingerprint: string
