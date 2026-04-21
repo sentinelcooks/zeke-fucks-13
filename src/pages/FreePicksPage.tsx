@@ -282,7 +282,7 @@ const FreePicksPage = () => {
                 {tab.label}
                 {count > 0 && (
                   <span className={`text-[9px] px-1 py-0.5 rounded-md font-bold ${
-                    active ? "bg-white/20" : "bg-secondary"
+                    active ? "bg-[hsla(142,60%,30%,0.5)] text-[hsl(142,70%,80%)]" : "bg-secondary"
                   }`}>
                     {count}
                   </span>
