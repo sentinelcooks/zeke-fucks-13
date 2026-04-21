@@ -157,20 +157,9 @@ const AuthPage = () => {
       const result = mode === "login"
         ? await signIn(email, password)
         : await signUp(email, password, displayName || undefined);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    if (!email || !password) { setError("Please fill in all fields"); return; }
-    if (password.length < 6) { setError("Password must be at least 6 characters"); return; }
-
-    setLoading(true);
-    try {
-      const result = mode === "login"
-        ? await signIn(email, password)
-        : await signUp(email, password, displayName || undefined);
       if (result.error) setError(result.error);
       else {
+        persistRememberChoice(remember);
         const { data: { user: authUser } } = await supabase.auth.getUser();
         if (authUser) await saveOnboardingToDb(authUser.id);
         navigate("/dashboard");
