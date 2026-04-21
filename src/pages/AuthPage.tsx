@@ -175,6 +175,7 @@ const AuthPage = () => {
     setError("");
     setOauthLoading(provider);
     try {
+      persistRememberChoice(remember);
       const result = await lovable.auth.signInWithOAuth(provider, {
         redirect_uri: window.location.origin + "/auth",
       });
