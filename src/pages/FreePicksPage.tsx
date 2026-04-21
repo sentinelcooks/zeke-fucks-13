@@ -270,11 +270,11 @@ const FreePicksPage = () => {
                 onClick={() => setActiveTab(tab.key)}
                 className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold tracking-wide transition-all ${
                   active
-                    ? "text-white shadow-lg shadow-accent/20"
+                    ? "text-[hsl(142,70%,75%)]"
                     : "text-muted-foreground/50 hover:text-muted-foreground/70"
                 }`}
                 style={active
-                  ? { background: "linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))" }
+                  ? { background: "hsla(142, 60%, 22%, 0.35)", border: "1px solid hsla(142, 70%, 45%, 0.35)" }
                   : { background: "hsla(228, 20%, 12%, 0.6)", border: "1px solid hsla(228, 20%, 18%, 0.3)" }
                 }
               >
