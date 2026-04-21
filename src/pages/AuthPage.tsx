@@ -49,7 +49,17 @@ const AuthPage = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<"google" | "apple" | null>(null);
-  const [remember, setRemember] = useState(true);
+  const [remember, setRemember] = useState(
+    () => localStorage.getItem("primal-remember") !== "false"
+  );
+
+  const persistRememberChoice = (value: boolean) => {
+    if (value) {
+      localStorage.setItem("primal-remember", "true");
+    } else {
+      localStorage.removeItem("primal-remember");
+    }
+  };
   const { signIn, signUp, isAuthenticated, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
@@ -126,6 +136,7 @@ const AuthPage = () => {
     const sub = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
+        if (event === "SIGNED_IN") persistRememberChoice(remember);
         await saveOnboardingToDb(session.user.id);
       }
     });
@@ -133,7 +144,7 @@ const AuthPage = () => {
       mounted = false;
       sub.data.subscription.unsubscribe();
     };
-  }, [saveOnboardingToDb]);
+  }, [saveOnboardingToDb, remember]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,6 +159,7 @@ const AuthPage = () => {
         : await signUp(email, password, displayName || undefined);
       if (result.error) setError(result.error);
       else {
+        persistRememberChoice(remember);
         const { data: { user: authUser } } = await supabase.auth.getUser();
         if (authUser) await saveOnboardingToDb(authUser.id);
         navigate("/dashboard");
@@ -163,6 +175,7 @@ const AuthPage = () => {
     setError("");
     setOauthLoading(provider);
     try {
+      persistRememberChoice(remember);
       const result = await lovable.auth.signInWithOAuth(provider, {
         redirect_uri: window.location.origin + "/auth",
       });
