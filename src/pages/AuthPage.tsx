@@ -49,7 +49,17 @@ const AuthPage = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<"google" | "apple" | null>(null);
-  const [remember, setRemember] = useState(true);
+  const [remember, setRemember] = useState(
+    () => localStorage.getItem("primal-remember") !== "false"
+  );
+
+  const persistRememberChoice = (value: boolean) => {
+    if (value) {
+      localStorage.setItem("primal-remember", "true");
+    } else {
+      localStorage.removeItem("primal-remember");
+    }
+  };
   const { signIn, signUp, isAuthenticated, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
