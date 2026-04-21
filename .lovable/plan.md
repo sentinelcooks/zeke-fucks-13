@@ -2,79 +2,54 @@
 
 ## Goal
 
-Fix "Remember Me" on the email/password sign-in & sign-up screen so a checked box keeps the user logged in across browser closes, and an unchecked box ends the session when the tab/browser closes.
+Replace the "Lovable" name shown on the Google and Apple sign-in sheets with **"Sentinel"** so users see your brand during OAuth.
 
-## Root cause (verified)
+## Why this is a config task, not a code change
 
-The contract is already wired everywhere **except the writer**:
+The provider name on the consent screen ("Continue to Lovable") comes from the **OAuth client registered with Google/Apple**, not from your app's code. Right now your project uses Lovable Cloud's managed/shared OAuth client, which is registered as "Lovable". To show "Sentinel", you need to register your own OAuth clients under your own Google Cloud + Apple Developer accounts, then plug those credentials into Lovable Cloud's Auth settings.
 
-- `src/contexts/AuthContext.tsx` lines 94–107 — on every fresh tab open, if `localStorage["primal-remember"] !== "true"`, it calls `supabase.auth.signOut()` and clears the session. This is the kill switch.
-- `src/services/api.ts`, `src/services/oddsApi.ts`, `src/components/MoneyLineSection.tsx` — all read the same `primal-remember` flag to decide between `localStorage` vs `sessionStorage` for the legacy session token.
-- `src/pages/LoginPage.tsx` lines 82–86 — correctly writes `localStorage.setItem("primal-remember", "true")` (or removes it) on successful key login.
-- **`src/pages/AuthPage.tsx`** — has the `remember` checkbox state (line 52, default `true`) and renders it (lines 375–384), but **never writes it to localStorage** in `handleSubmit` (line 138) or in the OAuth handler (line 162). Result: every email/password and Google/Apple sign-in leaves the flag at whatever it was before (usually unset → falsy), so on the next browser open `AuthContext` immediately signs them out.
+The existing `lovable.auth.signInWithOAuth("google" | "apple", …)` code in `AuthPage.tsx` keeps working unchanged — it automatically uses your credentials once they're configured.
 
-Supabase's own session is already configured to persist (`src/integrations/supabase/client.ts`: `storage: localStorage, persistSession: true, autoRefreshToken: true`), so the only thing breaking persistence is the missing flag write.
+## Steps you'll perform (I cannot do these — they require your Google + Apple developer accounts)
 
-## Fix — one file
+### A. Google — register a Sentinel OAuth client
 
-### `src/pages/AuthPage.tsx`
+1. Go to https://console.cloud.google.com/ → create/select a project named **Sentinel**.
+2. **APIs & Services → OAuth consent screen**:
+   - App name: **Sentinel**
+   - User support email + logo (this is what users will see)
+   - Authorized domains: `lovable.app` (and your custom domain if any)
+   - Scopes: `openid`, `userinfo.email`, `userinfo.profile`
+3. **Credentials → Create credentials → OAuth client ID** → Web application:
+   - Authorized redirect URI: `https://opvlboxntlyvftvwdkqr.supabase.co/auth/v1/callback`
+4. Copy the **Client ID** and **Client Secret**.
+5. In Lovable: open **Cloud Dashboard → Users → Authentication Settings → Sign In Methods → Google** → switch to "Use your own credentials" → paste Client ID + Secret → Save.
 
-1. Initialize `remember` from the stored flag so the checkbox reflects the user's last choice when they return:
-   ```ts
-   const [remember, setRemember] = useState(
-     () => localStorage.getItem("primal-remember") !== "false"  // default true
-   );
-   ```
+### B. Apple — register a Sentinel Services ID
 
-2. Add a tiny helper used by every successful auth path:
-   ```ts
-   const persistRememberChoice = (value: boolean) => {
-     if (value) {
-       localStorage.setItem("primal-remember", "true");
-     } else {
-       localStorage.removeItem("primal-remember");
-     }
-   };
-   ```
+1. https://developer.apple.com/account → **Identifiers → +** → **Services IDs**:
+   - Description: **Sentinel**
+   - Identifier: e.g. `com.sentinel.web`
+   - Enable **Sign In with Apple** → Configure:
+     - Primary App ID: your Sentinel App ID (create one if needed)
+     - Domains: `auth-key-portal.lovable.app` (+ custom domain if any)
+     - Return URLs: `https://opvlboxntlyvftvwdkqr.supabase.co/auth/v1/callback`
+2. **Keys → +** → enable **Sign In with Apple** → download the `.p8` file → note the **Key ID**.
+3. Note your **Team ID** (top right of Apple Developer console).
+4. In Lovable: **Cloud Dashboard → Users → Authentication Settings → Sign In Methods → Apple** → "Use your own credentials" → click **Generate Secret** → fill Team ID, Key ID, Client ID (the Services ID = `com.sentinel.web`), and paste the `.p8` contents → it produces a JWT (valid 6 months) → Save.
+   - Set a calendar reminder to regenerate the JWT before expiry.
 
-3. Call it in **three** spots:
-   - Inside `handleSubmit` right after `result.error` is falsy (line ~150), before the `navigate("/dashboard")`.
-   - Inside `handleOAuth` right before `lovable.auth.signInWithOAuth(...)` is invoked (line ~166) — must persist *before* the redirect because the callback comes back to a fresh page load.
-   - Inside the `onAuthStateChange` listener (line ~126) on `SIGNED_IN`, as a final safety net so the flag is always written when a session is established (covers the OAuth return path even if the user closed/reopened the tab mid-flow).
+### C. Verify
 
-That's the entire code change. No DB schema changes, no edge function changes, no Supabase client changes.
-
-## Why this is sufficient
-
-- With `remember=true`: flag is `"true"` in `localStorage`. `AuthContext` line 100 short-circuits and keeps the session. Supabase's `localStorage`-backed session is already long-lived (refresh token auto-rotates, default ~30 days, refreshed on every visit).
-- With `remember=false`: flag is removed. On the next fresh tab (`isNewTab` true at line 97), `AuthContext` signs out and forces re-auth. Existing behavior, now actually reachable.
+1. Sign out, click "Continue with Google" → consent sheet now reads **"Sign in to continue to Sentinel"** with your logo.
+2. Same for Apple → sheet shows **Sentinel**.
+3. Confirm sign-in still completes and lands on `/dashboard`.
 
 ## Files changed
 
-- `src/pages/AuthPage.tsx` — initialize `remember` from storage, persist it on submit + OAuth + `SIGNED_IN`.
+None. No code, no migrations, no edge functions. Pure dashboard configuration on Google, Apple, and Lovable Cloud.
 
-## Non-goals
+## Action button I'll give you
 
-- No change to `LoginPage.tsx` (already correct).
-- No change to `AuthContext.tsx` — its read logic is correct.
-- No change to Supabase client storage settings (already `localStorage` + `persistSession`).
-- No new tables or migrations. Supabase auth's own refresh tokens already provide ~30‑day persistence; we're not lengthening that further.
-
-## Verification (will run after approval)
-
-1. **DB query** — confirm Supabase already manages persistent sessions via `auth.refresh_tokens`:
-   ```sql
-   SELECT COUNT(*) AS active_refresh_tokens
-   FROM auth.refresh_tokens
-   WHERE revoked = false;
-   ```
-   Paste result. (No schema change expected — the persistence layer is Supabase-managed; this just proves it's live.)
-
-2. **Manual test in preview**:
-   - Sign in with Remember Me checked → verify `localStorage["primal-remember"] === "true"` and `localStorage["sb-opvlboxntlyvftvwdkqr-auth-token"]` is present.
-   - Hard reload / close & reopen tab → land on `/dashboard` without re-auth prompt.
-   - Sign out, sign back in with Remember Me **unchecked** → verify the flag is absent, close/reopen tab → forced back to `/auth`.
-   - Repeat for Google OAuth path.
-
-3. Paste a summary of all three checks (flag value, refresh-token count, manual flow result) before marking done.
+After approval, I'll surface a button to open the Cloud dashboard so you can paste the credentials directly.
 
