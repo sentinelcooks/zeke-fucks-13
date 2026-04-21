@@ -2,67 +2,79 @@
 
 ## Goal
 
-Stop "Today's Edge" from showing duplicates of the same pick (e.g. Josh Hart Under 0.5 Blocks appearing 3×). Verified in DB: today there are 3 identical rows for Josh Hart and 3 for Christian Braun — exact same `sport / player_name / prop_type / line / direction / pick_date / tier`.
+Fix "Remember Me" on the email/password sign-in & sign-up screen so a checked box keeps the user logged in across browser closes, and an unchecked box ends the session when the tab/browser closes.
 
 ## Root cause (verified)
 
-Three layers all fail to enforce uniqueness:
+The contract is already wired everywhere **except the writer**:
 
-1. **No DB-level unique constraint.** `daily_picks` only has a `PRIMARY KEY (id)`. Nothing in Postgres prevents identical rows.
-2. **`daily-picks` edge function uses `DELETE then INSERT` (not transactional)** — `supabase/functions/daily-picks/index.ts` lines 735 + 768. If the function gets invoked twice in parallel (e.g. cron + manual `regenerate` from admin, or two browsers refreshing the home page during a regen), Run B deletes after Run A inserts, then both insert their own copies. With 3 duplicates we likely had 3 overlapping invocations.
-3. **The home carousel reads everything raw** — `src/components/home/ModernHomeLayout.tsx` line 275/308 just `.select("*")` and filters by tier, so any duplicate row in the table renders as a duplicate card.
+- `src/contexts/AuthContext.tsx` lines 94–107 — on every fresh tab open, if `localStorage["primal-remember"] !== "true"`, it calls `supabase.auth.signOut()` and clears the session. This is the kill switch.
+- `src/services/api.ts`, `src/services/oddsApi.ts`, `src/components/MoneyLineSection.tsx` — all read the same `primal-remember` flag to decide between `localStorage` vs `sessionStorage` for the legacy session token.
+- `src/pages/LoginPage.tsx` lines 82–86 — correctly writes `localStorage.setItem("primal-remember", "true")` (or removes it) on successful key login.
+- **`src/pages/AuthPage.tsx`** — has the `remember` checkbox state (line 52, default `true`) and renders it (lines 375–384), but **never writes it to localStorage** in `handleSubmit` (line 138) or in the OAuth handler (line 162). Result: every email/password and Google/Apple sign-in leaves the flag at whatever it was before (usually unset → falsy), so on the next browser open `AuthContext` immediately signs them out.
 
-The in-function dedupe at line 680–686 (keyed by `sport|player|prop_type`) only protects within a single run; it can't protect against parallel runs.
+Supabase's own session is already configured to persist (`src/integrations/supabase/client.ts`: `storage: localStorage, persistSession: true, autoRefreshToken: true`), so the only thing breaking persistence is the missing flag write.
 
-## Fix (defense in depth)
+## Fix — one file
 
-### 1. DB migration — add unique index
-Add a partial unique index on the natural identity of a pick so the database itself rejects duplicates:
+### `src/pages/AuthPage.tsx`
 
-```sql
-CREATE UNIQUE INDEX IF NOT EXISTS daily_picks_unique_per_day
-ON public.daily_picks (
-  pick_date, sport, tier,
-  COALESCE(player_name,''),
-  COALESCE(prop_type,''),
-  COALESCE(direction,''),
-  COALESCE(line, -9999)
-);
-```
-Then de-dupe existing rows (keep oldest `id` per group) before creating the index, in the same migration.
+1. Initialize `remember` from the stored flag so the checkbox reflects the user's last choice when they return:
+   ```ts
+   const [remember, setRemember] = useState(
+     () => localStorage.getItem("primal-remember") !== "false"  // default true
+   );
+   ```
 
-### 2. `supabase/functions/daily-picks/index.ts`
-- Replace the `INSERT` at line 768 with `upsert(rows, { onConflict: 'pick_date,sport,tier,player_name,prop_type,direction,line', ignoreDuplicates: true })`. With the new unique index, any concurrent run becomes a no-op for already-persisted rows instead of a duplicate.
-- Keep the existing `DELETE` at line 735 (still wipes stale rows from earlier runs of the day) but wrap the delete+upsert sequence behind a simple in-process guard: store a row in a tiny `daily_picks_runs(date PRIMARY KEY, started_at)` table with `INSERT ... ON CONFLICT DO NOTHING` at the start of the function — if the insert returns no row, another run is already in flight and we exit early.
+2. Add a tiny helper used by every successful auth path:
+   ```ts
+   const persistRememberChoice = (value: boolean) => {
+     if (value) {
+       localStorage.setItem("primal-remember", "true");
+     } else {
+       localStorage.removeItem("primal-remember");
+     }
+   };
+   ```
 
-### 3. `src/components/home/ModernHomeLayout.tsx` (defensive client dedupe)
-After line 289 (`allToday = …`), collapse to one entry per natural key so any pre-existing duplicate rows still in the DB render once:
+3. Call it in **three** spots:
+   - Inside `handleSubmit` right after `result.error` is falsy (line ~150), before the `navigate("/dashboard")`.
+   - Inside `handleOAuth` right before `lovable.auth.signInWithOAuth(...)` is invoked (line ~166) — must persist *before* the redirect because the callback comes back to a fresh page load.
+   - Inside the `onAuthStateChange` listener (line ~126) on `SIGNED_IN`, as a final safety net so the flag is always written when a session is established (covers the OAuth return path even if the user closed/reopened the tab mid-flow).
 
-```ts
-const seen = new Set<string>();
-const dedupedToday = allToday.filter(p => {
-  const k = `${p.sport}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}|${p.tier}`;
-  if (seen.has(k)) return false;
-  seen.add(k);
-  return true;
-});
-```
-Use `dedupedToday` for the subsequent `edgeTier`/`dailyTier` split.
+That's the entire code change. No DB schema changes, no edge function changes, no Supabase client changes.
+
+## Why this is sufficient
+
+- With `remember=true`: flag is `"true"` in `localStorage`. `AuthContext` line 100 short-circuits and keeps the session. Supabase's `localStorage`-backed session is already long-lived (refresh token auto-rotates, default ~30 days, refreshed on every visit).
+- With `remember=false`: flag is removed. On the next fresh tab (`isNewTab` true at line 97), `AuthContext` signs out and forces re-auth. Existing behavior, now actually reachable.
 
 ## Files changed
 
-- New migration: add unique index + de-dupe existing rows + create `daily_picks_runs` lock table.
-- `supabase/functions/daily-picks/index.ts` — switch insert→upsert, add run-lock guard.
-- `src/components/home/ModernHomeLayout.tsx` — client-side dedupe before rendering carousel.
+- `src/pages/AuthPage.tsx` — initialize `remember` from storage, persist it on submit + OAuth + `SIGNED_IN`.
 
 ## Non-goals
 
-- No changes to the scoring model, tier thresholds, grade-picks, or admin Edge History tab.
-- No backfill of yesterday's data (we'll just dedupe today and forward).
+- No change to `LoginPage.tsx` (already correct).
+- No change to `AuthContext.tsx` — its read logic is correct.
+- No change to Supabase client storage settings (already `localStorage` + `persistSession`).
+- No new tables or migrations. Supabase auth's own refresh tokens already provide ~30‑day persistence; we're not lengthening that further.
 
-## Verification
+## Verification (will run after approval)
 
-1. Open Home → Today's Edge: Josh Hart Under 0.5 Blocks appears **once**, Christian Braun Under 0.5 Blocks appears **once** (immediate fix from client dedupe).
-2. Trigger `daily-picks` regen twice in quick succession from the admin tab → DB still has exactly one row per natural key (verified via `SELECT pick_date, player_name, prop_type, line, direction, COUNT(*) FROM daily_picks WHERE pick_date = CURRENT_DATE GROUP BY 1,2,3,4,5 HAVING COUNT(*) > 1` returning zero rows).
-3. Edge History tab in Admin: counts and hit rate now reflect deduped reality, not inflated by triplicates.
+1. **DB query** — confirm Supabase already manages persistent sessions via `auth.refresh_tokens`:
+   ```sql
+   SELECT COUNT(*) AS active_refresh_tokens
+   FROM auth.refresh_tokens
+   WHERE revoked = false;
+   ```
+   Paste result. (No schema change expected — the persistence layer is Supabase-managed; this just proves it's live.)
+
+2. **Manual test in preview**:
+   - Sign in with Remember Me checked → verify `localStorage["primal-remember"] === "true"` and `localStorage["sb-opvlboxntlyvftvwdkqr-auth-token"]` is present.
+   - Hard reload / close & reopen tab → land on `/dashboard` without re-auth prompt.
+   - Sign out, sign back in with Remember Me **unchecked** → verify the flag is absent, close/reopen tab → forced back to `/auth`.
+   - Repeat for Google OAuth path.
+
+3. Paste a summary of all three checks (flag value, refresh-token count, manual flow result) before marking done.
 
