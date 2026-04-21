@@ -136,6 +136,7 @@ const AuthPage = () => {
     const sub = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
+        if (event === "SIGNED_IN") persistRememberChoice(remember);
         await saveOnboardingToDb(session.user.id);
       }
     });
@@ -143,7 +144,19 @@ const AuthPage = () => {
       mounted = false;
       sub.data.subscription.unsubscribe();
     };
-  }, [saveOnboardingToDb]);
+  }, [saveOnboardingToDb, remember]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!email || !password) { setError("Please fill in all fields"); return; }
+    if (password.length < 6) { setError("Password must be at least 6 characters"); return; }
+
+    setLoading(true);
+    try {
+      const result = mode === "login"
+        ? await signIn(email, password)
+        : await signUp(email, password, displayName || undefined);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
