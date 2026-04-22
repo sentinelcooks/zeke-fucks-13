@@ -1,6 +1,43 @@
-// Unified scoring + verdict tiering for the daily slate engine. v2-strict-longshot-cap
-// qualityScore = confidence * reliability * (1 + edge) * hitRateFactor
+// Unified scoring + verdict tiering for the daily slate engine. v3-calibrated
+// qualityScore = calibratedProb * reliability * (1 + edge) * hitRateFactor
+//
+// v3 changes (vs v2-strict-longshot-cap):
+//   • probability math lives in prob_math.ts (vig removal + calibration + shrinkage)
+//   • tier thresholds live in thresholds.ts (single source of truth)
+//   • `projected_prob` and `confidence` are now CALIBRATED (0-1); callers pass the
+//     raw model confidence and we calibrate + de-vig here if the caller
+//     supplies an opposing American price (`odds_opp`).
+//   • rankAndDistribute fallback filler now pulls from the full sorted list
+//     (Strong + Lean), not the already-drained Strong set — fixes empty
+//     Today's Edge on slow slates.
+//
 // All probabilities are 0-1 scale.
+
+import {
+  americanToImplied,
+  fairImpliedFromPair,
+  calcEvPct,
+  applyCalibration,
+  clamp01,
+  type Calibration,
+} from "./prob_math.ts";
+import {
+  PROB_STRONG,
+  PROB_LEAN,
+  PROB_FLOOR,
+  EDGE_STRONG_MIN,
+  EDGE_LEAN_MIN,
+  RELIABILITY_STRONG_MIN,
+  RELIABILITY_LEAN_MIN,
+  RELIABILITY_FLOOR,
+  LONGSHOT_ODDS_MAX,
+  MID_LONGSHOT_ODDS_MIN,
+  MID_LONGSHOT_CONF_MIN,
+  MID_LONGSHOT_EDGE_MIN,
+  MID_LONGSHOT_RELIABILITY_MIN,
+  VOLATILE_UNDER_CONF_MIN,
+  VOLATILE_UNDER_EDGE_MIN,
+} from "./thresholds.ts";
 
 export interface ScoredPlay {
   sport: string;
@@ -16,27 +53,23 @@ export interface ScoredPlay {
   total_line?: number | null;
   direction: string;
   odds: number;
-  projected_prob: number;
-  implied_prob: number;
-  edge: number;
+  odds_opp?: number | null;       // opposing book price, if known — used for vig removal
+  projected_prob: number;          // calibrated probability of the bet cashing
+  implied_prob: number;            // fair (vig-removed) implied prob of the bet
+  raw_implied_prob: number;        // unadjusted american→implied (audit only)
+  edge: number;                    // projected_prob − implied_prob (vig-free)
   ev_pct: number;
-  confidence: number;
-  reliability: number;       // 0.4-1.0 market reliability
-  score: number;             // legacy edge*confidence
-  quality_score: number;     // composite curated score
+  confidence: number;              // = projected_prob, kept for legacy readers
+  raw_confidence: number;          // pre-calibration factor-sum score (0-1)
+  reliability: number;             // 0.4-1.0 market reliability
+  score: number;                   // legacy edge*confidence
+  quality_score: number;           // composite curated score
   verdict: "Strong" | "Lean" | "Pass";
   reasoning: string;
 }
 
-export function americanToImpliedProb(odds: number): number {
-  if (!odds) return 0;
-  return odds > 0 ? 100 / (odds + 100) : -odds / (-odds + 100);
-}
-
-export function calcEv(projectedProb: number, americanOdds: number): number {
-  const decimal = americanOdds > 0 ? americanOdds / 100 + 1 : 100 / -americanOdds + 1;
-  return (projectedProb * (decimal - 1) - (1 - projectedProb)) * 100;
-}
+// Back-compat exports — new callers should import from prob_math.ts directly.
+export { americanToImplied as americanToImpliedProb, calcEvPct as calcEv };
 
 // ── Market reliability map ─────────────────────────────────
 // 1.0 = highly stable / repeatable signal
@@ -64,7 +97,7 @@ export function getMarketReliability(
   betType: string,
   propType: string,
   direction: string,
-  odds: number
+  odds: number,
 ): number {
   // Game lines
   if (betType === "moneyline") {
@@ -94,7 +127,7 @@ export function getMarketReliability(
 export function computeQualityScore(
   confidence: number,
   edge: number,
-  reliability: number
+  reliability: number,
 ): number {
   const hitRateFactor = Math.max(0, (confidence - 0.5) * 2); // 0 at 50%, 1 at 100%
   return confidence * reliability * (1 + Math.max(0, edge)) * (0.5 + 0.5 * hitRateFactor);
@@ -107,29 +140,32 @@ export function tierVerdict(
   betType: string,
   propType: string,
   direction: string,
-  odds: number
+  odds: number,
 ): "Strong" | "Lean" | "Pass" {
   const key = (propType || "").toLowerCase().replace(/\s+/g, "_");
   const isUnder = (direction || "").toLowerCase() === "under";
 
-  // ABSOLUTE CAP: never surface anything at +500 or longer regardless of model confidence
-  if (odds >= 500) return "Pass";
+  // Absolute longshot cap — never surface +LONGSHOT_ODDS_MAX or longer.
+  if (odds >= LONGSHOT_ODDS_MAX) return "Pass";
 
-  // Hard gate: mid-longshots (+250 to +499) require elite numbers
-  const isLongshot = odds >= 250;
-  // Hard gate: volatile-market unders need stricter numbers
+  const isLongshot = odds >= MID_LONGSHOT_ODDS_MIN;
   const isVolatileUnder = isUnder && LOW_RELIABILITY_PROPS.has(key);
+
   if (isLongshot) {
-    if (confidence >= 0.72 && edge >= 0.06 && reliability >= 0.65) return "Strong";
+    if (
+      confidence >= MID_LONGSHOT_CONF_MIN &&
+      edge >= MID_LONGSHOT_EDGE_MIN &&
+      reliability >= MID_LONGSHOT_RELIABILITY_MIN
+    ) return "Strong";
     return "Pass";
   }
   if (isVolatileUnder) {
-    if (confidence >= 0.70 && edge >= 0.06) return "Strong";
+    if (confidence >= VOLATILE_UNDER_CONF_MIN && edge >= VOLATILE_UNDER_EDGE_MIN) return "Strong";
     return "Pass";
   }
 
-  if (confidence >= 0.65 && edge >= 0.03 && reliability >= 0.70) return "Strong";
-  if (confidence >= 0.60 && edge >= 0.025 && reliability >= 0.65) return "Lean";
+  if (confidence >= PROB_STRONG && edge >= EDGE_STRONG_MIN && reliability >= RELIABILITY_STRONG_MIN) return "Strong";
+  if (confidence >= PROB_LEAN && edge >= EDGE_LEAN_MIN && reliability >= RELIABILITY_LEAN_MIN) return "Lean";
   return "Pass";
 }
 
@@ -159,32 +195,139 @@ export function buildReasoning(p: {
   return `${p.player_name} ${p.direction} ${p.line} ${p.prop_type}: ${conf}% hit rate, ${edgePct}% edge (${relTag}).`;
 }
 
-export function score(
-  play: Omit<ScoredPlay, "score" | "quality_score" | "verdict" | "reasoning" | "reliability"> & { reliability?: number }
+// ── Primary scorer ────────────────────────────────────────
+// Accepts raw model confidence (0-1 or 0-100). Performs:
+//   1. Vig removal (if odds_opp supplied).
+//   2. Calibration (if calibration supplied).
+//   3. Reliability / verdict / quality-score assembly.
+export interface ScoreInput {
+  sport: string;
+  bet_type: "prop" | "moneyline" | "spread" | "total";
+  player_name: string;
+  team?: string | null;
+  opponent?: string | null;
+  home_team?: string | null;
+  away_team?: string | null;
+  prop_type: string;
+  line: number;
+  spread_line?: number | null;
+  total_line?: number | null;
+  direction: string;
+  odds: number;
+  odds_opp?: number | null;
+  // Raw confidence — either 0-100 (percent) or 0-1. We detect and normalize.
+  raw_confidence: number;
+  // Optional explicit calibration; if omitted, identity is used.
+  calibration?: Calibration;
+  // Optional reliability override (otherwise derived from market table).
+  reliability?: number;
+}
+
+export function score(input: ScoreInput): ScoredPlay {
+  // Normalize raw confidence to 0-1.
+  const raw01 = clamp01(
+    input.raw_confidence > 1 ? input.raw_confidence / 100 : input.raw_confidence,
+  );
+  const calibrated = input.calibration
+    ? clamp01(applyCalibration(raw01, input.calibration))
+    : raw01;
+
+  const rawImplied = americanToImplied(input.odds);
+  const fairImplied =
+    input.odds_opp != null ? fairImpliedFromPair(input.odds, input.odds_opp) : rawImplied;
+
+  const edge = calibrated - fairImplied;
+  const evPct = calcEvPct(calibrated, input.odds);
+
+  const reliability = input.reliability ?? getMarketReliability(input.bet_type, input.prop_type, input.direction, input.odds);
+  const legacyScore = edge * calibrated;
+  const qualityScore = computeQualityScore(calibrated, edge, reliability);
+  const verdict = tierVerdict(calibrated, edge, reliability, input.bet_type, input.prop_type, input.direction, input.odds);
+  const reasoning = buildReasoning({
+    bet_type: input.bet_type,
+    player_name: input.player_name,
+    prop_type: input.prop_type,
+    line: input.line,
+    direction: input.direction,
+    edge,
+    confidence: calibrated,
+    ev_pct: evPct,
+    reliability,
+  });
+
+  return {
+    sport: input.sport,
+    bet_type: input.bet_type,
+    player_name: input.player_name,
+    team: input.team ?? null,
+    opponent: input.opponent ?? null,
+    home_team: input.home_team ?? null,
+    away_team: input.away_team ?? null,
+    prop_type: input.prop_type,
+    line: input.line,
+    spread_line: input.spread_line ?? null,
+    total_line: input.total_line ?? null,
+    direction: input.direction,
+    odds: input.odds,
+    odds_opp: input.odds_opp ?? null,
+    projected_prob: calibrated,
+    implied_prob: fairImplied,
+    raw_implied_prob: rawImplied,
+    edge,
+    ev_pct: evPct,
+    confidence: calibrated,
+    raw_confidence: raw01,
+    reliability,
+    score: legacyScore,
+    quality_score: qualityScore,
+    verdict,
+    reasoning,
+  };
+}
+
+// Legacy shape for callers that already did their own calibration/vig work
+// and just want to stuff a fully-formed row through reliability + verdict.
+export function scorePrecomputed(
+  play: Omit<ScoredPlay, "score" | "quality_score" | "verdict" | "reasoning" | "reliability" | "raw_confidence" | "raw_implied_prob" | "odds_opp"> & {
+    reliability?: number;
+    raw_confidence?: number;
+    raw_implied_prob?: number;
+    odds_opp?: number | null;
+  },
 ): ScoredPlay {
   const reliability = play.reliability ?? getMarketReliability(play.bet_type, play.prop_type, play.direction, play.odds);
   const s = play.edge * play.confidence;
   const quality_score = computeQualityScore(play.confidence, play.edge, reliability);
   const verdict = tierVerdict(play.confidence, play.edge, reliability, play.bet_type, play.prop_type, play.direction, play.odds);
   const reasoning = buildReasoning({ ...play, reliability });
-  return { ...play, reliability, score: s, quality_score, verdict, reasoning };
+  return {
+    ...play,
+    odds_opp: play.odds_opp ?? null,
+    raw_confidence: play.raw_confidence ?? play.confidence,
+    raw_implied_prob: play.raw_implied_prob ?? play.implied_prob,
+    reliability,
+    score: s,
+    quality_score,
+    verdict,
+    reasoning,
+  } as ScoredPlay;
 }
 
 // ── Ranking + distribution with quality caps ──────────────
-const PER_SPORT_CAP = 25;            // raised so Picks tab gets the full slate per sport
+const PER_SPORT_CAP = 25;
 const MAX_LOW_RELIABILITY_TOTAL = 0;
 const FREE_PICKS_CAP = 30;
 const TODAYS_EDGE_CAP = 5;
-const DAILY_PICKS_CAP = 80;           // raised so all surviving analyzer-validated picks reach the Picks tab
+const DAILY_PICKS_CAP = 80;
 
 export function rankAndDistribute(plays: ScoredPlay[]) {
-  // 1. Hard floor: drop anything that fails the absolute minimums
+  // 1. Hard floor: drop anything that fails the absolute minimums.
   const floorOk = plays.filter(
-    (p) => p.confidence >= 0.62 && p.reliability >= 0.40 && p.edge > 0
+    (p) => p.confidence >= PROB_FLOOR && p.reliability >= RELIABILITY_FLOOR && p.edge > 0,
   );
-  // 2. Reject anything that fails verdict tiering
+  // 2. Reject anything that fails verdict tiering.
   const passing = floorOk.filter((p) => p.verdict !== "Pass");
-  // 3. Sort by quality_score desc
+  // 3. Sort by quality_score desc.
   const sorted = [...passing].sort((a, b) => b.quality_score - a.quality_score);
 
   // ── Free Picks: per-sport + low-reliability caps ──
@@ -206,18 +349,36 @@ export function rankAndDistribute(plays: ScoredPlay[]) {
   const strongs = sorted.filter((p) => p.verdict === "Strong");
   const todaysEdge: ScoredPlay[] = [];
   const edgeSportCount: Record<string, number> = {};
+  const edgeKeys = new Set<string>();
+  const keyOf = (p: ScoredPlay) =>
+    `${p.sport}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`;
+
   for (const p of strongs) {
     if (todaysEdge.length >= TODAYS_EDGE_CAP) break;
     if ((edgeSportCount[p.sport] || 0) >= 2) continue;
     todaysEdge.push(p);
+    edgeKeys.add(keyOf(p));
     edgeSportCount[p.sport] = (edgeSportCount[p.sport] || 0) + 1;
   }
-  // Fallback: if cap left us short, fill with strongest remaining Strong picks
+  // Fallback 1: fill remaining Strong slots ignoring the per-sport cap.
   if (todaysEdge.length < TODAYS_EDGE_CAP) {
     for (const p of strongs) {
       if (todaysEdge.length >= TODAYS_EDGE_CAP) break;
-      if (todaysEdge.includes(p)) continue;
+      const k = keyOf(p);
+      if (edgeKeys.has(k)) continue;
       todaysEdge.push(p);
+      edgeKeys.add(k);
+    }
+  }
+  // Fallback 2: fill with the best Lean picks if we STILL don't have 5 Strongs.
+  // This prevents the carousel from silently rendering empty on slow slates.
+  if (todaysEdge.length < TODAYS_EDGE_CAP) {
+    for (const p of sorted) {
+      if (todaysEdge.length >= TODAYS_EDGE_CAP) break;
+      const k = keyOf(p);
+      if (edgeKeys.has(k)) continue;
+      todaysEdge.push(p);
+      edgeKeys.add(k);
     }
   }
 

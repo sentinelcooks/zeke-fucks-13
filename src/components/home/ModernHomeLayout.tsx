@@ -312,9 +312,12 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       return arr;
     };
 
-    // Split by tier — top quality goes to Today's Edge, rest to Daily Picks
-    const edgeTier = allToday.filter(p => p.tier === "edge");
-    const dailyTier = allToday.filter(p => p.tier !== "edge");
+    // Split by tier — top quality goes to Today's Edge, rest to Daily Picks.
+    // The backend may insert an `empty_slate` marker row into tier="edge" when
+    // no genuine Strong picks exist; we filter it out of the carousel array
+    // and surface it via the existing zero-state branch below.
+    const edgeTier = allToday.filter(p => p.tier === "edge" && (p as any).status !== "empty_slate");
+    const dailyTier = allToday.filter(p => p.tier !== "edge" && (p as any).status !== "empty_slate");
 
     // STRICT: Today's Edge only shows tier="edge". No fallback to ungraded picks.
     setTodayPicks(sortByPref(edgeTier));
@@ -549,7 +552,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               borderRadius: 20,
             }}>
               <Sparkles className="w-6 h-6 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-[11px] text-muted-foreground/55">No picks generated yet today. Check back soon!</p>
+              <p className="text-[11px] text-muted-foreground/55">No Strong picks cleared the bar today. Check the Daily Picks tab for Lean plays.</p>
             </div>
           ) : (
             <div className="-mx-5 px-5 overflow-x-auto hide-scrollbar snap-x snap-mandatory">

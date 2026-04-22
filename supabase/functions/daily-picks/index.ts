@@ -555,7 +555,12 @@ function parseOdds(odds: string | null | undefined): number {
   return Number.isFinite(n) ? n : -110;
 }
 
-import { score, rankAndDistribute, americanToImpliedProb, calcEv, type ScoredPlay } from "../_shared/edge_scoring.ts";
+import { score, rankAndDistribute, type ScoredPlay } from "../_shared/edge_scoring.ts";
+import { americanToImplied, fairImpliedFromPair, calcEvPct, clamp01 } from "../_shared/prob_math.ts";
+import { getCalibration } from "../_shared/calibration_cache.ts";
+// Back-compat aliases so existing local references keep working unchanged.
+const americanToImpliedProb = americanToImplied;
+const calcEv = calcEvPct;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -699,8 +704,14 @@ Deno.serve(async (req) => {
       const oddsNum = parseOdds(p.odds);
       // Hard cap: no +500 or longer in the candidate pool at all
       if (oddsNum >= 500) return false;
-      const projectedProb = Math.max(0, Math.min(1, (p.hit_rate || 0) / 100));
-      const impliedProb = americanToImpliedProb(oddsNum);
+      // Pre-calibration sanity gap check. We use the RAW confidence here
+      // because calibration only compresses extremes; a 40% gap to fair
+      // implied prob pre-calibration is still almost always a mispaired
+      // alt-line → graded-line staple bug.
+      const projectedProb = clamp01((p.hit_rate || 0) / 100);
+      const impliedProb = p.odds_opp != null
+        ? fairImpliedFromPair(oddsNum, parseOdds(p.odds_opp))
+        : americanToImpliedProb(oddsNum);
       if (Math.abs(projectedProb - impliedProb) > 0.40) return false;
       return true;
     });
@@ -714,33 +725,47 @@ Deno.serve(async (req) => {
     const dedupedPicks = Array.from(bestByKey.values());
     console.log(`Phase C: ${rawPicks.length} raw → ${sanePicks.length} sane → ${dedupedPicks.length} deduped`);
 
-    const scoredPlays: ScoredPlay[] = dedupedPicks.map(p => {
+    // ── v3: calibrate + de-vig inside score(). Raw confidence is the
+    // pre-calibration factor-sum score (0-1 or 0-100). `odds_opp`, when
+    // available, removes the book's juice before computing edge.
+    // Calibration rows are cached 5 minutes per (sport, bet_type).
+    const calibrationBySport = new Map<string, any>();
+    async function calFor(sport: string, betType: string) {
+      const k = `${sport}|${betType}`;
+      if (!calibrationBySport.has(k)) {
+        calibrationBySport.set(k, await getCalibration(sport, betType));
+      }
+      return calibrationBySport.get(k);
+    }
+
+    const scoredPlays: ScoredPlay[] = [];
+    for (const p of dedupedPicks) {
       const oddsNum = parseOdds(p.odds);
-      const projectedProb = Math.max(0, Math.min(1, (p.hit_rate || 0) / 100));
-      const impliedProb = americanToImpliedProb(oddsNum);
-      const edge = projectedProb - impliedProb;
-      const evPct = calcEv(projectedProb, oddsNum);
-      return score({
-        sport: p.sport,
-        bet_type: (p.bet_type === "over_under" ? "total" : p.bet_type) as any,
-        player_name: p.player_name,
-        team: p.team,
-        opponent: p.opponent,
-        home_team: p.home_team,
-        away_team: p.away_team,
-        prop_type: p.prop_type,
-        line: p.line,
-        spread_line: p.spread_line,
-        total_line: p.total_line,
-        direction: p.direction,
-        odds: oddsNum,
-        projected_prob: projectedProb,
-        implied_prob: impliedProb,
-        edge,
-        ev_pct: evPct,
-        confidence: projectedProb,
-      });
-    });
+      const oddsOpp = p.odds_opp != null ? parseOdds(p.odds_opp) : null;
+      const betType = (p.bet_type === "over_under" ? "total" : p.bet_type) as
+        "prop" | "moneyline" | "spread" | "total";
+      const calibration = await calFor(p.sport, betType);
+      scoredPlays.push(
+        score({
+          sport: p.sport,
+          bet_type: betType,
+          player_name: p.player_name,
+          team: p.team,
+          opponent: p.opponent,
+          home_team: p.home_team,
+          away_team: p.away_team,
+          prop_type: p.prop_type,
+          line: p.line,
+          spread_line: p.spread_line,
+          total_line: p.total_line,
+          direction: p.direction,
+          odds: oddsNum,
+          odds_opp: oddsOpp,
+          raw_confidence: Number(p.hit_rate || 0),
+          calibration,
+        }),
+      );
+    }
 
     const { todaysEdge, dailyPicks: dailyRanked, freePicks } = rankAndDistribute(scoredPlays);
     console.log(`✅ Gated: ${todaysEdge.length} edge, ${dailyRanked.length} daily, ${freePicks.length} free`);
@@ -759,69 +784,111 @@ Deno.serve(async (req) => {
         Number(rp.line) === Number(sp.line)
       );
 
-    // ALWAYS wipe today's rows first — never let stale picks survive
-    await supabase.from("daily_picks").delete().eq("pick_date", today);
-    await supabase.from("free_props").delete().eq("prop_date", today);
+    // Build rows in memory and write in ONE transaction via replace_daily_picks RPC.
+    // This eliminates the "wipe succeeded + insert failed → empty carousel" race.
+    const pickRows = dailyRanked.map(sp => {
+      const raw = findRaw(sp);
+      const key = `${sp.sport}|${sp.player_name}|${sp.prop_type}|${sp.direction}|${sp.line}`;
+      const tier = edgeKeySet.has(key) ? "edge" : "daily";
+      console.log(`✓ persist [${tier}] ${sp.sport}/${sp.player_name}/${sp.prop_type} ${sp.direction} ${sp.line} | conf=${sp.confidence.toFixed(3)} rel=${sp.reliability.toFixed(2)} edge=${sp.edge.toFixed(3)} odds=${sp.odds} verdict=${sp.verdict}`);
+      return {
+        pick_date: today,
+        sport: sp.sport,
+        player_name: sp.player_name,
+        team: sp.team || null,
+        opponent: sp.opponent || null,
+        prop_type: sp.prop_type,
+        line: sp.line,
+        direction: sp.direction,
+        hit_rate: Math.round(sp.confidence * 100),
+        last_n_games: 10,
+        avg_value: raw?.avg_value ?? sp.line,
+        reasoning: raw?.reasoning || sp.reasoning,
+        odds: raw?.odds ?? (sp.odds > 0 ? `+${sp.odds}` : `${sp.odds}`),
+        result: "pending",
+        bet_type: sp.bet_type === "total" ? "over_under" : sp.bet_type,
+        spread_line: sp.spread_line ?? null,
+        total_line: sp.total_line ?? null,
+        home_team: sp.home_team ?? null,
+        away_team: sp.away_team ?? null,
+        tier,
+        status: null,
+      };
+    });
 
-    if (dailyRanked.length > 0) {
-      const rows = dailyRanked.map(sp => {
-        const raw = findRaw(sp);
-        const key = `${sp.sport}|${sp.player_name}|${sp.prop_type}|${sp.direction}|${sp.line}`;
-        const tier = edgeKeySet.has(key) ? "edge" : "daily";
-        // Per-pick survival log for audit
-        console.log(`✓ persist [${tier}] ${sp.sport}/${sp.player_name}/${sp.prop_type} ${sp.direction} ${sp.line} | conf=${sp.confidence.toFixed(3)} rel=${sp.reliability.toFixed(2)} edge=${sp.edge.toFixed(3)} odds=${sp.odds} verdict=${sp.verdict}`);
-        return {
-          pick_date: today,
-          sport: sp.sport,
-          player_name: sp.player_name,
-          team: sp.team || null,
-          opponent: sp.opponent || null,
-          prop_type: sp.prop_type,
-          line: sp.line,
-          direction: sp.direction,
-          hit_rate: Math.round(sp.confidence * 100),
-          last_n_games: 10,
-          avg_value: raw?.avg_value ?? sp.line,
-          reasoning: raw?.reasoning || sp.reasoning,
-          odds: raw?.odds ?? (sp.odds > 0 ? `+${sp.odds}` : `${sp.odds}`),
-          result: "pending",
-          bet_type: sp.bet_type === "total" ? "over_under" : sp.bet_type,
-          spread_line: sp.spread_line ?? null,
-          total_line: sp.total_line ?? null,
-          home_team: sp.home_team ?? null,
-          away_team: sp.away_team ?? null,
-          tier,
-        };
-      });
-      const { error: insertErr } = await supabase
-        .from("daily_picks")
-        .upsert(rows, {
-          onConflict: "pick_date,sport,tier,player_name,prop_type,direction,line",
-          ignoreDuplicates: true,
-        });
-      if (insertErr) console.error("daily_picks upsert error:", insertErr);
+    // ── Empty-slate marker ──
+    // If we generated zero Strong edge picks, insert a typed marker row
+    // so the Home carousel can render a real empty-state instead of blank.
+    if (todaysEdge.length === 0) {
+      pickRows.push({
+        pick_date: today,
+        sport: "meta",
+        player_name: "No Strong picks today",
+        team: null,
+        opponent: null,
+        prop_type: "empty_slate",
+        line: 0,
+        direction: "n/a",
+        hit_rate: 0,
+        last_n_games: 0,
+        avg_value: 0,
+        reasoning: "No games cleared the Strong threshold. Check Daily Picks tab for Lean plays.",
+        odds: "0",
+        result: "pending",
+        bet_type: "meta",
+        spread_line: null,
+        total_line: null,
+        home_team: null,
+        away_team: null,
+        tier: "edge",
+        status: "empty_slate",
+      } as any);
     }
 
-    if (freePicks.length > 0) {
-      const propRows = freePicks
-        .filter(sp => sp.bet_type === "prop")
-        .map(sp => ({
-          player_name: sp.player_name,
-          team: sp.team || null,
-          opponent: sp.opponent || null,
-          prop_type: sp.prop_type,
-          line: sp.line,
-          direction: sp.direction,
-          odds: Math.round(sp.odds),
-          edge: Math.round(sp.edge * 1000) / 10,
-          confidence: Math.round(sp.confidence * 1000) / 1000,
-          sport: sp.sport,
-          book: "model",
-          prop_date: today,
-        }));
-      if (propRows.length > 0) {
-        await supabase.from("free_props").insert(propRows);
+    const freeRows = freePicks
+      .filter(sp => sp.bet_type === "prop")
+      .map(sp => ({
+        player_name: sp.player_name,
+        team: sp.team || null,
+        opponent: sp.opponent || null,
+        prop_type: sp.prop_type,
+        line: sp.line,
+        direction: sp.direction,
+        odds: Math.round(sp.odds),
+        edge: Math.round(sp.edge * 1000) / 10,
+        confidence: Math.round(sp.confidence * 1000) / 1000,
+        sport: sp.sport,
+        book: "model",
+        prop_date: today,
+      }));
+
+    try {
+      const { error: rpcErr } = await supabase.rpc("replace_daily_picks", {
+        p_pick_date: today,
+        p_rows: pickRows,
+        p_free_rows: freeRows,
+      });
+      if (rpcErr) {
+        console.error("replace_daily_picks RPC error:", rpcErr);
+        // Fallback to the old wipe+upsert path — prevents total outage
+        // if the migration hasn't been applied yet.
+        await supabase.from("daily_picks").delete().eq("pick_date", today);
+        await supabase.from("free_props").delete().eq("prop_date", today);
+        if (pickRows.length > 0) {
+          const { error: insertErr } = await supabase
+            .from("daily_picks")
+            .upsert(pickRows, {
+              onConflict: "pick_date,sport,tier,player_name,prop_type,direction,line",
+              ignoreDuplicates: true,
+            });
+          if (insertErr) console.error("daily_picks fallback upsert error:", insertErr);
+        }
+        if (freeRows.length > 0) {
+          await supabase.from("free_props").insert(freeRows);
+        }
       }
+    } catch (e) {
+      console.error("persist error:", e);
     }
 
     return new Response(
