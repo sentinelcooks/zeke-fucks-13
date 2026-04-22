@@ -123,6 +123,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       options: {
         data: { display_name: displayName },
+        // Ensure email confirmation links always point to the current production
+        // domain, not localhost or a stale Lovable URL from Supabase's Site URL setting.
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
     if (error) return { error: error.message };

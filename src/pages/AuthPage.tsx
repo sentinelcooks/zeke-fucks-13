@@ -177,7 +177,7 @@ const AuthPage = () => {
     try {
       persistRememberChoice(remember);
       const result = await lovable.auth.signInWithOAuth(provider, {
-        redirect_uri: window.location.origin + "/auth",
+        redirect_uri: window.location.origin + "/auth/callback",
       });
       if (result.redirected) {
         // Browser navigates away to provider; onAuthStateChange handles return.

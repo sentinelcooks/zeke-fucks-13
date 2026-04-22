@@ -123,7 +123,13 @@ const AdminPage = () => {
     const { data, error } = await supabase.functions.invoke("key-admin", {
       body: { password, action, ...extra },
     });
-    if (error) throw new Error("Connection error");
+    if (error) {
+      // Surface the real error so we can diagnose: function not deployed,
+      // wrong project, CORS failure, missing env var, etc.
+      const detail = error.message || String(error);
+      console.error("[admin] key-admin invoke error:", error);
+      throw new Error(`Connection error: ${detail}`);
+    }
     if (data?.error) throw new Error(data.error);
     return data;
   };
@@ -141,7 +147,11 @@ const AdminPage = () => {
     const { data, error } = await supabase.functions.invoke("admin-onboarding", {
       body: { password, action },
     });
-    if (error) throw new Error("Connection error");
+    if (error) {
+      const detail = error.message || String(error);
+      console.error("[admin] admin-onboarding invoke error:", error);
+      throw new Error(`Connection error: ${detail}`);
+    }
     if (data?.error) throw new Error(data.error);
     return data;
   };
