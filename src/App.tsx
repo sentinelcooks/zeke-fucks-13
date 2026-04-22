@@ -26,6 +26,7 @@ import NotFound from "./pages/NotFound";
 import LandingPage from "./pages/LandingPage";
 
 const AuthPage = lazy(() => import("./pages/AuthPage"));
+const AuthCallbackPage = lazy(() => import("./pages/AuthCallbackPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
 const PaywallPage = lazy(() => import("./pages/PaywallPage"));
@@ -81,6 +82,11 @@ function AppRoutes() {
       <Route path="/auth" element={
         <Suspense fallback={<LoadingSpinner />}>
           <AuthPage />
+        </Suspense>
+      } />
+      <Route path="/auth/callback" element={
+        <Suspense fallback={<LoadingSpinner />}>
+          <AuthCallbackPage />
         </Suspense>
       } />
       <Route path="/admin" element={
