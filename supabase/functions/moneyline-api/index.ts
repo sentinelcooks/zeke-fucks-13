@@ -1020,13 +1020,23 @@ async function getNextOddsKey(supabase: any): Promise<{ id: string; key: string 
     .limit(1)
     .single();
   if (!error && data) return { id: data.id, key: data.api_key };
+
+  // Fallback: try admin-configured key in app_config
+  const { data: configData } = await supabase
+    .from("app_config")
+    .select("value")
+    .eq("key", "odds_api_key")
+    .single();
+  if (configData?.value) return { id: "app-config", key: configData.value };
+
+  // Last resort: env var
   const envKey = Deno.env.get("ODDS_API_KEY");
   if (envKey) return { id: "env-fallback", key: envKey };
   return null;
 }
 
 async function updateOddsKeyUsage(supabase: any, keyId: string, resp: Response) {
-  if (keyId === "env-fallback") return;
+  if (keyId === "env-fallback" || keyId === "app-config") return;
   const remaining = resp.headers.get("x-requests-remaining");
   const used = resp.headers.get("x-requests-used");
   const update: Record<string, any> = { last_used_at: new Date().toISOString() };
@@ -1039,7 +1049,7 @@ async function updateOddsKeyUsage(supabase: any, keyId: string, resp: Response) 
 }
 
 async function markOddsKeyExhausted(supabase: any, keyId: string, error: string) {
-  if (keyId === "env-fallback") return;
+  if (keyId === "env-fallback" || keyId === "app-config") return;
   await supabase.from("odds_api_keys").update({
     exhausted_at: new Date().toISOString(),
     last_error: error,

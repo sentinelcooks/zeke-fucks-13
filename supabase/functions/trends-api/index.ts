@@ -17,11 +17,25 @@ async function getNextApiKey(supabase: any): Promise<{ id: string; key: string }
     .order("last_used_at", { ascending: true, nullsFirst: true })
     .limit(1)
     .single();
-  if (error || !data) return null;
-  return { id: data.id, key: data.api_key };
+  if (!error && data) return { id: data.id, key: data.api_key };
+
+  // Fallback: try admin-configured key in app_config
+  const { data: configData } = await supabase
+    .from("app_config")
+    .select("value")
+    .eq("key", "odds_api_key")
+    .single();
+  if (configData?.value) return { id: "app-config", key: configData.value };
+
+  // Last resort: env var
+  const envKey = Deno.env.get("ODDS_API_KEY");
+  if (envKey) return { id: "env-fallback", key: envKey };
+
+  return null;
 }
 
 async function updateKeyAfterCall(supabase: any, keyId: string, resp: Response) {
+  if (keyId === "app-config" || keyId === "env-fallback") return;
   const remaining = resp.headers.get("x-requests-remaining");
   const used = resp.headers.get("x-requests-used");
   const update: Record<string, any> = { last_used_at: new Date().toISOString() };

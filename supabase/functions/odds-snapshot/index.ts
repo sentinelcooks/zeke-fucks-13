@@ -54,8 +54,24 @@ Deno.serve(async (req) => {
     .is("exhausted_at", null)
     .order("last_used_at", { ascending: true, nullsFirst: true })
     .limit(1);
-  const apiKey = keys?.[0]?.api_key || Deno.env.get("ODDS_API_KEY");
-  const keyId = keys?.[0]?.id || null;
+
+  let apiKey: string | undefined = keys?.[0]?.api_key;
+  let keyId: string | null = keys?.[0]?.id || null;
+
+  if (!apiKey) {
+    // Fallback: try admin-configured key in app_config
+    const { data: configData } = await supabase
+      .from("app_config")
+      .select("value")
+      .eq("key", "odds_api_key")
+      .single();
+    if (configData?.value) {
+      apiKey = configData.value;
+      keyId = "app-config";
+    }
+  }
+
+  if (!apiKey) apiKey = Deno.env.get("ODDS_API_KEY");
   if (!apiKey) return json({ error: "no_api_key" }, 500);
 
   const markets = ["h2h", "spreads", "totals"];
@@ -121,8 +137,8 @@ Deno.serve(async (req) => {
     if (error) console.error("odds_history insert failed:", error.message);
   }
 
-  // Update key usage
-  if (keyId && remaining != null) {
+  // Update key usage (skip non-DB sources)
+  if (keyId && keyId !== "app-config" && remaining != null) {
     await supabase.from("odds_api_keys")
       .update({ requests_remaining: remaining, requests_used: used, last_used_at: new Date().toISOString() })
       .eq("id", keyId);

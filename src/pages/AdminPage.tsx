@@ -119,6 +119,12 @@ const AdminPage = () => {
   const [testLoading, setTestLoading] = useState(false);
   const [testResults, setTestResults] = useState<Array<{ key: string; valid: boolean; error?: string }> | null>(null);
 
+  // Single canonical Odds API key (app_config)
+  const [oddsKeyInput, setOddsKeyInput] = useState("");
+  const [showOddsKey, setShowOddsKey] = useState(false);
+  const [oddsKeyStatus, setOddsKeyStatus] = useState<{ exists: boolean; updated_at: string | null } | null>(null);
+  const [oddsKeySaving, setOddsKeySaving] = useState(false);
+
   const adminCall = async (action: string, extra: Record<string, any> = {}) => {
     const { data, error } = await supabase.functions.invoke("key-admin", {
       body: { password, action, ...extra },
@@ -132,6 +138,24 @@ const AdminPage = () => {
     }
     if (data?.error) throw new Error(data.error);
     return data;
+  };
+
+  const saveConfigCall = async (action: string, extra: Record<string, any> = {}) => {
+    const { data, error } = await supabase.functions.invoke("save-config", {
+      body: { password, action, ...extra },
+    });
+    if (error) throw new Error(error.message || String(error));
+    if (data?.error) throw new Error(data.error);
+    return data;
+  };
+
+  const loadOddsKeyStatus = async () => {
+    try {
+      const data = await saveConfigCall("status", { key: "odds_api_key" });
+      setOddsKeyStatus(data);
+    } catch (e) {
+      console.error("Failed to load odds key status:", e);
+    }
   };
 
   const loadApiKeyStats = async () => {
@@ -195,6 +219,7 @@ const AdminPage = () => {
       loadWhitelist();
       loadOnboarding();
       loadApiKeyStats();
+      loadOddsKeyStatus();
     } catch (e: any) {
       const newAttempts = adminAttempts + 1;
       setAdminAttempts(newAttempts);
@@ -410,7 +435,70 @@ const AdminPage = () => {
               </button>
             </div>
 
-            {/* Odds API Key Status */}
+            {/* ── Primary Odds API Key (app_config) ── */}
+            <div className="glass-card rounded-xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Lock className="w-4 h-4" /> Odds API Key (Primary)
+                </h2>
+                {oddsKeyStatus && (
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                    oddsKeyStatus.exists
+                      ? "bg-green-500/15 text-green-400"
+                      : "bg-destructive/15 text-destructive"
+                  }`}>
+                    {oddsKeyStatus.exists ? "● Connected" : "○ Not Set"}
+                  </span>
+                )}
+              </div>
+              {oddsKeyStatus?.updated_at && (
+                <p className="text-xs text-muted-foreground">
+                  Last updated: {new Date(oddsKeyStatus.updated_at).toLocaleString()}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type={showOddsKey ? "text" : "password"}
+                    value={oddsKeyInput}
+                    onChange={(e) => setOddsKeyInput(e.target.value)}
+                    placeholder="Enter Odds API key..."
+                    className="w-full bg-input text-foreground placeholder:text-muted-foreground rounded-lg py-2.5 px-3 pr-10 text-sm border border-border focus:outline-none focus:ring-2 focus:ring-ring/50 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowOddsKey(!showOddsKey)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showOddsKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <button
+                  disabled={!oddsKeyInput.trim() || oddsKeySaving}
+                  onClick={async () => {
+                    setOddsKeySaving(true);
+                    try {
+                      await saveConfigCall("save", { key: "odds_api_key", value: oddsKeyInput.trim() });
+                      setOddsKeyInput("");
+                      const status = await saveConfigCall("status", { key: "odds_api_key" });
+                      setOddsKeyStatus(status);
+                    } catch (e: any) {
+                      alert(e.message);
+                    }
+                    setOddsKeySaving(false);
+                  }}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-lg py-2 px-4 text-sm transition-all disabled:opacity-40 whitespace-nowrap"
+                >
+                  {oddsKeySaving ? "Saving..." : "Save Key"}
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Stored securely in Supabase via Edge Function. Never exposed to the frontend.
+                Used by all Edge Functions as a fallback when the rotation pool is empty.
+              </p>
+            </div>
+
+            {/* Odds API Key Status (rotation pool) */}
             <div className="glass-card rounded-xl p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
