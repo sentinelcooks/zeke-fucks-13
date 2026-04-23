@@ -88,8 +88,8 @@ serve(async (req) => {
     const newSeed = (row.daily_tip_seed ?? 0) + 1;
     const focusHint = FOCUS_AREAS[newSeed % FOCUS_AREAS.length];
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
 
     const prompt = `User profile:
 - Sports: ${(row.sports || []).join(", ") || "general"}
@@ -100,14 +100,14 @@ Rotation seed: ${newSeed}. Focus this tip on: ${focusHint}.
 
 Write ONE sharp, actionable daily tip (1-2 complete sentences) tailored to this user's sports and style. Reference their specific sport when natural. Give real strategy with concrete numbers/percentages where useful. No generic filler like "do your research" or "bet responsibly". No greetings.`;
 
-    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: "You are a sharp sports betting strategist. Always respond via the provided tool with complete, grammatically correct sentences." },
           { role: "user", content: prompt },

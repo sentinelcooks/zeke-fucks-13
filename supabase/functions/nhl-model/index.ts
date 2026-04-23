@@ -572,7 +572,7 @@ function formatFactorLabel(factor: string): string {
 // ── AI Writeup ──
 async function generateWriteup(prediction: any, betType: string): Promise<string> {
   try {
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    const apiKey = Deno.env.get("OPENAI_API_KEY");
     if (!apiKey) return "";
 
     const topFactors = prediction.factorBreakdown
@@ -591,11 +591,11 @@ async function generateWriteup(prediction: any, betType: string): Promise<string
        ? `You are a sharp NHL analyst. ${goalieInfo} Top matchup factors: ${topFactors}. Injuries: ${injuryInfo}. Write 2-3 sentences about how the team matchup context (goalies, special teams, pace) affects this player prop. Do NOT state a confidence percentage or verdict.`
        : `You are a sharp NHL analyst. ${btLabel} pick: ${prediction.confidence}% confidence, ${prediction.verdict}. ${goalieInfo} Key factors: ${topFactors}. Injuries: ${injuryInfo}. Write ONE short paragraph (2-3 sentences max, under 200 characters). Be direct, no headers, no bullets, no bold text.`;
 
-    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: "You are a concise NHL analyst. Write a single short paragraph, no markdown formatting, no bold, no headers. Maximum 2-3 sentences." },
           { role: "user", content: prompt },

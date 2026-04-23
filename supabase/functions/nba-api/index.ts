@@ -2457,7 +2457,7 @@ async function generateMlbPropWriteup(
   isPitcher: boolean,
 ): Promise<string> {
   try {
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    const apiKey = Deno.env.get("OPENAI_API_KEY");
     if (!apiKey) return "";
     
     const topFactors = factors
@@ -2471,11 +2471,11 @@ async function generateMlbPropWriteup(
     
     const prompt = `You are a sharp MLB betting analyst. ${player} ${isPitcher ? "is pitching" : "is batting"} — prop: ${ou.toUpperCase()} ${line} ${propType}. ${spInfo}. ${parkInfo}. Key factors: ${topFactors}. Confidence: ${confidence}%. Write EXACTLY 2-3 sentences of direct, data-driven analysis. No hedging. Reference specific matchup advantages or red flags.`;
     
-    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: "You are an expert MLB prop analyst. Be concise, sharp, and data-specific. Never say 'I think' or hedge. State facts." },
           { role: "user", content: prompt },

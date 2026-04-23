@@ -13,9 +13,9 @@ serve(async (req) => {
   try {
     const { referral, sports, betting_style } = await req.json();
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY not configured");
     }
 
     const prompt = `You are a sharp sports betting strategist. Based on the user's onboarding answers, generate actionable, expert-level recommendations. Write in clear, grammatically correct English — no sentence fragments.
@@ -35,14 +35,14 @@ Generate a JSON object with these fields:
 
 Be specific, actionable, and expert-level. Use complete sentences with proper grammar. Match the tone to their experience level.`;
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: "You are an expert sports betting strategist. Always respond with valid JSON only, no markdown formatting. Use complete sentences with proper grammar." },
           { role: "user", content: prompt },

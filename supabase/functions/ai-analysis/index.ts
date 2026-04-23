@@ -418,9 +418,9 @@ ${formatRule}
 
     const systemMessage = getSystemMessage(sportLower, type);
 
-    // Determine AI provider: prefer Grok (xAI) if key is set, fallback to Lovable AI Gateway
+    // Determine AI provider: prefer Grok (xAI) if key is set, fallback to OpenAI
     const XAI_API_KEY = Deno.env.get("XAI_API_KEY");
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     
     let aiEndpoint: string;
     let aiKey: string;
@@ -431,13 +431,13 @@ ${formatRule}
       aiKey = XAI_API_KEY;
       aiModel = "grok-3";
       console.log("Using Grok (xAI) for analysis");
-    } else if (LOVABLE_API_KEY) {
-      aiEndpoint = "https://ai.gateway.lovable.dev/v1/chat/completions";
-      aiKey = LOVABLE_API_KEY;
-      aiModel = "google/gemini-2.5-flash";
-      console.log("Using Lovable AI Gateway for analysis");
+    } else if (OPENAI_API_KEY) {
+      aiEndpoint = "https://api.openai.com/v1/chat/completions";
+      aiKey = OPENAI_API_KEY;
+      aiModel = "gpt-4o-mini";
+      console.log("Using OpenAI for analysis");
     } else {
-      throw new Error("No AI API key configured (XAI_API_KEY or LOVABLE_API_KEY)");
+      throw new Error("No AI API key configured (XAI_API_KEY or OPENAI_API_KEY)");
     }
 
     const aiResponse = await fetch(aiEndpoint, {

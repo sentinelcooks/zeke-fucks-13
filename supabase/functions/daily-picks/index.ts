@@ -6,7 +6,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-session-token, x-device-fingerprint, x-request-nonce, x-request-timestamp",
 };
 
-const AI_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const AI_GATEWAY = "https://api.openai.com/v1/chat/completions";
 
 // ── Retry with exponential backoff for rate-limited calls ──
 async function retryWithBackoff<T>(fn: () => Promise<T>, maxRetries = 3, label = ""): Promise<T> {
@@ -372,7 +372,7 @@ async function analyzePlayerProp(
 async function getLineupPropSuggestions(
   players: Array<{ name: string; team: string; opponent: string }>,
   sport: string,
-  LOVABLE_API_KEY: string
+  OPENAI_API_KEY: string
 ): Promise<Array<{ name: string; team: string; opponent: string; prop_type: string; line: number; direction: string }>> {
   if (players.length === 0) return [];
 
@@ -389,9 +389,9 @@ async function getLineupPropSuggestions(
   try {
     const resp = await fetch(AI_GATEWAY, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -461,7 +461,7 @@ async function getLineupPropSuggestions(
 // ── Rank games by anticipation using AI ──
 async function rankGamesByAnticipation(
   games: GameInfo[],
-  LOVABLE_API_KEY: string
+  OPENAI_API_KEY: string
 ): Promise<GameInfo[]> {
   if (games.length <= 6) return games; // No need to rank small lists
 
@@ -470,9 +470,9 @@ async function rankGamesByAnticipation(
   try {
     const resp = await fetch(AI_GATEWAY, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",

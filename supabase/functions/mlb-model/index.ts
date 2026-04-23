@@ -512,24 +512,24 @@ function formatFactorLabel(factor: string): string {
 // ── AI Writeup ──
 async function generateWriteup(prediction: any, betType: string): Promise<string> {
   try {
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    const apiKey = Deno.env.get("OPENAI_API_KEY");
     if (!apiKey) return "";
-    
+
     const topFactors = prediction.factorBreakdown
       .sort((a: any, b: any) => b.weight - a.weight)
       .slice(0, 5)
       .map((f: any) => `${f.label}: T1=${f.team1Score} T2=${f.team2Score} (weight ${f.weight}%)`)
       .join(", ");
-    
+
      const prompt = betType === "player_prop"
        ? `You are a concise MLB analyst. The relevant team matchup factors are: ${topFactors}. Injuries: ${(prediction.warnings || []).join("; ") || "None"}. Write 2-3 sentences about how the team matchup context (pitchers, park, weather) affects this player prop. Do NOT state a confidence percentage or verdict.`
        : `You are a concise MLB analyst. Given this ${betType} prediction with ${prediction.confidence}% confidence (${prediction.verdict}), top factors: ${topFactors}. Injuries: ${(prediction.warnings || []).join("; ") || "None"}. Write exactly 2-3 sentences of sharp analysis. No hedging. Be direct.`;
-    
-    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: "You are an expert MLB betting analyst. Be concise, data-driven, and confident." },
           { role: "user", content: prompt },
