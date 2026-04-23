@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callAI, ANTI_GENERIC_INSTRUCTION } from "../_shared/ai-provider.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,7 +7,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-session-token, x-device-fingerprint, x-request-nonce, x-request-timestamp",
 };
 
-const AI_GATEWAY = "https://api.openai.com/v1/chat/completions";
 
 // ── Retry with exponential backoff for rate-limited calls ──
 async function retryWithBackoff<T>(fn: () => Promise<T>, maxRetries = 3, label = ""): Promise<T> {
@@ -372,7 +372,6 @@ async function analyzePlayerProp(
 async function getLineupPropSuggestions(
   players: Array<{ name: string; team: string; opponent: string }>,
   sport: string,
-  OPENAI_API_KEY: string
 ): Promise<Array<{ name: string; team: string; opponent: string; prop_type: string; line: number; direction: string }>> {
   if (players.length === 0) return [];
 
@@ -387,57 +386,44 @@ async function getLineupPropSuggestions(
   const propTypes = sportPropTypes[sport] || sportPropTypes.nba;
 
   try {
-    const resp = await fetch(AI_GATEWAY, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert ${sport.toUpperCase()} betting analyst. Given the FULL active lineup for today's game, identify which 4-5 players across the ENTIRE roster have the best prop opportunities. Don't just pick star players — consider matchup advantages, recent form, role changes, backup players getting extra minutes, and platoon advantages. Available prop types: ${propTypes}.`
-          },
-          {
-            role: "user",
-            content: `Today's ${sport.toUpperCase()} active lineup:\n${playerList}\n\nIdentify the 4-5 best prop opportunities across this roster. Include role players if they have a strong edge.`
-          }
-        ],
-        tools: [{
-          type: "function",
-          function: {
-            name: "suggest_props",
-            description: `Suggest the best prop bets from the full ${sport.toUpperCase()} lineup`,
-            parameters: {
-              type: "object",
-              properties: {
-                props: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      name: { type: "string" },
-                      prop_type: { type: "string" },
-                      line: { type: "number" },
-                      direction: { type: "string", enum: ["over", "under"] }
-                    },
-                    required: ["name", "prop_type", "line", "direction"]
-                  }
-                }
+    const result = await callAI({
+      fnName: "daily-picks",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert ${sport.toUpperCase()} betting analyst. Given the FULL active lineup for today's game, identify which 4-5 players across the ENTIRE roster have the best prop opportunities. Don't just pick star players — consider matchup advantages, recent form, role changes, backup players getting extra minutes, and platoon advantages. Available prop types: ${propTypes}. ${ANTI_GENERIC_INSTRUCTION}`,
+        },
+        {
+          role: "user",
+          content: `Today's ${sport.toUpperCase()} active lineup:\n${playerList}\n\nIdentify the 4-5 best prop opportunities across this roster. Include role players if they have a strong edge.`,
+        },
+      ],
+      tool: {
+        name: "suggest_props",
+        description: `Suggest the best prop bets from the full ${sport.toUpperCase()} lineup`,
+        parameters: {
+          type: "object",
+          properties: {
+            props: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  prop_type: { type: "string" },
+                  line: { type: "number" },
+                  direction: { type: "string", enum: ["over", "under"] },
+                },
+                required: ["name", "prop_type", "line", "direction"],
               },
-              required: ["props"]
-            }
-          }
-        }],
-        tool_choice: { type: "function", function: { name: "suggest_props" } },
-      }),
+            },
+          },
+          required: ["props"],
+        },
+      },
     });
 
-    if (!resp.ok) { await resp.text(); return []; }
-    const data = await resp.json();
-    const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall) return [];
-
-    const parsed = JSON.parse(toolCall.function.arguments);
+    const parsed = result.output as { props: any[] };
     return (parsed.props || []).map((s: any) => {
       const player = players.find(p =>
         p.name.toLowerCase().includes(s.name?.toLowerCase()) ||
@@ -461,61 +447,43 @@ async function getLineupPropSuggestions(
 // ── Rank games by anticipation using AI ──
 async function rankGamesByAnticipation(
   games: GameInfo[],
-  OPENAI_API_KEY: string
 ): Promise<GameInfo[]> {
   if (games.length <= 6) return games; // No need to rank small lists
 
   const gameList = games.map((g, i) => `${i}: ${g.away} @ ${g.home} (${g.sport.toUpperCase()})`).join("\n");
 
   try {
-    const resp = await fetch(AI_GATEWAY, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: "You are a sports betting analyst. Rank the given games by anticipated betting interest and viewership. Consider: playoff implications, rivalry matchups, marquee teams/stars, national TV broadcasts, competitive balance, and division/conference standings impact. Return indices from most to least anticipated."
+    const result = await callAI({
+      fnName: "daily-picks",
+      messages: [
+        {
+          role: "system",
+          content: `You are a sports betting analyst. Rank the given games by anticipated betting interest and viewership. Consider: playoff implications, rivalry matchups, marquee teams/stars, national TV broadcasts, competitive balance, and division/conference standings impact. Return indices from most to least anticipated. ${ANTI_GENERIC_INSTRUCTION}`,
+        },
+        {
+          role: "user",
+          content: `Rank these games by most anticipated for betting:\n${gameList}`,
+        },
+      ],
+      tool: {
+        name: "rank_games",
+        description: "Return game indices ranked by anticipation, most anticipated first",
+        parameters: {
+          type: "object",
+          properties: {
+            ranked_indices: {
+              type: "array",
+              items: { type: "number" },
+              description: "Array of game indices from most to least anticipated",
+            },
           },
-          {
-            role: "user",
-            content: `Rank these games by most anticipated for betting:\n${gameList}`
-          }
-        ],
-        tools: [{
-          type: "function",
-          function: {
-            name: "rank_games",
-            description: "Return game indices ranked by anticipation, most anticipated first",
-            parameters: {
-              type: "object",
-              properties: {
-                ranked_indices: {
-                  type: "array",
-                  items: { type: "number" },
-                  description: "Array of game indices from most to least anticipated"
-                }
-              },
-              required: ["ranked_indices"],
-              additionalProperties: false
-            }
-          }
-        }],
-        tool_choice: { type: "function", function: { name: "rank_games" } },
-      }),
+          required: ["ranked_indices"],
+          additionalProperties: false,
+        },
+      },
     });
 
-    if (!resp.ok) {
-      console.warn("AI ranking failed, using original order");
-      return games;
-    }
-
-    const data = await resp.json();
-    const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall) return games;
-
-    const parsed = JSON.parse(toolCall.function.arguments);
+    const parsed = result.output as { ranked_indices: number[] };
     const indices: number[] = parsed.ranked_indices || [];
 
     // Build ranked list, then append any missing games

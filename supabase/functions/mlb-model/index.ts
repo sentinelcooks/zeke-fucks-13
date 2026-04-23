@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { callAI, AIProviderError, ANTI_GENERIC_INSTRUCTION } from "../_shared/ai-provider.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -512,41 +513,35 @@ function formatFactorLabel(factor: string): string {
 // ── AI Writeup ──
 async function generateWriteup(prediction: any, betType: string): Promise<string> {
   try {
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!apiKey) return "";
-
     const topFactors = prediction.factorBreakdown
       .sort((a: any, b: any) => b.weight - a.weight)
       .slice(0, 5)
       .map((f: any) => `${f.label}: T1=${f.team1Score} T2=${f.team2Score} (weight ${f.weight}%)`)
       .join(", ");
 
-     const prompt = betType === "player_prop"
-       ? `You are a concise MLB analyst. The relevant team matchup factors are: ${topFactors}. Injuries: ${(prediction.warnings || []).join("; ") || "None"}. Write 2-3 sentences about how the team matchup context (pitchers, park, weather) affects this player prop. Do NOT state a confidence percentage or verdict.`
-       : `You are a concise MLB analyst. Given this ${betType} prediction with ${prediction.confidence}% confidence (${prediction.verdict}), top factors: ${topFactors}. Injuries: ${(prediction.warnings || []).join("; ") || "None"}. Write exactly 2-3 sentences of sharp analysis. No hedging. Be direct.`;
+    const prompt = betType === "player_prop"
+      ? `You are a concise MLB analyst. The relevant team matchup factors are: ${topFactors}. Injuries: ${(prediction.warnings || []).join("; ") || "None"}. Write 2-3 sentences about how the team matchup context (pitchers, park, weather) affects this player prop. Do NOT state a confidence percentage or verdict.`
+      : `You are a concise MLB analyst. Given this ${betType} prediction with ${prediction.confidence}% confidence (${prediction.verdict}), top factors: ${topFactors}. Injuries: ${(prediction.warnings || []).join("; ") || "None"}. Write exactly 2-3 sentences of sharp analysis. No hedging. Be direct.`;
 
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: "You are an expert MLB betting analyst. Be concise, data-driven, and confident." },
-          { role: "user", content: prompt },
-        ],
-        max_tokens: 200,
-      }),
+    const result = await callAI({
+      fnName: "mlb-model",
+      messages: [
+        { role: "system", content: `You are an expert MLB betting analyst. Be concise, data-driven, and confident. ${ANTI_GENERIC_INSTRUCTION}` },
+        { role: "user", content: prompt },
+      ],
+      maxTokens: 200,
     });
-    
-    if (!resp.ok) return "";
-    const data = await resp.json();
-    const raw = data.choices?.[0]?.message?.content || "";
+
+    const raw = result.output as string;
     const clean = raw.replace(/\*\*/g, "").replace(/^#+\s*/gm, "").replace(/\n{2,}/g, " ").trim();
     if (clean.length <= 250) return clean;
     const cut = clean.slice(0, 250);
     const lastDot = cut.lastIndexOf(".");
     return lastDot > 80 ? cut.slice(0, lastDot + 1) : cut + "…";
-  } catch { return ""; }
+  } catch (e) {
+    if (!(e instanceof AIProviderError)) console.error("mlb-model writeup error:", e);
+    return "Analysis currently unavailable";
+  }
 }
 
 // ── Supabase Client ──

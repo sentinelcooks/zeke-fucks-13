@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callAI, AIProviderError, ANTI_GENERIC_INSTRUCTION } from "../_shared/ai-provider.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -2457,37 +2458,31 @@ async function generateMlbPropWriteup(
   isPitcher: boolean,
 ): Promise<string> {
   try {
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!apiKey) return "";
-    
     const topFactors = factors
       .sort((a, b) => (b.score * b.weight) - (a.score * a.weight))
       .slice(0, 6)
       .map(f => `${f.label}: ${f.score}/100 (${f.detail})`)
       .join("; ");
-    
+
     const spInfo = ctx.opposingSP ? `vs ${ctx.opposingSP.name} (${ctx.opposingSP.era} ERA, ${ctx.opposingSP.k9} K/9)` : "";
     const parkInfo = ctx.venue ? `at ${ctx.venue} (PF: ${getMlbParkFactor(ctx.venue).toFixed(2)})` : "";
-    
+
     const prompt = `You are a sharp MLB betting analyst. ${player} ${isPitcher ? "is pitching" : "is batting"} — prop: ${ou.toUpperCase()} ${line} ${propType}. ${spInfo}. ${parkInfo}. Key factors: ${topFactors}. Confidence: ${confidence}%. Write EXACTLY 2-3 sentences of direct, data-driven analysis. No hedging. Reference specific matchup advantages or red flags.`;
-    
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: "You are an expert MLB prop analyst. Be concise, sharp, and data-specific. Never say 'I think' or hedge. State facts." },
-          { role: "user", content: prompt },
-        ],
-        max_tokens: 200,
-      }),
+
+    const result = await callAI({
+      fnName: "nba-api",
+      messages: [
+        { role: "system", content: `You are an expert MLB prop analyst. Be concise, sharp, and data-specific. Never say 'I think' or hedge. State facts. ${ANTI_GENERIC_INSTRUCTION}` },
+        { role: "user", content: prompt },
+      ],
+      maxTokens: 200,
     });
-    
-    if (!resp.ok) return "";
-    const data = await resp.json();
-    return data.choices?.[0]?.message?.content || "";
-  } catch { return ""; }
+
+    return result.output as string;
+  } catch (e) {
+    if (!(e instanceof AIProviderError)) console.error("nba-api MLB writeup error:", e);
+    return "Analysis currently unavailable";
+  }
 }
 
 // ── Confidence ──────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callAI, AIProviderError, PERSONALIZATION_INSTRUCTION } from "../_shared/ai-provider.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,11 +13,6 @@ serve(async (req) => {
 
   try {
     const { referral, sports, betting_style } = await req.json();
-
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    if (!OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY not configured");
-    }
 
     const prompt = `You are a sharp sports betting strategist. Based on the user's onboarding answers, generate actionable, expert-level recommendations. Write in clear, grammatically correct English — no sentence fragments.
 
@@ -35,74 +31,39 @@ Generate a JSON object with these fields:
 
 Be specific, actionable, and expert-level. Use complete sentences with proper grammar. Match the tone to their experience level.`;
 
-    const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
+    let recommendations;
+    try {
+      const aiResult = await callAI({
+        fnName: "personalize",
         messages: [
-          { role: "system", content: "You are an expert sports betting strategist. Always respond with valid JSON only, no markdown formatting. Use complete sentences with proper grammar." },
+          { role: "system", content: `You are an expert sports betting strategist. Always respond with valid JSON only, no markdown formatting. Use complete sentences with proper grammar. ${PERSONALIZATION_INSTRUCTION}` },
           { role: "user", content: prompt },
         ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "personalize_app",
-              description: "Return personalized recommendations for the user",
-              parameters: {
-                type: "object",
-                properties: {
-                  welcome_message: { type: "string" },
-                  daily_tip: { type: "string" },
-                  recommended_features: {
-                    type: "array",
-                    items: { type: "string" },
-                  },
-                  focus_sport: { type: "string" },
-                  risk_level: { type: "string", enum: ["low", "medium", "high"] },
-                  bankroll_tip: { type: "string" },
-                },
-                required: ["welcome_message", "daily_tip", "recommended_features", "focus_sport", "risk_level", "bankroll_tip"],
-                additionalProperties: false,
+        tool: {
+          name: "personalize_app",
+          description: "Return personalized recommendations for the user",
+          parameters: {
+            type: "object",
+            properties: {
+              welcome_message: { type: "string" },
+              daily_tip: { type: "string" },
+              recommended_features: {
+                type: "array",
+                items: { type: "string" },
               },
+              focus_sport: { type: "string" },
+              risk_level: { type: "string", enum: ["low", "medium", "high"] },
+              bankroll_tip: { type: "string" },
             },
+            required: ["welcome_message", "daily_tip", "recommended_features", "focus_sport", "risk_level", "bankroll_tip"],
+            additionalProperties: false,
           },
-        ],
-        tool_choice: { type: "function", function: { name: "personalize_app" } },
-      }),
-    });
-
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      console.error("AI API error:", errText);
-      if (aiResponse.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited, please try again later." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ error: "Payment required." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      throw new Error(`AI API error: ${aiResponse.status}`);
-    }
-
-    const aiData = await aiResponse.json();
-    
-    // Extract from tool call response
-    const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
-    let recommendations;
-    if (toolCall?.function?.arguments) {
-      recommendations = JSON.parse(toolCall.function.arguments);
-    } else {
-      // Fallback
+        },
+        maxTokens: 400,
+      });
+      recommendations = aiResult.output;
+    } catch (e) {
+      if (!(e instanceof AIProviderError)) console.error("AI API error:", e);
       recommendations = {
         welcome_message: "Welcome to Sentinel! Let's find your edge.",
         daily_tip: "Track closing line movement on player props — if a line shifts toward your pick before tip-off, it confirms sharp money agrees with your read.",

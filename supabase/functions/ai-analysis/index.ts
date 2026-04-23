@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callAI, AIProviderError, ANTI_GENERIC_INSTRUCTION } from "../_shared/ai-provider.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -416,67 +417,23 @@ ${formatRule}
     // Prepend the locked-pick block to every prompt (sport-agnostic, all bet types)
     prompt = lockedPickBlock + prompt;
 
-    const systemMessage = getSystemMessage(sportLower, type);
+    const systemMessage = getSystemMessage(sportLower, type) + "\n\n" + ANTI_GENERIC_INSTRUCTION;
 
-    // Determine AI provider: prefer Grok (xAI) if key is set, fallback to OpenAI
-    const XAI_API_KEY = Deno.env.get("XAI_API_KEY");
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    
-    let aiEndpoint: string;
-    let aiKey: string;
-    let aiModel: string;
-    
-    if (XAI_API_KEY) {
-      aiEndpoint = "https://api.x.ai/v1/chat/completions";
-      aiKey = XAI_API_KEY;
-      aiModel = "grok-3";
-      console.log("Using Grok (xAI) for analysis");
-    } else if (OPENAI_API_KEY) {
-      aiEndpoint = "https://api.openai.com/v1/chat/completions";
-      aiKey = OPENAI_API_KEY;
-      aiModel = "gpt-4o-mini";
-      console.log("Using OpenAI for analysis");
-    } else {
-      throw new Error("No AI API key configured (XAI_API_KEY or OPENAI_API_KEY)");
-    }
-
-    const aiResponse = await fetch(aiEndpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${aiKey}`,
-      },
-      body: JSON.stringify({
-        model: aiModel,
+    let content = "Analysis currently unavailable";
+    try {
+      const aiResult = await callAI({
+        fnName: "ai-analysis",
         messages: [
           { role: "system", content: systemMessage },
           { role: "user", content: prompt },
         ],
-        max_tokens: 600,
+        maxTokens: 600,
         temperature: 0.3,
-      }),
-    });
-
-    if (!aiResponse.ok) {
-      if (aiResponse.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ error: "Payment required, please add funds." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const errText = await aiResponse.text();
-      console.error("AI API error:", errText);
-      throw new Error(`AI API error: ${aiResponse.status}`);
+      });
+      content = aiResult.output as string;
+    } catch (e) {
+      if (!(e instanceof AIProviderError)) console.error("AI API error:", e);
     }
-
-    const aiData = await aiResponse.json();
-    let content = aiData.choices?.[0]?.message?.content || "";
 
     // ── Hard scrub: never leak internal model labels or robotic "0 units on X" copy ──
     const passLabel = decision && decision.winning_team_name && team1Name && team2Name

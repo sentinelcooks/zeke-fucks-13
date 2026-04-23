@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { callAI, AIProviderError, ANTI_GENERIC_INSTRUCTION } from "../_shared/ai-provider.ts";
 import { WEIGHTS_V2, FACTOR_LABELS, MODEL_VERSION } from "./weights.ts";
 import {
   computeXGProxy, scoreXG,
@@ -572,9 +573,6 @@ function formatFactorLabel(factor: string): string {
 // ── AI Writeup ──
 async function generateWriteup(prediction: any, betType: string): Promise<string> {
   try {
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!apiKey) return "";
-
     const topFactors = prediction.factorBreakdown
       .sort((a: any, b: any) => b.weight - a.weight)
       .slice(0, 5)
@@ -587,33 +585,29 @@ async function generateWriteup(prediction: any, betType: string): Promise<string
       : "";
     const injuryInfo = (prediction.warnings || []).join("; ") || "None reported";
 
-     const prompt = betType === "player_prop"
-       ? `You are a sharp NHL analyst. ${goalieInfo} Top matchup factors: ${topFactors}. Injuries: ${injuryInfo}. Write 2-3 sentences about how the team matchup context (goalies, special teams, pace) affects this player prop. Do NOT state a confidence percentage or verdict.`
-       : `You are a sharp NHL analyst. ${btLabel} pick: ${prediction.confidence}% confidence, ${prediction.verdict}. ${goalieInfo} Key factors: ${topFactors}. Injuries: ${injuryInfo}. Write ONE short paragraph (2-3 sentences max, under 200 characters). Be direct, no headers, no bullets, no bold text.`;
+    const prompt = betType === "player_prop"
+      ? `You are a sharp NHL analyst. ${goalieInfo} Top matchup factors: ${topFactors}. Injuries: ${injuryInfo}. Write 2-3 sentences about how the team matchup context (goalies, special teams, pace) affects this player prop. Do NOT state a confidence percentage or verdict.`
+      : `You are a sharp NHL analyst. ${btLabel} pick: ${prediction.confidence}% confidence, ${prediction.verdict}. ${goalieInfo} Key factors: ${topFactors}. Injuries: ${injuryInfo}. Write ONE short paragraph (2-3 sentences max, under 200 characters). Be direct, no headers, no bullets, no bold text.`;
 
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: "You are a concise NHL analyst. Write a single short paragraph, no markdown formatting, no bold, no headers. Maximum 2-3 sentences." },
-          { role: "user", content: prompt },
-        ],
-        max_tokens: 200,
-      }),
+    const result = await callAI({
+      fnName: "nhl-model",
+      messages: [
+        { role: "system", content: `You are a concise NHL analyst. Write a single short paragraph, no markdown formatting, no bold, no headers. Maximum 2-3 sentences. ${ANTI_GENERIC_INSTRUCTION}` },
+        { role: "user", content: prompt },
+      ],
+      maxTokens: 200,
     });
 
-    if (!resp.ok) return "";
-    const data = await resp.json();
-    const raw = data.choices?.[0]?.message?.content || "";
-    // Strip markdown and truncate
+    const raw = result.output as string;
     const clean = raw.replace(/\*\*/g, "").replace(/^#+\s*/gm, "").replace(/\n{2,}/g, " ").trim();
     if (clean.length <= 250) return clean;
     const cut = clean.slice(0, 250);
     const lastDot = cut.lastIndexOf(".");
     return lastDot > 80 ? cut.slice(0, lastDot + 1) : cut + "…";
-  } catch { return ""; }
+  } catch (e) {
+    if (!(e instanceof AIProviderError)) console.error("nhl-model writeup error:", e);
+    return "Analysis currently unavailable";
+  }
 }
 
 // ── Supabase Client ──
