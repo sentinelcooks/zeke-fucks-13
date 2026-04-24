@@ -269,27 +269,48 @@ const TEAM_ALIASES: Record<string, string[]> = {
 async function getTeamsList(sport = "nba") {
   const base = getEspnBase(sport);
   const limit = sport === "ncaab" ? 500 : 100;
-  const data = await fetchJSON(`${base}/teams?limit=${limit}`);
-  const teamsRaw = data.sports?.[0]?.leagues?.[0]?.teams || [];
+  const espnUrl = `${base}/teams?limit=${limit}`;
+  let data: any;
+  try {
+    data = await fetchJSON(espnUrl);
+  } catch (err) {
+    console.error(`getTeamsList(${sport}): ESPN fetch failed for ${espnUrl}:`, err);
+    return [];
+  }
+
+  // ESPN site/v2 wraps teams under sports[0].leagues[0].teams
+  let teamsRaw: any[] = data?.sports?.[0]?.leagues?.[0]?.teams;
+  if (!Array.isArray(teamsRaw) || teamsRaw.length === 0) {
+    // Some endpoints surface teams at top level
+    teamsRaw = data?.teams;
+  }
+  if (!Array.isArray(teamsRaw) || teamsRaw.length === 0) {
+    console.warn(`getTeamsList(${sport}): unexpected ESPN shape. Top-level keys: ${Object.keys(data || {}).join(", ")}`);
+    return [];
+  }
+
   const teams = teamsRaw.map((t: any) => {
-    const abbr = t.team.abbreviation;
+    const team = t?.team ?? t;
+    const abbr = team?.abbreviation ?? "";
     const aliases = (sport === "nba" ? TEAM_ALIASES[abbr] : null) || [];
     return {
-      id: t.team.id,
+      id: team?.id ?? abbr,
       abbr,
-      name: t.team.displayName,
-      shortName: t.team.shortDisplayName,
-      logo: t.team.logos?.[0]?.href || "",
-      record: t.team.record?.items?.[0]?.summary || "",
-      color: t.team.color ? `#${t.team.color}` : "#666",
+      name: team?.displayName ?? team?.name ?? "",
+      shortName: team?.shortDisplayName ?? team?.name ?? "",
+      logo: team?.logos?.[0]?.href ?? team?.logo ?? "",
+      record: team?.record?.items?.[0]?.summary ?? "",
+      color: team?.color ? `#${team.color}` : "#666",
       aliases: [
-        t.team.displayName.toLowerCase(),
-        t.team.shortDisplayName.toLowerCase(),
+        (team?.displayName ?? "").toLowerCase(),
+        (team?.shortDisplayName ?? "").toLowerCase(),
         abbr.toLowerCase(),
         ...aliases,
-      ],
+      ].filter(Boolean),
     };
-  });
+  }).filter((t: any) => t.name);
+
+  console.log(`getTeamsList(${sport}): returned ${teams.length} teams`);
   return teams;
 }
 

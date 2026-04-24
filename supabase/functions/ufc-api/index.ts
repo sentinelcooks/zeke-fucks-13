@@ -1170,13 +1170,13 @@ serve(async (req) => {
       const analysis = buildMatchupAnalysis(f1Data as FighterData, f2Data as FighterData);
 
       // Snapshot logging — fire and forget
-      const mlConf = analysis?.recommendation?.probability ?? analysis?.moneyline?.confidence ?? 50;
+      const mlConf = analysis?.ml_pick?.probability ?? 50;
       logSnapshot({
         sport: "ufc",
         market_type: "moneyline",
         player_or_team: `${(f1Data as FighterData).fighter?.name || fighter1} vs ${(f2Data as FighterData).fighter?.name || fighter2}`,
         confidence: mlConf,
-        verdict: analysis?.recommendation?.confidence || null,
+        verdict: analysis?.ml_pick?.confidence || null,
         top_factors: null,
       }).catch((err) => console.error("logSnapshot failed:", err));
 

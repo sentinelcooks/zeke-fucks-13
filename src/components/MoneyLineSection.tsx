@@ -1258,6 +1258,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
 
   const [betType, setBetType] = useState<BetType>("moneyline");
   const [teams, setTeams] = useState<Team[]>([]);
+  const [teamsError, setTeamsError] = useState<string | null>(null);
   const [team1, setTeam1] = useState("");
   const [team2, setTeam2] = useState("");
   const [spreadTeam, setSpreadTeam] = useState("");
@@ -1278,7 +1279,21 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
     setTeams([]); setTeam1(""); setTeam2(""); setResults(null); setError("");
     setTotalLine(""); setSpreadLine(""); setSpreadTeam("");
     setOverUnder("over");
-    callMoneylineApi("teams", { sport }).then(setTeams).catch(() => {}).finally(() => setTeamsLoading(false));
+    setTeamsError(null);
+    callMoneylineApi("teams", { sport })
+      .then((res: any) => {
+        const list = Array.isArray(res) ? res : [];
+        setTeams(list);
+        if (list.length === 0) {
+          console.warn(`Teams lookup returned empty for sport=${sport}`);
+          setTeamsError(`No teams found for ${sport.toUpperCase()} — check edge function logs`);
+        }
+      })
+      .catch((e: any) => {
+        console.error("Teams fetch failed:", e);
+        setTeamsError(e?.message || `Failed to load ${sport.toUpperCase()} teams`);
+      })
+      .finally(() => setTeamsLoading(false));
   }, [sport]);
 
   // Clear stale results whenever teams change
@@ -1367,6 +1382,12 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
         <div className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground">
           <Loader2 className="w-3 h-3 animate-spin" />
           Loading {sport.toUpperCase()} teams...
+        </div>
+      )}
+
+      {!teamsLoading && teamsError && (
+        <div className="flex items-center gap-2 py-2 px-3 rounded-lg text-xs text-red-400/80" style={{ background: 'hsla(0, 60%, 15%, 0.4)', border: '1px solid hsla(0, 60%, 30%, 0.3)' }}>
+          ⚠️ {teamsError}
         </div>
       )}
 

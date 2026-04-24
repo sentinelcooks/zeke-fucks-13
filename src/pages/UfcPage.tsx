@@ -39,8 +39,10 @@ const UfcPage = () => {
           const data = await analyzeUfcMatchup(state.fighter1!, state.fighter2!);
           if (data.error) setError(data.error);
           else setResults(data);
-        } catch { setError("Failed to fetch matchup data. Please try again."); }
-        finally { setLoading(false); }
+        } catch (e: any) {
+          console.error("UFC auto-analyze failed:", e);
+          setError(e?.message || "Failed to fetch matchup data. Please try again.");
+        } finally { setLoading(false); }
       })();
     }
   }, [location.state]);
@@ -74,8 +76,10 @@ const UfcPage = () => {
       const data = await analyzeUfcMatchup(fighter1, fighter2);
       if (data.error) setError(data.error);
       else setResults(data);
-    } catch { setError("Failed to fetch matchup data. Please try again."); }
-    finally { setLoading(false); }
+    } catch (e: any) {
+      console.error("UFC analyze failed:", e);
+      setError(e?.message || "Failed to fetch matchup data. Please try again.");
+    } finally { setLoading(false); }
   };
 
   const renderSearchInput = (value: string, side: 1 | 2, suggestions: any[], showSuggestions: boolean, placeholder: string) => (
