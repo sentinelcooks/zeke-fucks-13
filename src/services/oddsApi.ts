@@ -1,6 +1,13 @@
 import { supabase } from "@/integrations/supabase/client";
 import { generateDeviceFingerprint } from "@/utils/fingerprint";
 
+function getProjectId(): string {
+  const explicit = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+  if (explicit) return explicit;
+  const url = import.meta.env.VITE_SUPABASE_URL || "";
+  try { return new URL(url).hostname.split(".")[0]; } catch { return ""; }
+}
+
 function getStoredSessionToken(): string {
   const remember = localStorage.getItem("primal-remember") === "true";
   const preferredStore = remember ? localStorage : sessionStorage;
@@ -60,7 +67,7 @@ function normalizeOddsSport(sport?: string) {
 }
 
 export async function fetchNbaOdds(bookmakers?: string, markets?: string, sport?: string) {
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+  const projectId = getProjectId();
   const secHeaders = await getSessionHeaders();
   const normalizedSport = normalizeOddsSport(sport);
 
@@ -86,7 +93,7 @@ export async function fetchNbaOdds(bookmakers?: string, markets?: string, sport?
 }
 
 export async function fetchPlayerProps(eventId: string, markets?: string, sport?: string) {
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+  const projectId = getProjectId();
   const secHeaders = await getSessionHeaders();
   const normalizedSport = normalizeOddsSport(sport);
 
@@ -110,7 +117,7 @@ export async function fetchPlayerProps(eventId: string, markets?: string, sport?
 }
 
 export async function fetchPlayerOdds(playerName: string, propType: string, overUnder: string, sport?: string) {
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+  const projectId = getProjectId();
   const secHeaders = await getSessionHeaders();
   const normalizedSport = normalizeOddsSport(sport);
 
