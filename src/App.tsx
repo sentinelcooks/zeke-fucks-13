@@ -52,6 +52,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function OnboardingGuard({ children }: { children: React.ReactNode }) {
   const { profile, isAuthenticated, isLoading } = useAuth();
   if (isLoading) return <LoadingSpinner />;
+  // Auth resolved but profile fetch is still in-flight (setTimeout(0) defer in AuthContext).
+  // Without this guard an authenticated user briefly sees onboarding before the redirect fires.
+  if (isAuthenticated && profile === null) return <LoadingSpinner />;
 
   // Escape hatch: ?force=1 bypasses the guard so onboarding can always be re-entered for testing/QA.
   const forceParam = new URLSearchParams(window.location.search).get("force");

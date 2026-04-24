@@ -356,7 +356,10 @@ Deno.serve(async (req) => {
         regionConfigs,
       );
 
-      if (!multiResult) return json({ error: "All API keys exhausted" }, 503);
+      if (!multiResult) {
+        console.log(JSON.stringify({ fn: "nba-odds", action: "events", sport, status: "error", reason: "all_keys_exhausted" }));
+        return json({ error: "All API keys exhausted" }, 503);
+      }
 
       const responseData = {
         events: multiResult.events,
@@ -364,6 +367,7 @@ Deno.serve(async (req) => {
         regions_queried: REGION_CONFIGS.map(c => c.region),
         sport,
       };
+      console.log(JSON.stringify({ fn: "nba-odds", action: "events", sport, eventsFound: multiResult.events.length, quotaRemaining: multiResult.quota.remaining, quotaUsed: multiResult.quota.used }));
       setCache(cacheKey, responseData);
       return json(responseData);
     }

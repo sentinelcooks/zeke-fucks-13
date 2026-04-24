@@ -142,6 +142,11 @@ Deno.serve(async (req) => {
     await supabase.from("odds_api_keys")
       .update({ requests_remaining: remaining, requests_used: used, last_used_at: new Date().toISOString() })
       .eq("id", keyId);
+    if (remaining <= 0) {
+      await supabase.from("odds_api_keys")
+        .update({ exhausted_at: new Date().toISOString() })
+        .eq("id", keyId);
+    }
   }
 
   await recordOddsApiUsage(supabase, {

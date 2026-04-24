@@ -155,7 +155,7 @@ ${formatRule}
 
 1. Statistical Edge — Season stats, L10 trends, platoon splits, K rate / ERA / WHIP / OPS.
 2. Matchup & Park Factor — Opposing pitcher/hitter matchup, park dimensions, weather, bullpen state.${paceStr ? " Factor in game pace/total context." : ""}
-3. Verdict & Risk — Final recommendation with unit sizing and key risk.`;
+3. Verdict & Risk — Name the bet direction and line (${overUnder || "OVER"} ${line || "N/A"}) explicitly. State the model confidence (${confidence}%) and edge vs market. Name the ONE specific risk that could kill this pick. Give a unit size (0.5–3u). NEVER write "this pick checks the boxes", "strong play here", or any generic template phrase.`;
 
   if (s === "nhl") return `You are a sharp NHL betting analyst. Be concise and data-driven. Use hockey terminology throughout.
 
@@ -173,7 +173,7 @@ ${formatRule}
 
 1. Statistical Edge — SOG trends, shooting %, ice time, power-play involvement.
 2. Matchup & Lineup — Opposing goalie save %, line combinations, PP/PK time, fatigue.${paceStr ? " Factor in game pace/total context." : ""}
-3. Verdict & Risk — Final recommendation with unit sizing and key risk.`;
+3. Verdict & Risk — Name the bet direction and line (${overUnder || "OVER"} ${line || "N/A"}) explicitly. State the model confidence (${confidence}%) and edge vs market. Name the ONE specific risk factor (goalie, line matchup, TOI volatility) that could kill this pick. Give a unit size (0.5–3u). NEVER write "this pick checks the boxes", "strong play here", or any generic template phrase.`;
 
   // NBA / default
   return `You are a sharp sports betting analyst. Be concise, data-driven, and persuasive.
@@ -193,7 +193,7 @@ ${formatRule}
 
 1. Statistical Edge — Hit rates, averages, trends supporting the bet.
 2. Matchup & Pace — Opponent matchup, pace of play, injuries affecting this prop.${paceStr ? " Use the game pace/total context provided." : ""}
-3. Verdict & Risk — Final recommendation with unit sizing and key risk.`;
+3. Verdict & Risk — Name the bet direction and line (${overUnder || "OVER"} ${line || "N/A"}) explicitly. State the model confidence (${confidence}%) and edge vs market. Name the ONE specific risk factor (injury, blowout risk, pace, matchup) that could kill this pick. Give a unit size (0.5–3u). NEVER write "this pick checks the boxes", "strong play here", or any generic template phrase.`;
 }
 
 /* ── Sport-specific system messages ── */

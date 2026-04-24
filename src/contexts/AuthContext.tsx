@@ -18,7 +18,7 @@ interface AuthContextType {
   profile: Profile | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  signUp: (email: string, password: string, displayName?: string) => Promise<{ error?: string }>;
+  signUp: (email: string, password: string, displayName?: string) => Promise<{ error?: string; needsConfirmation?: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Pick<Profile, "display_name" | "timezone" | "notification_enabled" | "odds_format">>) => Promise<void>;
@@ -117,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, [fetchProfile]);
 
-  const signUp = async (email: string, password: string, displayName?: string): Promise<{ error?: string }> => {
+  const signUp = async (email: string, password: string, displayName?: string): Promise<{ error?: string; needsConfirmation?: boolean }> => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -129,6 +129,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
     if (error) return { error: error.message };
+    // When email confirmation is required, Supabase returns a user but no session.
+    // Signal this to the caller so the UI can show the confirmation pending state.
+    if (data.user && !data.session) {
+      return { needsConfirmation: true };
+    }
     if (data.user && displayName) {
       await supabase.from("profiles").update({ display_name: displayName }).eq("id", data.user.id);
     }

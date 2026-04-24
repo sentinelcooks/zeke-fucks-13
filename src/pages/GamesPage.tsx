@@ -736,7 +736,16 @@ const GamesPage = () => {
         )}
 
         <button
-          onClick={() => navigate("/dashboard/moneyline", { state: { home_team: game.home_team, away_team: game.away_team, sport, autoAnalyze: true } })}
+          onClick={() => {
+            // Normalize sport key: GamesPage uses Odds API keys (basketball_nba) but
+            // moneyline-api expects short keys (nba). Map them before passing via state.
+            const sportShort: Record<string, string> = {
+              basketball_nba: "nba", baseball_mlb: "mlb",
+              icehockey_nhl: "nhl", americanfootball_nfl: "nfl",
+            };
+            const normalizedSport = sportShort[sport] ?? sport;
+            navigate("/dashboard/moneyline", { state: { home_team: game.home_team, away_team: game.away_team, sport: normalizedSport, autoAnalyze: true } });
+          }}
           className="mt-3 w-full flex items-center justify-center gap-2 transition-all hover:opacity-80"
           style={{
             background: "#1a1735",

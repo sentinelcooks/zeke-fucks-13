@@ -219,6 +219,7 @@ function Sparkline({ color = "#00FF6A", down = false, className = "" }: { color?
 function ScreenHero({ onNext }: { onNext: () => void }) {
   const navigate = useNavigate();
   return (
+    <>
     <SectionContainer>
       <ProgressDots current={1} total={5} />
 
@@ -351,15 +352,30 @@ function ScreenHero({ onNext }: { onNext: () => void }) {
       {/* Feature pills — living micro-previews (accordion: one open at a time) */}
       <FeatureAccordion />
 
-      {/* CTA */}
-      <div className="mt-6">
+      {/* Spacer so content doesn't hide behind the sticky CTA bar */}
+      <div className="h-28" />
+    </SectionContainer>
+
+    {/* Sticky Get Started CTA — always visible at bottom of viewport */}
+    <div
+      className="fixed inset-x-0 bottom-0 z-50"
+      style={{
+        background: "rgba(10,10,10,0.92)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        borderTop: "1px solid rgba(255,255,255,0.06)",
+        paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)",
+      }}
+    >
+      <div className="mx-auto max-w-md px-5 pt-3">
         <GreenCTA onClick={onNext}>Get Started</GreenCTA>
-        <p className="text-center text-[11px] text-white/50 mt-3">
+        <p className="text-center text-[11px] text-white/50 mt-2.5">
           Already have an account?{" "}
           <button onClick={() => navigate("/auth")} className="text-[#00FF6A] underline font-semibold">Sign in</button>
         </p>
       </div>
-    </SectionContainer>
+    </div>
+    </>
   );
 }
 

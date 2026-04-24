@@ -12,6 +12,43 @@ import {
 } from "../_shared/odds_intelligence.ts";
 import { nhlInjuryAdjustments, type NHLInjuryWarning } from "../_shared/injuries.ts";
 
+async function getNextApiKey(supabase: any): Promise<{ id: string; key: string } | null> {
+  const { data, error } = await supabase
+    .from("odds_api_keys")
+    .select("id, api_key")
+    .eq("is_active", true)
+    .is("exhausted_at", null)
+    .order("last_used_at", { ascending: true, nullsFirst: true })
+    .limit(1)
+    .single();
+  if (!error && data) return { id: data.id, key: data.api_key };
+  const { data: cfg } = await supabase.from("app_config").select("value").eq("key", "odds_api_key").single();
+  if (cfg?.value) return { id: "app-config", key: cfg.value };
+  const envKey = Deno.env.get("ODDS_API_KEY");
+  if (envKey) return { id: "env-fallback", key: envKey };
+  return null;
+}
+
+async function updateKeyUsage(supabase: any, keyId: string, resp: Response): Promise<void> {
+  if (keyId === "env-fallback" || keyId === "app-config") return;
+  const remaining = resp.headers.get("x-requests-remaining");
+  const used = resp.headers.get("x-requests-used");
+  const update: Record<string, any> = { last_used_at: new Date().toISOString() };
+  if (remaining !== null) update.requests_remaining = parseInt(remaining, 10);
+  if (used !== null) update.requests_used = parseInt(used, 10);
+  if (remaining !== null && parseInt(remaining, 10) <= 0) update.exhausted_at = new Date().toISOString();
+  await supabase.from("odds_api_keys").update(update).eq("id", keyId);
+}
+
+async function markKeyExhausted(supabase: any, keyId: string, reason: string): Promise<void> {
+  if (keyId === "env-fallback" || keyId === "app-config") return;
+  await supabase.from("odds_api_keys").update({
+    exhausted_at: new Date().toISOString(),
+    last_error: reason,
+    last_used_at: new Date().toISOString(),
+  }).eq("id", keyId);
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-session-token, x-device-fingerprint, x-request-timestamp, x-request-nonce, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
@@ -164,22 +201,17 @@ async function getStartingGoalieInfo(event: any): Promise<{ home: any; away: any
 // ── Odds API Integration ──
 async function getOddsForGame(supabase: any, gameTeams: { home: string; away: string }) {
   try {
-    const keyData = await supabase
-      .from("odds_api_keys")
-      .select("api_key")
-      .eq("is_active", true)
-      .is("exhausted_at", null)
-      .order("last_used_at", { ascending: true, nullsFirst: true })
-      .limit(1)
-      .single();
-
-    const apiKey = keyData?.data?.api_key || Deno.env.get("ODDS_API_KEY");
-    if (!apiKey) return null;
+    const keyInfo = await getNextApiKey(supabase);
+    if (!keyInfo) return null;
 
     const resp = await fetch(
-      `https://api.the-odds-api.com/v4/sports/icehockey_nhl/odds/?apiKey=${apiKey}&regions=us&markets=h2h,spreads,totals&oddsFormat=american`
+      `https://api.the-odds-api.com/v4/sports/icehockey_nhl/odds/?apiKey=${keyInfo.key}&regions=us&markets=h2h,spreads,totals&oddsFormat=american`
     );
-    if (!resp.ok) return null;
+    if (!resp.ok) {
+      if (resp.status === 401 || resp.status === 403) await markKeyExhausted(supabase, keyInfo.id, `HTTP ${resp.status}`);
+      return null;
+    }
+    await updateKeyUsage(supabase, keyInfo.id, resp);
     const events = await resp.json();
 
     const matchEvent = events.find((e: any) => {

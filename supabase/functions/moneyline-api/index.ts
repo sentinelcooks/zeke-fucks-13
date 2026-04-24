@@ -15,6 +15,7 @@ interface Decision {
   conviction_tier: ConvictionTier;
   recommended_units: 0 | 0.5 | 1 | 2 | 3;
   verdict_text: string;
+  grade_explanation?: string;
   pass_reason?: "low_conviction" | "toss_up" | "negative_edge" | null;
 }
 
@@ -39,12 +40,13 @@ function buildDecision(opts: {
   team2: { name?: string; shortName?: string; abbr?: string };
   team1_pct: number;                      // 0-100, model probability for team1 (or "over" for totals)
   verdict: string;                        // "STRONG/LEAN <name>" or "TOSS-UP" or "DO NOT BET"
-  factorBreakdown?: Array<{ team1Score?: number; team2Score?: number; weight?: number }>;
+  factorBreakdown?: Array<{ label?: string; team1Score?: number; team2Score?: number; weight?: number }>;
   oddsAmerican?: number | null;           // best price on the WINNING side, if available
   betType: "moneyline" | "spread" | "total";
   overUnder?: string | null;              // for totals
+  sport?: string;                         // for sport-aware grade explanation
 }): Decision {
-  const { team1, team2, team1_pct, verdict, factorBreakdown = [], oddsAmerican, betType, overUnder } = opts;
+  const { team1, team2, team1_pct, verdict, factorBreakdown = [], oddsAmerican, betType, overUnder, sport } = opts;
   const v = (verdict || "").toUpperCase();
   const t1Name = team1.shortName || team1.name || "Team 1";
   const t2Name = team2.shortName || team2.name || "Team 2";
@@ -127,6 +129,34 @@ function buildDecision(opts: {
     else pass_reason = "low_conviction";
   }
 
+  // Build sport-aware grade explanation from top decisive factors
+  const tierLabel = tier === "veryHigh" ? "Very High" : tier === "high" ? "High" : tier === "medium" ? "Medium" : tier === "low" ? "Low" : "No Bet";
+  const sportLabel = sport ? sport.toUpperCase() : null;
+  const edgePart = edge != null ? ` · ${edge > 0 ? "+" : ""}${edge}% vs market` : "";
+
+  const topFactors = factorBreakdown
+    .filter((f) => (f.weight ?? 0) > 0 && f.label)
+    .sort((a, b) => {
+      const aAdv = winning_side === "team1" ? (a.team1Score ?? 50) - (a.team2Score ?? 50) : (a.team2Score ?? 50) - (a.team1Score ?? 50);
+      const bAdv = winning_side === "team1" ? (b.team1Score ?? 50) - (b.team2Score ?? 50) : (b.team2Score ?? 50) - (b.team1Score ?? 50);
+      return bAdv - aAdv;
+    })
+    .slice(0, 3)
+    .map((f) => f.label!);
+
+  let grade_explanation: string;
+  if (tier === "noBet") {
+    grade_explanation = pass_reason === "toss_up"
+      ? `${sportLabel ? sportLabel + ": " : ""}Toss-up — no meaningful edge found.`
+      : pass_reason === "negative_edge"
+        ? `${sportLabel ? sportLabel + ": " : ""}Model edge is negative vs market price — pass.`
+        : `${sportLabel ? sportLabel + ": " : ""}Low conviction — factors split evenly.`;
+  } else if (topFactors.length > 0) {
+    grade_explanation = `${sportLabel ? sportLabel + ": " : ""}${topFactors.join(", ")} → ${tierLabel} conviction${edgePart}.`;
+  } else {
+    grade_explanation = `${sportLabel ? sportLabel + ": " : ""}${tierLabel} conviction${edgePart}.`;
+  }
+
   return {
     winning_side,
     winning_team_name,
@@ -135,6 +165,7 @@ function buildDecision(opts: {
     conviction_tier: tier,
     recommended_units: tierToUnits(tier),
     verdict_text: verdict || "",
+    grade_explanation,
     pass_reason,
   };
 }
@@ -1339,6 +1370,7 @@ Deno.serve(async (req) => {
                 oddsAmerican: odds?.bestOdds?.american ?? null,
                 betType: bet_type,
                 overUnder: over_under,
+                sport: "mlb",
               });
 
               return json({
@@ -1409,6 +1441,7 @@ Deno.serve(async (req) => {
                 oddsAmerican: odds?.bestOdds?.american ?? null,
                 betType: bet_type,
                 overUnder: over_under,
+                sport: "nhl",
               });
 
               return json({
@@ -1485,6 +1518,7 @@ Deno.serve(async (req) => {
         oddsAmerican: odds?.bestOdds?.american ?? null,
         betType: bet_type,
         overUnder: over_under,
+        sport,
       });
 
       return json({

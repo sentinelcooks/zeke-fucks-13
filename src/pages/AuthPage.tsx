@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { Eye, EyeOff, ArrowRight, ArrowLeft } from "lucide-react";
+import { Eye, EyeOff, ArrowRight, ArrowLeft, Mail, CheckCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import sentinelLogo from "@/assets/sentinel-lock.jpg";
 
 // Sentinel purple brand
@@ -63,6 +64,8 @@ const AuthPage = () => {
   const navigate = useNavigate();
 
   const [savingOnboarding, setSavingOnboarding] = useState(false);
+  const [confirmationPending, setConfirmationPending] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const savedForUser = useState(() => new Set<string>())[0];
 
   const saveOnboardingToDb = useCallback(async (userId: string) => {
@@ -156,8 +159,13 @@ const AuthPage = () => {
       const result = mode === "login"
         ? await signIn(email, password)
         : await signUp(email, password, displayName || undefined);
-      if (result.error) setError(result.error);
-      else {
+      if (result.error) {
+        setError(result.error);
+      } else if (result.needsConfirmation) {
+        // Email/password signup requires email confirmation — show pending screen.
+        // Do NOT navigate; the onAuthStateChange listener handles post-confirm routing.
+        setConfirmationPending(true);
+      } else {
         persistRememberChoice(remember);
         const { data: { user: authUser } } = await supabase.auth.getUser();
         if (authUser) await saveOnboardingToDb(authUser.id);
@@ -191,7 +199,88 @@ const AuthPage = () => {
     }
   };
 
+  const handleResend = async () => {
+    if (!email || resendLoading) return;
+    setResendLoading(true);
+    try {
+      const { error: resendError } = await supabase.auth.resend({ type: "signup", email });
+      if (resendError) {
+        toast.error(resendError.message || "Failed to resend. Try again shortly.");
+      } else {
+        toast.success("Confirmation email resent. Check your inbox.");
+      }
+    } catch {
+      toast.error("Something went wrong. Try again.");
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   if (isAuthenticated) return null;
+
+  if (confirmationPending) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background relative overflow-hidden px-4 py-8 pt-safe-plus-4 pb-safe">
+        {/* Ambient purple orbs */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[120px] pointer-events-none" style={{ background: 'hsl(270 70% 45% / 0.22)' }} />
+
+        <motion.div
+          initial={{ opacity: 0, y: 20, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+          className="w-full max-w-[440px] relative z-10 rounded-[28px] p-7 sm:p-8 border text-center"
+          style={{
+            background: 'hsla(265, 25%, 9%, 0.72)',
+            borderColor: 'hsla(0, 0%, 100%, 0.06)',
+            backdropFilter: 'blur(28px)',
+            WebkitBackdropFilter: 'blur(28px)',
+            boxShadow: '0 20px 60px hsla(265, 50%, 4%, 0.65), inset 0 1px 0 hsla(0, 0%, 100%, 0.04)',
+          }}
+        >
+          <div className="flex justify-center mb-5">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: `${ACCENT}22`, border: `1px solid ${ACCENT}44` }}>
+              <Mail className="w-8 h-8" style={{ color: ACCENT }} />
+            </div>
+          </div>
+
+          <h2 className="text-[24px] font-bold text-white mb-2">Check your email</h2>
+          <p className="text-[13px] text-white/55 leading-relaxed mb-1">
+            We sent a confirmation link to
+          </p>
+          <p className="text-[14px] font-semibold mb-5" style={{ color: ACCENT }}>{email}</p>
+          <p className="text-[12px] text-white/45 leading-relaxed mb-6">
+            Open the link to activate your account. Once confirmed, come back to unlock the rest of Sentinel.
+          </p>
+
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={handleResend}
+            disabled={resendLoading}
+            className="w-full py-3 rounded-full text-[13px] font-semibold mb-3 transition-all disabled:opacity-50"
+            style={{
+              background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_DEEP})`,
+              boxShadow: `0 8px 24px ${ACCENT}44`,
+              color: 'white',
+            }}
+          >
+            {resendLoading ? (
+              <div className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              "Resend confirmation email"
+            )}
+          </motion.button>
+
+          <button
+            type="button"
+            onClick={() => { setConfirmationPending(false); setError(""); }}
+            className="text-[12px] text-white/45 hover:text-white/70 transition-colors"
+          >
+            ← Back to sign in
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
 
   const isSignup = mode === "signup";
 

@@ -11,6 +11,7 @@ export interface Decision {
   conviction_tier: "noBet" | "low" | "medium" | "high" | "veryHigh";
   recommended_units: 0 | 0.5 | 1 | 2 | 3;
   verdict_text: string;
+  grade_explanation?: string;
 }
 
 interface WrittenAnalysisProps {
@@ -66,40 +67,46 @@ const SECTION_COLORS = [
 
 function generateFallbackSections(data: WrittenAnalysisProps): AnalysisSection[] {
   const { verdict, confidence, playerOrTeam, line, propDisplay, overUnder, reasoning = [], factors = [] } = data;
+  const ev = (data as any).ev;
+  const edge = (data as any).edge;
   const source = reasoning.length > 0 ? reasoning : factors;
   const direction = overUnder?.toUpperCase() || "OVER";
+  const lineProp = line ? `${direction} ${line}${propDisplay ? ` ${propDisplay}` : ""}` : direction;
+  const evStr = typeof ev === "number" && ev !== 0 ? ` · +${ev.toFixed(1)}% EV` : "";
+  const edgeStr = typeof edge === "number" && edge !== 0 ? ` · ${edge > 0 ? "+" : ""}${edge.toFixed(1)}% edge` : "";
+  const sizingStr = confidence >= 65 ? "1.5–2 units" : confidence >= 55 ? "1 unit" : "0.5 units";
 
   const sections: AnalysisSection[] = [];
 
   if (data.type === "prop") {
     sections.push({
       title: "Statistical Edge",
-      content: confidence >= 70
-        ? `Our model projects ${playerOrTeam} at ${confidence}% confidence for ${direction} ${line} ${propDisplay || ""}. Season-long averages and recent usage rates both trend favorably above this line, creating a clear statistical edge.`
-        : `${playerOrTeam} shows a ${confidence}% probability of going ${direction} ${line} ${propDisplay || ""}. The model identifies a moderate edge based on available data points.`,
+      content: source[0] || (confidence >= 70
+        ? `${playerOrTeam} hits ${lineProp} at ${confidence}% model confidence${edgeStr}${evStr}. Recent volume and usage rate trend above this threshold.`
+        : `${playerOrTeam} projects ${lineProp} at ${confidence}% confidence${edgeStr}${evStr}. Model identifies a moderate edge — proceed with reduced sizing.`),
     });
     sections.push({
       title: "Matchup Breakdown",
-      content: source[0] || `The matchup context supports this ${direction} play. Defensive rankings and pace of play create an environment where ${playerOrTeam} can exceed this line.`,
+      content: source[1] || `Opponent defensive profile and game pace both factor into this ${direction} lean for ${playerOrTeam} at ${line ?? "this"} ${propDisplay || "line"}.`,
     });
     sections.push({
       title: "Recent Form",
-      content: source[1] || `Recent game logs show ${playerOrTeam} trending in the right direction for this prop, with consistency across the last several outings.`,
+      content: source[2] || `Game log trend supports the ${direction} at ${line ?? "this number"} — monitor pregame news for injury or lineup changes before betting.`,
     });
     sections.push({
       title: "Line Value",
-      content: source[2] || `The current line of ${line} ${propDisplay || ""} appears to offer value given the statistical profile and situational factors at play.`,
+      content: source[3] || `The ${lineProp} line offers ${edge != null && edge > 3 ? "clear" : "marginal"} market value${evStr}. Stale line or sharp action may tighten before tip.`,
     });
     sections.push({
       title: "Risk & Verdict",
       content: verdict === "STRONG PICK"
-        ? `Minimal red flags identified. This is a high-conviction play — consider 1.5-2 unit sizing. All key indicators align for a strong ${direction} play.`
-        : `Some variance factors exist. Recommended at 0.5-1 unit sizing with standard bankroll management. ${source[3] || "Monitor pregame news for any lineup changes."}`,
+        ? `${playerOrTeam} ${lineProp} — ${confidence}% confidence${edgeStr}. High-conviction play, sized at ${sizingStr}. Primary risk: early blowout or unexpected DNP.`
+        : `${playerOrTeam} ${lineProp} — ${confidence}% confidence${edgeStr}. Lean play, sized at ${sizingStr}. ${source[4] || "Monitor lineup status. Standard bankroll management applies."}`,
     });
   } else {
     sections.push({
       title: "Statistical Edge",
-      content: `${playerOrTeam} grades out at ${confidence}% win probability in our model, ${confidence >= 60 ? "significantly exceeding" : "slightly above"} the implied odds threshold.`,
+      content: source[0] || `${playerOrTeam} grades at ${confidence}% win probability${edgeStr}${evStr}. ${confidence >= 60 ? "Meaningful edge over the implied market price." : "Slight edge — reduce sizing accordingly."}`,
     });
     factors.slice(0, 4).forEach((f, i) => {
       sections.push({
@@ -110,7 +117,7 @@ function generateFallbackSections(data: WrittenAnalysisProps): AnalysisSection[]
     while (sections.length < 5) {
       sections.push({
         title: "Additional Context",
-        content: `The model's confidence at ${confidence}% reflects the balance of available data points for this matchup.`,
+        content: `${confidence}% model confidence${edgeStr}. Proceed at ${sizingStr} with standard bankroll management.`,
       });
     }
   }
@@ -575,6 +582,11 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
                   <p className="text-[13px] leading-relaxed text-foreground">
                     {overallSummary.summary}
                   </p>
+                  {props.decision?.grade_explanation && (
+                    <p className="text-[10px] text-muted-foreground/55 mt-1.5 font-mono">
+                      {props.decision.grade_explanation}
+                    </p>
+                  )}
                 </motion.div>
 
                 {/* Confidence footer */}

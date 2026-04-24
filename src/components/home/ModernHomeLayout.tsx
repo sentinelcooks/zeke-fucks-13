@@ -432,7 +432,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const quickLinks = [
     { label: "Analyze", icon: BarChart3, path: "/dashboard/analyze", gradient: "from-[hsl(142,100%,50%)] to-[hsl(158,64%,52%)]", desc: "Props & Lines" },
     { label: "Picks", icon: Sparkles, path: "/dashboard/picks", gradient: "from-[hsl(30,100%,50%)] to-[hsl(15,100%,55%)]", desc: "Today's picks" },
-    { label: "Parlay", icon: Layers, path: "/dashboard/parlay", gradient: "from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)]", desc: "Build a slip" },
+    { label: "Tracker", icon: DollarSign, path: "/dashboard/tracker", gradient: "from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)]", desc: "Your bets" },
     { label: "Lines", icon: Crosshair, path: "/dashboard/moneyline", gradient: "from-[hsl(190,90%,55%)] to-[hsl(158,64%,52%)]", desc: "Moneylines" },
   ];
 
@@ -552,7 +552,8 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               borderRadius: 20,
             }}>
               <Sparkles className="w-6 h-6 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-[11px] text-muted-foreground/55">No Strong picks cleared the bar today. Check the Daily Picks tab for Lean plays.</p>
+              <p className="text-[11px] text-muted-foreground/55 mb-1">No top-tier picks qualify today.</p>
+              <p className="text-[10px] text-muted-foreground/35">Thresholds: 65%+ confidence · +5% edge vs market. Check Daily Picks for Lean plays.</p>
             </div>
           ) : (
             <div className="-mx-5 px-5 overflow-x-auto hide-scrollbar snap-x snap-mandatory">
