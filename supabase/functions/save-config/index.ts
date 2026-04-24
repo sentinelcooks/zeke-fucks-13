@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getMasterClient } from "../_shared/masterClient.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,10 +18,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    // app_config lives in MASTER DB alongside odds_api_keys (key-admin writes there).
+    const supabase = await getMasterClient();
 
     const body = await req.json();
     const { password, action, key, value } = body;

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getMasterClient } from "../_shared/masterClient.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,8 +32,10 @@ const MARKET_TO_PROP: Record<string, string> = {
   fighter_moneylines: "moneyline",
 };
 
-async function getNextApiKey(supabase: any) {
-  const { data } = await supabase
+// Rotation-pool reads/writes always go to MASTER DB so admin uploads are visible.
+async function getNextApiKey(_supabase: any) {
+  const master = await getMasterClient();
+  const { data } = await master
     .from("odds_api_keys")
     .select("id, api_key")
     .eq("is_active", true)
@@ -42,33 +45,33 @@ async function getNextApiKey(supabase: any) {
     .single();
   if (data) return { id: data.id, key: data.api_key };
 
-  // Fallback: try admin-configured key in app_config
-  const { data: configData } = await supabase
+  const { data: configData } = await master
     .from("app_config")
     .select("value")
     .eq("key", "odds_api_key")
     .single();
   if (configData?.value) return { id: "app-config", key: configData.value };
 
-  // Last resort: env var
   const envKey = Deno.env.get("ODDS_API_KEY");
   if (envKey) return { id: "__env__", key: envKey };
   return null;
 }
 
-async function updateKeyUsage(supabase: any, keyId: string, resp: Response) {
+async function updateKeyUsage(_supabase: any, keyId: string, resp: Response) {
   if (keyId === "__env__" || keyId === "app-config") return;
+  const master = await getMasterClient();
   const remaining = resp.headers.get("x-requests-remaining");
   const used = resp.headers.get("x-requests-used");
   const updates: any = { last_used_at: new Date().toISOString() };
   if (remaining) updates.requests_remaining = parseInt(remaining);
   if (used) updates.requests_used = parseInt(used);
-  await supabase.from("odds_api_keys").update(updates).eq("id", keyId);
+  await master.from("odds_api_keys").update(updates).eq("id", keyId);
 }
 
-async function markKeyExhausted(supabase: any, keyId: string, error: string) {
+async function markKeyExhausted(_supabase: any, keyId: string, error: string) {
   if (keyId === "__env__" || keyId === "app-config") return;
-  await supabase.from("odds_api_keys").update({
+  const master = await getMasterClient();
+  await master.from("odds_api_keys").update({
     exhausted_at: new Date().toISOString(),
     last_error: error,
   }).eq("id", keyId);

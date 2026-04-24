@@ -5,6 +5,7 @@ import { TrendingUp, TrendingDown, Zap, Clock, Search, Loader2, Link2, X, Chevro
 import { supabase } from "@/integrations/supabase/client";
 
 import { analyzeProp } from "@/services/api";
+import { getFunctionUrl } from "@/services/supabaseFunctionUrl";
 import WrittenAnalysis from "@/components/WrittenAnalysis";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import OddsComparison from "@/components/OddsComparison";
@@ -199,12 +200,15 @@ const FreePropsPage = () => {
 
       if (fetched.length === 0) {
         try {
-          const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-          await fetch(`https://${projectId}.supabase.co/functions/v1/free-props`, {
+          const resp = await fetch(getFunctionUrl("free-props"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ path: "generate" }),
           });
+          if (!resp.ok) {
+            const body = await resp.text().catch(() => "");
+            console.error("[edge]", "free-props/generate", resp.status, body.slice(0, 500));
+          }
           const { data: retry } = await supabase
             .from("free_props")
             .select("*")

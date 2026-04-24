@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getMasterClient } from "../_shared/masterClient.ts";
 
 /* ── Single Source of Truth: Decision Builder ──
  * Sport-agnostic. Used for moneyline / spread / total across all sports.
@@ -1130,7 +1131,7 @@ async function fetchOddsWithRotation(supabase: any, url: string, maxRetries = 3)
 
 async function fetchOddsForMatchup(team1Name: string, team2Name: string, sport: string, supabaseClient?: any) {
   try {
-    const sb = supabaseClient || createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const sb = supabaseClient || (await getMasterClient());
     const sportKey = SPORT_ODDS_KEYS[sport] || SPORT_ODDS_KEYS.nba;
     const url = `https://api.the-odds-api.com/v4/sports/${sportKey}/odds/?apiKey=__API_KEY__&regions=us,us2,us_dfs,us_ex&markets=h2h,spreads,totals&oddsFormat=american`;
 
@@ -1339,12 +1340,8 @@ Deno.serve(async (req) => {
 
       const extras = { injuries1, injuries2, splits1, splits2, b2b1, b2b2, pace1, pace2, team1IsHome: venue ? venue.team1IsHome : null };
 
-      // Fetch live odds for all sports (using rotating key pool)
-      const masterUrl = Deno.env.get("MASTER_SUPABASE_URL");
-      const masterKey = Deno.env.get("MASTER_SUPABASE_SERVICE_KEY");
-      const oddsDb = (masterUrl && masterKey)
-        ? createClient(masterUrl, masterKey)
-        : createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      // Fetch live odds for all sports — always read rotation pool from MASTER DB.
+      const oddsDb = await getMasterClient();
       const oddsData = await fetchOddsForMatchup(team1.name, team2.name, sport, oddsDb);
 
       // MLB: delegate to 20-factor model for superior analysis

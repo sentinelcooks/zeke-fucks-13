@@ -11,9 +11,12 @@ import {
   computeRLM, scoreRLM20, sharpBookDivergence,
 } from "../_shared/odds_intelligence.ts";
 import { nhlInjuryAdjustments, type NHLInjuryWarning } from "../_shared/injuries.ts";
+import { getMasterClient } from "../_shared/masterClient.ts";
 
-async function getNextApiKey(supabase: any): Promise<{ id: string; key: string } | null> {
-  const { data, error } = await supabase
+// Rotation-pool reads/writes always go to MASTER DB so admin uploads are visible.
+async function getNextApiKey(_supabase: any): Promise<{ id: string; key: string } | null> {
+  const master = await getMasterClient();
+  const { data, error } = await master
     .from("odds_api_keys")
     .select("id, api_key")
     .eq("is_active", true)
@@ -22,27 +25,29 @@ async function getNextApiKey(supabase: any): Promise<{ id: string; key: string }
     .limit(1)
     .single();
   if (!error && data) return { id: data.id, key: data.api_key };
-  const { data: cfg } = await supabase.from("app_config").select("value").eq("key", "odds_api_key").single();
+  const { data: cfg } = await master.from("app_config").select("value").eq("key", "odds_api_key").single();
   if (cfg?.value) return { id: "app-config", key: cfg.value };
   const envKey = Deno.env.get("ODDS_API_KEY");
   if (envKey) return { id: "env-fallback", key: envKey };
   return null;
 }
 
-async function updateKeyUsage(supabase: any, keyId: string, resp: Response): Promise<void> {
+async function updateKeyUsage(_supabase: any, keyId: string, resp: Response): Promise<void> {
   if (keyId === "env-fallback" || keyId === "app-config") return;
+  const master = await getMasterClient();
   const remaining = resp.headers.get("x-requests-remaining");
   const used = resp.headers.get("x-requests-used");
   const update: Record<string, any> = { last_used_at: new Date().toISOString() };
   if (remaining !== null) update.requests_remaining = parseInt(remaining, 10);
   if (used !== null) update.requests_used = parseInt(used, 10);
   if (remaining !== null && parseInt(remaining, 10) <= 0) update.exhausted_at = new Date().toISOString();
-  await supabase.from("odds_api_keys").update(update).eq("id", keyId);
+  await master.from("odds_api_keys").update(update).eq("id", keyId);
 }
 
-async function markKeyExhausted(supabase: any, keyId: string, reason: string): Promise<void> {
+async function markKeyExhausted(_supabase: any, keyId: string, reason: string): Promise<void> {
   if (keyId === "env-fallback" || keyId === "app-config") return;
-  await supabase.from("odds_api_keys").update({
+  const master = await getMasterClient();
+  await master.from("odds_api_keys").update({
     exhausted_at: new Date().toISOString(),
     last_error: reason,
     last_used_at: new Date().toISOString(),

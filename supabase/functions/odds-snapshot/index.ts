@@ -7,6 +7,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { checkOddsQuota, recordOddsApiUsage } from "../_shared/odds_intelligence.ts";
+import { getMasterClient } from "../_shared/masterClient.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,13 +34,17 @@ Deno.serve(async (req) => {
   const sport = url.pathname.split("/").filter(Boolean).pop() || "nhl";
   const oddsSport = SPORT_KEYS[sport] || SPORT_KEYS.nhl;
 
+  // Local client for odds_history (per-project history table).
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+  // Master client for the rotation pool (odds_api_keys / app_config),
+  // shared with the Admin Dashboard.
+  const keysDb = await getMasterClient();
 
   // Quota guard — skip if low
-  const quota = await checkOddsQuota(supabase);
+  const quota = await checkOddsQuota(keysDb);
   if (!quota.ok) {
     const msg = `WARN: skipping ${sport} snapshot, quota at ${(quota.remainingPct * 100).toFixed(1)}% (${quota.remaining} remaining)`;
     console.warn(msg);
@@ -47,7 +52,7 @@ Deno.serve(async (req) => {
   }
 
   // Pick the freshest active key
-  const { data: keys } = await supabase
+  const { data: keys } = await keysDb
     .from("odds_api_keys")
     .select("id, api_key")
     .eq("is_active", true)
@@ -60,7 +65,7 @@ Deno.serve(async (req) => {
 
   if (!apiKey) {
     // Fallback: try admin-configured key in app_config
-    const { data: configData } = await supabase
+    const { data: configData } = await keysDb
       .from("app_config")
       .select("value")
       .eq("key", "odds_api_key")
@@ -90,7 +95,7 @@ Deno.serve(async (req) => {
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
     console.error(`Odds API ${resp.status}:`, text);
-    await recordOddsApiUsage(supabase, {
+    await recordOddsApiUsage(keysDb, {
       endpoint: `/v4/sports/${oddsSport}/odds`,
       sport,
       markets,
@@ -139,17 +144,17 @@ Deno.serve(async (req) => {
 
   // Update key usage (skip non-DB sources)
   if (keyId && keyId !== "app-config" && remaining != null) {
-    await supabase.from("odds_api_keys")
+    await keysDb.from("odds_api_keys")
       .update({ requests_remaining: remaining, requests_used: used, last_used_at: new Date().toISOString() })
       .eq("id", keyId);
     if (remaining <= 0) {
-      await supabase.from("odds_api_keys")
+      await keysDb.from("odds_api_keys")
         .update({ exhausted_at: new Date().toISOString() })
         .eq("id", keyId);
     }
   }
 
-  await recordOddsApiUsage(supabase, {
+  await recordOddsApiUsage(keysDb, {
     endpoint: `/v4/sports/${oddsSport}/odds`,
     sport,
     markets,

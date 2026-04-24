@@ -118,6 +118,8 @@ const AdminPage = () => {
   const [bulkLoading, setBulkLoading] = useState(false);
   const [testLoading, setTestLoading] = useState(false);
   const [testResults, setTestResults] = useState<Array<{ key: string; valid: boolean; error?: string }> | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthResult, setHealthResult] = useState<any>(null);
 
   // Single canonical Odds API key (app_config)
   const [oddsKeyInput, setOddsKeyInput] = useState("");
@@ -597,6 +599,26 @@ const AdminPage = () => {
                   >
                     Reset Exhausted
                   </button>
+                  <button
+                    onClick={async () => {
+                      setHealthLoading(true);
+                      setHealthResult(null);
+                      try {
+                        const { data, error } = await supabase.functions.invoke("odds-health-check", {
+                          body: { password },
+                        });
+                        if (error) throw new Error(error.message || String(error));
+                        setHealthResult(data);
+                      } catch (e: any) {
+                        setHealthResult({ ok: false, error: e.message });
+                      }
+                      setHealthLoading(false);
+                    }}
+                    disabled={healthLoading || !password}
+                    className="text-sm text-muted-foreground hover:text-foreground bg-muted px-3 py-2 rounded-lg transition-colors disabled:opacity-40"
+                  >
+                    {healthLoading ? "Checking..." : "Run Odds Health Check"}
+                  </button>
                   <span className="text-xs text-muted-foreground ml-auto">
                     {bulkApiKeys.trim() ? `${bulkApiKeys.split(/[\n,]+/).map(k => k.trim()).filter(Boolean).length} keys detected` : ""}
                   </span>
@@ -610,6 +632,30 @@ const AdminPage = () => {
                         <span className="text-muted-foreground">{r.error || ""}</span>
                       </div>
                     ))}
+                  </div>
+                )}
+                {healthResult && (
+                  <div className="text-xs font-mono bg-muted/40 rounded-lg p-3 space-y-1">
+                    {healthResult.error && (
+                      <div className="text-destructive">Error: {healthResult.error}</div>
+                    )}
+                    {!healthResult.error && (
+                      <>
+                        <div className={healthResult.ok ? "text-green-400" : "text-destructive"}>
+                          {healthResult.ok ? "✓ Healthy" : "✗ Unhealthy"}
+                        </div>
+                        <div>Master DB: {healthResult.masterDbConfigured ? "✓ configured" : "✗ not configured"}</div>
+                        <div>Total keys: {healthResult.totalKeys} (active {healthResult.activeKeys} / exhausted {healthResult.exhaustedKeys})</div>
+                        <div>Last rotation: {healthResult.lastRotationAt || "never"}</div>
+                        <div>nba-odds reachable: {healthResult.nbaOddsReachable ? "✓" : "✗"}</div>
+                        <div>moneyline-api reachable: {healthResult.moneylineReachable ? "✓" : "✗"}</div>
+                        {healthResult.envSeen && (
+                          <div className="pt-1 text-muted-foreground">
+                            env: {Object.entries(healthResult.envSeen).map(([k, v]: any) => `${k}=${v ? "✓" : "✗"}`).join(" ")}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 )}
               </div>

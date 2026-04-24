@@ -5,13 +5,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { generateDeviceFingerprint } from "@/utils/fingerprint";
-
-function getProjectId(): string {
-  const explicit = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-  if (explicit) return explicit;
-  const url = import.meta.env.VITE_SUPABASE_URL || "";
-  try { return new URL(url).hostname.split(".")[0]; } catch { return ""; }
-}
+import { getFunctionUrl, getSupabaseAnonKey } from "@/services/supabaseFunctionUrl";
 
 function getStoredSessionToken(): string {
   const remember = localStorage.getItem("primal-remember") === "true";
@@ -45,27 +39,32 @@ async function callEdgeFunction(
   method: "GET" | "POST" = "GET"
 ) {
   const secHeaders = await getSessionHeaders();
-  const projectId = getProjectId();
-  const baseUrl = `https://${projectId}.supabase.co/functions/v1/${functionName}`;
 
   if (method === "POST") {
     const { data, error } = await supabase.functions.invoke(`${functionName}/${action}`, {
       body: { ...params, __sec: secHeaders },
     });
-    if (error) throw error;
+    if (error) {
+      console.error("[edge]", functionName, action, error.message || error);
+      throw error;
+    }
     return data;
   }
 
   const qs = params ? "?" + new URLSearchParams(params).toString() : "";
-  const url = `${baseUrl}/${action}${qs}`;
+  const url = `${getFunctionUrl(functionName)}/${action}${qs}`;
   const resp = await fetch(url, {
     headers: {
-      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      apikey: getSupabaseAnonKey(),
+      Authorization: `Bearer ${getSupabaseAnonKey()}`,
       ...secHeaders,
     },
   });
-  if (!resp.ok) throw new Error(`API error ${resp.status}`);
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => "");
+    console.error("[edge]", functionName, action, resp.status, body.slice(0, 500));
+    throw new Error(`API error ${resp.status}`);
+  }
   return resp.json();
 }
 
