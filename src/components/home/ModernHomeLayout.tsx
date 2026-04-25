@@ -36,6 +36,7 @@ interface DailyPick {
   line: number;
   direction: string;
   hit_rate: number;
+  confidence?: number | null;
   odds: string | null;
   reasoning: string | null;
   result: string | null;
@@ -272,22 +273,20 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
 
     const [todayRes, yesterdayRes] = await Promise.all([
-      supabase.from("daily_picks").select("*").eq("pick_date", today).order("hit_rate", { ascending: false }).limit(40),
+      supabase.from("daily_picks").select("*").eq("pick_date", today).order("confidence", { ascending: false, nullsFirst: false }).limit(40),
       supabase.from("daily_picks").select("*").eq("pick_date", yesterday).order("created_at", { ascending: false }),
     ]);
 
-    // hit_rate may be stored as decimal (0.55) or percent (55) — normalize threshold to 55
-    const hrOk = (hr: number) => (hr > 1 ? hr >= 55 : hr >= 0.55);
-    // Hard odds guard: drop any pick where |odds| >= 500 (longshot junk)
+    // Hard odds guard: drop extreme longshots (|odds| >= 1000)
     const oddsOk = (o: string | null | undefined) => {
       if (!o) return true;
       const n = parseInt(String(o).replace(/[^\d-]/g, ""), 10);
       if (Number.isNaN(n)) return true;
-      return Math.abs(n) < 500;
+      return Math.abs(n) < 1000;
     };
-    // STRICT: today only. No 3-day stale fallback — show empty state if no picks today.
+    // Trust tier as quality gate — don't require hit_rate since new rows may not populate it
     const rawToday = ((todayRes.data as DailyPick[]) || []).filter(
-      p => hrOk(p.hit_rate) && oddsOk(p.odds) && p.tier !== "pass"
+      p => oddsOk(p.odds) && p.tier !== "pass" && (p as any).status !== "empty_slate"
     );
     // Defensive client-side dedupe (in case duplicate rows still exist in DB)
     const seenKeys = new Set<string>();
@@ -298,26 +297,25 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       return true;
     });
 
+    // Sort by confidence first (backend model score), fall back to hit_rate
+    const scoreOf = (p: DailyPick) => (p.confidence != null ? p.confidence : (p.hit_rate > 1 ? p.hit_rate / 100 : p.hit_rate)) ?? 0;
     const sortByPref = (arr: DailyPick[]) => {
       if (userSports.length > 0) {
         arr.sort((a, b) => {
           const aMatch = userSports.includes(a.sport?.toLowerCase()) ? 1 : 0;
           const bMatch = userSports.includes(b.sport?.toLowerCase()) ? 1 : 0;
           if (bMatch !== aMatch) return bMatch - aMatch;
-          return b.hit_rate - a.hit_rate;
+          return scoreOf(b) - scoreOf(a);
         });
       } else {
-        arr.sort((a, b) => b.hit_rate - a.hit_rate);
+        arr.sort((a, b) => scoreOf(b) - scoreOf(a));
       }
       return arr;
     };
 
-    // Split by tier — top quality goes to Today's Edge, rest to Daily Picks.
-    // The backend may insert an `empty_slate` marker row into tier="edge" when
-    // no genuine Strong picks exist; we filter it out of the carousel array
-    // and surface it via the existing zero-state branch below.
-    const edgeTier = allToday.filter(p => p.tier === "edge" && (p as any).status !== "empty_slate");
-    const dailyTier = allToday.filter(p => p.tier !== "edge" && (p as any).status !== "empty_slate");
+    // Split by tier — edge goes to Today's Edge carousel, rest to Daily Picks section.
+    const edgeTier = allToday.filter(p => p.tier === "edge");
+    const dailyTier = allToday.filter(p => p.tier !== "edge");
 
     // STRICT: Today's Edge only shows tier="edge". No fallback to ungraded picks.
     setTodayPicks(sortByPref(edgeTier));
@@ -552,19 +550,16 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               borderRadius: 20,
             }}>
               <Sparkles className="w-6 h-6 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-[11px] text-muted-foreground/55 mb-1">No top-tier picks qualify today.</p>
-              <p className="text-[10px] text-muted-foreground/35">Thresholds: 65%+ confidence · +5% edge vs market. Check Daily Picks for Lean plays.</p>
+              <p className="text-[11px] text-muted-foreground/55 mb-1">No edge picks generated yet today.</p>
+              <p className="text-[10px] text-muted-foreground/35">Check back after games are scheduled. Lean plays may be available in Daily Picks below.</p>
             </div>
           ) : (
             <div className="-mx-5 px-5 overflow-x-auto hide-scrollbar snap-x snap-mandatory">
               <div className="flex gap-3 pb-2">
                 {todayPicks.slice(0, 5).map((pick, i) => {
                   const isGameBet = pick.bet_type && pick.bet_type !== 'prop';
-                  // Defensive: hit_rate may be decimal (0.76) or percent (76). Normalize to percent.
-                  const rawHr = pick.hit_rate ?? 0;
-                  const confPercent = rawHr > 1 ? Math.round(rawHr) : Math.round(rawHr * 100);
-                  // Hard skip: never render junk in Today's Edge
-                  if (confPercent < 55) return null;
+                  const rawConf = pick.confidence ?? pick.hit_rate ?? 0;
+                  const confPercent = rawConf > 1 ? Math.round(rawConf) : Math.round(rawConf * 100);
                   return (
                   <motion.div
                     key={`${pick.id}-${i}`}

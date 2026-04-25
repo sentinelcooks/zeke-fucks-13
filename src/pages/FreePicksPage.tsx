@@ -17,6 +17,7 @@ interface Pick {
   line: number;
   direction: string;
   hit_rate: number;
+  confidence?: number | null;
   sport: string;
   team: string | null;
   opponent: string | null;
@@ -181,25 +182,41 @@ const FreePicksPage = () => {
     const fetchPicks = async () => {
       setLoading(true);
       const today = new Date().toISOString().slice(0, 10);
+      // Prefer daily/value tiers; fall back to any non-edge, non-pass row if none found
       let { data } = await supabase
         .from("daily_picks")
         .select("*")
         .eq("pick_date", today)
-        .order("hit_rate", { ascending: false });
+        .in("tier", ["daily", "value"])
+        .order("confidence", { ascending: false, nullsFirst: false });
+
+      if (!data || data.length === 0) {
+        // Fallback: all non-edge rows today
+        const { data: fallback } = await supabase
+          .from("daily_picks")
+          .select("*")
+          .eq("pick_date", today)
+          .neq("tier", "edge")
+          .neq("tier", "pass")
+          .order("confidence", { ascending: false, nullsFirst: false });
+        data = fallback;
+      }
 
       if (data && data.length > 0) {
         setPicks(data as Pick[]);
         setPickDate(today);
       } else {
+        // No picks today — try most recent date
         const { data: recent } = await supabase
           .from("daily_picks")
           .select("*")
+          .not("tier", "eq", "pass")
           .order("pick_date", { ascending: false })
-          .order("hit_rate", { ascending: false })
+          .order("confidence", { ascending: false, nullsFirst: false })
           .limit(50);
         if (recent && recent.length > 0) {
           const latestDate = recent[0].pick_date;
-          setPicks(recent.filter((p: any) => p.pick_date === latestDate) as Pick[]);
+          setPicks(recent.filter((p: any) => p.pick_date === latestDate && p.tier !== "edge") as Pick[]);
           setPickDate(latestDate);
         } else {
           setPicks([]);
@@ -233,12 +250,14 @@ const FreePicksPage = () => {
   // Normalize hit_rate (may be stored as decimal 0-1 or percent 0-100)
   const normHr = (hr: number) => (hr > 1 ? Math.round(hr) : Math.round(hr * 100));
   const normalized = picks.map(p => ({ ...p, hit_rate: normHr(p.hit_rate) }));
-  // Apply filters — only show 50%+ confidence picks
-  let filtered = normalized.filter(p => p.hit_rate >= 50);
+  // Score: prefer confidence field (0-1), fall back to normalized hit_rate
+  const scoreOf = (p: Pick) => (p.confidence != null ? p.confidence * 100 : p.hit_rate);
+  // Apply sport/prop filters; tier gate already applied at query layer
+  let filtered = normalized.filter(p => (p as any).status !== "empty_slate");
   if (sportFilter !== "all") filtered = filtered.filter(p => p.sport === sportFilter);
   if (propFilter !== "all") filtered = filtered.filter(p => p.prop_type === propFilter);
   filtered = [...filtered].sort((a, b) =>
-    sortMode === "high" ? b.hit_rate - a.hit_rate : a.hit_rate - b.hit_rate
+    sortMode === "high" ? scoreOf(b) - scoreOf(a) : scoreOf(a) - scoreOf(b)
   );
 
   const isStale = pickDate && pickDate !== new Date().toISOString().slice(0, 10);

@@ -67,8 +67,9 @@ async function searchFighters(query: string) {
         for (const comp of event?.competitions || []) {
           for (const c of comp?.competitors || []) {
             const a = c.athlete || c;
-            if (a?.displayName?.toLowerCase().includes(qLower)) {
-              results.push({ id: String(a.id), name: a.displayName, record: a.record?.summary || "", headshot: a?.headshot?.href || "" });
+            const name = a?.displayName || a?.shortName || a?.fullName || c?.displayName || "";
+            if (name && name.toLowerCase().includes(qLower)) {
+              results.push({ id: String(a.id || c.id), name, record: a.record?.summary || a.records?.[0]?.summary || "", headshot: a?.headshot?.href || "" });
             }
           }
         }
