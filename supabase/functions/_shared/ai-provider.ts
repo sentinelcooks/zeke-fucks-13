@@ -1,8 +1,8 @@
 // Shared AI provider with cascading fallback:
-// Gemini 2.0 Flash Lite → Grok fast-reasoning → Grok mini → OpenAI (optional)
+// Grok 4.1 Fast Reasoning → Grok Mini → Gemini Flash-Lite → OpenAI (optional)
 
 export const ANTI_GENERIC_INSTRUCTION =
-  `You must generate unique, context-aware analysis. Do NOT reuse generic templates or repeated phrasing. Tailor analysis specifically to the provided player, matchup, stats, and context passed in this prompt. Reference the actual data provided. Vary sentence structure across responses. Avoid phrases like "this is a strong play" unless justified by specific data points. Each output must feel specific to this exact query and not be reusable for any other query.`;
+  `You must generate unique, context-aware analysis. Do NOT reuse generic templates or repeated phrasing. Tailor analysis specifically to the provided player, matchup, stats, and context passed in this prompt. Reference the actual data provided — cite exact stat values, player names, prop lines, and opponent context from the input. Explain the specific betting angle: why over or why under, what edge exists, and what risks exist. If data is incomplete or missing for a key factor, acknowledge the uncertainty explicitly rather than filling the gap with confident-sounding filler. Apply sport-specific reasoning: for NBA use usage rate, pace, and matchup defense; for MLB use pitcher ERA/WHIP/K-rate and park factors; for NHL use Corsi, PP%, and goalie save%%; for UFC use finishing rate, reach, and grappling vs striking tendencies. Vary sentence structure across responses. Avoid phrases like "this is a strong play" unless justified by specific data points. Each output must feel specific to this exact query and not be reusable for any other query.`;
 
 export const PERSONALIZATION_INSTRUCTION =
   `Incorporate the user-specific context provided. Adjust tone and recommendations based on their sports, style, and input data. Never return a static or repeated response.`;
@@ -61,68 +61,6 @@ function stripAdditionalProps(schema: unknown): unknown {
   return rest;
 }
 
-async function tryGemini(
-  fnName: string,
-  messages: AIMessage[],
-  tool: AITool | undefined,
-  maxTokens: number,
-  temperature: number,
-): Promise<string | Record<string, unknown>> {
-  const apiKey = Deno.env.get("GEMINI_API_KEY");
-  if (!apiKey) {
-    console.log(`[ai-provider] fn=${fnName} GEMINI_API_KEY not set — skipping gemini`);
-    throw new Error("GEMINI_API_KEY not set");
-  }
-
-  const systemMsg = messages.find(m => m.role === "system");
-  const userMsgs = messages.filter(m => m.role === "user");
-
-  const body: Record<string, unknown> = {
-    contents: userMsgs.map(m => ({ role: "user", parts: [{ text: m.content }] })),
-    generationConfig: { maxOutputTokens: maxTokens, temperature },
-  };
-  if (systemMsg) body.system_instruction = { parts: [{ text: systemMsg.content }] };
-  if (tool) {
-    body.tools = [{ functionDeclarations: [{ name: tool.name, description: tool.description, parameters: stripAdditionalProps(tool.parameters) }] }];
-    body.tool_config = { function_calling_config: { mode: "ANY", allowed_function_names: [tool.name] } };
-  }
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-  console.log(`[ai-provider] fn=${fnName} trying provider=gemini model=${GEMINI_MODEL}`);
-
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  if (!resp.ok) {
-    const errText = await resp.text().catch(() => "");
-    console.log(`[ai-provider] fn=${fnName} provider=gemini FAILED status=${resp.status} reason=${errText.slice(0, 200)} → trying grok-fast`);
-    throw new Error(`gemini ${resp.status}`);
-  }
-
-  const data = await resp.json();
-  const part = data?.candidates?.[0]?.content?.parts?.[0];
-
-  if (tool) {
-    if (!part?.functionCall?.args) {
-      console.log(`[ai-provider] fn=${fnName} provider=gemini FAILED reason=no_function_call → trying grok-fast`);
-      throw new Error("gemini no function call");
-    }
-    console.log(`[ai-provider] fn=${fnName} provider=gemini SUCCESS model=${GEMINI_MODEL}`);
-    return part.functionCall.args as Record<string, unknown>;
-  }
-
-  const text: string = part?.text ?? "";
-  if (!text) {
-    console.log(`[ai-provider] fn=${fnName} provider=gemini FAILED reason=empty_response → trying grok-fast`);
-    throw new Error("gemini empty response");
-  }
-  console.log(`[ai-provider] fn=${fnName} provider=gemini SUCCESS model=${GEMINI_MODEL}`);
-  return text;
-}
-
 async function tryOpenAICompat(
   fnName: string,
   providerLabel: "grok-fast" | "grok-mini" | "openai",
@@ -134,13 +72,15 @@ async function tryOpenAICompat(
   tool: AITool | undefined,
   maxTokens: number,
   temperature: number,
+  skipTemperature = false,
 ): Promise<string | Record<string, unknown>> {
   const body: Record<string, unknown> = {
     model,
     messages: messages.map(m => ({ role: m.role, content: m.content })),
     max_tokens: maxTokens,
-    temperature,
   };
+  // Reasoning models don't support temperature — only include for non-reasoning models
+  if (!skipTemperature) body.temperature = temperature;
   if (tool) {
     body.tools = [{ type: "function", function: { name: tool.name, description: tool.description, parameters: tool.parameters } }];
     body.tool_choice = { type: "function", function: { name: tool.name } };
@@ -181,30 +121,93 @@ async function tryOpenAICompat(
   return text;
 }
 
+async function tryGemini(
+  fnName: string,
+  messages: AIMessage[],
+  tool: AITool | undefined,
+  maxTokens: number,
+  temperature: number,
+): Promise<string | Record<string, unknown>> {
+  const apiKey = Deno.env.get("GEMINI_API_KEY");
+  if (!apiKey) {
+    console.log(`[ai-provider] fn=${fnName} GEMINI_API_KEY not set — skipping gemini`);
+    throw new Error("GEMINI_API_KEY not set");
+  }
+
+  const systemMsg = messages.find(m => m.role === "system");
+  const userMsgs = messages.filter(m => m.role === "user");
+
+  const body: Record<string, unknown> = {
+    contents: userMsgs.map(m => ({ role: "user", parts: [{ text: m.content }] })),
+    generationConfig: { maxOutputTokens: maxTokens, temperature },
+  };
+  if (systemMsg) body.system_instruction = { parts: [{ text: systemMsg.content }] };
+  if (tool) {
+    body.tools = [{ functionDeclarations: [{ name: tool.name, description: tool.description, parameters: stripAdditionalProps(tool.parameters) }] }];
+    body.tool_config = { function_calling_config: { mode: "ANY", allowed_function_names: [tool.name] } };
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+  console.log(`[ai-provider] fn=${fnName} trying provider=gemini model=${GEMINI_MODEL}`);
+
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => "");
+    console.log(`[ai-provider] fn=${fnName} provider=gemini FAILED status=${resp.status} reason=${errText.slice(0, 200)} → trying openai`);
+    throw new Error(`gemini ${resp.status}`);
+  }
+
+  const data = await resp.json();
+  const part = data?.candidates?.[0]?.content?.parts?.[0];
+
+  if (tool) {
+    if (!part?.functionCall?.args) {
+      console.log(`[ai-provider] fn=${fnName} provider=gemini FAILED reason=no_function_call → trying openai`);
+      throw new Error("gemini no function call");
+    }
+    console.log(`[ai-provider] fn=${fnName} provider=gemini SUCCESS model=${GEMINI_MODEL}`);
+    return part.functionCall.args as Record<string, unknown>;
+  }
+
+  const text: string = part?.text ?? "";
+  if (!text) {
+    console.log(`[ai-provider] fn=${fnName} provider=gemini FAILED reason=empty_response → trying openai`);
+    throw new Error("gemini empty response");
+  }
+  console.log(`[ai-provider] fn=${fnName} provider=gemini SUCCESS model=${GEMINI_MODEL}`);
+  return text;
+}
+
 export async function callAI(opts: AICallOptions): Promise<AICallResult> {
   const { fnName, messages, tool, maxTokens = 600, temperature = 0.3 } = opts;
 
-  // 1. Gemini
-  try {
-    const output = await tryGemini(fnName, messages, tool, maxTokens, temperature);
-    return { output, provider: "gemini", model: GEMINI_MODEL };
-  } catch { /* fall through */ }
-
-  // 2 & 3. Grok (fast-reasoning, then mini — same key)
+  // 1. Grok Fast Reasoning (primary) — skip temperature: reasoning models don't support it
   const grokKey = Deno.env.get("GROK_API_KEY");
   if (grokKey) {
     try {
-      const output = await tryOpenAICompat(fnName, "grok-fast", GROK_ENDPOINT, grokKey, GROK_FAST_MODEL, "grok-mini", messages, tool, maxTokens, temperature);
+      const output = await tryOpenAICompat(fnName, "grok-fast", GROK_ENDPOINT, grokKey, GROK_FAST_MODEL, "grok-mini", messages, tool, maxTokens, temperature, true);
       return { output, provider: "grok-fast", model: GROK_FAST_MODEL };
     } catch { /* fall through */ }
 
+    // 2. Grok Mini (backup)
     try {
-      const output = await tryOpenAICompat(fnName, "grok-mini", GROK_ENDPOINT, grokKey, GROK_MINI_MODEL, "openai", messages, tool, maxTokens, temperature);
+      const output = await tryOpenAICompat(fnName, "grok-mini", GROK_ENDPOINT, grokKey, GROK_MINI_MODEL, "gemini", messages, tool, maxTokens, temperature);
       return { output, provider: "grok-mini", model: GROK_MINI_MODEL };
     } catch { /* fall through */ }
   } else {
     console.log(`[ai-provider] fn=${fnName} GROK_API_KEY not set — skipping grok`);
   }
+
+  // 3. Gemini Flash-Lite (optional third)
+  try {
+    const output = await tryGemini(fnName, messages, tool, maxTokens, temperature);
+    return { output, provider: "gemini", model: GEMINI_MODEL };
+  } catch { /* fall through */ }
 
   // 4. OpenAI (optional)
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
