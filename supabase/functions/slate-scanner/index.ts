@@ -7,7 +7,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { rankAndDistribute, score, type ScoredPlay } from "../_shared/edge_scoring.ts";
+import { rankAndDistribute, scorePrecomputed, type ScoredPlay } from "../_shared/edge_scoring.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,29 +21,21 @@ function json(body: unknown, status = 200) {
   });
 }
 
-const FN_BASE = `${Deno.env.get("SUPABASE_URL")}/functions/v1`;
 const SVC_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-async function invokeSport(sport: string): Promise<any> {
-  const url = `${FN_BASE}/slate-scanner-${sport}`;
+// Use supabase.functions.invoke() so the service-role client handles auth
+// automatically — avoids the 401s that manual Bearer header assembly produces
+// when functions call peer functions internally.
+async function invokeSport(supabase: ReturnType<typeof createClient>, sport: string): Promise<any> {
   try {
-    const r = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${SVC_KEY}`,
-        apikey: SVC_KEY,
-        "Content-Type": "application/json",
-      },
-      body: "{}",
+    const { data, error } = await supabase.functions.invoke(`slate-scanner-${sport}`, {
+      body: {},
     });
-    const text = await r.text();
-    let data: any = null;
-    try { data = JSON.parse(text); } catch { data = text; }
-    if (!r.ok) {
-      console.error(`[${sport}] invocation failed ${r.status}:`, text.slice(0, 300));
-      return { sport, error: `status ${r.status}`, scanned: 0, validated: 0, inserted: 0 };
+    if (error) {
+      console.error(`[${sport}] invoke error:`, error);
+      return { sport, error: String(error), scanned: 0, validated: 0, inserted: 0 };
     }
-    return data;
+    return data ?? { sport, scanned: 0, validated: 0, inserted: 0 };
   } catch (e) {
     console.error(`[${sport}] invoke threw:`, e);
     return { sport, error: String(e), scanned: 0, validated: 0, inserted: 0 };
@@ -70,7 +62,7 @@ Deno.serve(async (req) => {
   const perSport: Record<string, any> = {};
   for (const s of sports) {
     try {
-      perSport[s] = await invokeSport(s);
+      perSport[s] = await invokeSport(supabase, s);
     } catch (e) {
       perSport[s] = { error: String(e) };
     }
@@ -91,14 +83,19 @@ Deno.serve(async (req) => {
   console.log(`Loaded ${pendingRows?.length ?? 0} _pending rows for finalization`);
 
   // 4. Re-score each pending row (so rankAndDistribute can use composite quality)
+  // The per-sport scanners already wrote a calibrated confidence (0-1) into
+  // the `confidence` column; fall back to hit_rate (0-100 percent) if missing
+  // for legacy rows.
   const validated: ScoredPlay[] = (pendingRows || []).map((r: any) => {
-    const confidence = Number(r.hit_rate ?? 0) / 100;
+    const confidence = r.confidence != null
+      ? Number(r.confidence)
+      : Number(r.hit_rate ?? 0) / 100;
     const oddsNum = Number(r.odds ?? -110);
     const decimal = oddsNum > 0 ? oddsNum / 100 + 1 : 100 / -oddsNum + 1;
     const implied = oddsNum > 0 ? 100 / (oddsNum + 100) : -oddsNum / (-oddsNum + 100);
     const edge = Math.max(0, confidence - implied);
     const ev_pct = (confidence * (decimal - 1) - (1 - confidence)) * 100;
-    return score({
+    return scorePrecomputed({
       sport: r.sport,
       bet_type: r.bet_type as any,
       player_name: r.player_name,
@@ -167,6 +164,10 @@ Deno.serve(async (req) => {
     let tier = "value";
     if (edgeKeys.has(key)) tier = "edge";
     else if (Number(r.hit_rate ?? 0) >= 70) tier = "daily";
+    // Preserve calibrated confidence so the frontend can sort by it.
+    const confidence01 = r.confidence != null
+      ? Number(r.confidence)
+      : Number(r.hit_rate ?? 0) / 100;
     return {
       pick_date: today,
       sport: r.sport,
@@ -182,6 +183,7 @@ Deno.serve(async (req) => {
       total_line: r.total_line,
       direction: r.direction,
       hit_rate: r.hit_rate,
+      confidence: Math.round(confidence01 * 1000) / 1000,
       last_n_games: r.last_n_games ?? 10,
       avg_value: r.avg_value,
       odds: r.odds,

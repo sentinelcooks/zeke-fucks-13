@@ -124,6 +124,7 @@ function setCache(key: string, data: unknown) {
 
 // ── API Key Rotation ──
 async function getNextApiKey(supabase: any): Promise<{ id: string; key: string } | null> {
+  // 1. Primary: active key with quota still available
   const { data, error } = await supabase
     .from("odds_api_keys")
     .select("id, api_key")
@@ -134,7 +135,31 @@ async function getNextApiKey(supabase: any): Promise<{ id: string; key: string }
     .single();
   if (!error && data) return { id: data.id, key: data.api_key };
 
-  // Fallback: try admin-configured key in app_config
+  // 2. Fallback: retry a key that was marked exhausted >24 h ago.
+  //    Most Odds API plans reset on a rolling or daily basis, so a key that
+  //    failed yesterday may have quota again today. We reset exhausted_at so
+  //    the normal rotation picks it up, and markKeyExhausted will re-set it
+  //    if it still fails on this attempt.
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data: staleKey } = await supabase
+    .from("odds_api_keys")
+    .select("id, api_key")
+    .eq("is_active", true)
+    .not("exhausted_at", "is", null)
+    .lt("exhausted_at", oneDayAgo)
+    .order("exhausted_at", { ascending: true })
+    .limit(1)
+    .single();
+  if (staleKey) {
+    console.log(`[key-rotation] Retrying key id=${staleKey.id} — exhausted >24 h ago, quota may have reset`);
+    await supabase
+      .from("odds_api_keys")
+      .update({ exhausted_at: null, last_error: null })
+      .eq("id", staleKey.id);
+    return { id: staleKey.id, key: staleKey.api_key };
+  }
+
+  // 3. Admin-configured key in app_config table
   const { data: configData } = await supabase
     .from("app_config")
     .select("value")
@@ -142,10 +167,11 @@ async function getNextApiKey(supabase: any): Promise<{ id: string; key: string }
     .single();
   if (configData?.value) return { id: "app-config", key: configData.value };
 
-  // Last resort: env secret
+  // 4. Last resort: env secret (for local dev / CI)
   const envKey = Deno.env.get("ODDS_API_KEY");
   if (envKey) return { id: "env-fallback", key: envKey };
 
+  console.error("[key-rotation] No usable Odds API keys — all active keys exhausted or inactive");
   return null;
 }
 
