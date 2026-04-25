@@ -13,10 +13,17 @@ interface StrengthWeaknessProps {
   opponentName: string;
   playerStrengths?: MatchupFactor[];
   teamWeaknesses?: MatchupFactor[];
-  defRank?: number;
+  defRank?: number | null;
   defRankLabel?: string;
-  paceRank?: number;
+  paceRank?: number | null;
+  defLabel?: string;
   sport?: "nba" | "mlb" | "nhl" | "ufc";
+}
+
+function formatMetric(val: number | null | undefined): string {
+  if (val == null) return "—";
+  if (Number.isInteger(val) && val >= 1 && val <= 30) return `#${val}`;
+  return typeof val === "number" ? val.toFixed(1) : String(val);
 }
 
 function getRatingColor(val: number): string {
@@ -95,17 +102,19 @@ export function StrengthWeakness({
   opponentName,
   playerStrengths,
   teamWeaknesses,
-  defRank = 24,
-  defRankLabel = "vs. this prop type",
-  paceRank = 8,
+  defRank = null,
+  defRankLabel,
+  paceRank = null,
+  defLabel,
   sport,
 }: StrengthWeaknessProps) {
   const defaults = getDefaults(sport);
   const strengths = playerStrengths || defaults.strengths;
   const weaknesses = teamWeaknesses || defaults.weaknesses;
 
-  const defLabel = sport === "mlb" ? "ERA RANK" : sport === "nhl" ? "DEF RANK" : "DEF RANK";
-  const paceLabel = sport === "mlb" ? "PACE" : sport === "nhl" ? "PACE" : "PACE";
+  const displayDefLabel = defLabel || (sport === "mlb" ? "OPP ERA" : sport === "nhl" ? "OPP DEF RTG" : "OPP DEF RTG");
+  const paceLabel = sport === "mlb" ? "RUNS/G" : "PACE";
+  const hasMetrics = defRank != null || paceRank != null;
 
   return (
     <div className="space-y-4">
@@ -120,19 +129,29 @@ export function StrengthWeakness({
             <h4 className="text-xs font-bold uppercase tracking-widest text-foreground">Matchup Grade</h4>
             <p className="text-[10px] text-foreground/70 mt-0.5">{playerName} vs {opponentName}</p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="text-center">
-              <span className="block text-[9px] font-bold uppercase text-foreground/70">{defLabel}</span>
-              <span className="block text-lg font-black text-nba-green tabular-nums">#{defRank}</span>
-              <span className="block text-[8px] text-foreground/60">{defRankLabel}</span>
+          {hasMetrics ? (
+            <div className="flex items-center gap-3">
+              {defRank != null && (
+                <div className="text-center">
+                  <span className="block text-[9px] font-bold uppercase text-foreground/70">{displayDefLabel}</span>
+                  <span className="block text-lg font-black text-nba-green tabular-nums">{formatMetric(defRank)}</span>
+                  {defRankLabel && <span className="block text-[8px] text-foreground/60">{defRankLabel}</span>}
+                </div>
+              )}
+              {defRank != null && paceRank != null && <div className="w-px h-10 bg-border" />}
+              {paceRank != null && (
+                <div className="text-center">
+                  <span className="block text-[9px] font-bold uppercase text-foreground/70">{paceLabel}</span>
+                  <span className="block text-lg font-black text-nba-blue tabular-nums">{formatMetric(paceRank)}</span>
+                </div>
+              )}
             </div>
-            <div className="w-px h-10 bg-border" />
-            <div className="text-center">
-              <span className="block text-[9px] font-bold uppercase text-foreground/70">{paceLabel}</span>
-              <span className="block text-lg font-black text-nba-blue tabular-nums">#{paceRank}</span>
-              <span className="block text-[8px] text-foreground/60">{defaults.paceLabel}</span>
+          ) : (
+            <div className="text-right">
+              <span className="block text-[10px] font-semibold text-muted-foreground/50">Insufficient data</span>
+              <span className="block text-[9px] text-muted-foreground/35 mt-0.5">Matchup metrics unavailable</span>
             </div>
-          </div>
+          )}
         </div>
       </motion.div>
 

@@ -421,8 +421,11 @@ const GamesPage = () => {
           const competitors = comp?.competitors || [];
           if (competitors.length < 2) continue;
 
-          const f1 = competitors[0]?.athlete?.displayName || competitors[0]?.team?.displayName || "TBD";
-          const f2 = competitors[1]?.athlete?.displayName || competitors[1]?.team?.displayName || "TBD";
+          const getName = (c: any) =>
+            c?.athlete?.displayName || c?.athlete?.shortName || c?.athlete?.fullName ||
+            c?.displayName || c?.team?.displayName || c?.team?.name || "TBD";
+          const f1 = getName(competitors[0]);
+          const f2 = getName(competitors[1]);
 
           const compTs = comp?.date ? Math.floor(new Date(comp.date).getTime() / 60000) : 0;
           const cardType = tsToCard[compTs] || "Main Card";

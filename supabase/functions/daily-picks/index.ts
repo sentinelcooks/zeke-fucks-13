@@ -736,7 +736,8 @@ Deno.serve(async (req) => {
     }
 
     const { todaysEdge, dailyPicks: dailyRanked, freePicks } = rankAndDistribute(scoredPlays);
-    console.log(`✅ Gated: ${todaysEdge.length} edge, ${dailyRanked.length} daily, ${freePicks.length} free`);
+    const rejectedCount = dedupedPicks.length - scoredPlays.filter(p => p.verdict !== "Pass").length;
+    console.log(`✅ Gated: ${todaysEdge.length} edge, ${dailyRanked.length} daily, ${freePicks.length} free, ${rejectedCount} rejected`);
 
     // ── Phase D: Persist ──
     const today = new Date().toISOString().slice(0, 10);
@@ -830,10 +831,43 @@ Deno.serve(async (req) => {
         prop_date: today,
       }));
 
+    // Build value-tier rows from freePicks so the Picks tab can surface them.
+    // These are lower-confidence plays that still have positive edge.
+    const edgeDailyKeys = new Set(pickRows.map((r: any) => `${r.sport}|${r.player_name}|${r.prop_type}|${r.direction}|${r.line}`));
+    const valueRows = freePicks
+      .filter(sp => !edgeDailyKeys.has(`${sp.sport}|${sp.player_name}|${sp.prop_type}|${sp.direction}|${sp.line}`))
+      .map(sp => {
+        const raw = findRaw(sp);
+        return {
+          pick_date: today,
+          sport: sp.sport,
+          player_name: sp.player_name,
+          team: sp.team || null,
+          opponent: sp.opponent || null,
+          prop_type: sp.prop_type,
+          line: sp.line,
+          direction: sp.direction,
+          hit_rate: Math.round(sp.confidence * 100),
+          last_n_games: 10,
+          avg_value: raw?.avg_value ?? sp.line,
+          reasoning: raw?.reasoning || sp.reasoning,
+          odds: raw?.odds ?? (sp.odds > 0 ? `+${sp.odds}` : `${sp.odds}`),
+          result: "pending",
+          bet_type: sp.bet_type === "total" ? "over_under" : sp.bet_type,
+          spread_line: sp.spread_line ?? null,
+          total_line: sp.total_line ?? null,
+          home_team: sp.home_team ?? null,
+          away_team: sp.away_team ?? null,
+          tier: "value",
+          status: null,
+        };
+      });
+
     try {
+      const allPickRows = [...pickRows, ...valueRows];
       const { error: rpcErr } = await supabase.rpc("replace_daily_picks", {
         p_pick_date: today,
-        p_rows: pickRows,
+        p_rows: allPickRows,
         p_free_rows: freeRows,
       });
       if (rpcErr) {
@@ -842,10 +876,10 @@ Deno.serve(async (req) => {
         // if the migration hasn't been applied yet.
         await supabase.from("daily_picks").delete().eq("pick_date", today);
         await supabase.from("free_props").delete().eq("prop_date", today);
-        if (pickRows.length > 0) {
+        if (allPickRows.length > 0) {
           const { error: insertErr } = await supabase
             .from("daily_picks")
-            .upsert(pickRows, {
+            .upsert(allPickRows, {
               onConflict: "pick_date,sport,tier,player_name,prop_type,direction,line",
               ignoreDuplicates: true,
             });
@@ -859,14 +893,78 @@ Deno.serve(async (req) => {
       console.error("persist error:", e);
     }
 
+    // ── Persist top-5 edge picks to edge_history for backtesting ──
+    if (todaysEdge.length > 0) {
+      try {
+        const historyRows = todaysEdge.map(sp => {
+          const raw = findRaw(sp);
+          const market = sp.bet_type === "total" ? "total" : sp.bet_type === "over_under" ? "total" : sp.bet_type === "prop" ? "player_prop" : sp.bet_type;
+          const selection = sp.bet_type === "prop"
+            ? `${sp.player_name} ${sp.direction} ${sp.line} ${sp.prop_type}`
+            : sp.bet_type === "total"
+            ? `${sp.direction} ${sp.line}`
+            : `${sp.player_name} ${sp.direction}`;
+          return {
+            pick_date: today,
+            sport: sp.sport,
+            league: sp.sport.toUpperCase(),
+            event_id: sp.home_team && sp.away_team ? `${sp.away_team}@${sp.home_team}` : null,
+            teams: sp.home_team && sp.away_team ? `${sp.away_team} @ ${sp.home_team}` : null,
+            player_or_fighter: sp.player_name,
+            market,
+            selection,
+            line: sp.line || null,
+            odds: Math.round(sp.odds),
+            sportsbook: raw?.odds ? "book" : "model",
+            implied_prob: Math.round(sp.implied_prob * 1000) / 1000,
+            model_prob: Math.round(sp.confidence * 1000) / 1000,
+            ev_pct: Math.round(sp.ev_pct * 10) / 10,
+            confidence: Math.round(sp.confidence * 1000) / 1000,
+            units: sp.confidence >= 0.65 ? 2 : 1,
+            risk_tier: "edge",
+            reasoning: raw?.reasoning || sp.reasoning,
+            status: "pending",
+            source_function: "daily-picks",
+            source_version: "v3",
+          };
+        });
+        const { error: histErr } = await supabase
+          .from("edge_history")
+          .upsert(historyRows, { onConflict: "pick_date,sport,player_or_fighter,market,selection", ignoreDuplicates: true });
+        if (histErr) console.error("edge_history upsert error:", histErr);
+        else console.log(`📚 Saved ${historyRows.length} picks to edge_history`);
+      } catch (e) {
+        console.error("edge_history persist error:", e);
+      }
+    }
+
+    const diagnostics = {
+      sports_scanned: Object.keys(ESPN_SPORTS),
+      games_scanned: allGames.length,
+      raw_candidates: rawPicks.length,
+      sane_after_filter: sanePicks.length,
+      deduped: dedupedPicks.length,
+      scored: scoredPlays.length,
+      rejected_by_threshold: rejectedCount,
+      edge_picks: todaysEdge.length,
+      daily_picks: dailyRanked.length,
+      value_picks: valueRows.length,
+      free_picks: freePicks.length,
+      no_picks_reason: todaysEdge.length === 0
+        ? rawPicks.length === 0 ? "no_games_or_odds"
+          : dedupedPicks.length === 0 ? "all_picks_filtered_by_sanity"
+          : "all_picks_below_threshold"
+        : null,
+    };
+    console.log("Diagnostics:", JSON.stringify(diagnostics));
+
     return new Response(
       JSON.stringify({
         message: "Picks generated — full-slate deterministic scan",
         count: dailyRanked.length,
         todays_edge: todaysEdge.length,
         free_picks: freePicks.length,
-        scanned_games: allGames.length,
-        raw_candidates: rawPicks.length,
+        diagnostics,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
