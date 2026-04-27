@@ -268,6 +268,22 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       });
   }, [user]);
 
+  const sortByPref = useCallback((arr: DailyPick[]) => {
+    const scoreOf = (p: DailyPick) => (p.confidence != null ? p.confidence : (p.hit_rate > 1 ? p.hit_rate / 100 : p.hit_rate)) ?? 0;
+    if (userSports.length > 0) {
+      arr.sort((a, b) => {
+        const aMatch = userSports.includes(a.sport?.toLowerCase()) ? 1 : 0;
+        const bMatch = userSports.includes(b.sport?.toLowerCase()) ? 1 : 0;
+        if (bMatch !== aMatch) return bMatch - aMatch;
+        return scoreOf(b) - scoreOf(a);
+      });
+    } else {
+      const scoreOf2 = scoreOf;
+      arr.sort((a, b) => scoreOf2(b) - scoreOf2(a));
+    }
+    return arr;
+  }, [userSports]);
+
   const fetchTodayPicks = useCallback(async () => {
     const today = new Date().toISOString().split("T")[0];
     const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
@@ -297,22 +313,6 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       return true;
     });
 
-    // Sort by confidence first (backend model score), fall back to hit_rate
-    const scoreOf = (p: DailyPick) => (p.confidence != null ? p.confidence : (p.hit_rate > 1 ? p.hit_rate / 100 : p.hit_rate)) ?? 0;
-    const sortByPref = (arr: DailyPick[]) => {
-      if (userSports.length > 0) {
-        arr.sort((a, b) => {
-          const aMatch = userSports.includes(a.sport?.toLowerCase()) ? 1 : 0;
-          const bMatch = userSports.includes(b.sport?.toLowerCase()) ? 1 : 0;
-          if (bMatch !== aMatch) return bMatch - aMatch;
-          return scoreOf(b) - scoreOf(a);
-        });
-      } else {
-        arr.sort((a, b) => scoreOf(b) - scoreOf(a));
-      }
-      return arr;
-    };
-
     // Split by tier — edge goes to Today's Edge carousel, rest to Daily Picks section.
     const edgeTier = allToday.filter(p => p.tier === "edge");
     const dailyTier = allToday.filter(p => p.tier !== "edge");
@@ -323,7 +323,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     setYesterdayPicks((yesterdayRes.data as DailyPick[]) || []);
     setPicksLoading(false);
     setLastRefreshed(new Date());
-  }, [userSports]);
+  }, [sortByPref]);
 
   useEffect(() => {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -349,21 +349,27 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("slate-scanner");
-      if (error) {
+      const { data, error } = await supabase.functions.invoke("force-refresh-edge");
+      if (error || !data?.ok) {
         toast.error("Failed to refresh picks. Try again later.");
-      } else {
-        const total = data?.counts?.total ?? 0;
-        const edge = data?.counts?.todaysEdge ?? 0;
-        toast.success(total > 0 ? `${edge} edge picks · ${total} total generated` : "No games available for picks right now.");
+        return;
       }
-      await fetchTodayPicks();
+      const total = data?.counts?.total ?? 0;
+      const edgeCount = data?.counts?.todaysEdge ?? 0;
+      const edgeRows = (data?.edge as DailyPick[]) || [];
+      const dailyRows = (data?.daily as DailyPick[]) || [];
+      // Force-update state from response payload — bypasses any broken/cached frontend read.
+      setTodayPicks(sortByPref([...edgeRows]));
+      setDailyTierPicks(sortByPref([...dailyRows]));
+      setPicksLoading(false);
+      setLastRefreshed(new Date());
+      toast.success(total > 0 ? `${edgeCount} edge picks · ${total} total generated` : "No games available for picks right now.");
     } catch {
       toast.error("Failed to refresh picks. Try again later.");
     } finally {
       setRefreshing(false);
     }
-  }, [fetchTodayPicks]);
+  }, [sortByPref]);
 
   // Fetch player headshots for prop picks only
   useEffect(() => {
@@ -415,6 +421,29 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     })();
     return { wins, losses, total, hitRate, profit, roi, sportCounts, streak };
   }, [plays]);
+
+  function formatPickLabel(pick: DailyPick, propAbbrev: Record<string, string>): string {
+    const dir = (pick.direction || "").toLowerCase();
+    if (pick.bet_type === "moneyline") {
+      const team =
+        pick.team ||
+        (dir === "home" ? pick.home_team : dir === "away" ? pick.away_team : null) ||
+        (dir === "win" ? ((pick.player_name || "").split(/\s+vs\s+/i)[0] || pick.player_name) : pick.player_name);
+      return `${team} ML`;
+    }
+    if (pick.bet_type === "spread") {
+      const team = dir === "home" ? pick.home_team : pick.away_team;
+      const pt = Number(pick.line ?? 0);
+      const signed = dir === "home" ? -Math.abs(pt) : Math.abs(pt);
+      return `${team} ${signed > 0 ? "+" : ""}${signed}`;
+    }
+    if (pick.bet_type === "total") {
+      const label = dir === "over" ? "O" : "U";
+      return `${label} ${pick.line} TOTAL`;
+    }
+    const abbr = propAbbrev[pick.prop_type?.toLowerCase()] || (pick.prop_type || "").replace(/_/g, " ").toUpperCase();
+    return `${dir === "over" ? "O" : "U"} ${pick.line} ${abbr}`;
+  }
 
   const yesterdayGraded = yesterdayPicks.filter(p => p.result === "hit" || p.result === "miss");
   const yesterdayPending = yesterdayPicks.filter(p => !p.result || (p.result !== "hit" && p.result !== "miss"));
@@ -886,8 +915,8 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       total_bases: "TB", stolen_bases: "SB",
                       goals: "G", shots_on_goal: "SOG", saves: "SV",
                     };
-                    const abbr = propAbbrev[pick.prop_type?.toLowerCase()] || (pick.prop_type || "").replace(/_/g, " ").toUpperCase();
                     const isHit = pick.result === "hit";
+                    const pickLabel = formatPickLabel(pick, propAbbrev);
                     return (
                       <div key={pick.id} className="flex items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '1px solid hsl(250 20% 18% / 0.4)' }}>
                         <div className="flex items-center gap-2.5 min-w-0">
@@ -899,7 +928,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                           <span className="truncate" style={{ fontSize: 13, fontWeight: 700, color: 'hsl(250 80% 97%)' }}>{pick.player_name}</span>
                         </div>
                         <span className="tabular-nums shrink-0 ml-2" style={{ fontSize: 11, fontWeight: 700, color: isHit ? 'hsl(142 71% 45%)' : 'hsl(0 84% 60%)' }}>
-                          {pick.direction === "over" ? "O" : "U"} {pick.line} {abbr} — {isHit ? "HIT" : "MISS"}
+                          {pickLabel} — {isHit ? "HIT" : "MISS"}
                         </span>
                       </div>
                     );
@@ -913,7 +942,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     total_bases: "TB", stolen_bases: "SB",
                     goals: "G", shots_on_goal: "SOG", saves: "SV",
                   };
-                  const abbr = propAbbrev[pick.prop_type?.toLowerCase()] || (pick.prop_type || "").replace(/_/g, " ").toUpperCase();
+                  const pickLabel = formatPickLabel(pick, propAbbrev);
                   return (
                     <div key={pick.id} className="flex items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '1px solid hsl(250 20% 18% / 0.4)' }}>
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -921,7 +950,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                         <span className="truncate" style={{ fontSize: 13, fontWeight: 700, color: 'hsl(250 80% 97%)' }}>{pick.player_name}</span>
                       </div>
                       <span className="tabular-nums shrink-0 ml-2" style={{ fontSize: 11, fontWeight: 700, color: 'hsl(45 93% 58%)' }}>
-                        {pick.direction === "over" ? "O" : "U"} {pick.line} {abbr} — PENDING
+                        {pickLabel} — PENDING
                       </span>
                     </div>
                   );

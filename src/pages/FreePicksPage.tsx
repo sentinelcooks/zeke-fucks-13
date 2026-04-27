@@ -427,33 +427,85 @@ const FreePicksPage = () => {
                     }}
                     className="w-full text-left ios-row active:bg-card-hover transition-colors"
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <div className={`w-1.5 h-1.5 rounded-full ${conf.dot}`} />
-                        <span className="text-[15px] font-semibold text-foreground truncate">{pick.player_name}</span>
-                        <span className="text-[11px] font-medium text-muted-foreground uppercase">{pick.sport}</span>
+                    <div className="flex-1 min-w-0 pr-2">
+                      <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${conf.dot}`} />
+                        <span className="text-[14px] font-semibold text-foreground truncate min-w-0 flex-1">
+                          {(() => {
+                            const isGameBet = pick.bet_type && pick.bet_type !== "prop";
+                            if (!isGameBet) return pick.player_name;
+                            // For game bets, prefer a clean matchup string.
+                            if (pick.away_team && pick.home_team) return `${pick.away_team} @ ${pick.home_team}`;
+                            return pick.player_name;
+                          })()}
+                        </span>
+                        <span className="text-[10px] font-medium text-muted-foreground uppercase whitespace-nowrap shrink-0">{pick.sport}</span>
                         {pick.tier === 'edge' && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-nba-green/15 text-nba-green uppercase tracking-wide">
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-nba-green/15 text-nba-green uppercase tracking-wide whitespace-nowrap shrink-0">
                             Edge
                           </span>
                         )}
                         {pick.bet_type && pick.bet_type !== "prop" && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-accent/15 text-accent uppercase tracking-wide">
-                            {pick.bet_type === "moneyline" ? "ML" : pick.bet_type}
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-accent/15 text-accent uppercase tracking-wide whitespace-nowrap shrink-0">
+                            {pick.bet_type === "moneyline" ? "ML" : pick.bet_type === "spread" ? "Spread" : "Total"}
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 pl-3.5">
-                        <span className={`text-[12px] font-bold ${pick.direction === "over" ? "text-nba-green" : "text-nba-red"}`}>
-                          {pick.direction === "over" ? "↗" : "↘"}{pick.direction.toUpperCase()}
-                        </span>
-                        <span className="text-[13px] text-foreground/80 tabular-nums">
-                          {pick.line} {getPropLabel(pick.prop_type)}
-                        </span>
-                        {pick.odds && <span className="text-[11px] text-muted-foreground tabular-nums">{formatOdds(pick.odds)}</span>}
-                      </div>
-                      {pick.opponent && (
-                        <div className="pl-3.5 mt-0.5">
+                      {(() => {
+                        const isGameBet = pick.bet_type && pick.bet_type !== "prop";
+                        const dir = (pick.direction || "").toLowerCase();
+                        const arrow = dir === "over" || dir === "home" || dir === "win" ? "↗" : "↘";
+                        const arrowColor = dir === "over" || dir === "home" || dir === "win" ? "text-nba-green" : "text-nba-red";
+
+                        if (isGameBet && pick.bet_type === "moneyline") {
+                          const team =
+                            pick.team ||
+                            (dir === "home" ? pick.home_team : dir === "away" ? pick.away_team : null) ||
+                            (dir === "win" ? (pick.player_name?.split(/\s+vs\s+/i)[0] || pick.player_name) : pick.player_name);
+                          return (
+                            <div className="flex items-center gap-2 pl-3.5 flex-wrap">
+                              <span className={`text-[12px] font-bold ${arrowColor} whitespace-nowrap`}>{arrow} {team}</span>
+                              {pick.odds && <span className="text-[11px] text-muted-foreground tabular-nums">{formatOdds(pick.odds)}</span>}
+                            </div>
+                          );
+                        }
+                        if (isGameBet && pick.bet_type === "spread") {
+                          const team = dir === "home" ? pick.home_team : pick.away_team;
+                          const point = pick.line ?? 0;
+                          const signed = dir === "home" ? -Math.abs(Number(point)) : Math.abs(Number(point));
+                          const display = `${signed > 0 ? "+" : ""}${signed}`;
+                          return (
+                            <div className="flex items-center gap-2 pl-3.5 flex-wrap">
+                              <span className={`text-[12px] font-bold ${arrowColor} whitespace-nowrap`}>{arrow} {team} {display}</span>
+                              {pick.odds && <span className="text-[11px] text-muted-foreground tabular-nums">{formatOdds(pick.odds)}</span>}
+                            </div>
+                          );
+                        }
+                        if (isGameBet && pick.bet_type === "total") {
+                          return (
+                            <div className="flex items-center gap-2 pl-3.5 flex-wrap">
+                              <span className={`text-[12px] font-bold ${arrowColor} whitespace-nowrap`}>
+                                {arrow} {dir.toUpperCase()} {pick.line}
+                              </span>
+                              {pick.odds && <span className="text-[11px] text-muted-foreground tabular-nums">{formatOdds(pick.odds)}</span>}
+                            </div>
+                          );
+                        }
+                        // Prop default
+                        return (
+                          <div className="flex items-center gap-2 pl-3.5 flex-wrap">
+                            <span className={`text-[12px] font-bold ${arrowColor} whitespace-nowrap`}>
+                              {arrow} {dir.toUpperCase()}
+                            </span>
+                            <span className="text-[13px] text-foreground/80 tabular-nums whitespace-nowrap">
+                              {pick.line} {getPropLabel(pick.prop_type)}
+                            </span>
+                            {pick.odds && <span className="text-[11px] text-muted-foreground tabular-nums">{formatOdds(pick.odds)}</span>}
+                          </div>
+                        );
+                      })()}
+                      {pick.opponent && (!pick.bet_type || pick.bet_type === "prop") && (
+                        <div className="pl-3.5 mt-1">
                           <span className="text-[10px] text-muted-foreground">vs {pick.opponent}</span>
                         </div>
                       )}
