@@ -66,6 +66,11 @@ export interface ScoredPlay {
   quality_score: number;           // composite curated score
   verdict: "Strong" | "Lean" | "Pass";
   reasoning: string;
+  // Event identity carried through from the Odds API event for downstream
+  // public display (filter by actual game_date, not pick_date).
+  event_id?: string | null;
+  commence_time?: string | null;
+  game_date?: string | null;
 }
 
 // Back-compat exports — new callers should import from prob_math.ts directly.

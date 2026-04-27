@@ -6,7 +6,8 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
-import { isPicksHistoryPick } from "@/lib/pickHistoryFilters";
+import { isPicksHistoryPick, isActiveTodayPick } from "@/lib/pickHistoryFilters";
+import { todayInTZ, getGameDate } from "@/lib/gameDate";
 
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 
@@ -30,6 +31,11 @@ interface Pick {
   avg_value: number | null;
   bet_type: string | null;
   tier: string | null;
+  status?: string | null;
+  result?: string | null;
+  event_id?: string | null;
+  commence_time?: string | null;
+  game_date?: string | null;
 }
 
 interface TrendProp {
@@ -182,42 +188,62 @@ const FreePicksPage = () => {
   useEffect(() => {
     const fetchPicks = async () => {
       setLoading(true);
-      const today = new Date().toISOString().slice(0, 10);
-      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      const todayET = todayInTZ();
+      const yesterdayPickDate = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 
-      // Rolling window covers night-before scans whose pick_date is yesterday
-      // but whose games play today. Order newest day / newest insert first so
-      // the dedupe below keeps the freshest row per logical pick.
-      const { data } = await supabase
-        .from("daily_picks")
-        .select("*")
-        .gte("pick_date", yesterday)
-        .lte("pick_date", today)
-        .order("pick_date", { ascending: false })
-        .order("created_at", { ascending: false })
-        .order("confidence", { ascending: false, nullsFirst: false });
+      // Filter by actual game_date (America/New_York) so night-before scans
+      // for tomorrow do not leak into today, and yesterday's already-played
+      // games do not show as "today's picks". Legacy rows missing game_date
+      // are still surfaced via a fallback that uses pick_date + isActiveTodayPick.
+      const [todayByGame, todayLegacyRes] = await Promise.all([
+        supabase
+          .from("daily_picks")
+          .select("*")
+          .eq("game_date", todayET)
+          .order("created_at", { ascending: false })
+          .order("confidence", { ascending: false, nullsFirst: false }),
+        supabase
+          .from("daily_picks")
+          .select("*")
+          .is("game_date", null)
+          .gte("pick_date", yesterdayPickDate)
+          .lte("pick_date", todayET)
+          .order("created_at", { ascending: false }),
+      ]);
+
+      const merged: Pick[] = [
+        ...((todayByGame.data as Pick[]) || []),
+        ...((todayLegacyRes.data as Pick[]) || []),
+      ];
 
       const seen = new Set<string>();
       const deduped: Pick[] = [];
-      for (const row of (data ?? []) as Pick[]) {
-        const key = [
-          row.sport,
-          row.player_name,
-          row.prop_type,
-          row.direction,
-          row.line,
-        ].join("|");
+      for (const row of merged) {
+        const key = row.event_id
+          ? [row.event_id, row.player_name, row.prop_type, row.direction, row.line].join("|")
+          : [
+              row.sport,
+              getGameDate(row) ?? "",
+              row.home_team ?? row.team ?? "",
+              row.away_team ?? row.opponent ?? "",
+              row.player_name,
+              row.prop_type,
+              row.direction,
+              row.line,
+            ].join("|");
         if (seen.has(key)) continue;
         seen.add(key);
         deduped.push(row);
       }
 
-      const filtered = deduped.filter(isPicksHistoryPick);
+      const filtered = deduped.filter(
+        p => isPicksHistoryPick(p as any) && isActiveTodayPick(p as any),
+      );
 
       if (import.meta.env.DEV) {
         console.log(
           "[PicksTab] fetched",
-          data?.length ?? 0,
+          merged.length,
           "filtered",
           filtered.length,
           "sport",
@@ -226,9 +252,7 @@ const FreePicksPage = () => {
       }
 
       setPicks(filtered);
-      // Display "today" as the active date even when most rows came from
-      // last night's scan; the rolling window guarantees they're current.
-      setPickDate(today);
+      setPickDate(todayET);
       setLoading(false);
     };
     fetchPicks();
@@ -266,7 +290,7 @@ const FreePicksPage = () => {
     sortMode === "high" ? scoreOf(b) - scoreOf(a) : scoreOf(a) - scoreOf(b)
   );
 
-  const isStale = pickDate && pickDate !== new Date().toISOString().slice(0, 10);
+  const isStale = pickDate && pickDate !== todayInTZ();
   const formattedDate = pickDate ? new Date(pickDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
 
   const totalCount = picks.length + trends.length + club100.length + sgps.length;

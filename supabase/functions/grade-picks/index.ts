@@ -24,6 +24,26 @@ function ymd(d: Date): string {
   return d.toISOString().split("T")[0];
 }
 
+// Pick the date(s) ESPN's scoreboard should be queried for to grade a pick.
+// Prefer the actual game_date / commence_time captured at scan time. Fall
+// back to pick_date and pick_date+1 only for legacy rows missing those.
+function gradingDatesForPick(pick: Pick): string[] {
+  if (pick.game_date) return [String(pick.game_date).slice(0, 10)];
+  if (pick.commence_time) {
+    const d = new Date(pick.commence_time);
+    if (!Number.isNaN(d.getTime())) {
+      const ymdET = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/New_York",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(d);
+      return [ymdET];
+    }
+  }
+  return [pick.pick_date, ymd(new Date(new Date(pick.pick_date).getTime() + 86400000))];
+}
+
 function compactDate(s: string): string {
   return s.replace(/-/g, "");
 }
@@ -282,10 +302,14 @@ Deno.serve(async (req) => {
     // original NBA path against each date in the pending set (covers 3-day
     // lookback without changing the grading logic itself).
     if (bySport.nba?.length) {
+      // Group by primary grading date — prefer game_date, fall back to pick_date.
       const byDate: Record<string, Pick[]> = {};
+      const fallbackDates = new Map<string, string[]>();
       for (const p of bySport.nba) {
-        // Try both pick_date and pick_date+1 — night-before scans put games on the next calendar day.
-        (byDate[p.pick_date] ||= []).push(p);
+        const dates = gradingDatesForPick(p);
+        const primary = dates[0];
+        (byDate[primary] ||= []).push(p);
+        if (dates.length > 1) fallbackDates.set(p.id, dates.slice(1));
       }
       const remaining = new Map<string, Pick>();
       for (const p of bySport.nba) remaining.set(p.id, p);
@@ -295,20 +319,29 @@ Deno.serve(async (req) => {
         if (stillPending.length === 0) continue;
         const r1 = await gradeNbaProps(supabase, stillPending, date);
         totalGraded += r1.graded;
-        // For unmatched picks, try the next calendar day (night-before scan).
-        const nextDate = ymd(new Date(new Date(date).getTime() + 86400000));
-        const after = stillPending.filter((p) => remaining.has(p.id));
-        if (after.length && nextDate <= ymd(new Date())) {
-          // re-fetch which picks are still pending after r1 by re-querying state
+
+        // Legacy fallback (rows missing game_date): try next calendar day.
+        const after = stillPending.filter(
+          (p) => remaining.has(p.id) && fallbackDates.has(p.id),
+        );
+        const todayStr = ymd(new Date());
+        if (after.length) {
           const { data: rows } = await supabase
             .from("daily_picks")
             .select("id")
             .in("id", after.map((p) => p.id))
             .or("result.is.null,result.eq.pending");
           const stillIds = new Set((rows || []).map((r: any) => r.id));
-          const tryNext = after.filter((p) => stillIds.has(p.id));
-          if (tryNext.length) {
-            const r2 = await gradeNbaProps(supabase, tryNext, nextDate);
+          const groupedNext: Record<string, Pick[]> = {};
+          for (const p of after) {
+            if (!stillIds.has(p.id)) continue;
+            for (const nd of fallbackDates.get(p.id) || []) {
+              if (nd > todayStr) continue;
+              (groupedNext[nd] ||= []).push(p);
+            }
+          }
+          for (const [nd, ndPicks] of Object.entries(groupedNext)) {
+            const r2 = await gradeNbaProps(supabase, ndPicks, nd);
             totalGraded += r2.graded;
             skippedNoData += r2.skippedNoData;
           }
@@ -337,10 +370,7 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const candidateDates = [
-          pick.pick_date,
-          ymd(new Date(new Date(pick.pick_date).getTime() + 86400000)),
-        ];
+        const candidateDates = gradingDatesForPick(pick);
 
         let graded: "hit" | "miss" | "push" | null = null;
         let foundFinal = false;

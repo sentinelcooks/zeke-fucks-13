@@ -12,6 +12,30 @@ import {
   type ScoredPlay,
 } from "./edge_scoring.ts";
 
+// App slate timezone — matches the public-display assumption in src/lib/gameDate.ts.
+const APP_TZ = "America/New_York";
+
+function toETDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
+function todayET(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
 const SPORT_KEYS: Record<string, string> = {
   nba: "basketball_nba",
   mlb: "baseball_mlb",
@@ -473,6 +497,9 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
                 edge,
                 ev_pct: calcEv(projected, o.price),
                 confidence: projected,
+                event_id: ev.id ?? null,
+                commence_time: ev.commence_time ?? null,
+                game_date: toETDate(ev.commence_time ?? null),
               })
             );
           }
@@ -520,10 +547,19 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
     );
   }
 
-  const oddsEvents = Array.isArray(oddsRes.data?.events) ? oddsRes.data.events : [];
+  const oddsEventsRaw = Array.isArray(oddsRes.data?.events) ? oddsRes.data.events : [];
+  // Restrict to events whose actual game_date (America/New_York) is today.
+  // Yesterday's already-played and tomorrow's events are dropped here so
+  // they never appear in today's slate.
+  const targetGameDate = todayET();
+  const oddsEvents = oddsEventsRaw.filter(
+    (ev: any) => ev?.commence_time && toETDate(ev.commence_time) === targetGameDate,
+  );
 
   console.log(
-    `[${sport}] evaluateGameLines: ${upcoming.length} upcoming games, ${oddsEvents.length} Odds API events (HTTP ${oddsRes.status})`
+    `[${sport}] evaluateGameLines: ${upcoming.length} upcoming games, ` +
+      `${oddsEvents.length}/${oddsEventsRaw.length} Odds API events for ${targetGameDate} ` +
+      `(HTTP ${oddsRes.status})`
   );
 
   const oddsMap = new Map<string, any>();
@@ -607,6 +643,9 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
                 edge,
                 ev_pct: calcEv(projected, o.price),
                 confidence: projected,
+                event_id: ev.id ?? null,
+                commence_time: ev.commence_time ?? null,
+                game_date: toETDate(ev.commence_time ?? null),
               })
             );
           }
@@ -651,6 +690,9 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
                 edge,
                 ev_pct: calcEv(projected, o.price),
                 confidence: projected,
+                event_id: ev.id ?? null,
+                commence_time: ev.commence_time ?? null,
+                game_date: toETDate(ev.commence_time ?? null),
               })
             );
           }
@@ -687,10 +729,15 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
     );
   }
 
-  events = Array.isArray(r.data?.events) ? r.data.events : [];
+  const rawEvents = Array.isArray(r.data?.events) ? r.data.events : [];
+  // Restrict prop events to today's actual game date (America/New_York).
+  const targetGameDate = todayET();
+  events = rawEvents.filter(
+    (ev: any) => ev?.commence_time && toETDate(ev.commence_time) === targetGameDate,
+  );
 
   console.log(
-    `[${sport}] evaluatePlayerProps: ${events.length} Odds API events (HTTP ${r.status})`
+    `[${sport}] evaluatePlayerProps: ${events.length}/${rawEvents.length} Odds API events for ${targetGameDate} (HTTP ${r.status})`
   );
 
   // Drive scanning off the Games-tab schedule so EVERY scheduled game gets a chance.
@@ -885,6 +932,9 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
                 edge,
                 ev_pct: calcEv(projected, pick.bestPrice),
                 confidence: projected,
+                event_id: ev.id ?? null,
+                commence_time: ev.commence_time ?? null,
+                game_date: toETDate(ev.commence_time ?? null),
               })
             );
           }
@@ -1109,6 +1159,9 @@ export async function scanSport(sport: string): Promise<{
         edge: r.edge,
         ev_pct: r.ev_pct,
         confidence: r.confidence,
+        event_id: r.event_id ?? null,
+        commence_time: r.commence_time ?? null,
+        game_date: r.game_date ?? null,
       });
 
       rescored.reasoning = r.reasoning || rescored.reasoning;
@@ -1128,6 +1181,9 @@ export async function scanSport(sport: string): Promise<{
 
   const rows = validated.map((p) => ({
     pick_date: today,
+    event_id: p.event_id ?? null,
+    commence_time: p.commence_time ?? null,
+    game_date: p.game_date ?? (p.commence_time ? toETDate(p.commence_time) : null),
     sport: p.sport,
     bet_type: p.bet_type,
     player_name: p.player_name,

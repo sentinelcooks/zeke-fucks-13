@@ -16,7 +16,8 @@ import { searchPlayers } from "@/services/api";
 import { AddToSlipSheet } from "@/components/AddToSlipSheet";
 import { getTeamLogoUrl } from "@/utils/teamLogos";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
-import { isEdgeHistoryPick, isPicksHistoryPick } from "@/lib/pickHistoryFilters";
+import { isEdgeHistoryPick, isPicksHistoryPick, isActiveTodayPick } from "@/lib/pickHistoryFilters";
+import { todayInTZ, getGameDate } from "@/lib/gameDate";
 
 interface Play {
   id: string;
@@ -50,6 +51,10 @@ interface DailyPick {
   spread_line?: number | null;
   total_line?: number | null;
   tier?: string;
+  status?: string | null;
+  event_id?: string | null;
+  commence_time?: string | null;
+  game_date?: string | null;
 }
 
 const stagger = (i: number) => ({
@@ -286,23 +291,40 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   }, [userSports]);
 
   const fetchTodayPicks = useCallback(async () => {
-    const today = new Date().toISOString().split("T")[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    const todayET = todayInTZ();
+    const yesterdayPickDate = new Date(Date.now() - 86400000).toISOString().split("T")[0];
 
-    // Rolling window: night-before scans land with pick_date=yesterday but
-    // games play today. Pull both days, prefer the freshest row per logical
-    // pick via newest-wins dedupe below.
-    const [windowRes, yesterdayRes] = await Promise.all([
+    // Public display is keyed off the actual game_date in America/New_York —
+    // pick_date (scanner generation date) must NOT drive what shows in
+    // Today's Edge / Picks. We pull two sets:
+    //   1. Today's slate by game_date (with a fallback for legacy rows that
+    //      were inserted before the game_date column existed).
+    //   2. Yesterday's edge results for the recap card (unchanged).
+    const [todayByGame, todayLegacyRes, yesterdayRes] = await Promise.all([
       supabase
         .from("daily_picks")
         .select("*")
-        .gte("pick_date", yesterday)
-        .lte("pick_date", today)
-        .order("pick_date", { ascending: false })
+        .eq("game_date", todayET)
         .order("created_at", { ascending: false })
         .order("confidence", { ascending: false, nullsFirst: false })
+        .limit(120),
+      // Legacy fallback: rows missing game_date that were generated today or
+      // yesterday (night-before scans). isActiveTodayPick will drop any whose
+      // commence_time-derived game date is not today.
+      supabase
+        .from("daily_picks")
+        .select("*")
+        .is("game_date", null)
+        .gte("pick_date", yesterdayPickDate)
+        .lte("pick_date", todayET)
+        .order("created_at", { ascending: false })
         .limit(80),
-      supabase.from("daily_picks").select("*").eq("pick_date", yesterday).eq("tier", "edge").order("created_at", { ascending: false }),
+      supabase
+        .from("daily_picks")
+        .select("*")
+        .eq("pick_date", yesterdayPickDate)
+        .eq("tier", "edge")
+        .order("created_at", { ascending: false }),
     ]);
 
     // Hard odds guard: drop extreme longshots (|odds| >= 1000)
@@ -312,27 +334,36 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       if (Number.isNaN(n)) return true;
       return Math.abs(n) < 1000;
     };
-    const rawWindow = ((windowRes.data as DailyPick[]) || []).filter(
-      p => oddsOk(p.odds) && p.tier !== "pass" && (p as any).status !== "empty_slate"
+
+    const merged: DailyPick[] = [
+      ...((todayByGame.data as DailyPick[]) || []),
+      ...((todayLegacyRes.data as DailyPick[]) || []),
+    ];
+
+    // Active picks = game is today AND result not final.
+    const activeToday = merged.filter(
+      p => oddsOk(p.odds) && p.tier !== "pass" && isActiveTodayPick(p as any)
     );
-    // Newest-wins dedupe: same logical pick on both days → keep today's row.
-    // Tier intentionally excluded from the key so a yesterday "edge" copy
-    // doesn't co-exist with today's "daily" copy of the same matchup.
+
+    // Event-identity dedupe so the same logical pick can't appear twice
+    // because the scanner inserted a fresh copy on a later run.
     const seenKeys = new Set<string>();
-    const allActive = rawWindow.filter(p => {
-      const k = `${p.sport}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`;
+    const allActive = activeToday.filter(p => {
+      const k = (p as any).event_id
+        ? `${(p as any).event_id}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`
+        : `${p.sport}|${getGameDate(p as any) ?? ""}|${p.home_team ?? p.team ?? ""}|${p.away_team ?? p.opponent ?? ""}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`;
       if (seenKeys.has(k)) return false;
       seenKeys.add(k);
       return true;
     });
 
-    const edgeTier = allActive.filter(p => p.tier === "edge");
+    const edgeTier = allActive.filter(p => isEdgeHistoryPick(p as any));
     const dailyTier = allActive.filter(p => p.tier !== "edge" && isPicksHistoryPick(p as any));
 
     if (import.meta.env.DEV) {
       console.log(
         "[PicksTab] fetched",
-        windowRes.data?.length ?? 0,
+        merged.length,
         "edge",
         edgeTier.length,
         "daily",

@@ -170,6 +170,9 @@ Deno.serve(async (req) => {
       : Number(r.hit_rate ?? 0) / 100;
     return {
       pick_date: today,
+      event_id: r.event_id ?? null,
+      commence_time: r.commence_time ?? null,
+      game_date: r.game_date ?? null,
       sport: r.sport,
       bet_type: r.bet_type,
       player_name: r.player_name,
