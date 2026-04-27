@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 import ProfitCharts from "@/components/ProfitCharts";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
+import { formatPropType } from "@/lib/formatPickLabel";
 import { PlayerAutocomplete, getLinePlaceholder } from "@/components/tracker/PlayerAutocomplete";
 import { BetTypeDropdown } from "@/components/tracker/BetTypeDropdown";
 import { ParlayPlayForm } from "@/components/tracker/ParlayPlayForm";
@@ -810,7 +811,7 @@ const ProfitTrackerPage = () => {
                                   <p className="text-[12px] font-bold text-foreground truncate">{pick.player_name}</p>
                                   <span className={`text-[10px] font-semibold ${isOver ? "text-nba-green/80" : "text-nba-red/80"}`}>
                                     <PropIcon className="w-2.5 h-2.5 inline mr-0.5" />
-                                    {pick.direction.toUpperCase()} {pick.line} {pick.prop_type}
+                                    {pick.direction.toUpperCase()} {pick.line} {formatPropType(pick.prop_type)}
                                   </span>
                                 </div>
                               </div>

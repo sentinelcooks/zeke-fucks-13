@@ -3,6 +3,7 @@ import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { motion, AnimatePresence } from "framer-motion";
 import { TrendingUp, TrendingDown, Zap, Clock, Search, Loader2, Link2, X, ChevronDown, ChevronLeft, Target, ArrowRight, Shield, Hand, Crosshair, RotateCcw, Trophy, BarChart3, Activity, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { formatPropType } from "@/lib/formatPickLabel";
 
 import { analyzeProp } from "@/services/api";
 import { getFunctionUrl } from "@/services/supabaseFunctionUrl";
@@ -56,12 +57,6 @@ interface CorrelatedProp {
   hit_rate: number;
   sample_size: number;
 }
-
-const PROP_LABELS: Record<string, string> = {
-  points: "PTS", rebounds: "REB", assists: "AST", "3-pointers": "3PT",
-  blocks: "BLK", steals: "STL", hits: "H", runs: "R", rbi: "RBI",
-  home_runs: "HR", total_bases: "TB", strikeouts: "K", moneyline: "ML",
-};
 
 function getHitRateColor(rate: number) {
   if (rate >= 75) return { text: "text-nba-green", bg: "hsla(160, 84%, 39%, 0.12)" };
@@ -559,7 +554,7 @@ const FreePropsPage = () => {
                     ) : correlations.length > 0 ? (
                       <div className="space-y-1.5">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-accent/50 mb-2">
-                          When {prop.player_name.split(" ").pop()} {(PROP_LABELS[prop.prop_type] || prop.prop_type).toUpperCase()} hits, these also hit:
+                          When {prop.player_name.split(" ").pop()} {formatPropType(prop.prop_type)} hits, these also hit:
                         </p>
                         {correlations.map((c, ci) => (
                           <motion.div key={ci} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ci * 0.04 }}
@@ -567,7 +562,7 @@ const FreePropsPage = () => {
                             <div>
                               <span className="text-[13px] font-bold text-foreground">{c.correlated_player}</span>
                               {c.correlated_team && <span className="text-[10px] text-muted-foreground/50 ml-1.5">{c.correlated_team}</span>}
-                              <div className="text-[10px] text-muted-foreground/50 mt-0.5">{(PROP_LABELS[c.correlated_prop] || c.correlated_prop).toUpperCase()}</div>
+                              <div className="text-[10px] text-muted-foreground/50 mt-0.5">{formatPropType(c.correlated_prop)}</div>
                             </div>
                             <div className="flex items-center gap-3">
                               <span className="text-[9px] text-muted-foreground/35">{c.sample_size}G</span>
@@ -669,7 +664,7 @@ const FreePropsPage = () => {
                     border: `1px solid ${propTypeFilter === pt ? 'hsla(250, 76%, 62%, 0.25)' : 'hsla(228, 25%, 18%, 0.2)'}`,
                   }}
                 >
-                  {PROP_LABELS[pt] || pt.toUpperCase()}
+                  {formatPropType(pt)}
                 </button>
               ))}
             </div>
@@ -744,7 +739,7 @@ const FreePropsPage = () => {
                           {prop.direction.toUpperCase()}
                         </span>
                         <span className="text-[12px] text-foreground/70 font-medium tabular-nums">
-                          {prop.line > 0 ? prop.line : ""} {PROP_LABELS[prop.prop_type] || prop.prop_type.toUpperCase()}
+                          {prop.line > 0 ? prop.line : ""} {formatPropType(prop.prop_type)}
                         </span>
                         {prop.odds != null && (
                           <span className="text-[11px] text-muted-foreground/50 tabular-nums">{formatOdds(prop.odds)}</span>

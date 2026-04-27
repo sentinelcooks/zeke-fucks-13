@@ -7,6 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { isPicksHistoryPick } from "@/lib/pickHistoryFilters";
+import { formatPropType } from "@/lib/formatPickLabel";
 
 interface PicksPick {
   id: string;
@@ -190,7 +191,7 @@ export const PicksHistoryTab: React.FC<{ password: string }> = ({ password }) =>
     if (p.bet_type === "moneyline") return `${p.team || ""} ML`;
     if (p.bet_type === "spread") return `${p.team || ""} ${p.line > 0 ? "+" : ""}${p.line}`;
     if (p.bet_type === "total") return `${p.direction.toUpperCase()} ${p.line}`;
-    return `${p.prop_type} ${p.direction.toUpperCase()} ${p.line}`;
+    return `${formatPropType(p.prop_type)} ${p.direction.toUpperCase()} ${p.line}`;
   };
 
   return (

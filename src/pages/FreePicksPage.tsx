@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { isPicksHistoryPick, isActiveTodayPick } from "@/lib/pickHistoryFilters";
 import { todayInTZ, getGameDate } from "@/lib/gameDate";
+import { formatPropType } from "@/lib/formatPickLabel";
 
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 
@@ -69,20 +70,6 @@ function getConfidenceColor(rate: number) {
   if (rate >= 55) return { text: "text-nba-blue", bg: "bg-nba-blue-dim", dot: "bg-nba-blue" };
   if (rate >= 40) return { text: "text-nba-yellow", bg: "bg-nba-yellow-dim", dot: "bg-nba-yellow" };
   return { text: "text-nba-red", bg: "bg-nba-red-dim", dot: "bg-nba-red" };
-}
-
-function getPropLabel(pt: string): string {
-  const map: Record<string, string> = {
-    points: "PTS", rebounds: "REB", assists: "AST",
-    "3-pointers": "3PT", steals: "STL", blocks: "BLK",
-    turnovers: "TO", "pts+reb+ast": "PRA",
-    hits: "HITS", home_runs: "HR", rbi: "RBI",
-    strikeouts: "K", total_bases: "TB", runs: "RUNS",
-    goals: "GOALS", shots_on_goal: "SOG", saves: "SAVES",
-    moneyline: "ML", sig_strikes: "SIG STR", takedowns: "TD",
-    ko_tko: "KO/TKO", submission: "SUB", rounds: "ROUNDS",
-  };
-  return map[pt] || pt.toUpperCase();
 }
 
 const PROP_FILTERS_BY_SPORT: Record<string, { value: string; label: string }[]> = {
@@ -528,7 +515,7 @@ const FreePicksPage = () => {
                               {arrow} {dir.toUpperCase()}
                             </span>
                             <span className="text-[13px] text-foreground/80 tabular-nums whitespace-nowrap">
-                              {pick.line} {getPropLabel(pick.prop_type)}
+                              {pick.line} {formatPropType(pick.prop_type)}
                             </span>
                             {pick.odds && <span className="text-[11px] text-muted-foreground tabular-nums">{formatOdds(pick.odds)}</span>}
                           </div>
@@ -579,7 +566,7 @@ const FreePicksPage = () => {
                         <p className="text-[11px] text-muted-foreground/60">
                           <span className={prop.direction === "over" ? "text-nba-green" : "text-nba-red"}>
                             {prop.direction === "over" ? "Over" : "Under"}
-                          </span>{" "}{prop.line} {prop.prop_type}
+                          </span>{" "}{prop.line} {formatPropType(prop.prop_type)}
                         </p>
                       </div>
                       <div className="text-right">
@@ -666,7 +653,7 @@ const FreePicksPage = () => {
                       <p className="text-[10px] text-muted-foreground/50">
                         <span className={prop.direction === "over" ? "text-nba-green" : "text-nba-red"}>
                           {prop.direction === "over" ? "▲" : "▼"} {prop.line}
-                        </span>{" "}{prop.prop_type} · {prop.streak_label}
+                        </span>{" "}{formatPropType(prop.prop_type)} · {prop.streak_label}
                       </p>
                     </div>
                     <div className="text-right shrink-0">

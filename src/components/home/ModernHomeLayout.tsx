@@ -18,6 +18,7 @@ import { getTeamLogoUrl } from "@/utils/teamLogos";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { isEdgeHistoryPick, isPicksHistoryPick, isActiveTodayPick } from "@/lib/pickHistoryFilters";
 import { todayInTZ, getGameDate } from "@/lib/gameDate";
+import { formatPropType } from "@/lib/formatPickLabel";
 
 interface Play {
   id: string;
@@ -475,7 +476,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     return { wins, losses, total, hitRate, profit, roi, sportCounts, streak };
   }, [plays]);
 
-  function formatPickLabel(pick: DailyPick, propAbbrev: Record<string, string>): string {
+  function formatPickLabel(pick: DailyPick): string {
     const dir = (pick.direction || "").toLowerCase();
     if (pick.bet_type === "moneyline") {
       const team =
@@ -492,10 +493,9 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     }
     if (pick.bet_type === "total") {
       const label = dir === "over" ? "O" : "U";
-      return `${label} ${pick.line} TOTAL`;
+      return `${label} ${pick.line} Total`;
     }
-    const abbr = propAbbrev[pick.prop_type?.toLowerCase()] || (pick.prop_type || "").replace(/_/g, " ").toUpperCase();
-    return `${dir === "over" ? "O" : "U"} ${pick.line} ${abbr}`;
+    return `${dir === "over" ? "O" : "U"} ${pick.line} ${formatPropType(pick.prop_type)}`;
   }
 
   const yesterdayGraded = yesterdayPicks.filter(p => p.result === "hit" || p.result === "miss");
@@ -854,7 +854,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                             : pick.bet_type === 'spread'
                               ? `Spread ${pick.spread_line && pick.spread_line > 0 ? '+' : ''}${pick.spread_line}`
                               : `${pick.direction === "over" ? "Over" : "Under"} ${pick.total_line}`
-                          : `${pick.direction === "over" ? "Over" : "Under"} ${pick.line} ${(pick.prop_type || "").replace(/_/g, " ")}`
+                          : `${pick.direction === "over" ? "Over" : "Under"} ${pick.line} ${formatPropType(pick.prop_type)}`
                         }
                       </span>
                       <div style={{ textAlign: 'right' }}>
@@ -960,16 +960,8 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                 {yesterdayGraded
                   .slice(0, 10)
                   .map(pick => {
-                    const propAbbrev: Record<string, string> = {
-                      points: "PTS", rebounds: "REB", assists: "AST",
-                      "3-pointers": "3PM", threes: "3PM", steals: "STL",
-                      blocks: "BLK", hits: "H", runs: "R", rbi: "RBI", rbis: "RBI",
-                      strikeouts: "K", hr: "HR", home_runs: "HR",
-                      total_bases: "TB", stolen_bases: "SB",
-                      goals: "G", shots_on_goal: "SOG", saves: "SV",
-                    };
                     const isHit = pick.result === "hit";
-                    const pickLabel = formatPickLabel(pick, propAbbrev);
+                    const pickLabel = formatPickLabel(pick);
                     return (
                       <div key={pick.id} className="flex items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '1px solid hsl(250 20% 18% / 0.4)' }}>
                         <div className="flex items-center gap-2.5 min-w-0">
@@ -987,15 +979,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     );
                   })}
                 {yesterdayPending.slice(0, 5).map(pick => {
-                  const propAbbrev: Record<string, string> = {
-                    points: "PTS", rebounds: "REB", assists: "AST",
-                    "3-pointers": "3PM", threes: "3PM", steals: "STL",
-                    blocks: "BLK", hits: "H", runs: "R", rbi: "RBI", rbis: "RBI",
-                    strikeouts: "K", hr: "HR", home_runs: "HR",
-                    total_bases: "TB", stolen_bases: "SB",
-                    goals: "G", shots_on_goal: "SOG", saves: "SV",
-                  };
-                  const pickLabel = formatPickLabel(pick, propAbbrev);
+                  const pickLabel = formatPickLabel(pick);
                   return (
                     <div key={pick.id} className="flex items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '1px solid hsl(250 20% 18% / 0.4)' }}>
                       <div className="flex items-center gap-2.5 min-w-0">
