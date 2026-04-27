@@ -16,6 +16,7 @@ import { searchPlayers } from "@/services/api";
 import { AddToSlipSheet } from "@/components/AddToSlipSheet";
 import { getTeamLogoUrl } from "@/utils/teamLogos";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
+import { isEdgeHistoryPick } from "@/lib/pickHistoryFilters";
 
 interface Play {
   id: string;
@@ -290,7 +291,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
 
     const [todayRes, yesterdayRes] = await Promise.all([
       supabase.from("daily_picks").select("*").eq("pick_date", today).order("confidence", { ascending: false, nullsFirst: false }).limit(40),
-      supabase.from("daily_picks").select("*").eq("pick_date", yesterday).order("created_at", { ascending: false }),
+      supabase.from("daily_picks").select("*").eq("pick_date", yesterday).eq("tier", "edge").neq("status", "empty_slate").order("created_at", { ascending: false }),
     ]);
 
     // Hard odds guard: drop extreme longshots (|odds| >= 1000)
@@ -320,7 +321,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     // STRICT: Today's Edge only shows tier="edge". No fallback to ungraded picks.
     setTodayPicks(sortByPref(edgeTier));
     setDailyTierPicks(sortByPref(dailyTier));
-    setYesterdayPicks((yesterdayRes.data as DailyPick[]) || []);
+    setYesterdayPicks(((yesterdayRes.data as DailyPick[]) || []).filter(isEdgeHistoryPick));
     setPicksLoading(false);
     setLastRefreshed(new Date());
   }, [sortByPref]);
@@ -340,8 +341,8 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     // Auto-refresh yesterday's results every 60 seconds
     const interval = setInterval(async () => {
       const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
-      const { data } = await supabase.from("daily_picks").select("*").eq("pick_date", yesterday).order("created_at", { ascending: false });
-      setYesterdayPicks((data as DailyPick[]) || []);
+      const { data } = await supabase.from("daily_picks").select("*").eq("pick_date", yesterday).eq("tier", "edge").neq("status", "empty_slate").order("created_at", { ascending: false });
+      setYesterdayPicks(((data as DailyPick[]) || []).filter(isEdgeHistoryPick));
     }, 60000);
     return () => clearInterval(interval);
   }, [fetchTodayPicks]);
@@ -899,7 +900,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
           <div className="absolute -bottom-6 -right-6 w-24 h-24 rounded-full opacity-[0.04] pointer-events-none"
             style={{ background: 'radial-gradient(circle, hsl(142 71% 45%), transparent)' }} />
           <p className="text-[11px] font-bold tracking-[0.15em] uppercase mb-3" style={{ color: 'hsl(142 100% 50%)' }}>
-            {yesterdayPending.length > 0 ? "Yesterday's Picks" : "Yesterday's Results"}
+            {yesterdayPending.length > 0 ? "Yesterday's Edge" : "Yesterday's Edge Results"}
           </p>
           {hasYesterdayData ? (
             <>
@@ -962,7 +963,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                 </p>
               ) : yesterdayPending.length > 0 ? (
                 <p className="text-center mt-3" style={{ fontSize: 12, fontWeight: 600, color: 'hsl(45 93% 58%)' }}>
-                  {yesterdayPending.length} pick{yesterdayPending.length > 1 ? "s" : ""} still pending — games in progress
+                  {yesterdayPending.length} edge pick{yesterdayPending.length > 1 ? "s" : ""} still pending — games in progress
                 </p>
               ) : null}
             </>
@@ -978,8 +979,8 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                 <Target className="w-4 h-4 text-muted-foreground/40" />
               </div>
               <div className="min-w-0">
-                <p style={{ fontSize: 13, fontWeight: 700, color: 'hsl(250 80% 97%)' }}>Results processing</p>
-                <p style={{ fontSize: 11, color: 'hsl(250 15% 50%)', lineHeight: 1.4 }}>Yesterday's picks are being graded — check back shortly.</p>
+                <p style={{ fontSize: 13, fontWeight: 700, color: 'hsl(250 80% 97%)' }}>No edge yesterday</p>
+                <p style={{ fontSize: 11, color: 'hsl(250 15% 50%)', lineHeight: 1.4 }}>No Today's Edge picks were generated yesterday.</p>
               </div>
             </div>
           )}

@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { isEdgeHistoryPick } from "@/lib/pickHistoryFilters";
+import { isPicksHistoryPick } from "@/lib/pickHistoryFilters";
 
-interface EdgePick {
+interface PicksPick {
   id: string;
   pick_date: string;
   sport: string;
@@ -49,9 +49,9 @@ const SPORT_COLORS: Record<string, string> = {
 
 type Preset = "today" | "7d" | "30d" | "all" | "custom";
 
-export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => {
+export const PicksHistoryTab: React.FC<{ password: string }> = ({ password }) => {
   const [loading, setLoading] = useState(false);
-  const [picks, setPicks] = useState<EdgePick[]>([]);
+  const [picks, setPicks] = useState<PicksPick[]>([]);
   const [preset, setPreset] = useState<Preset>("all");
   const [customStart, setCustomStart] = useState<Date | undefined>();
   const [customEnd, setCustomEnd] = useState<Date | undefined>();
@@ -61,13 +61,13 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("admin-onboarding", {
-        body: { password, action: "list_edge_history" },
+        body: { password, action: "list_picks_history" },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      setPicks(((data.picks || []) as EdgePick[]).filter(isEdgeHistoryPick));
+      setPicks(((data.picks || []) as PicksPick[]).filter(isPicksHistoryPick));
     } catch (e) {
-      console.error("Failed to load edge history:", e);
+      console.error("Failed to load picks history:", e);
     }
     setLoading(false);
   };
@@ -136,7 +136,6 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
   }, [filtered]);
 
   const updateResult = async (pick_id: string, result: string) => {
-    // optimistic
     setPicks((prev) => prev.map((p) => (p.id === pick_id ? { ...p, result } : p)));
     try {
       const { data, error } = await supabase.functions.invoke("admin-onboarding", {
@@ -172,14 +171,20 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
     return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-yellow-500/15 text-yellow-400 border border-yellow-500/20">Pending</span>;
   };
 
-  const renderMatchup = (p: EdgePick) => {
+  const tierBadge = (tier: string | null | undefined) => {
+    const t = String(tier || "").toLowerCase();
+    if (!t) return null;
+    return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-muted text-muted-foreground border-border uppercase">{t}</span>;
+  };
+
+  const renderMatchup = (p: PicksPick) => {
     if (p.bet_type === "moneyline" || p.bet_type === "spread" || p.bet_type === "total") {
       return `${p.away_team || "—"} @ ${p.home_team || "—"}`;
     }
     return `${p.player_name}${p.team ? ` (${p.team}${p.opponent ? ` vs ${p.opponent}` : ""})` : ""}`;
   };
 
-  const renderPick = (p: EdgePick) => {
+  const renderPick = (p: PicksPick) => {
     if (p.bet_type === "moneyline") return `${p.team || ""} ML`;
     if (p.bet_type === "spread") return `${p.team || ""} ${p.line > 0 ? "+" : ""}${p.line}`;
     if (p.bet_type === "total") return `${p.direction.toUpperCase()} ${p.line}`;
@@ -188,7 +193,6 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
 
   return (
     <>
-      {/* Stats header */}
       <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
         <div className="glass-card rounded-xl p-4 col-span-2 sm:col-span-1">
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Hit Rate</p>
@@ -233,7 +237,6 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
         </div>
       </div>
 
-      {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex gap-1.5">
           {presetBtn("today", "Today")}
@@ -285,7 +288,6 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
         </button>
       </div>
 
-      {/* Table */}
       <div className="glass-card rounded-xl overflow-hidden">
         {loading && (
           <div className="flex items-center justify-center py-12">
@@ -293,7 +295,7 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
           </div>
         )}
         {!loading && filtered.length === 0 && (
-          <p className="text-muted-foreground text-sm py-8 text-center">No edge picks in this range.</p>
+          <p className="text-muted-foreground text-sm py-8 text-center">No non-edge picks in this range.</p>
         )}
         {!loading && filtered.length > 0 && (
           <div className="overflow-x-auto">
@@ -302,6 +304,7 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
                 <tr className="border-b border-border bg-muted/30">
                   <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Date</th>
                   <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sport</th>
+                  <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Tier</th>
                   <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Matchup</th>
                   <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Pick</th>
                   <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Conf</th>
@@ -324,6 +327,7 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
                           {p.sport}
                         </span>
                       </td>
+                      <td className="py-2.5 px-4">{tierBadge(p.tier)}</td>
                       <td className="py-2.5 px-4 text-xs text-foreground/90 max-w-[220px] truncate">{renderMatchup(p)}</td>
                       <td className="py-2.5 px-4 text-xs font-medium text-foreground">{renderPick(p)}</td>
                       <td className="py-2.5 px-4 text-xs tabular-nums text-foreground/80">{Math.round(p.hit_rate)}%</td>
