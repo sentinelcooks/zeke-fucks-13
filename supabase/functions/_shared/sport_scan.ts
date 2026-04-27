@@ -63,6 +63,138 @@ const PREFILTER_MIN_CONF: Record<string, number> = {
   ufc: 0.50,
 };
 
+// Sport → analyzer function path. null means skip analyzer (deterministic only).
+// MLB/NHL have no dedicated analyze endpoint; do NOT fall back to nba-api/analyze
+// because that piles all sports onto a single rate-limited function.
+const ANALYZER_ENDPOINT: Record<string, string | null> = {
+  nba: "nba-api/analyze",
+  ufc: "ufc-api/analyze",
+  mlb: null,
+  nhl: null,
+};
+
+// Per-sport analyzer concurrency. Bounded to keep AI Gateway pressure low.
+const ANALYZER_LIMIT: Record<string, number> = {
+  nba: 3,
+  mlb: 2,
+  nhl: 2,
+  ufc: 1,
+};
+
+// Per-sport edge cap (top-N by quality_score get tier='edge' inside this scan).
+const EDGE_CAP_PER_SPORT: Record<string, number> = {
+  nba: 5,
+  mlb: 4,
+  nhl: 3,
+  ufc: 2,
+};
+
+interface AnalyzerDiagnostics {
+  endpoint: string | null;
+  calls: number;
+  skipped: number;
+  rateLimited: number;
+  retries: number;
+  errors: number;
+}
+
+function newAnalyzerDiagnostics(sport: string): AnalyzerDiagnostics {
+  return {
+    endpoint: ANALYZER_ENDPOINT[sport] ?? null,
+    calls: 0,
+    skipped: 0,
+    rateLimited: 0,
+    retries: 0,
+    errors: 0,
+  };
+}
+
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const workerCount = Math.max(1, Math.min(limit, items.length));
+
+  async function worker(): Promise<void> {
+    while (true) {
+      const idx = cursor++;
+      if (idx >= items.length) return;
+      results[idx] = await fn(items[idx], idx);
+    }
+  }
+
+  await Promise.all(Array.from({ length: workerCount }, worker));
+  return results;
+}
+
+function parseRetryAfterMs(headerVal: string | null, dataAny: any): number | null {
+  if (headerVal) {
+    const n = Number(headerVal);
+    if (Number.isFinite(n) && n > 0) return Math.round(n * 1000);
+  }
+  if (dataAny && typeof dataAny === "object") {
+    const ms = Number(dataAny.retryAfterMs ?? dataAny.retry_after_ms ?? NaN);
+    if (Number.isFinite(ms) && ms > 0) return Math.round(ms);
+    const sec = Number(dataAny.retryAfter ?? dataAny.retry_after ?? NaN);
+    if (Number.isFinite(sec) && sec > 0) return Math.round(sec * 1000);
+  }
+  if (typeof dataAny === "string") {
+    const m = dataAny.match(/retry after\s+(\d+)\s*ms/i);
+    if (m) return Number(m[1]);
+    const s = dataAny.match(/retry after\s+(\d+)\s*s/i);
+    if (s) return Number(s[1]) * 1000;
+  }
+  return null;
+}
+
+function isRateLimited(r: FetchResult): boolean {
+  if (r.status === 429) return true;
+  if (typeof r.data === "string" && /rate.?limit/i.test(r.data)) return true;
+  if (r.data && typeof r.data === "object") {
+    const code = String(r.data.code ?? r.data.error ?? "").toLowerCase();
+    if (code.includes("rate") && code.includes("limit")) return true;
+  }
+  return false;
+}
+
+// fnPost wrapper that detects 429 / RateLimitError and retries with backoff.
+// Returns the final FetchResult and an extra rateLimited flag if all attempts failed.
+async function fnPostWithRetry(
+  path: string,
+  body: any,
+  diagnostics: AnalyzerDiagnostics,
+  maxRetries = 2,
+): Promise<FetchResult & { rateLimited?: boolean }> {
+  let attempt = 0;
+  let lastResult: FetchResult | null = null;
+
+  while (attempt <= maxRetries) {
+    const r = await fnPost(path, body);
+    lastResult = r;
+
+    if (!isRateLimited(r)) {
+      return r;
+    }
+
+    if (attempt === maxRetries) {
+      diagnostics.rateLimited++;
+      return { ...r, rateLimited: true };
+    }
+
+    diagnostics.retries++;
+    const waitMs =
+      parseRetryAfterMs(null, r.data) ?? (1500 * Math.pow(2, attempt));
+    const jitter = Math.floor(Math.random() * 400);
+    await new Promise((res) => setTimeout(res, waitMs + jitter));
+    attempt++;
+  }
+
+  return { ...(lastResult as FetchResult), rateLimited: true };
+}
+
 // Sport-aware mapping from Odds-API market keys → analyzer prop_type.
 // Must match cases in nba-api/index.ts getStatValue(). Unmapped → skip.
 const NBA_MAP: Record<string, string> = {
@@ -967,11 +1099,23 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
 }
 
 // ── Analyzer validation ──────────────
+// Soft-fail policy:
+// - No endpoint for this sport → return play unchanged (deterministic survives).
+// - Rate-limited after retries → return play unchanged.
+// - Hard verdict PASS/FADE or playerIsOut → return null.
+// - Other errors → return play unchanged (do not crash the scan).
 async function validateWithAnalyzer(
   play: ScoredPlay,
-  cache: Map<string, any>
+  cache: Map<string, any>,
+  diagnostics: AnalyzerDiagnostics,
 ): Promise<ScoredPlay | null> {
   if (play.bet_type !== "prop") return play;
+
+  const endpoint = ANALYZER_ENDPOINT[play.sport] ?? null;
+  if (!endpoint) {
+    diagnostics.skipped++;
+    return play;
+  }
 
   const cacheKey = `${play.sport}|${play.player_name}|${play.prop_type}|${play.line}|${play.direction}`;
   let analyzed = cache.get(cacheKey);
@@ -992,15 +1136,18 @@ async function validateWithAnalyzer(
       bet_type: "player_prop",
     };
 
-    let r = await fnPost("nba-api/analyze", body);
+    diagnostics.calls++;
+    const r = await fnPostWithRetry(endpoint, body, diagnostics);
 
-    if (r.status === 429 || (typeof r.data === "string" && /rate limit/i.test(r.data))) {
-      const waitMs = 3000;
-      await new Promise((res) => setTimeout(res, waitMs));
-      r = await fnPost("nba-api/analyze", body);
+    if (r.rateLimited) {
+      // Keep deterministic candidate alive instead of dropping it.
+      return play;
     }
 
-    if (!r.ok || !r.data) return null;
+    if (!r.ok || !r.data) {
+      diagnostics.errors++;
+      return play;
+    }
 
     analyzed = r.data;
     cache.set(cacheKey, analyzed);
@@ -1064,6 +1211,9 @@ export async function scanSport(sport: string): Promise<{
   validated: number;
   inserted: number;
   stats: any;
+  tiers?: { edge: number; daily: number; value: number; pass: number };
+  analyzer?: AnalyzerDiagnostics;
+  droppedNoGameDate?: number;
   error?: string;
 }> {
   const stats: any = {
@@ -1121,53 +1271,74 @@ export async function scanSport(sport: string): Promise<{
   }
 
   const ANALYZER_CAP = 45;
-  const ANALYZER_CHUNK = 1;
   const top = prefiltered.sort((a, b) => b.edge - a.edge).slice(0, ANALYZER_CAP);
   const cache = new Map<string, any>();
-  const validated: ScoredPlay[] = [];
+  const analyzerDiagnostics = newAnalyzerDiagnostics(sport);
 
-  for (let i = 0; i < top.length; i += ANALYZER_CHUNK) {
-    if (i > 0) {
-      await new Promise((res) => setTimeout(res, 1500));
-    }
-
-    const slice = top.slice(i, i + ANALYZER_CHUNK);
-
-    const results = await Promise.all(
-      slice.map((p) => validateWithAnalyzer(p, cache).catch(() => null))
+  if (analyzerDiagnostics.endpoint === null && top.length > 0) {
+    console.warn(
+      `[sport_scan] analyzer skipped for ${sport}: no sport-specific analyze endpoint`
     );
-
-    for (const r of results) {
-      if (!r) continue;
-
-      const rescored = scorePrecomputed({
-        sport: r.sport,
-        bet_type: r.bet_type,
-        player_name: r.player_name,
-        team: r.team ?? null,
-        opponent: r.opponent ?? null,
-        home_team: r.home_team ?? null,
-        away_team: r.away_team ?? null,
-        prop_type: r.prop_type,
-        line: r.line,
-        spread_line: r.spread_line ?? null,
-        total_line: r.total_line ?? null,
-        direction: r.direction,
-        odds: r.odds,
-        projected_prob: r.projected_prob,
-        implied_prob: r.implied_prob,
-        edge: r.edge,
-        ev_pct: r.ev_pct,
-        confidence: r.confidence,
-        event_id: r.event_id ?? null,
-        commence_time: r.commence_time ?? null,
-        game_date: r.game_date ?? null,
-      });
-
-      rescored.reasoning = r.reasoning || rescored.reasoning;
-      validated.push(rescored);
-    }
   }
+
+  const limit = ANALYZER_LIMIT[sport] ?? 1;
+  const rawResults = await mapLimit(top, limit, async (p) => {
+    try {
+      return await validateWithAnalyzer(p, cache, analyzerDiagnostics);
+    } catch (e) {
+      analyzerDiagnostics.errors++;
+      console.error(`[${sport}] analyzer threw, keeping deterministic candidate:`, e);
+      return p; // soft failure
+    }
+  });
+
+  const validated: ScoredPlay[] = [];
+  for (const r of rawResults) {
+    if (!r) continue;
+    const rescored = scorePrecomputed({
+      sport: r.sport,
+      bet_type: r.bet_type,
+      player_name: r.player_name,
+      team: r.team ?? null,
+      opponent: r.opponent ?? null,
+      home_team: r.home_team ?? null,
+      away_team: r.away_team ?? null,
+      prop_type: r.prop_type,
+      line: r.line,
+      spread_line: r.spread_line ?? null,
+      total_line: r.total_line ?? null,
+      direction: r.direction,
+      odds: r.odds,
+      projected_prob: r.projected_prob,
+      implied_prob: r.implied_prob,
+      edge: r.edge,
+      ev_pct: r.ev_pct,
+      confidence: r.confidence,
+      event_id: r.event_id ?? null,
+      commence_time: r.commence_time ?? null,
+      game_date: r.game_date ?? null,
+    });
+
+    rescored.reasoning = r.reasoning || rescored.reasoning;
+    validated.push(rescored);
+  }
+
+  // Tier assignment: top-N by quality_score → 'edge', rest split into
+  // 'daily' (>=0.70 confidence) or 'value'. This guarantees the public
+  // Picks tab gets daily/value rows alongside Today's Edge.
+  const sortedByQuality = [...validated].sort((a, b) => b.quality_score - a.quality_score);
+  const edgeCap = EDGE_CAP_PER_SPORT[sport] ?? 5;
+  const edgeKeySet = new Set<string>();
+  const tierKey = (p: ScoredPlay) =>
+    `${p.sport}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`;
+  for (const p of sortedByQuality.slice(0, edgeCap)) {
+    edgeKeySet.add(tierKey(p));
+  }
+  const assignTier = (p: ScoredPlay): "edge" | "daily" | "value" => {
+    if (edgeKeySet.has(tierKey(p))) return "edge";
+    if (p.confidence >= 0.70) return "daily";
+    return "value";
+  };
 
   const supabaseUrl = Deno.env.get("PROJECT_URL")?.trim();
   const serviceRoleKey = Deno.env.get("SERVICE_ROLE_KEY")?.trim();
@@ -1179,31 +1350,41 @@ export async function scanSport(sport: string): Promise<{
   const supabase = createClient(supabaseUrl, serviceRoleKey);
   const today = new Date().toISOString().slice(0, 10);
 
-  const rows = validated.map((p) => ({
-    pick_date: today,
-    event_id: p.event_id ?? null,
-    commence_time: p.commence_time ?? null,
-    game_date: p.game_date ?? (p.commence_time ? toETDate(p.commence_time) : null),
-    sport: p.sport,
-    bet_type: p.bet_type,
-    player_name: p.player_name,
-    team: p.team ?? null,
-    opponent: p.opponent ?? null,
-    home_team: p.home_team ?? null,
-    away_team: p.away_team ?? null,
-    prop_type: p.prop_type,
-    line: p.line,
-    spread_line: p.spread_line ?? null,
-    total_line: p.total_line ?? null,
-    direction: p.direction,
-    hit_rate: Math.round(p.confidence * 100),
-    confidence: Math.round(p.confidence * 1000) / 1000,
-    last_n_games: 10,
-    avg_value: p.ev_pct,
-    odds: String(p.odds),
-    reasoning: p.reasoning,
-    tier: p.confidence >= 0.70 ? "edge" : "daily",
-  }));
+  let droppedNoGameDate = 0;
+  const rows = validated
+    .map((p) => {
+      const gameDate = p.game_date ?? (p.commence_time ? toETDate(p.commence_time) : null);
+      if (!gameDate) {
+        droppedNoGameDate++;
+        return null;
+      }
+      return {
+        pick_date: today,
+        event_id: p.event_id ?? null,
+        commence_time: p.commence_time ?? null,
+        game_date: gameDate,
+        sport: p.sport,
+        bet_type: p.bet_type,
+        player_name: p.player_name,
+        team: p.team ?? null,
+        opponent: p.opponent ?? null,
+        home_team: p.home_team ?? null,
+        away_team: p.away_team ?? null,
+        prop_type: p.prop_type,
+        line: p.line,
+        spread_line: p.spread_line ?? null,
+        total_line: p.total_line ?? null,
+        direction: p.direction,
+        hit_rate: Math.round(p.confidence * 100),
+        confidence: Math.round(p.confidence * 1000) / 1000,
+        last_n_games: 10,
+        avg_value: p.ev_pct,
+        odds: String(p.odds),
+        reasoning: p.reasoning,
+        tier: assignTier(p),
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
 
   // Dedupe inside the same scanner run before inserting.
   // This fixes duplicate key errors when the same player/prop/line appears twice in one batch.
@@ -1256,13 +1437,25 @@ export async function scanSport(sport: string): Promise<{
     }
   }
 
+  const tierCounts = { edge: 0, daily: 0, value: 0, pass: 0 };
+  for (const r of uniqueRows) {
+    const t = String(r.tier ?? "");
+    if (t === "edge" || t === "daily" || t === "value") {
+      tierCounts[t as "edge" | "daily" | "value"]++;
+    }
+  }
+  // Anything that cleared prefilter but was not validated/inserted counts as 'pass'.
+  tierCounts.pass = Math.max(0, prefiltered.length - validated.length);
+
   console.log(
     `[${sport}] games=${stats.games} scheduled=${stats.scheduled_games} ` +
     `events=${stats.events} players=${stats.players} ` +
     `propLines=${stats.propLines} lines=${stats.lines} ` +
     `candidates=${stats.candidates} scanned=${scanned} ` +
     `prefiltered=${prefiltered.length} validated=${validated.length} ` +
-    `inserted=${inserted} (minConf=${minConf})`
+    `inserted=${inserted} droppedNoGameDate=${droppedNoGameDate} ` +
+    `tiers=${JSON.stringify(tierCounts)} ` +
+    `analyzer=${JSON.stringify(analyzerDiagnostics)} (minConf=${minConf})`
   );
 
   return {
@@ -1271,5 +1464,8 @@ export async function scanSport(sport: string): Promise<{
     validated: validated.length,
     inserted,
     stats,
+    tiers: tierCounts,
+    analyzer: analyzerDiagnostics,
+    droppedNoGameDate,
   };
 }
