@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { isPicksHistoryPick } from "@/lib/pickHistoryFilters";
 
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 
@@ -182,47 +183,52 @@ const FreePicksPage = () => {
     const fetchPicks = async () => {
       setLoading(true);
       const today = new Date().toISOString().slice(0, 10);
-      // Prefer daily/value tiers; fall back to any non-edge, non-pass row if none found
-      let { data } = await supabase
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+
+      // Rolling window covers night-before scans whose pick_date is yesterday
+      // but whose games play today. Order newest day / newest insert first so
+      // the dedupe below keeps the freshest row per logical pick.
+      const { data } = await supabase
         .from("daily_picks")
         .select("*")
-        .eq("pick_date", today)
-        .in("tier", ["daily", "value"])
+        .gte("pick_date", yesterday)
+        .lte("pick_date", today)
+        .order("pick_date", { ascending: false })
+        .order("created_at", { ascending: false })
         .order("confidence", { ascending: false, nullsFirst: false });
 
-      if (!data || data.length === 0) {
-        // Fallback: all non-edge rows today
-        const { data: fallback } = await supabase
-          .from("daily_picks")
-          .select("*")
-          .eq("pick_date", today)
-          .neq("tier", "edge")
-          .neq("tier", "pass")
-          .order("confidence", { ascending: false, nullsFirst: false });
-        data = fallback;
+      const seen = new Set<string>();
+      const deduped: Pick[] = [];
+      for (const row of (data ?? []) as Pick[]) {
+        const key = [
+          row.sport,
+          row.player_name,
+          row.prop_type,
+          row.direction,
+          row.line,
+        ].join("|");
+        if (seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(row);
       }
 
-      if (data && data.length > 0) {
-        setPicks(data as Pick[]);
-        setPickDate(today);
-      } else {
-        // No picks today — try most recent date
-        const { data: recent } = await supabase
-          .from("daily_picks")
-          .select("*")
-          .not("tier", "eq", "pass")
-          .order("pick_date", { ascending: false })
-          .order("confidence", { ascending: false, nullsFirst: false })
-          .limit(50);
-        if (recent && recent.length > 0) {
-          const latestDate = recent[0].pick_date;
-          setPicks(recent.filter((p: any) => p.pick_date === latestDate && p.tier !== "edge") as Pick[]);
-          setPickDate(latestDate);
-        } else {
-          setPicks([]);
-          setPickDate(today);
-        }
+      const filtered = deduped.filter(isPicksHistoryPick);
+
+      if (import.meta.env.DEV) {
+        console.log(
+          "[PicksTab] fetched",
+          data?.length ?? 0,
+          "filtered",
+          filtered.length,
+          "sport",
+          sportFilter,
+        );
       }
+
+      setPicks(filtered);
+      // Display "today" as the active date even when most rows came from
+      // last night's scan; the rolling window guarantees they're current.
+      setPickDate(today);
       setLoading(false);
     };
     fetchPicks();

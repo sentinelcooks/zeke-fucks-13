@@ -16,7 +16,7 @@ import { searchPlayers } from "@/services/api";
 import { AddToSlipSheet } from "@/components/AddToSlipSheet";
 import { getTeamLogoUrl } from "@/utils/teamLogos";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
-import { isEdgeHistoryPick } from "@/lib/pickHistoryFilters";
+import { isEdgeHistoryPick, isPicksHistoryPick } from "@/lib/pickHistoryFilters";
 
 interface Play {
   id: string;
@@ -289,8 +289,19 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     const today = new Date().toISOString().split("T")[0];
     const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
 
-    const [todayRes, yesterdayRes] = await Promise.all([
-      supabase.from("daily_picks").select("*").eq("pick_date", today).order("confidence", { ascending: false, nullsFirst: false }).limit(40),
+    // Rolling window: night-before scans land with pick_date=yesterday but
+    // games play today. Pull both days, prefer the freshest row per logical
+    // pick via newest-wins dedupe below.
+    const [windowRes, yesterdayRes] = await Promise.all([
+      supabase
+        .from("daily_picks")
+        .select("*")
+        .gte("pick_date", yesterday)
+        .lte("pick_date", today)
+        .order("pick_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .order("confidence", { ascending: false, nullsFirst: false })
+        .limit(80),
       supabase.from("daily_picks").select("*").eq("pick_date", yesterday).eq("tier", "edge").order("created_at", { ascending: false }),
     ]);
 
@@ -301,24 +312,34 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       if (Number.isNaN(n)) return true;
       return Math.abs(n) < 1000;
     };
-    // Trust tier as quality gate — don't require hit_rate since new rows may not populate it
-    const rawToday = ((todayRes.data as DailyPick[]) || []).filter(
+    const rawWindow = ((windowRes.data as DailyPick[]) || []).filter(
       p => oddsOk(p.odds) && p.tier !== "pass" && (p as any).status !== "empty_slate"
     );
-    // Defensive client-side dedupe (in case duplicate rows still exist in DB)
+    // Newest-wins dedupe: same logical pick on both days → keep today's row.
+    // Tier intentionally excluded from the key so a yesterday "edge" copy
+    // doesn't co-exist with today's "daily" copy of the same matchup.
     const seenKeys = new Set<string>();
-    const allToday = rawToday.filter(p => {
-      const k = `${p.sport}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}|${p.tier}`;
+    const allActive = rawWindow.filter(p => {
+      const k = `${p.sport}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`;
       if (seenKeys.has(k)) return false;
       seenKeys.add(k);
       return true;
     });
 
-    // Split by tier — edge goes to Today's Edge carousel, rest to Daily Picks section.
-    const edgeTier = allToday.filter(p => p.tier === "edge");
-    const dailyTier = allToday.filter(p => p.tier !== "edge");
+    const edgeTier = allActive.filter(p => p.tier === "edge");
+    const dailyTier = allActive.filter(p => p.tier !== "edge" && isPicksHistoryPick(p as any));
 
-    // STRICT: Today's Edge only shows tier="edge". No fallback to ungraded picks.
+    if (import.meta.env.DEV) {
+      console.log(
+        "[PicksTab] fetched",
+        windowRes.data?.length ?? 0,
+        "edge",
+        edgeTier.length,
+        "daily",
+        dailyTier.length,
+      );
+    }
+
     setTodayPicks(sortByPref(edgeTier));
     setDailyTierPicks(sortByPref(dailyTier));
     setYesterdayPicks(((yesterdayRes.data as DailyPick[]) || []).filter(isEdgeHistoryPick));
