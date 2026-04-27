@@ -1,5 +1,6 @@
 // Per-sport scan: fetch events/props, prefilter, run analyzer validation,
-// and write surviving candidates to daily_picks with tier='_pending'.
+// and write surviving candidates to daily_picks tiered as 'edge' (>=0.70)
+// or 'daily' (otherwise). No '_pending' rows are written.
 // Used by slate-scanner-{nba,mlb,nhl,ufc} so each sport runs in its own
 // edge invocation (isolated wall-time budget).
 
@@ -23,6 +24,16 @@ const SPORT_KEYS: Record<string, string> = {
 // MLB/NHL candidate. Tuned per sport.
 const ANALYZER_MIN_CONF: Record<string, number> = {
   nba: 0.65,
+  mlb: 0.45,
+  nhl: 0.50,
+  ufc: 0.50,
+};
+
+// Per-sport prefilter confidence floor (applied before the analyzer runs).
+// Mirrors ANALYZER_MIN_CONF reasoning: MLB/NHL/UFC models score lower than
+// NBA, so a uniform 0.62 gate filtered every non-NBA candidate to zero.
+const PREFILTER_MIN_CONF: Record<string, number> = {
+  nba: 0.62,
   mlb: 0.45,
   nhl: 0.50,
   ufc: 0.50,
@@ -353,6 +364,133 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
 
   if (!sportKey) return [];
 
+  // UFC does not use games-schedule. The Odds API gives fight events directly.
+  // Use h2h fight-winner odds as the free UFC picks source.
+  if (sport === "ufc") {
+    const oddsRes = await fnFetch(`nba-odds/events?sport=ufc&markets=h2h`);
+
+    if (!oddsRes.ok) {
+      console.error(
+        `[ufc] nba-odds/events game-lines error (HTTP ${oddsRes.status}):`,
+        JSON.stringify(oddsRes.data).slice(0, 300)
+      );
+    }
+
+    const oddsEvents = Array.isArray(oddsRes.data?.events) ? oddsRes.data.events : [];
+    const allUpcomingEvents = oddsEvents
+      .filter((ev: any) => {
+        if (!ev?.commence_time) return true;
+        return new Date(ev.commence_time).getTime() > Date.now();
+      })
+      .sort((a: any, b: any) => {
+        const at = a?.commence_time ? new Date(a.commence_time).getTime() : Number.MAX_SAFE_INTEGER;
+        const bt = b?.commence_time ? new Date(b.commence_time).getTime() : Number.MAX_SAFE_INTEGER;
+        return at - bt;
+      });
+
+    // Only scan the next UFC event/card. Odds API may return fights far into the future,
+    // but Sentinel should only publish free UFC picks for the nearest upcoming card.
+    const nextCardTime = allUpcomingEvents[0]?.commence_time || null;
+    const upcomingEvents = nextCardTime
+      ? allUpcomingEvents.filter((ev: any) => ev?.commence_time === nextCardTime)
+      : allUpcomingEvents.slice(0, 1);
+
+    stats.games = oddsEvents.length;
+    stats.scheduled_games = allUpcomingEvents.length;
+    stats.events = upcomingEvents.length;
+
+    console.log(
+      `[ufc] evaluateGameLines: ${upcomingEvents.length} fights from next UFC card ` +
+      `(nextCardTime=${nextCardTime}, totalUpcoming=${allUpcomingEvents.length}, HTTP ${oddsRes.status})`
+    );
+
+    const candidateMap = new Map<string, ScoredPlay>();
+
+    function addCandidate(play: ScoredPlay) {
+      const key = [
+        play.sport,
+        play.bet_type,
+        play.player_name,
+        play.team ?? "",
+        play.prop_type,
+        play.direction,
+        play.line,
+        play.odds,
+      ].join("|");
+
+      const existing = candidateMap.get(key);
+
+      if (!existing || play.confidence > existing.confidence || play.ev_pct > existing.ev_pct) {
+        candidateMap.set(key, play);
+      }
+    }
+
+    for (const ev of upcomingEvents) {
+      const homeFighter = ev.home_team || "";
+      const awayFighter = ev.away_team || "";
+      const fightName = `${awayFighter} vs ${homeFighter}`;
+
+      for (const bm of ev.bookmakers || []) {
+        for (const mkt of bm.markets || []) {
+          if (mkt.key !== "h2h") continue;
+
+          for (const o of mkt.outcomes || []) {
+            if (typeof o.price !== "number") continue;
+            if (!o.name) continue;
+
+            // Keep away from unreadable extreme odds.
+            if (o.price >= 500 || o.price <= -350) continue;
+
+            const implied = americanToImpliedProb(o.price);
+
+            // Conservative market-derived projection. This uses real fight odds.
+            // These non-prop plays skip nba-api/analyze, same as other moneyline plays.
+            const projected = Math.max(0.38, Math.min(0.82, implied * 0.94 + 0.045));
+            const edge = projected - implied;
+
+            if (edge < 0.006) continue;
+
+            const opponent =
+              o.name === homeFighter ? awayFighter :
+              o.name === awayFighter ? homeFighter :
+              "";
+
+            addCandidate(
+              scorePrecomputed({
+                sport,
+                bet_type: "moneyline",
+                player_name: fightName,
+                home_team: homeFighter,
+                away_team: awayFighter,
+                team: o.name,
+                opponent,
+                prop_type: "moneyline",
+                line: 0,
+                direction: "win",
+                odds: o.price,
+                projected_prob: projected,
+                implied_prob: implied,
+                edge,
+                ev_pct: calcEv(projected, o.price),
+                confidence: projected,
+              })
+            );
+          }
+        }
+      }
+    }
+
+    const plays = Array.from(candidateMap.values()).sort((a, b) => {
+      const scoreA = a.confidence * 100 + a.edge * 100 + a.ev_pct;
+      const scoreB = b.confidence * 100 + b.edge * 100 + b.ev_pct;
+      return scoreB - scoreA;
+    });
+
+    console.log(`[ufc] evaluateGameLines produced ${plays.length} fight-winner candidates`);
+
+    return plays;
+  }
+
   const gamesRes = await fnFetch(`games-schedule?sport=${sportKey}`);
   const games = Array.isArray(gamesRes.data) ? gamesRes.data : [];
 
@@ -398,7 +536,34 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
     oddsMap.set(`${away}|${home}`, ev);
   }
 
-  const plays: ScoredPlay[] = [];
+  // MLB currently does not have reliable player props on the free/current Odds API setup.
+  // This fallback creates conservative, market-based game-line candidates from h2h/spreads/totals.
+  // Non-prop plays skip nba-api/analyze and can still populate Free Picks / Today's Edge.
+  const gameLineMinEdge = sport === "mlb" ? 0.006 : 0.035;
+  const gameLineBump = sport === "mlb" ? 0.045 : 0.03;
+  const moneylineHomeBump = sport === "mlb" ? 0.05 : 0.04;
+  const moneylineAwayBump = sport === "mlb" ? 0.04 : 0.02;
+
+  const candidateMap = new Map<string, ScoredPlay>();
+
+  function addCandidate(play: ScoredPlay) {
+    const key = [
+      play.sport,
+      play.bet_type,
+      play.player_name,
+      play.team ?? "",
+      play.prop_type,
+      play.direction,
+      play.line,
+      play.odds,
+    ].join("|");
+
+    const existing = candidateMap.get(key);
+
+    if (!existing || play.confidence > existing.confidence || play.ev_pct > existing.ev_pct) {
+      candidateMap.set(key, play);
+    }
+  }
 
   for (const g of upcoming) {
     const key = `${(g.home_team || "").toLowerCase()}|${(g.away_team || "").toLowerCase()}`;
@@ -406,85 +571,101 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
 
     if (!ev?.bookmakers?.length) continue;
 
-    const bm = ev.bookmakers.find((b: any) => b.key === "pinnacle") || ev.bookmakers[0];
+    // Use all books, not only the first book. MLB free props are missing, so
+    // this gives the game-line fallback enough candidates to work with.
+    for (const bm of ev.bookmakers || []) {
+      for (const mkt of bm.markets || []) {
+        if (mkt.key === "h2h") {
+          for (const o of mkt.outcomes || []) {
+            if (typeof o.price !== "number") continue;
 
-    for (const mkt of bm.markets || []) {
-      if (mkt.key === "h2h") {
-        for (const o of mkt.outcomes || []) {
-          const isHome = o.name === g.home_team;
-          const implied = americanToImpliedProb(o.price);
-          const projected = Math.max(
-            0.35,
-            Math.min(0.95, implied * 0.92 + (isHome ? 0.04 : 0.02))
-          );
-          const edge = projected - implied;
+            const isHome = o.name === g.home_team;
+            const implied = americanToImpliedProb(o.price);
+            const projected = Math.max(
+              0.35,
+              Math.min(0.95, implied * 0.94 + (isHome ? moneylineHomeBump : moneylineAwayBump))
+            );
+            const edge = projected - implied;
 
-          if (edge < 0.035) continue;
+            if (edge < gameLineMinEdge) continue;
 
-          plays.push(
-            scorePrecomputed({
-              sport,
-              bet_type: "moneyline",
-              player_name: `${g.away_team} @ ${g.home_team}`,
-              home_team: g.home_team,
-              away_team: g.away_team,
-              team: o.name,
-              opponent: isHome ? g.away_team : g.home_team,
-              prop_type: "moneyline",
-              line: 0,
-              direction: isHome ? "home" : "away",
-              odds: o.price,
-              projected_prob: projected,
-              implied_prob: implied,
-              edge,
-              ev_pct: calcEv(projected, o.price),
-              confidence: projected,
-            })
-          );
-        }
-      } else if (mkt.key === "spreads" || mkt.key === "totals") {
-        const betType = mkt.key === "spreads" ? "spread" : "total";
+            addCandidate(
+              scorePrecomputed({
+                sport,
+                bet_type: "moneyline",
+                player_name: `${g.away_team} @ ${g.home_team}`,
+                home_team: g.home_team,
+                away_team: g.away_team,
+                team: o.name,
+                opponent: isHome ? g.away_team : g.home_team,
+                prop_type: "moneyline",
+                line: 0,
+                direction: isHome ? "home" : "away",
+                odds: o.price,
+                projected_prob: projected,
+                implied_prob: implied,
+                edge,
+                ev_pct: calcEv(projected, o.price),
+                confidence: projected,
+              })
+            );
+          }
+        } else if (mkt.key === "spreads" || mkt.key === "totals") {
+          const betType = mkt.key === "spreads" ? "spread" : "total";
 
-        for (const o of mkt.outcomes || []) {
-          const implied = americanToImpliedProb(o.price);
-          const projected = Math.max(0.4, Math.min(0.92, implied * 0.94 + 0.03));
-          const edge = projected - implied;
+          for (const o of mkt.outcomes || []) {
+            if (typeof o.price !== "number") continue;
 
-          if (edge < 0.035) continue;
+            const implied = americanToImpliedProb(o.price);
+            const projected = Math.max(0.4, Math.min(0.92, implied * 0.94 + gameLineBump));
+            const edge = projected - implied;
 
-          const dir =
-            betType === "total"
-              ? (o.name || "").toLowerCase().includes("over")
-                ? "over"
-                : "under"
-              : o.name === g.home_team
-                ? "home"
-                : "away";
+            if (edge < gameLineMinEdge) continue;
 
-          plays.push(
-            scorePrecomputed({
-              sport,
-              bet_type: betType as "spread" | "total",
-              player_name: `${g.away_team} @ ${g.home_team}`,
-              home_team: g.home_team,
-              away_team: g.away_team,
-              prop_type: betType,
-              line: o.point ?? 0,
-              spread_line: betType === "spread" ? o.point : null,
-              total_line: betType === "total" ? o.point : null,
-              direction: dir,
-              odds: o.price,
-              projected_prob: projected,
-              implied_prob: implied,
-              edge,
-              ev_pct: calcEv(projected, o.price),
-              confidence: projected,
-            })
-          );
+            const dir =
+              betType === "total"
+                ? (o.name || "").toLowerCase().includes("over")
+                  ? "over"
+                  : "under"
+                : o.name === g.home_team
+                  ? "home"
+                  : "away";
+
+            addCandidate(
+              scorePrecomputed({
+                sport,
+                bet_type: betType as "spread" | "total",
+                player_name: `${g.away_team} @ ${g.home_team}`,
+                home_team: g.home_team,
+                away_team: g.away_team,
+                team: betType === "spread" ? o.name : null,
+                opponent: null,
+                prop_type: betType,
+                line: o.point ?? 0,
+                spread_line: betType === "spread" ? o.point : null,
+                total_line: betType === "total" ? o.point : null,
+                direction: dir,
+                odds: o.price,
+                projected_prob: projected,
+                implied_prob: implied,
+                edge,
+                ev_pct: calcEv(projected, o.price),
+                confidence: projected,
+              })
+            );
+          }
         }
       }
     }
   }
+
+  const plays = Array.from(candidateMap.values()).sort((a, b) => {
+    const scoreA = a.confidence * 100 + a.edge * 100 + a.ev_pct;
+    const scoreB = b.confidence * 100 + b.edge * 100 + b.ev_pct;
+    return scoreB - scoreA;
+  });
+
+  console.log(`[${sport}] evaluateGameLines produced ${plays.length} game-line candidates`);
 
   return plays;
 }
@@ -643,7 +824,9 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
           }
         }
 
-        if (standardLine === null || bestCount < 3) continue;
+        const minBookCount = sport === "mlb" ? 1 : 3;
+
+        if (standardLine === null || bestCount < minBookCount) continue;
 
         const lines = new Set<number>([standardLine]);
 
@@ -713,6 +896,22 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
   stats.players = playerSet.size;
   stats.propLines = propLineCount;
   stats.candidates = plays.length;
+
+  if (sport === "ufc" && plays.length === 0 && stats.events > 0) {
+    console.log(`[ufc] no prop markets supported; relying on h2h game lines`);
+  }
+
+  if (sport !== "ufc" && upcoming.length > 0 && playerSet.size === 0) {
+    const sample = eventProps.slice(0, 3).map(({ ev, data }) => ({
+      eventId: ev?.id,
+      players: Object.keys(data?.players || {}).length,
+      hasError: !!data?.error,
+    }));
+    console.log(
+      `[${sport}] all ${upcoming.length} events returned 0 players from nba-odds/player-props. ` +
+      `sample=${JSON.stringify(sample)}`
+    );
+  }
 
   return plays;
 }
@@ -851,14 +1050,25 @@ export async function scanSport(sport: string): Promise<{
   const all = [...lines, ...props];
   const scanned = all.length;
 
+  const minConf = PREFILTER_MIN_CONF[sport] ?? 0.55;
+  const drops = { conf: 0, oddsHigh: 0, oddsLow: 0, edge: 0 };
+
   const prefiltered = all.filter((p) => {
-    if (p.odds >= 500) return false;
-    if (p.odds <= -350) return false;
-    if (p.confidence < 0.62) return false;
-    if (p.edge <= 0) return false;
+    if (p.odds >= 500) { drops.oddsHigh++; return false; }
+    if (p.odds <= -350) { drops.oddsLow++; return false; }
+    if (p.confidence < minConf) { drops.conf++; return false; }
+    if (p.edge <= 0) { drops.edge++; return false; }
 
     return true;
   });
+
+  if (scanned > 0 && prefiltered.length === 0) {
+    console.log(
+      `[${sport}] prefilter dropped all ${scanned} candidates: ` +
+      `conf<${minConf}=${drops.conf} odds>=+500=${drops.oddsHigh} ` +
+      `odds<=-350=${drops.oddsLow} edge<=0=${drops.edge}`
+    );
+  }
 
   const ANALYZER_CAP = 45;
   const ANALYZER_CHUNK = 1;
@@ -991,7 +1201,12 @@ export async function scanSport(sport: string): Promise<{
   }
 
   console.log(
-    `[${sport}] scanned=${scanned} prefiltered=${prefiltered.length} validated=${validated.length} inserted=${inserted}`
+    `[${sport}] games=${stats.games} scheduled=${stats.scheduled_games} ` +
+    `events=${stats.events} players=${stats.players} ` +
+    `propLines=${stats.propLines} lines=${stats.lines} ` +
+    `candidates=${stats.candidates} scanned=${scanned} ` +
+    `prefiltered=${prefiltered.length} validated=${validated.length} ` +
+    `inserted=${inserted} (minConf=${minConf})`
   );
 
   return {

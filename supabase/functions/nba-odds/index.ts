@@ -61,11 +61,13 @@ const NBA_PROP_MARKETS = [
 const MLB_PROP_MARKETS = [
   "pitcher_strikeouts",
   "batter_hits",
+  "batter_runs_scored",
   "batter_home_runs",
   "batter_total_bases",
   "batter_rbis",
   "batter_walks",
   "batter_stolen_bases",
+  "batter_hits_runs_rbis",
 ].join(",");
 
 const NHL_PROP_MARKETS = [
@@ -322,30 +324,160 @@ async function fetchMultiRegion(
 }
 
 // Helper to build player map from bookmakers data
-function buildPlayerMap(bookmakers: any[]): Record<string, Record<string, Array<{
-  book: string; name: string; price: number; point: number;
+function buildPlayerMap(bookmakers: any[], sport?: string): Record<string, Record<string, Array<{
+  book: string; bookmaker: string; name: string; price: number; point: number;
 }>>> {
   const playerMap: Record<string, Record<string, Array<{
-    book: string; name: string; price: number; point: number;
+    book: string; bookmaker: string; name: string; price: number; point: number;
   }>>> = {};
 
-  for (const bk of bookmakers) {
+  const normalizedSport = (sport || "").toLowerCase();
+
+  for (const bk of bookmakers || []) {
+    const bookName = bk.title || bk.key || "unknown";
+
     for (const market of (bk.markets || [])) {
+      const marketKey = market?.key;
+      if (!marketKey) continue;
+
       for (const outcome of (market.outcomes || [])) {
-        const playerName = outcome.description || outcome.name;
+        const outcomeName = String(outcome?.name || "").trim();
+        const description = String(outcome?.description || "").trim();
+
+        // For MLB/NHL/NBA player props, Odds API usually gives:
+        // outcome.name = Over/Under and outcome.description = Player Name.
+        // If description is missing on player props, skip it instead of creating
+        // fake players named "Over" or "Under".
+        const isOverUnder = /^(over|under)$/i.test(outcomeName);
+        const looksLikePlayerProp =
+          marketKey.startsWith("player_") ||
+          marketKey.startsWith("batter_") ||
+          marketKey.startsWith("pitcher_");
+
+        let playerName = description || (!isOverUnder ? outcomeName : "");
+
+        if (looksLikePlayerProp && !playerName) continue;
+
+        // H2H markets are not player props for MLB/NHL/NBA.
+        // UFC uses h2h elsewhere in player-odds, not this player-props map.
+        if (marketKey === "h2h" && normalizedSport !== "ufc") continue;
+
         if (!playerName) continue;
+
         if (!playerMap[playerName]) playerMap[playerName] = {};
-        if (!playerMap[playerName][market.key]) playerMap[playerName][market.key] = [];
-        playerMap[playerName][market.key].push({
-          book: bk.title || bk.key,
-          name: outcome.name,
-          price: outcome.price,
-          point: outcome.point ?? 0,
+        if (!playerMap[playerName][marketKey]) playerMap[playerName][marketKey] = [];
+
+        playerMap[playerName][marketKey].push({
+          book: bookName,
+          bookmaker: bookName,
+          name: outcomeName,
+          price: Number(outcome.price),
+          point: Number(outcome.point ?? 0),
         });
       }
     }
   }
+
   return playerMap;
+}
+
+function mergeBookmakersWithMarkets(existing: any[] = [], incoming: any[] = []) {
+  const byBook = new Map<string, any>();
+
+  for (const bk of existing || []) {
+    const key = `${bk?.key || ""}::${bk?.title || ""}`;
+    byBook.set(key, { ...bk, markets: [...(bk?.markets || [])] });
+  }
+
+  for (const bk of incoming || []) {
+    const key = `${bk?.key || ""}::${bk?.title || ""}`;
+    const current = byBook.get(key);
+
+    if (!current) {
+      byBook.set(key, { ...bk, markets: [...(bk?.markets || [])] });
+      continue;
+    }
+
+    const marketKeys = new Set((current.markets || []).map((m: any) => m?.key));
+    for (const market of bk?.markets || []) {
+      // Same bookmaker can return different markets across separate requests.
+      // Keep one copy of each market key from that book.
+      if (marketKeys.has(market?.key)) continue;
+      marketKeys.add(market?.key);
+      current.markets.push(market);
+    }
+  }
+
+  return Array.from(byBook.values());
+}
+
+function countParsedPropLines(playerMap: Record<string, Record<string, any[]>>) {
+  let lines = 0;
+
+  for (const markets of Object.values(playerMap || {})) {
+    for (const outcomes of Object.values(markets || {})) {
+      lines += Array.isArray(outcomes) ? outcomes.length : 0;
+    }
+  }
+
+  return lines;
+}
+
+async function fetchSingleEventPropsWithFallback(
+  supabase: any,
+  sportKey: string,
+  sport: string,
+  eventId: string,
+  marketsCsv: string,
+  propRegions: typeof REGION_CONFIGS,
+): Promise<{ eventData: any; bookmakers: any[]; quota: { remaining: string | null; used: string | null }; marketsSucceeded: string[]; marketsFailed: string[] } | null> {
+  const normalizedSport = (sport || "").toLowerCase();
+  const markets = marketsCsv.split(",").map((m) => m.trim()).filter(Boolean);
+
+  // NBA/NHL usually handle comma-separated markets fine. MLB props can be
+  // spotty by market/book, so fetch MLB markets one-by-one so one unsupported
+  // market does not zero out the whole response.
+  const marketGroups = normalizedSport === "mlb"
+    ? markets.map((m) => [m])
+    : [markets];
+
+  let eventData: any = null;
+  let allBookmakers: any[] = [];
+  let lastQuota = { remaining: null as string | null, used: null as string | null };
+  const marketsSucceeded: string[] = [];
+  const marketsFailed: string[] = [];
+
+  for (const group of marketGroups) {
+    const marketParam = group.join(",");
+
+    const multiResult = await fetchMultiRegion(
+      supabase,
+      (apiKey, region, bookmakers) =>
+        `${ODDS_API_BASE}/sports/${sportKey}/events/${eventId}/odds?apiKey=${apiKey}&regions=${region}&oddsFormat=american&bookmakers=${bookmakers}&markets=${marketParam}`,
+      propRegions,
+    );
+
+    if (!multiResult) {
+      marketsFailed.push(marketParam);
+      continue;
+    }
+
+    const data = multiResult.events[0] || {};
+    eventData = eventData || data;
+    allBookmakers = mergeBookmakersWithMarkets(allBookmakers, data.bookmakers || multiResult.mergedBookmakers || []);
+    lastQuota = multiResult.quota;
+    marketsSucceeded.push(...group);
+  }
+
+  if (!eventData && allBookmakers.length === 0) return null;
+
+  return {
+    eventData: eventData || { id: eventId },
+    bookmakers: allBookmakers,
+    quota: lastQuota,
+    marketsSucceeded,
+    marketsFailed,
+  };
 }
 
 Deno.serve(async (req) => {
@@ -414,14 +546,50 @@ Deno.serve(async (req) => {
       const defaultMarkets = getPropMarkets(sport);
       const markets = url.searchParams.get("markets") || defaultMarkets;
 
-      const multiResult = await fetchMultiRegion(supabase, (apiKey, region, bookmakers) =>
-        `${ODDS_API_BASE}/sports/${sportKey}/events/${eventId}/odds?apiKey=${apiKey}&regions=${region}&oddsFormat=american&bookmakers=${bookmakers}&markets=${markets}`
+      // us_dfs (PrizePicks/Underdog) and us_ex (Kalshi/Polymarket) do not
+      // support pitcher_*/batter_*/player_* markets — they 422. Query only
+      // the us + us2 regions for player props (matches /player-odds flow).
+      const PROP_REGIONS = REGION_CONFIGS.filter(
+        (c) => c.region === "us" || c.region === "us2"
       );
 
-      if (!multiResult) return json({ error: "All API keys exhausted" }, 503);
+      const propsResult = await fetchSingleEventPropsWithFallback(
+        supabase,
+        sportKey,
+        sport,
+        eventId,
+        markets,
+        PROP_REGIONS,
+      );
 
-      const playerMap = buildPlayerMap(multiResult.mergedBookmakers);
-      const eventData = multiResult.events[0] || {};
+      if (!propsResult) {
+        console.log(JSON.stringify({
+          fn: "nba-odds", action: "player-props", sport, eventId,
+          status: "empty", reason: "all_regions_failed_or_unsupported",
+          requestedMarkets: markets.split(","),
+        }));
+        return json({ error: "All API keys exhausted or markets unsupported" }, 503);
+      }
+
+      const playerMap = buildPlayerMap(propsResult.bookmakers, sport);
+      const eventData = propsResult.eventData || {};
+      const playerCount = Object.keys(playerMap).length;
+      const parsedPropLines = countParsedPropLines(playerMap);
+
+      console.log(JSON.stringify({
+        fn: "nba-odds",
+        action: "player-props",
+        sport,
+        sportKey,
+        eventId,
+        requestedMarkets: markets.split(","),
+        marketsSucceeded: propsResult.marketsSucceeded,
+        marketsFailed: propsResult.marketsFailed,
+        players: playerCount,
+        propLines: parsedPropLines,
+        bookmakers: propsResult.bookmakers.length,
+        quotaRemaining: propsResult.quota.remaining,
+      }));
 
       const responseData = {
         event_id: eventData.id || eventId,
@@ -429,9 +597,14 @@ Deno.serve(async (req) => {
         away_team: eventData.away_team,
         commence_time: eventData.commence_time,
         players: playerMap,
-        quota: multiResult.quota,
-        sources: REGION_CONFIGS.map(c => c.region),
+        quota: propsResult.quota,
+        sources: PROP_REGIONS.map(c => c.region),
         sport,
+        requested_markets: markets.split(","),
+        markets_succeeded: propsResult.marketsSucceeded,
+        markets_failed: propsResult.marketsFailed,
+        parsed_players: playerCount,
+        parsed_prop_lines: parsedPropLines,
       };
       setCache(cacheKey, responseData);
       return json(responseData);
@@ -509,8 +682,9 @@ Deno.serve(async (req) => {
         hits: "batter_hits",
         home_runs: "batter_home_runs",
         total_bases: "batter_total_bases",
+        rbi: "batter_rbis",
         rbis: "batter_rbis",
-        runs: "batter_runs",
+        runs: "batter_runs_scored",
         walks: "batter_walks",
         stolen_bases: "batter_stolen_bases",
         hits_runs_rbis: "batter_hits_runs_rbis",
@@ -582,7 +756,7 @@ Deno.serve(async (req) => {
             clearTimeout(timeoutId);
             if (!multiResult) continue;
 
-            const playerMap = buildPlayerMap(multiResult.mergedBookmakers);
+            const playerMap = buildPlayerMap(multiResult.mergedBookmakers, sport);
             const evData = multiResult.events[0] || {};
             propsData = {
               event_id: evData.id, home_team: evData.home_team, away_team: evData.away_team,
