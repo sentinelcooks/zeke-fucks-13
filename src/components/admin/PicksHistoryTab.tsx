@@ -65,7 +65,9 @@ export const PicksHistoryTab: React.FC<{ password: string }> = ({ password }) =>
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      setPicks(((data.picks || []) as PicksPick[]).filter(isPicksHistoryPick));
+      const filtered = ((data.picks || []) as PicksPick[]).filter(isPicksHistoryPick);
+      console.log("[PicksHistory] rows after filter", filtered.length, filtered.slice(0, 3));
+      setPicks(filtered);
     } catch (e) {
       console.error("Failed to load picks history:", e);
     }

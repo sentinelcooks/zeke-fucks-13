@@ -65,7 +65,9 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      setPicks(((data.picks || []) as EdgePick[]).filter(isEdgeHistoryPick));
+      const filtered = ((data.picks || []) as EdgePick[]).filter(isEdgeHistoryPick);
+      console.log("[EdgeHistory] rows after filter", filtered.length, filtered.slice(0, 3));
+      setPicks(filtered);
     } catch (e) {
       console.error("Failed to load edge history:", e);
     }

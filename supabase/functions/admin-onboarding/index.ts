@@ -62,7 +62,7 @@ serve(async (req) => {
         .from("daily_picks")
         .select("*")
         .eq("tier", "edge")
-        .neq("status", "empty_slate")
+        .or("status.is.null,status.eq.,status.neq.empty_slate")
         .order("pick_date", { ascending: false })
         .order("created_at", { ascending: false });
       if (start_date) q = q.gte("pick_date", start_date);
@@ -120,7 +120,7 @@ serve(async (req) => {
         .select("*")
         .neq("tier", "edge")
         .not("tier", "in", "(pass,_pending)")
-        .neq("status", "empty_slate")
+        .or("status.is.null,status.eq.,status.neq.empty_slate")
         .order("pick_date", { ascending: false })
         .order("created_at", { ascending: false });
       if (start_date) q = q.gte("pick_date", start_date);

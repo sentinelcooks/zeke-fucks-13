@@ -291,7 +291,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
 
     const [todayRes, yesterdayRes] = await Promise.all([
       supabase.from("daily_picks").select("*").eq("pick_date", today).order("confidence", { ascending: false, nullsFirst: false }).limit(40),
-      supabase.from("daily_picks").select("*").eq("pick_date", yesterday).eq("tier", "edge").neq("status", "empty_slate").order("created_at", { ascending: false }),
+      supabase.from("daily_picks").select("*").eq("pick_date", yesterday).eq("tier", "edge").order("created_at", { ascending: false }),
     ]);
 
     // Hard odds guard: drop extreme longshots (|odds| >= 1000)
@@ -341,7 +341,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     // Auto-refresh yesterday's results every 60 seconds
     const interval = setInterval(async () => {
       const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
-      const { data } = await supabase.from("daily_picks").select("*").eq("pick_date", yesterday).eq("tier", "edge").neq("status", "empty_slate").order("created_at", { ascending: false });
+      const { data } = await supabase.from("daily_picks").select("*").eq("pick_date", yesterday).eq("tier", "edge").order("created_at", { ascending: false });
       setYesterdayPicks(((data as DailyPick[]) || []).filter(isEdgeHistoryPick));
     }, 60000);
     return () => clearInterval(interval);
