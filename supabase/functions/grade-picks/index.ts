@@ -16,8 +16,79 @@ const PROP_TO_STAT: Record<string, string[]> = {
   blocks: ["blocks"],
 };
 
+type MlbStatKey =
+  | "hits"
+  | "rbi"
+  | "home_runs"
+  | "runs"
+  | "total_bases"
+  | "strikeouts_pit"
+  | "strikeouts_bat"
+  | "walks"
+  | "stolen_bases";
+
+const MLB_PROP_TO_STAT: Record<string, MlbStatKey> = {
+  hits: "hits",
+  hit: "hits",
+  mlb_hits: "hits",
+  rbi: "rbi",
+  rbis: "rbi",
+  mlb_rbi: "rbi",
+  hr: "home_runs",
+  home_runs: "home_runs",
+  mlb_hr: "home_runs",
+  runs: "runs",
+  mlb_runs: "runs",
+  tb: "total_bases",
+  total_bases: "total_bases",
+  mlb_total_bases: "total_bases",
+  k: "strikeouts_pit",
+  ks: "strikeouts_pit",
+  strikeouts: "strikeouts_pit",
+  mlb_strikeouts: "strikeouts_pit",
+  bb: "walks",
+  walks: "walks",
+  mlb_walks: "walks",
+  sb: "stolen_bases",
+  stolen_bases: "stolen_bases",
+};
+
+type NhlStatKey = "sog" | "assists" | "points" | "goals" | "saves";
+
+const NHL_PROP_TO_STAT: Record<string, NhlStatKey> = {
+  sog: "sog",
+  nhl_sog: "sog",
+  shots_on_goal: "sog",
+  assists: "assists",
+  nhl_assists: "assists",
+  points: "points",
+  nhl_points: "points",
+  goals: "goals",
+  nhl_goals: "goals",
+  saves: "saves",
+  nhl_saves: "saves",
+};
+
 function normalise(name: string): string {
   return name.replace(/[.']/g, "").toLowerCase().trim();
+}
+
+// Stricter normalization for MLB/NHL player matching: lowercase, strip
+// punctuation, strip Jr/Sr/II/III/IV suffixes, collapse whitespace.
+function normalizePlayerName(name: string): string {
+  if (!name) return "";
+  const lowered = name.toLowerCase();
+  const stripped = lowered.replace(/[^a-z0-9\s]/g, " ");
+  const tokens = stripped
+    .split(/\s+/)
+    .filter((t) => t.length > 0 && !["jr", "sr", "ii", "iii", "iv"].includes(t));
+  return tokens.join(" ").trim();
+}
+
+function lastToken(name: string): string {
+  const norm = normalizePlayerName(name);
+  const parts = norm.split(/\s+/);
+  return parts[parts.length - 1] || "";
 }
 
 function ymd(d: Date): string {
@@ -59,6 +130,7 @@ function teamMatch(a: string | null | undefined, b: string | null | undefined): 
 type Pick = Record<string, any>;
 
 interface ScoreboardGame {
+  id: string;
   date: string;          // YYYY-MM-DD
   final: boolean;
   home: string;
@@ -91,6 +163,7 @@ async function fetchScoreboard(
     const homeScore = parseFloat(home.score ?? "0") || 0;
     const awayScore = parseFloat(away.score ?? "0") || 0;
     games.push({
+      id: String(e.id || ""),
       date: dateStr,
       final: state === "post",
       home: home.team?.displayName || home.team?.name || "",
@@ -257,6 +330,379 @@ async function gradeNbaProps(
   return { graded, skippedNoData };
 }
 
+// ────────────────────────────────────────────────────────────────────
+// MLB / NHL player prop grading
+
+interface PropPlayerEntry {
+  rawName: string;
+  normName: string;
+  lastName: string;
+  group: string;          // "batting" | "pitching" | "skater" | "goalie" | etc.
+  stats: Record<string, number>;
+}
+
+interface SummaryIndex {
+  final: boolean;
+  players: PropPlayerEntry[];
+}
+
+function indexSummary(box: any): PropPlayerEntry[] {
+  const out: PropPlayerEntry[] = [];
+  const teams = box?.boxscore?.players || [];
+  for (const team of teams) {
+    for (const statGroup of team.statistics || []) {
+      const groupName = String(statGroup.name || statGroup.type || "").toLowerCase();
+      const labels: string[] = (statGroup.labels || []).map((l: any) => String(l));
+      for (const athlete of statGroup.athletes || []) {
+        const rawName: string =
+          athlete.athlete?.displayName ||
+          athlete.athlete?.fullName ||
+          athlete.athlete?.name ||
+          "";
+        if (!rawName) continue;
+        const values: string[] = (athlete.stats || []).map((v: any) => String(v));
+        const stats: Record<string, number> = {};
+        labels.forEach((label, idx) => {
+          if (!label) return;
+          const num = parseFloat(values[idx] ?? "");
+          stats[label.toUpperCase()] = Number.isFinite(num) ? num : 0;
+        });
+        out.push({
+          rawName,
+          normName: normalizePlayerName(rawName),
+          lastName: lastToken(rawName),
+          group: groupName,
+          stats,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+function findPlayerEntries(
+  index: PropPlayerEntry[],
+  playerName: string,
+  preferredGroups: string[],
+): { entries: PropPlayerEntry[]; reason?: "ambiguous_player" | "player_not_found" } {
+  const target = normalizePlayerName(playerName);
+  if (!target) return { entries: [], reason: "player_not_found" };
+
+  const exact = index.filter((e) => e.normName === target);
+  if (exact.length > 0) {
+    const preferred = exact.filter((e) => preferredGroups.includes(e.group));
+    return { entries: preferred.length > 0 ? preferred : exact };
+  }
+
+  const last = lastToken(playerName);
+  if (last) {
+    const lastMatches = index.filter((e) => e.lastName === last);
+    const uniqueByName = new Set(lastMatches.map((e) => e.normName));
+    if (uniqueByName.size === 1 && lastMatches.length > 0) {
+      const preferred = lastMatches.filter((e) => preferredGroups.includes(e.group));
+      return { entries: preferred.length > 0 ? preferred : lastMatches };
+    }
+    if (uniqueByName.size > 1) {
+      return { entries: [], reason: "ambiguous_player" };
+    }
+  }
+  return { entries: [], reason: "player_not_found" };
+}
+
+function getMlbPlayerStat(
+  summary: any,
+  playerName: string,
+  propType: string,
+): { found: boolean; actual: number | null; reason?: string } {
+  const key = MLB_PROP_TO_STAT[(propType || "").toLowerCase()];
+  if (!key) return { found: false, actual: null, reason: "unsupported_prop" };
+
+  const index = indexSummary(summary);
+  if (index.length === 0) return { found: false, actual: null, reason: "no_data" };
+
+  const preferred =
+    key === "strikeouts_pit" ? ["pitching"] : ["batting"];
+  const { entries, reason } = findPlayerEntries(index, playerName, preferred);
+  if (entries.length === 0) {
+    return { found: false, actual: null, reason: reason || "player_not_found" };
+  }
+
+  // Pick best entry from results (preferred group first; if strikeouts_pit and
+  // no pitching entry exists, fall back to batting K/SO).
+  let entry = entries.find((e) => preferred.includes(e.group));
+  if (!entry) entry = entries[0];
+
+  const s = entry.stats;
+  const pick = (...candidates: string[]): number => {
+    for (const c of candidates) {
+      const v = s[c.toUpperCase()];
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+    }
+    return 0;
+  };
+
+  let actual: number | null = null;
+  switch (key) {
+    case "hits":
+      actual = pick("H");
+      break;
+    case "rbi":
+      actual = pick("RBI");
+      break;
+    case "home_runs":
+      actual = pick("HR");
+      break;
+    case "runs":
+      actual = pick("R");
+      break;
+    case "walks":
+      actual = pick("BB");
+      break;
+    case "stolen_bases":
+      actual = pick("SB");
+      break;
+    case "total_bases": {
+      const h = pick("H");
+      const d = pick("2B");
+      const t = pick("3B");
+      const hr = pick("HR");
+      // singles = h - d - t - hr; TB = singles + 2d + 3t + 4hr = h + d + 2t + 3hr
+      actual = h + d + 2 * t + 3 * hr;
+      break;
+    }
+    case "strikeouts_pit":
+      if (entry.group === "pitching") {
+        actual = pick("K", "SO");
+      } else {
+        // Player wasn't a pitcher — fall back to batter SO/K.
+        actual = pick("SO", "K");
+      }
+      break;
+    case "strikeouts_bat":
+      actual = pick("SO", "K");
+      break;
+  }
+
+  if (actual == null || !Number.isFinite(actual)) {
+    return { found: false, actual: null, reason: "no_data" };
+  }
+  return { found: true, actual };
+}
+
+function getNhlPlayerStat(
+  summary: any,
+  playerName: string,
+  propType: string,
+): { found: boolean; actual: number | null; reason?: string } {
+  const key = NHL_PROP_TO_STAT[(propType || "").toLowerCase()];
+  if (!key) return { found: false, actual: null, reason: "unsupported_prop" };
+
+  const index = indexSummary(summary);
+  if (index.length === 0) return { found: false, actual: null, reason: "no_data" };
+
+  // Goalie groups commonly named "goalies"; skater groups "skaters" / "forwards" / "defense".
+  const goalieGroups = ["goalies", "goalie", "goaltenders"];
+  const skaterGroups = ["skaters", "forwards", "defense", "defensemen"];
+  const preferred = key === "saves" ? goalieGroups : skaterGroups;
+
+  const { entries, reason } = findPlayerEntries(index, playerName, preferred);
+  if (entries.length === 0) {
+    return { found: false, actual: null, reason: reason || "player_not_found" };
+  }
+  let entry = entries.find((e) => preferred.includes(e.group));
+  if (!entry) entry = entries[0];
+  const s = entry.stats;
+  const pick = (...candidates: string[]): number => {
+    for (const c of candidates) {
+      const v = s[c.toUpperCase()];
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+    }
+    return 0;
+  };
+
+  let actual: number | null = null;
+  switch (key) {
+    case "sog":
+      actual = pick("SOG", "S");
+      break;
+    case "goals":
+      actual = pick("G");
+      break;
+    case "assists":
+      actual = pick("A");
+      break;
+    case "points":
+      actual = pick("PTS") || pick("G") + pick("A");
+      break;
+    case "saves":
+      actual = pick("SV", "SVS");
+      break;
+  }
+
+  if (actual == null || !Number.isFinite(actual)) {
+    return { found: false, actual: null, reason: "no_data" };
+  }
+  return { found: true, actual };
+}
+
+interface PropGradeCounters {
+  graded: number;
+  skippedNotFinal: number;
+  skippedNoData: number;
+  skippedUnsupportedProp: number;
+  skippedPlayerNotFound: number;
+  skippedAmbiguousPlayer: number;
+  skippedNoEvent: number;
+}
+
+function emptyCounters(): PropGradeCounters {
+  return {
+    graded: 0,
+    skippedNotFinal: 0,
+    skippedNoData: 0,
+    skippedUnsupportedProp: 0,
+    skippedPlayerNotFound: 0,
+    skippedAmbiguousPlayer: 0,
+    skippedNoEvent: 0,
+  };
+}
+
+function gradeOverUnder(
+  direction: string,
+  actual: number,
+  line: number,
+): "hit" | "miss" | "push" {
+  const dir = (direction || "").toLowerCase();
+  if (actual === line) return "push";
+  if (dir === "over") return actual > line ? "hit" : "miss";
+  // default to under semantics
+  return actual < line ? "hit" : "miss";
+}
+
+async function fetchSummary(
+  sport: "mlb" | "nhl",
+  eventId: string,
+): Promise<any | null> {
+  const path = sport === "mlb" ? "baseball/mlb" : "hockey/nhl";
+  try {
+    const resp = await fetch(
+      `https://site.api.espn.com/apis/site/v2/sports/${path}/summary?event=${eventId}`,
+    );
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch (e) {
+    console.error(`[GradePicks] summary fetch failed sport=${sport} event=${eventId}`, e);
+    return null;
+  }
+}
+
+async function gradePlayerPropsForSport(
+  supabase: ReturnType<typeof createClient>,
+  sport: "mlb" | "nhl",
+  picks: Pick[],
+  getStat: (
+    summary: any,
+    playerName: string,
+    propType: string,
+  ) => { found: boolean; actual: number | null; reason?: string },
+  propMap: Record<string, string>,
+): Promise<PropGradeCounters> {
+  const counters = emptyCounters();
+  if (picks.length === 0) return counters;
+
+  // Group by primary grading date so we cache scoreboard fetches per date.
+  const byDate: Record<string, Pick[]> = {};
+  for (const p of picks) {
+    const primary = gradingDatesForPick(p)[0];
+    (byDate[primary] ||= []).push(p);
+  }
+
+  const summaryCache = new Map<string, any | null>();
+  const scoreboardCache = new Map<string, ScoreboardGame[]>();
+
+  for (const [dateStr, datePicks] of Object.entries(byDate)) {
+    if (!scoreboardCache.has(dateStr)) {
+      scoreboardCache.set(dateStr, await fetchScoreboard(sport, dateStr));
+    }
+    const scoreboard = scoreboardCache.get(dateStr) || [];
+
+    for (const pick of datePicks) {
+      const propTypeLower = (pick.prop_type || "").toLowerCase();
+      if (!propMap[propTypeLower]) {
+        counters.skippedUnsupportedProp++;
+        continue;
+      }
+
+      // Resolve event_id: prefer pick.event_id only if it matches a scoreboard
+      // entry for this sport/date (Odds-API event_id ≠ ESPN id, so we cannot
+      // call summary with it directly).
+      let game = findGameForPick(pick, scoreboard);
+      if (!game && pick.event_id) {
+        const matched = scoreboard.find((g) => g.id === String(pick.event_id));
+        if (matched) game = matched;
+      }
+      if (!game) {
+        counters.skippedNoEvent++;
+        continue;
+      }
+      if (!game.final) {
+        counters.skippedNotFinal++;
+        continue;
+      }
+
+      let summary = summaryCache.get(game.id);
+      if (summary === undefined) {
+        summary = await fetchSummary(sport, game.id);
+        summaryCache.set(game.id, summary);
+      }
+      if (!summary) {
+        counters.skippedNoData++;
+        continue;
+      }
+
+      const { found, actual, reason } = getStat(
+        summary,
+        pick.player_name || "",
+        pick.prop_type || "",
+      );
+      if (!found || actual == null) {
+        if (reason === "ambiguous_player") counters.skippedAmbiguousPlayer++;
+        else if (reason === "unsupported_prop") counters.skippedUnsupportedProp++;
+        else if (reason === "player_not_found") counters.skippedPlayerNotFound++;
+        else counters.skippedNoData++;
+        continue;
+      }
+
+      const line = Number(pick.line);
+      if (!Number.isFinite(line)) {
+        counters.skippedNoData++;
+        continue;
+      }
+      const result = gradeOverUnder(pick.direction || "", actual, line);
+      const { error } = await supabase
+        .from("daily_picks")
+        .update({ result, avg_value: actual })
+        .eq("id", pick.id);
+      if (error) {
+        console.error(`[GradePicks] update failed pick=${pick.id}`, error);
+        counters.skippedNoData++;
+        continue;
+      }
+      counters.graded++;
+    }
+  }
+
+  return counters;
+}
+
+function isPlayerProp(pick: Pick): boolean {
+  const betType = (pick.bet_type || "").toLowerCase();
+  if (["moneyline", "spread", "total"].includes(betType)) return false;
+  if (betType === "prop") return true;
+  // Fall back: treat picks with player_name + prop_type as props.
+  return !!(pick.player_name && pick.prop_type);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -297,11 +743,20 @@ Deno.serve(async (req) => {
     let totalGraded = 0;
     let skippedNotFinal = 0;
     let skippedNoData = 0;
+    let skippedUnsupportedProp = 0;
+    let skippedPlayerNotFound = 0;
+    let skippedAmbiguousPlayer = 0;
+    let skippedNoEvent = 0;
+
+    const sportSummary: Record<string, any> = {};
 
     // ── NBA: preserve existing prop grading. Group by pick_date and run the
     // original NBA path against each date in the pending set (covers 3-day
     // lookback without changing the grading logic itself).
     if (bySport.nba?.length) {
+      const nbaCount = bySport.nba.length;
+      let nbaGraded = 0;
+      let nbaSkippedNoData = 0;
       // Group by primary grading date — prefer game_date, fall back to pick_date.
       const byDate: Record<string, Pick[]> = {};
       const fallbackDates = new Map<string, string[]>();
@@ -318,7 +773,7 @@ Deno.serve(async (req) => {
         const stillPending = datePicks.filter((p) => remaining.has(p.id));
         if (stillPending.length === 0) continue;
         const r1 = await gradeNbaProps(supabase, stillPending, date);
-        totalGraded += r1.graded;
+        nbaGraded += r1.graded;
 
         // Legacy fallback (rows missing game_date): try next calendar day.
         const after = stillPending.filter(
@@ -342,31 +797,57 @@ Deno.serve(async (req) => {
           }
           for (const [nd, ndPicks] of Object.entries(groupedNext)) {
             const r2 = await gradeNbaProps(supabase, ndPicks, nd);
-            totalGraded += r2.graded;
-            skippedNoData += r2.skippedNoData;
+            nbaGraded += r2.graded;
+            nbaSkippedNoData += r2.skippedNoData;
           }
         } else {
-          skippedNoData += r1.skippedNoData;
+          nbaSkippedNoData += r1.skippedNoData;
         }
       }
+      totalGraded += nbaGraded;
+      skippedNoData += nbaSkippedNoData;
+      sportSummary.nba = {
+        total: nbaCount,
+        graded: nbaGraded,
+        skipped_no_data: nbaSkippedNoData,
+      };
     }
 
-    // ── MLB / NHL: game bets only (moneyline / spread / total).
+    // ── MLB / NHL: split into player props vs game bets.
     for (const sport of ["mlb", "nhl"] as const) {
       const sportPicks = bySport[sport];
       if (!sportPicks?.length) continue;
 
-      // Cache scoreboards by date so we don't refetch.
+      const props = sportPicks.filter(isPlayerProp);
+      const games = sportPicks.filter((p) => !isPlayerProp(p));
+
+      let propCounters = emptyCounters();
+      if (props.length > 0) {
+        propCounters = await gradePlayerPropsForSport(
+          supabase,
+          sport,
+          props,
+          sport === "mlb" ? getMlbPlayerStat : getNhlPlayerStat,
+          sport === "mlb" ? MLB_PROP_TO_STAT : NHL_PROP_TO_STAT,
+        );
+      }
+
+      // Game bets — preserve original behaviour exactly.
       const scoreboards = new Map<string, ScoreboardGame[]>();
       const dateOf = async (d: string) => {
         if (!scoreboards.has(d)) scoreboards.set(d, await fetchScoreboard(sport, d));
         return scoreboards.get(d)!;
       };
 
-      for (const pick of sportPicks) {
+      let gameGraded = 0;
+      let gameNotFinal = 0;
+      let gameNoData = 0;
+      let gameUnsupported = 0;
+
+      for (const pick of games) {
         const betType = (pick.bet_type || "").toLowerCase();
         if (!["moneyline", "spread", "total"].includes(betType)) {
-          skippedNoData++;
+          gameUnsupported++;
           continue;
         }
 
@@ -376,8 +857,8 @@ Deno.serve(async (req) => {
         let foundFinal = false;
         let foundGame = false;
         for (const d of candidateDates) {
-          const games = await dateOf(d);
-          const g = findGameForPick(pick, games);
+          const gs = await dateOf(d);
+          const g = findGameForPick(pick, gs);
           if (!g) continue;
           foundGame = true;
           const r = gradeGameBet(pick, g);
@@ -393,33 +874,60 @@ Deno.serve(async (req) => {
             .from("daily_picks")
             .update({ result: graded })
             .eq("id", pick.id);
-          totalGraded++;
+          gameGraded++;
         } else if (foundGame && !foundFinal) {
-          skippedNotFinal++;
+          gameNotFinal++;
         } else {
-          skippedNoData++;
+          gameNoData++;
         }
       }
+
+      totalGraded += propCounters.graded + gameGraded;
+      skippedNotFinal += propCounters.skippedNotFinal + gameNotFinal;
+      skippedNoData += propCounters.skippedNoData + gameNoData;
+      skippedUnsupportedProp += propCounters.skippedUnsupportedProp + gameUnsupported;
+      skippedPlayerNotFound += propCounters.skippedPlayerNotFound;
+      skippedAmbiguousPlayer += propCounters.skippedAmbiguousPlayer;
+      skippedNoEvent += propCounters.skippedNoEvent;
+
+      sportSummary[sport] = {
+        total: sportPicks.length,
+        graded: propCounters.graded + gameGraded,
+        skipped_not_final: propCounters.skippedNotFinal + gameNotFinal,
+        skipped_no_data: propCounters.skippedNoData + gameNoData,
+        skipped_unsupported_prop: propCounters.skippedUnsupportedProp + gameUnsupported,
+        skipped_player_not_found: propCounters.skippedPlayerNotFound,
+        skipped_ambiguous_player: propCounters.skippedAmbiguousPlayer,
+        skipped_no_event: propCounters.skippedNoEvent,
+        props: props.length,
+        game_bets: games.length,
+      };
     }
 
     if (bySport.ufc?.length) {
       console.log(
         `[GradePicks] skipping ufc — manual grade only (${bySport.ufc.length} pending)`,
       );
+      sportSummary.ufc = { total: bySport.ufc.length, graded: 0, skipped_manual_only: bySport.ufc.length };
     }
 
-    console.log(
-      `[GradePicks] graded=${totalGraded} skipped_not_final=${skippedNotFinal} skipped_no_data=${skippedNoData}`,
-    );
+    const responseBody = {
+      message: "Picks graded",
+      graded: totalGraded,
+      total: picks.length,
+      skipped_not_final: skippedNotFinal,
+      skipped_no_data: skippedNoData,
+      skipped_unsupported_prop: skippedUnsupportedProp,
+      skipped_player_not_found: skippedPlayerNotFound,
+      skipped_ambiguous_player: skippedAmbiguousPlayer,
+      skipped_no_event: skippedNoEvent,
+      bySport: sportSummary,
+    };
+
+    console.log(`[GradePicks] ${JSON.stringify(responseBody)}`);
 
     return new Response(
-      JSON.stringify({
-        message: "Picks graded",
-        graded: totalGraded,
-        skipped_not_final: skippedNotFinal,
-        skipped_no_data: skippedNoData,
-        total: picks.length,
-      }),
+      JSON.stringify(responseBody),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
