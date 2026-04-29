@@ -2026,9 +2026,7 @@ const NbaPropsPage = () => {
                     playerName={results.player?.full_name || player}
                     opponentName={results.next_game?.opponent_name || "Opponent"}
                     sport={sport}
-                    defRank={results.pace_context?.opponent?.defRtg ?? null}
-                    defLabel={sport === "mlb" ? "OPP ERA" : sport === "nhl" ? "OPP DEF RTG" : "OPP DEF RTG"}
-                    paceRank={results.pace_context?.team?.pace ?? null}
+                    paceContext={results.pace_context}
                   />
                 </Section>
               )}

@@ -395,7 +395,7 @@ const FreePropsPage = () => {
 
                 {results.next_game && (
                   <Section title="Matchup Analysis">
-                    <StrengthWeakness playerName={results.player?.full_name || prop.player_name} opponentName={results.next_game?.opponent_name || "Opponent"} sport={prop.sport as "nba" | "mlb" | "nhl" | "ufc"} />
+                    <StrengthWeakness playerName={results.player?.full_name || prop.player_name} opponentName={results.next_game?.opponent_name || "Opponent"} sport={prop.sport as "nba" | "mlb" | "nhl" | "ufc"} paceContext={results.pace_context} />
                   </Section>
                 )}
 

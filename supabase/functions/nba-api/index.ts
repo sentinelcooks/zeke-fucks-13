@@ -3063,19 +3063,22 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
         try {
           const d = await resp.json();
           const stats = d?.results?.stats?.categories || d?.statistics?.splits?.categories || [];
-          const getStatVal = (name: string) => {
+          const getStatVal = (name: string): number | null => {
             for (const cat of stats) {
               const stat = (cat.stats || []).find((s: any) => s.name === name || s.abbreviation === name);
-              if (stat) return parseFloat(stat.displayValue || stat.value) || 0;
+              if (stat) {
+                const parsed = parseFloat(stat.displayValue ?? stat.value);
+                return Number.isFinite(parsed) ? parsed : null;
+              }
             }
-            return 0;
+            return null;
           };
           if (cfg.searchLeague === "nba") {
-            return { team: abbr, pace: getStatVal("pace") || getStatVal("possessions"), ppg: getStatVal("avgPoints"), offRtg: getStatVal("offensiveRating"), defRtg: getStatVal("defensiveRating") };
+            return { team: abbr, pace: getStatVal("pace") ?? getStatVal("possessions"), ppg: getStatVal("avgPoints"), offRtg: getStatVal("offensiveRating"), defRtg: getStatVal("defensiveRating") };
           } else if (cfg.searchLeague === "nhl") {
-            return { team: abbr, goalsFor: getStatVal("goalsFor") || getStatVal("avgGoals"), goalsAgainst: getStatVal("goalsAgainst"), shotsPerGame: getStatVal("avgShotsPerGame") || getStatVal("shots") };
+            return { team: abbr, goalsFor: getStatVal("goalsFor") ?? getStatVal("avgGoals"), goalsAgainst: getStatVal("goalsAgainst"), shotsPerGame: getStatVal("avgShotsPerGame") ?? getStatVal("shots") };
           } else if (cfg.searchLeague === "mlb") {
-            return { team: abbr, runsPerGame: getStatVal("runsPerGame") || getStatVal("avgRuns"), battingAvg: getStatVal("battingAvg") || getStatVal("AVG"), ops: getStatVal("OPS") };
+            return { team: abbr, runsPerGame: getStatVal("runsPerGame") ?? getStatVal("avgRuns"), battingAvg: getStatVal("battingAvg") ?? getStatVal("AVG"), ops: getStatVal("OPS") };
           }
         } catch { /* ignore */ }
         return null;
@@ -3086,8 +3089,9 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
         extractPaceStats(oppStatsResp, oppAbbr2),
       ]);
 
-      if (teamPace || oppPace) {
-        paceContext = { team: teamPace, opponent: oppPace, sport: cfg.searchLeague };
+      const hasAnyReal = (o: any) => o && Object.entries(o).some(([k, v]) => k !== "team" && v != null);
+      if (hasAnyReal(teamPace) || hasAnyReal(oppPace)) {
+        paceContext = { team: teamPace, opponent: oppPace, sport: cfg.searchLeague, matchup_source: "real" };
       }
     }
   } catch (e) {
