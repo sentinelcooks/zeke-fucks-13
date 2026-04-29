@@ -1293,6 +1293,33 @@ function buildOddsPayload(
   };
 }
 
+function buildAnalysisStatus(
+  odds: any,
+  factorBreakdown: any[] | undefined,
+  hasWriteup: boolean,
+): { status: "complete" | "partial" | "failed"; missingSections: string[] } {
+  const missingSections: string[] = [];
+  if (!odds || odds.unavailable || !odds.bestBook) missingSections.push("odds");
+  if (!factorBreakdown || factorBreakdown.length === 0) missingSections.push("factorBreakdown");
+  if (!hasWriteup) missingSections.push("aiInsights");
+  let status: "complete" | "partial" | "failed";
+  if (missingSections.length === 0) status = "complete";
+  else if (odds && odds.bestBook) status = "partial";
+  else status = "failed";
+  return { status, missingSections };
+}
+
+function pickSelectedSide(
+  betType: string,
+  overUnder: string | undefined,
+  spreadTeam: string | undefined,
+  team1Name: string,
+): string | null {
+  if (betType === "total") return overUnder || null;
+  if (betType === "spread") return spreadTeam || team1Name || null;
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -1412,8 +1439,13 @@ Deno.serve(async (req) => {
                 sport: "mlb",
               });
 
+              const mlbStatus = buildAnalysisStatus(odds, mlbResult.factorBreakdown, !!mlbResult.writeup);
               return json({
                 bet_type, sport, model: "mlb-20-factor",
+                ...mlbStatus,
+                marketType: bet_type,
+                selectedSide: pickSelectedSide(bet_type, over_under, spread_team, team1.name),
+                errors: [],
                 team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
                 team2: { ...team2, stats: team2Stats, homeAway: team2HomeAway },
                 matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue },
@@ -1483,8 +1515,13 @@ Deno.serve(async (req) => {
                 sport: "nhl",
               });
 
+              const nhlStatus = buildAnalysisStatus(odds, nhlResult.factorBreakdown, !!nhlResult.writeup);
               return json({
                 bet_type, sport, model: "nhl-20-factor",
+                ...nhlStatus,
+                marketType: bet_type,
+                selectedSide: pickSelectedSide(bet_type, over_under, spread_team, team1.name),
+                errors: [],
                 team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
                 team2: { ...team2, stats: team2Stats, homeAway: team2HomeAway },
                 matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue },
@@ -1560,10 +1597,15 @@ Deno.serve(async (req) => {
         sport,
       });
 
+      const genericStatus = buildAnalysisStatus(odds, analysis.factorBreakdown, !!analysis.writeup);
       return json({
         bet_type,
         sport,
         model: `${sport}-20-factor`,
+        ...genericStatus,
+        marketType: bet_type,
+        selectedSide: pickSelectedSide(bet_type, over_under, spread_team, team1.name),
+        errors: [],
         team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
         team2: { ...team2, stats: team2Stats, homeAway: team2HomeAway },
         matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue },

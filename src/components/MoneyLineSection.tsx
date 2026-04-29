@@ -642,14 +642,15 @@ function getPastMeetingsLabel(sport?: string): string {
 }
 
 /* ── Platform Odds (Real from Odds API) — OddsProjection-style design ── */
-function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType = "moneyline", activeOverUnder = "over", factorBreakdown }: { team1: Team; team2: Team; sport?: string; modelProb?: number; activeBetType?: BetType; activeOverUnder?: "over" | "under"; factorBreakdown?: any[] }) {
+function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType = "moneyline", activeOverUnder = "over", factorBreakdown, mode = "preview" }: { team1: Team; team2: Team; sport?: string; modelProb?: number; activeBetType?: BetType; activeOverUnder?: "over" | "under"; factorBreakdown?: any[]; mode?: "preview" | "analysis" }) {
   const { profile } = useAuth();
   const oddsFormat = (profile?.odds_format as "american" | "decimal") || "american";
   const [allMarketData, setAllMarketData] = useState<Record<string, Array<{ name: string; logo: string; abbrev: string; color: string; bookKey: string; t1: string; t2: string; t1Raw: number; t2Raw: number; spread1?: string; spread2?: string; total?: string }>>>({});
   const [loading, setLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);
   const [showExplainer, setShowExplainer] = useState(false);
-  const [showOddsSection, setShowOddsSection] = useState(true);
+  const isPreviewMode = mode === "preview";
+  const [showOddsSection, setShowOddsSection] = useState(!isPreviewMode);
 
   const [loadKey, setLoadKey] = useState(0);
 
@@ -929,8 +930,8 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-accent" />
           <div className="text-left">
-            <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-foreground/80">Odds & EV Analysis</span>
-            <p className="text-[9px] text-muted-foreground/55">{team1.name} vs {team2.name}</p>
+            <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-foreground/80">{isPreviewMode ? "Live Odds Preview" : "Odds & EV Analysis"}</span>
+            <p className="text-[9px] text-muted-foreground/55">{team1.name} vs {team2.name}{isPreviewMode ? " · click Analyze Matchup for full analysis" : ""}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -956,7 +957,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
             className="overflow-hidden space-y-3"
           >
       {/* ── MODEL vs MARKET HERO CARD ── */}
-      {activeEV && modelProb && modelProb > 0 && (
+      {!isPreviewMode && activeEV && modelProb && modelProb > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1069,7 +1070,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
       )}
 
       {/* ── WHAT IS EDGE & EV EXPLAINER ── */}
-      {activeEV && modelProb && modelProb > 0 && (
+      {!isPreviewMode && activeEV && modelProb && modelProb > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1146,7 +1147,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
       )}
 
       {/* ── BEST LINE AVAILABLE ── */}
-      {bestBook && modelProb && modelProb > 0 && (
+      {!isPreviewMode && bestBook && modelProb && modelProb > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1193,7 +1194,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
       )}
 
       {/* ── EV ACROSS ALL MARKETS ── */}
-      {evCards.length > 1 && (
+      {!isPreviewMode && evCards.length > 1 && (
         <div className="vision-card p-4 relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(158,64%,52%,0.15), transparent)' }} />
           <div className="flex items-center gap-2 mb-4">
@@ -1351,9 +1352,11 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
     }
   }, [autoAnalyze, didAutoAnalyze, teams, initialTeam1, initialTeam2]);
 
+  const requestIdRef = React.useRef(0);
   const handleAnalyze = useCallback(async () => {
     if (!team1 || !team2) { setError("Select both teams"); return; }
     if (team1 === team2) { setError("Select two different teams"); return; }
+    const localId = ++requestIdRef.current;
     setLoading(true); setError(""); setResults(null);
     try {
       const body: any = { bet_type: betType, team1, team2, sport };
@@ -1368,6 +1371,8 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
         body.over_under = overUnder;
       }
       const data = await callMoneylineApi("analyze", body);
+      // Drop stale responses — only the latest in-flight request wins.
+      if (requestIdRef.current !== localId) return;
       if (data.error) { setError(data.error); } else {
         setResults(data);
         // Scroll to top so user sees results from the beginning
@@ -1376,9 +1381,18 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
           if (main) main.scrollTo({ top: 0, behavior: "smooth" });
         });
       }
-    } catch { setError("Analysis failed. Please try again."); }
-    finally { setLoading(false); }
+    } catch {
+      if (requestIdRef.current === localId) setError("Analysis failed. Please try again.");
+    }
+    finally {
+      if (requestIdRef.current === localId) setLoading(false);
+    }
   }, [betType, team1, team2, spreadTeam, spreadLine, totalLine, overUnder, sport]);
+
+  // Bump request id on any selection change so any in-flight call is ignored.
+  useEffect(() => {
+    requestIdRef.current++;
+  }, [sport, betType, team1, team2, spreadTeam, spreadLine, totalLine, overUnder]);
 
   // Auto-trigger analysis once teams are set from Games navigation
   const autoAnalyzeTriggered = React.useRef(false);
@@ -1672,6 +1686,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
             sport={sport}
             activeBetType={betType}
             activeOverUnder={overUnder}
+            mode="preview"
           />
         );
       })()}
@@ -1839,7 +1854,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
             </div>
           )}
 
-          <MoneylinePlatformOdds team1={results.team1} team2={results.team2} sport={results.sport || sport} modelProb={betType === "moneyline" ? results.team1_pct : results.confidence} activeBetType={betType} activeOverUnder={overUnder} factorBreakdown={results.factorBreakdown} />
+          <MoneylinePlatformOdds team1={results.team1} team2={results.team2} sport={results.sport || sport} modelProb={betType === "moneyline" ? results.team1_pct : results.confidence} activeBetType={betType} activeOverUnder={overUnder} factorBreakdown={results.factorBreakdown} mode="analysis" />
 
           {(results.head_to_head || []).length > 0 && (
             <div className="grid grid-cols-4 gap-2">
