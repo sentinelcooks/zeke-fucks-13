@@ -1,5 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getMasterClient } from "../_shared/masterClient.ts";
+import { normalizeBookKey } from "../_shared/normalizeBookName.ts";
+import { selectBestBookLine, type BookLine, type Direction, type MarketType } from "../_shared/bestBookLine.ts";
 
 /* ── Single Source of Truth: Decision Builder ──
  * Sport-agnostic. Used for moneyline / spread / total across all sports.
@@ -1168,7 +1170,7 @@ async function fetchOddsForMatchup(team1Name: string, team2Name: string, sport: 
       for (const mkt of bm.markets || []) {
         if (!result[mkt.key]) result[mkt.key] = [];
         for (const o of mkt.outcomes || []) {
-          result[mkt.key].push({ ...o, book: bm.title, bookKey: bm.key });
+          result[mkt.key].push({ ...o, book: bm.title, bookKey: normalizeBookKey(bm.key) });
         }
       }
     }
@@ -1213,62 +1215,81 @@ function buildOddsPayload(
   if (entries.length === 0) return unavailable("no_entries");
 
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
-  const t1n = norm(team1Name);
 
   // Determine which side is the model's pick
   const matchName = (entryName: string, teamName: string) => {
     const n = norm(entryName);
     const t = norm(teamName);
-    return n.includes(t) || t.includes(n) || 
+    return n.includes(t) || t.includes(n) ||
            (n.length >= 4 && t.length >= 4 && (n.endsWith(t.slice(-Math.min(t.length, 8))) || t.endsWith(n.slice(-Math.min(n.length, 8)))));
   };
 
   let pickEntries: any[];
+  let direction: Direction;
   if (marketKey === "totals") {
-    pickEntries = entries.filter((e: any) => norm(e.name) === (overUnder || "over"));
+    const side = (overUnder || "over").toLowerCase();
+    pickEntries = entries.filter((e: any) => norm(e.name) === side);
+    direction = side === "under" ? "under" : "over";
   } else {
-    // For h2h/spreads, pick = team1 (the team the model confidence refers to)
-    pickEntries = entries.filter((e: any) => matchName(e.name, team1Name));
-    // If model says team2 is stronger (confidence < 50), flip
     if (modelConfidence < 50) {
       pickEntries = entries.filter((e: any) => matchName(e.name, team2Name));
+      direction = "team2";
+    } else {
+      pickEntries = entries.filter((e: any) => matchName(e.name, team1Name));
+      direction = "team1";
     }
   }
 
   if (pickEntries.length === 0) pickEntries = entries;
 
-  // Find best odds (highest american odds = best payout)
-  let best = pickEntries[0];
-  for (const e of pickEntries) {
-    if ((e.price || 0) > (best.price || 0)) best = e;
-  }
-
-  const bestOdds = best.price || -110;
+  const marketType: MarketType = marketKey === "h2h" ? "moneyline" : marketKey === "spreads" ? "spread" : "total";
   const effectiveConf = betType === "moneyline" ? Math.max(modelConfidence, 100 - modelConfidence) : modelConfidence;
-  const ev = computeEV(effectiveConf, bestOdds);
 
-  // Get all unique books for this side
-  const allBooks = pickEntries.map((e: any) => ({
+  // Deduplicate by bookKey (keep highest odds per book)
+  const byBook = new Map<string, any>();
+  for (const e of pickEntries) {
+    const key = e.bookKey || normalizeBookKey(e.book || "");
+    const existing = byBook.get(key);
+    if (!existing || (e.price ?? -Infinity) > (existing.price ?? -Infinity)) {
+      byBook.set(key, e);
+    }
+  }
+  const dedupedEntries = Array.from(byBook.values());
+
+  const bookLines: BookLine[] = dedupedEntries.map((e: any) => ({
     book: e.book,
-    bookKey: e.bookKey,
+    bookKey: e.bookKey || normalizeBookKey(e.book || ""),
     odds: e.price,
-    point: e.point,
+    point: e.point ?? null,
   }));
 
-  // Deduplicate by book
-  const seenBooks = new Set<string>();
-  const uniqueBooks = allBooks.filter((b: any) => {
-    if (seenBooks.has(b.bookKey)) return false;
-    seenBooks.add(b.bookKey);
-    return true;
-  }).sort((a: any, b: any) => b.odds - a.odds);
+  const selection = selectBestBookLine(bookLines, marketType, direction, effectiveConf / 100);
+
+  const ev = selection.bestBook ? selection.bestBook.ev : computeEV(effectiveConf / 100, dedupedEntries[0]?.price ?? -110);
+
+  // All books sorted by primary rule for the "All Books" list
+  const allBooksSorted = (selection.comparisonRows.length > 0 ? selection.comparisonRows : bookLines).slice(0, 8);
 
   return {
     market: marketKey,
-    bestLine: { book: best.book, odds: bestOdds, point: best.point },
+    // bestBook = the unified recommendation (side-filtered, line-tiebroke)
+    bestBook: selection.bestBook
+      ? { book: selection.bestBook.book, bookKey: selection.bestBook.bookKey, odds: selection.bestBook.odds, point: selection.bestBook.point ?? null }
+      : null,
+    // bestLineObj = book with the best handicap line (may differ from bestBook on moneyline)
+    bestLineObj: selection.bestLine
+      ? { book: selection.bestLine.book, bookKey: selection.bestLine.bookKey, odds: selection.bestLine.odds, point: selection.bestLine.point ?? null }
+      : null,
+    // bestOddsObj = book with the highest raw American odds
+    bestOddsObj: selection.bestOdds
+      ? { book: selection.bestOdds.book, bookKey: selection.bestOdds.bookKey, odds: selection.bestOdds.odds, point: selection.bestOdds.point ?? null }
+      : null,
+    // agree = all three selectors agree on the same book
+    agree: selection.agree,
+    reason: selection.reason,
     impliedProb: effectiveConf,
     ev,
-    allBooks: uniqueBooks.slice(0, 8),
+    allBooks: allBooksSorted.map((b) => ({ book: b.book, bookKey: b.bookKey, odds: b.odds, point: b.point ?? null })),
   };
 }
 

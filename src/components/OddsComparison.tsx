@@ -4,6 +4,8 @@ import { Trophy, TrendingUp, TrendingDown, Loader2, AlertTriangle, RefreshCw, Za
 import { motion } from "framer-motion";
 import { fetchPlayerOdds } from "@/services/oddsApi";
 import { getSportsbookInfo } from "@/utils/sportsbookLogos";
+import { selectBestBookLine } from "@/lib/bestBookLine";
+import { normalizeBookKey } from "@/lib/normalizeBookName";
 
 interface OddsComparisonProps {
   playerName: string;
@@ -88,7 +90,22 @@ const OddsComparison = ({ playerName, propType, line, overUnder, sport = "nba", 
 
   if (!playerName || !line || line <= 0) return null;
 
-  const bestOdds = books.length > 0 ? books.reduce((best, b) => b.odds > best.odds ? b : best) : null;
+  // Convert books → BookLine[], apply selectBestBookLine for line-first, then odds tiebreak
+  const bookLines = books.map(b => ({
+    book: b.book,
+    bookKey: normalizeBookKey(b.book),
+    odds: b.odds,
+    point: b.line,
+  }));
+  const selResult = selectBestBookLine(
+    bookLines,
+    "prop",
+    overUnder,
+    modelHitRate ? modelHitRate / 100 : 0.5,
+  );
+  const bestOdds = selResult.bestBook
+    ? books.find(b => b.book === selResult.bestBook!.book) ?? null
+    : books.length > 0 ? books[0] : null;
   const worstOdds = books.length > 0 ? books.reduce((worst, b) => b.odds < worst.odds ? b : worst) : null;
 
   // Calculate market consensus (average implied probability across all books)

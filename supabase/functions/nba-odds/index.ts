@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { normalizeBookKey } from "../_shared/normalizeBookName.ts";
 
 function getLocalClient(): SupabaseClient {
   return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -334,7 +335,7 @@ function buildPlayerMap(bookmakers: any[], sport?: string): Record<string, Recor
   const normalizedSport = (sport || "").toLowerCase();
 
   for (const bk of bookmakers || []) {
-    const bookName = bk.title || bk.key || "unknown";
+    const bookName = normalizeBookKey(bk.key || bk.title || "unknown");
 
     for (const market of (bk.markets || [])) {
       const marketKey = market?.key;

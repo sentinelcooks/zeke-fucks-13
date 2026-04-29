@@ -48,6 +48,7 @@ import { fetchNbaOdds } from "@/services/oddsApi";
 import { getSportsbookInfo } from "@/utils/sportsbookLogos";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatOdds } from "@/utils/oddsFormat";
+import { selectBestBookLine, type Direction, type MarketType } from "@/lib/bestBookLine";
 import sportNba from "@/assets/logo-nba.png";
 import sportMlb from "@/assets/logo-mlb.png";
 
@@ -817,33 +818,50 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
   const betTypeToMarketKey: Record<string, string> = { moneyline: "h2h", spread: "spreads", total: "totals" };
   const activeMarketKey = betTypeToMarketKey[activeBetType] || "h2h";
 
-  // Compute EV for each market
+  // Determine direction for any market given modelProb and activeOverUnder
+  function getMarketDirection(marketKey: string): Direction {
+    if (marketKey === "totals") return activeOverUnder === "under" ? "under" : "over";
+    return (modelProb ?? 50) >= 50 ? "team1" : "team2";
+  }
+
+  function getMarketType(marketKey: string): MarketType {
+    if (marketKey === "h2h") return "moneyline";
+    if (marketKey === "spreads") return "spread";
+    return "total";
+  }
+
+  // Convert an allMarketData row to a BookLine for the given market/direction
+  function rowToBookLine(row: typeof allMarketData[string][number], marketKey: string, dir: Direction) {
+    const odds = (marketKey === "totals" || marketKey === "h2h")
+      ? (dir === "under" ? row.t2Raw : dir === "team2" ? row.t2Raw : row.t1Raw)
+      : (dir === "team2" ? row.t2Raw : row.t1Raw);
+    const point = marketKey === "spreads"
+      ? parseFloat((dir === "team2" ? row.spread2 : row.spread1) ?? "0")
+      : marketKey === "totals"
+      ? parseFloat(row.total ?? "0")
+      : undefined;
+    return { book: row.name, bookKey: row.bookKey, odds, point };
+  }
+
+  // Compute EV for each market using side-aware selection
   const evCards: Array<{ market: string; label: string; ev: number; edge: number; bestOdds: number; bestBook: string; modelProbUsed: number; bestImplied: number }> = [];
   if (modelProb && modelProb > 0) {
     for (const [marketKey, rows] of Object.entries(allMarketData)) {
       if (!rows || rows.length === 0) continue;
-      const prob = modelProb / 100;
-      // For totals, use t1Raw for over, t2Raw for under
-      let bestOdds = -Infinity;
-      let bestBook = "";
-      for (const row of rows) {
-        const relevantOdds = (marketKey === "totals" && activeOverUnder === "under") ? row.t2Raw : row.t1Raw;
-        if (relevantOdds > bestOdds) {
-          bestOdds = relevantOdds;
-          bestBook = row.name;
-        }
-      }
-      const decimalOdds = americanToDecimalLocal(bestOdds);
-      const implied = impliedProbLocal(bestOdds);
-      const ev = (prob * decimalOdds - 1) * 100;
-      const edge = modelProb - implied;
+      const dir = getMarketDirection(marketKey);
+      const mType = getMarketType(marketKey);
+      const bookLines = rows.map(row => rowToBookLine(row, marketKey, dir));
+      const sel = selectBestBookLine(bookLines, mType, dir, modelProb / 100);
+      const winner = sel.bestBook;
+      if (!winner) continue;
+      const implied = winner.implied * 100;
       evCards.push({
         market: marketKey,
         label: marketLabels[marketKey]?.label || marketKey,
-        ev: +ev.toFixed(1),
-        edge: +edge.toFixed(1),
-        bestOdds,
-        bestBook,
+        ev: +winner.ev.toFixed(1),
+        edge: +(modelProb - implied).toFixed(1),
+        bestOdds: winner.odds,
+        bestBook: winner.book,
         modelProbUsed: modelProb,
         bestImplied: implied,
       });
@@ -862,17 +880,34 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
     { label: "BAD VALUE", color: "text-nba-red", bg: "bg-nba-red/10" }
   ) : null;
 
-  // All books for the active market with EV
+  // All books for the active market with EV — side-aware
   const activeMarketBooks = allMarketData[activeMarketKey] || [];
-  const activeMarketBooksWithEV = activeMarketBooks.map(row => {
-    const relevantOdds = (activeMarketKey === "totals" && activeOverUnder === "under") ? row.t2Raw : row.t1Raw;
-    const implied = impliedProbLocal(relevantOdds);
-    const ev = modelProb ? ((modelProb / 100) * americanToDecimalLocal(relevantOdds) - 1) * 100 : 0;
-    const edge = modelProb ? modelProb - implied : 0;
-    return { ...row, relevantOdds, implied, ev, edge };
-  }).sort((a, b) => b.relevantOdds - a.relevantOdds);
+  const activeDir = getMarketDirection(activeMarketKey);
+  const activeMType = getMarketType(activeMarketKey);
+  const activeBookLines = activeMarketBooks.map(row => rowToBookLine(row, activeMarketKey, activeDir));
+  const activeSelection = selectBestBookLine(activeBookLines, activeMType, activeDir, (modelProb ?? 50) / 100);
 
-  const bestBook = activeMarketBooksWithEV[0];
+  // Merge selection result back onto the original row for display fields (logo, abbrev, etc.)
+  const bestBook = (() => {
+    if (!activeSelection.bestBook) return null;
+    const origRow = activeMarketBooks.find(r => r.bookKey === activeSelection.bestBook!.bookKey);
+    if (!origRow) return null;
+    return {
+      ...origRow,
+      relevantOdds: activeSelection.bestBook.odds,
+      implied: activeSelection.bestBook.implied * 100,
+      ev: activeSelection.bestBook.ev,
+      edge: (modelProb ?? 0) - activeSelection.bestBook.implied * 100,
+    };
+  })();
+
+  const activeMarketBooksWithEV = activeMarketBooks.map(row => {
+    const bl = rowToBookLine(row, activeMarketKey, activeDir);
+    const implied = impliedProbLocal(bl.odds);
+    const ev = modelProb ? ((modelProb / 100) * americanToDecimalLocal(bl.odds) - 1) * 100 : 0;
+    const edge = modelProb ? modelProb - implied : 0;
+    return { ...row, relevantOdds: bl.odds, implied, ev, edge };
+  }).sort((a, b) => b.relevantOdds - a.relevantOdds);
 
   const getEVColorLocal = (ev: number) => {
     if (ev >= 5) return "text-nba-green";
@@ -1695,7 +1730,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
           </div>
 
           {/* Odds & Value Card */}
-          {results.odds && !results.odds.unavailable && results.odds.bestLine ? (
+          {results.odds && !results.odds.unavailable && results.odds.bestBook ? (
             <div className="vision-card p-4 relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(158,64%,52%,0.2), transparent)' }} />
               <div className="flex items-center gap-2 mb-4">
@@ -1738,14 +1773,39 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                 <div className="text-center p-3 rounded-xl" style={{ background: 'hsla(228, 20%, 10%, 0.4)', border: '1px solid hsla(228, 30%, 18%, 0.2)' }}>
                   <span className="block text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 mb-1">Best Odds</span>
                   <span className="block text-lg font-extrabold text-foreground">
-                    {formatOdds(results.odds.bestLine.odds, oddsFormat)}
+                    {formatOdds(results.odds.bestBook.odds, oddsFormat)}
                   </span>
                 </div>
                 <div className="text-center p-3 rounded-xl" style={{ background: 'hsla(228, 20%, 10%, 0.4)', border: '1px solid hsla(228, 30%, 18%, 0.2)' }}>
                   <span className="block text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 mb-1">Best Book</span>
-                  <span className="block text-sm font-extrabold text-foreground truncate">{results.odds.bestLine.book}</span>
+                  <span className="block text-sm font-extrabold text-foreground truncate">{results.odds.bestBook.book}</span>
                 </div>
               </div>
+
+              {/* Disambiguation: surface when best odds, best line, and best EV differ */}
+              {results.odds.agree === false && results.odds.bestOddsObj && results.odds.bestLineObj && (
+                <div className="mb-3 p-2.5 rounded-xl space-y-1.5" style={{ background: 'hsla(43,96%,56%,0.05)', border: '1px solid hsla(43,96%,56%,0.15)' }}>
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-nba-yellow/70">Books differ — breakdown</span>
+                  <div className="grid grid-cols-3 gap-1.5 text-center">
+                    <div>
+                      <span className="block text-[7px] text-muted-foreground/50 uppercase tracking-wider mb-0.5">Best Line</span>
+                      <span className="block text-[10px] font-bold text-foreground/80 truncate">{results.odds.bestLineObj.book}</span>
+                      {results.odds.bestLineObj.point != null && (
+                        <span className="block text-[9px] text-muted-foreground/60">{results.odds.bestLineObj.point > 0 ? "+" : ""}{results.odds.bestLineObj.point}</span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="block text-[7px] text-muted-foreground/50 uppercase tracking-wider mb-0.5">Best Odds</span>
+                      <span className="block text-[10px] font-bold text-foreground/80 truncate">{results.odds.bestOddsObj.book}</span>
+                      <span className="block text-[9px] text-muted-foreground/60">{formatOdds(results.odds.bestOddsObj.odds, oddsFormat)}</span>
+                    </div>
+                    <div>
+                      <span className="block text-[7px] text-muted-foreground/50 uppercase tracking-wider mb-0.5">Recommended</span>
+                      <span className="block text-[10px] font-bold text-nba-green truncate">{results.odds.bestBook.book}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {results.odds.allBooks && results.odds.allBooks.length > 1 && (
                 <div className="space-y-1.5">
