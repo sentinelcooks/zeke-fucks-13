@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { isPicksHistoryPick, isActiveTodayPick } from "@/lib/pickHistoryFilters";
 import { todayInTZ, getGameDate } from "@/lib/gameDate";
 import { formatPropType } from "@/lib/formatPickLabel";
+import { pickMatchesCategory } from "@/lib/pickCategoryFilters";
 
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 
@@ -272,7 +273,7 @@ const FreePicksPage = () => {
   // Apply sport/prop filters; tier gate already applied at query layer
   let filtered = normalized.filter(p => (p as any).status !== "empty_slate");
   if (sportFilter !== "all") filtered = filtered.filter(p => p.sport === sportFilter);
-  if (propFilter !== "all") filtered = filtered.filter(p => p.prop_type === propFilter);
+  filtered = filtered.filter(p => pickMatchesCategory(p, propFilter, sportFilter));
   filtered = [...filtered].sort((a, b) =>
     sortMode === "high" ? scoreOf(b) - scoreOf(a) : scoreOf(a) - scoreOf(b)
   );
