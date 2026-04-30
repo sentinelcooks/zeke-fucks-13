@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.sentinel.picks',
+  appId: 'com.sentinelprops.app',
   appName: 'Sentinel',
   webDir: 'dist',
   // No server.url — loads the bundled dist/ files from device storage.
