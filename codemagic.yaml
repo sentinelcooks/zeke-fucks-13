@@ -1,0 +1,77 @@
+workflows:
+  sentinel-ios-app-store:
+    name: Sentinel iOS App Store Build
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+
+    integrations:
+      app_store_connect: sentinel_app_store_connect
+
+    environment:
+      xcode: latest
+      cocoapods: default
+      node: latest
+
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.sentinelprops.app
+
+      groups:
+        - sentinel_ios_env
+
+      vars:
+        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
+        BUNDLE_ID: "com.sentinelprops.app"
+
+    scripts:
+      - name: Install JavaScript dependencies
+        script: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Build web app
+        script: |
+          npm run build
+
+      - name: Sync Capacitor iOS project
+        script: |
+          npx cap sync ios
+
+      - name: Install iOS pods
+        script: |
+          cd ios/App
+          pod install
+
+      - name: Set exempt encryption flag
+        script: |
+          /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" ios/App/App/Info.plist || /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" ios/App/App/Info.plist
+
+      - name: Set iOS build number
+        script: |
+          cd ios/App
+          agvtool new-version -all "$PROJECT_BUILD_NUMBER"
+
+      - name: Set up iOS code signing
+        script: |
+          xcode-project use-profiles
+
+      - name: Build IPA
+        script: |
+          xcode-project build-ipa \
+            --workspace "$CM_BUILD_DIR/$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
+        submit_to_app_store: false
