@@ -5,10 +5,16 @@ import { Check, Star, Shield, Zap, BarChart3, TrendingUp, Crown, ChevronDown, Lo
 
 type PlanInterval = "weekly" | "monthly" | "yearly";
 
+const TRIAL_DAYS = 7;
+const TRIAL_LABEL = `${TRIAL_DAYS}-Day Free Trial`;
+const CTA_LABEL = `Start Your ${TRIAL_DAYS}-Day Free Trial`;
+
 interface Plan {
   id: PlanInterval;
   label: string;
   price: string;
+  period: string;
+  periodShort: string;
   subtext: string;
   badge?: string;
   saving?: string;
@@ -16,9 +22,9 @@ interface Plan {
 }
 
 const PLANS: Plan[] = [
-  { id: "weekly",  label: "Weekly",  price: "$9.99",   subtext: "Good for trying it out" },
-  { id: "monthly", label: "Monthly", price: "$39.99",  subtext: "$1.33/day", badge: "MOST POPULAR", saving: "Save 60% vs Weekly" },
-  { id: "yearly",  label: "Yearly",  price: "$219.99", subtext: "$18.25/month", badge: "Best Long-Term Value", saving: "Save $260 vs weekly", extraLine: "2 months free" },
+  { id: "weekly",  label: "Weekly",  price: "$9.99",   period: "/week",  periodShort: "/wk",    subtext: "Good for trying it out" },
+  { id: "monthly", label: "Monthly", price: "$39.99",  period: "/month", periodShort: "/mo",    subtext: "$1.33/day", badge: "MOST POPULAR", saving: "Save 60% vs Weekly" },
+  { id: "yearly",  label: "Yearly",  price: "$219.99", period: "/year",  periodShort: "/yr",    subtext: "$18.25/month", badge: "Best Long-Term Value", saving: "Save $260 vs weekly", extraLine: "2 months free" },
 ];
 
 interface Feature {
@@ -180,12 +186,7 @@ export default function PaywallPage() {
     navigate("/welcome", { replace: true });
   };
 
-  const ctaLabel =
-    selectedPlan === "monthly"
-      ? "Start Your Monthly Trial"
-      : selectedPlan === "yearly"
-      ? "Start Your Yearly Trial"
-      : "Start Your Weekly Trial";
+  const ctaLabel = CTA_LABEL;
 
   const monthlyValueStack = [
     "Full AI prop access",
@@ -226,7 +227,7 @@ export default function PaywallPage() {
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }} className="mt-3 flex justify-center">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#00FF6A]/12 border border-[#00FF6A]/30 px-3 py-1 text-[11px] font-bold text-[#00FF6A]">
             <Check className="w-3 h-3" strokeWidth={3} />
-            7-Day Free Trial • No charge today
+            {TRIAL_LABEL} • No charge today
           </span>
         </motion.div>
 
@@ -286,7 +287,10 @@ export default function PaywallPage() {
                   <div className="text-right flex-shrink-0">
                     <div className="flex items-baseline justify-end gap-1">
                       <span className="text-[34px] font-black text-[#00FF6A] tabular-nums leading-none">{monthly.price}</span>
-                      <span className="text-[11px] font-bold text-white/50">/month</span>
+                      <span className="text-[11px] font-bold text-white/50">{monthly.period}</span>
+                    </div>
+                    <div className="text-[10px] font-semibold text-white/70 mt-1">
+                      {TRIAL_DAYS} days free, then {monthly.price}{monthly.period}
                     </div>
                     {monthly.saving && (
                       <div className="flex items-center gap-0.5 mt-1 justify-end">
@@ -349,6 +353,9 @@ export default function PaywallPage() {
                       {plan.price}
                     </div>
                     <div className={`text-[10px] mt-1 ${isWeekly ? "text-white/50" : "text-white/60"}`}>{plan.subtext}</div>
+                    <div className="text-[9px] font-semibold text-white/70 mt-1 leading-tight">
+                      {TRIAL_DAYS} days free, then {plan.price}{plan.periodShort}
+                    </div>
                   </div>
 
                   {plan.extraLine && (

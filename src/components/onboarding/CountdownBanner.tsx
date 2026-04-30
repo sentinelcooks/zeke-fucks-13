@@ -58,7 +58,7 @@ const CountdownBanner = () => {
             Limited Time
           </div>
           <div className="text-[11px] font-black uppercase tracking-wider text-[#FFC93C] leading-tight mt-0.5 whitespace-nowrap">
-            7 Day Free Trial
+            7-Day Free Trial
           </div>
         </div>
       </div>
