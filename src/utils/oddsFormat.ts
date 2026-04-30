@@ -9,6 +9,16 @@ export function americanToDecimal(american: number): number {
 }
 
 /**
+ * Convert American odds to implied win probability (0-1).
+ * +150 → 0.40, -200 → 0.667
+ */
+export function americanToImplied(american: number): number {
+  if (!Number.isFinite(american) || american === 0) return 0;
+  if (american > 0) return 100 / (american + 100);
+  return Math.abs(american) / (Math.abs(american) + 100);
+}
+
+/**
  * Format odds based on user preference.
  * Input is always American format (number or string like "+150" or "-200").
  */

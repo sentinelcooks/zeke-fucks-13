@@ -19,6 +19,7 @@ import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { isEdgeHistoryPick, isPicksHistoryPick, isActiveTodayPick } from "@/lib/pickHistoryFilters";
 import { todayInTZ, getGameDate } from "@/lib/gameDate";
 import { formatPropType } from "@/lib/formatPickLabel";
+import { resolveDisplayName } from "@/lib/displayName";
 
 interface Play {
   id: string;
@@ -540,7 +541,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
 
         <motion.div {...stagger(0)} className="relative z-10">
           <h1 className="text-2xl font-extrabold text-foreground tracking-tight">
-            {getGreeting()}, {profile?.display_name || user?.email?.split("@")[0] || "Player"}
+            {getGreeting()}, {resolveDisplayName(profile, user, "Player")}
           </h1>
           <div className="mt-1">
             <span

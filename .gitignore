@@ -25,3 +25,8 @@ dist-ssr
 
 # Supabase CLI cache
 supabase/.temp/
+
+# Environment variables (never commit secrets)
+.env
+.env.*
+!.env.example

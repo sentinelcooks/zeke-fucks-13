@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           : "America/New_York";
         const { data: newProfile } = await supabase
           .from("profiles")
-          .upsert({ id: userId, email: currentUser.email, display_name: displayName, timezone: deviceTz || "America/New_York" }, { onConflict: "id" })
+          .insert({ id: userId, email: currentUser.email, display_name: displayName, timezone: deviceTz || "America/New_York" })
           .select()
           .single();
         if (newProfile) {

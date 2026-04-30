@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { PnLCalendar } from "@/components/PnLCalendar";
 import { useAuth } from "@/contexts/AuthContext";
 import { ModernHomeLayout } from "@/components/home/ModernHomeLayout";
+import { resolveDisplayName } from "@/lib/displayName";
 
 interface Play {
   id: string;
@@ -322,7 +323,7 @@ const HomePage = () => {
         <div className="relative z-10 flex items-start justify-between">
           <div className="min-w-0 flex-1">
             <p className="text-[10px] text-muted-foreground/65 font-bold uppercase tracking-[0.15em]">Welcome back</p>
-            <h2 className="text-lg font-extrabold gradient-text mt-0.5 truncate">{profile?.display_name || user?.email?.split("@")[0] || "User"}</h2>
+            <h2 className="text-lg font-extrabold gradient-text mt-0.5 truncate">{resolveDisplayName(profile, user, "User")}</h2>
             <p className="text-[11px] text-muted-foreground/65 mt-1.5 leading-relaxed line-clamp-2">
               {aiRecs?.welcome_message || "Check your latest picks and analytics below."}
             </p>

@@ -16,6 +16,12 @@ import { PlayerAutocomplete, getLinePlaceholder } from "@/components/tracker/Pla
 import { BetTypeDropdown } from "@/components/tracker/BetTypeDropdown";
 import { ParlayPlayForm } from "@/components/tracker/ParlayPlayForm";
 import { americanToDecimal } from "@/utils/oddsFormat";
+import {
+  parlayLabel, combineLegProbabilities, gradeParlayFromLegResults,
+  resolveLegConfidence, matchPickRow, gradeColorClasses, gradeFromString,
+  normalizeConfidence,
+  type DailyPickRow, type PickHistoryRow, type LegInput,
+} from "@/utils/parlayConfidence";
 
 /* ── Types ── */
 interface Play {
@@ -134,6 +140,82 @@ const ProfitTrackerPage = () => {
     setPlaysLoading(false);
   }, [user]);
 
+  const recalcParlay = async (parlay: SavedParlay): Promise<SavedParlay> => {
+    const legs: any[] = Array.isArray(parlay.legs) ? parlay.legs : [];
+    if (legs.length === 0) return parlay;
+
+    // Build leg inputs — use structured fields if present, else parse pick string
+    const legInputs: LegInput[] = legs.map((l: any) => {
+      const parsed = (!l.player && l.pick) ? parseLegPick(l.pick) : null;
+      return {
+        sport: (l.sport ?? "").toLowerCase(),
+        player: l.player ?? parsed?.player ?? "",
+        betType: l.betType ?? parsed?.prop_type ?? "",
+        line: l.line != null ? l.line : (parsed?.line ?? null),
+        direction: l.direction ?? parsed?.over_under ?? "",
+        odds: l.odds ?? null,
+      };
+    });
+
+    const sports = [...new Set(legInputs.map(l => l.sport).filter(Boolean))];
+    const players = [...new Set(legInputs.map(l => l.player).filter(Boolean))];
+
+    const [{ data: dailyRows }, { data: historyRows }] = await Promise.all([
+      supabase
+        .from("daily_picks")
+        .select("id, sport, player_name, prop_type, direction, line, hit_rate, result, pick_date")
+        .in("sport", sports)
+        .in("player_name", players)
+        .order("pick_date", { ascending: false })
+        .limit(200),
+      supabase
+        .from("pick_history")
+        .select("id, sport, player_name, prop_type, direction, line, hit_rate, result")
+        .eq("license_key", licenseKey)
+        .in("player_name", players)
+        .limit(200),
+    ]);
+
+    const legProbs: number[] = [];
+    const updatedLegs = legs.map((l: any, i: number) => {
+      const input = legInputs[i];
+      const dm = matchPickRow<DailyPickRow>(dailyRows as DailyPickRow[] | null, input);
+      const hm = matchPickRow<PickHistoryRow>(historyRows as PickHistoryRow[] | null, input);
+      const resolved = resolveLegConfidence(input, dm, hm);
+      legProbs.push(resolved.probability);
+      const { label } = parlayLabel(resolved.probability);
+      return {
+        ...l,
+        confidence: Math.round(resolved.probability * 100),
+        grade: label.toLowerCase(),
+        pick_id: resolved.pickId ?? l.pick_id ?? null,
+        confidence_source: resolved.source,
+        result: resolved.result ?? l.result ?? null,
+      };
+    });
+
+    const combined = combineLegProbabilities(legProbs);
+    const { label: overallLabel } = parlayLabel(combined);
+    const legResults = updatedLegs.map((l: any) => l.result);
+    const autoResult = gradeParlayFromLegResults(legResults);
+    const newResult = parlay.result !== "pending" ? parlay.result : autoResult;
+    const profit = newResult === "win"
+      ? parlay.potential_payout - parlay.stake
+      : newResult === "loss" ? -parlay.stake : 0;
+
+    const patch: any = {
+      overall_confidence: Math.round(combined * 100),
+      overall_grade: overallLabel.toLowerCase(),
+      legs: updatedLegs,
+    };
+    if (newResult !== parlay.result) patch.result = newResult;
+    if (newResult !== "pending") patch.profit = profit;
+
+    await supabase.from("parlay_history" as any).update(patch as any).eq("id", parlay.id);
+
+    return { ...parlay, ...patch };
+  };
+
   const fetchPicksAndParlays = useCallback(async () => {
     if (!user) return;
     setPicksLoading(true);
@@ -141,9 +223,25 @@ const ProfitTrackerPage = () => {
     setPicks((data as SavedPick[]) || []);
 
     const { data: parlayData } = await supabase.from("parlay_history" as any).select("*").order("created_at", { ascending: false });
-    const parsed = ((parlayData as any[]) || []).map((p: any) => ({ ...p, legs: typeof p.legs === "string" ? JSON.parse(p.legs) : p.legs }));
-    setParlays(parsed);
+    const parsed: SavedParlay[] = ((parlayData as any[]) || []).map((p: any) => ({
+      ...p,
+      legs: typeof p.legs === "string" ? JSON.parse(p.legs) : p.legs,
+    }));
+
+    // Backfill any parlay that still has 0% confidence or is pending with known leg results
+    const needsRecalc = parsed.filter(
+      p => p.overall_confidence === 0 || p.result === "pending"
+    );
+    const settled = parsed.filter(
+      p => p.overall_confidence !== 0 && p.result !== "pending"
+    );
+
+    const recalced = await Promise.all(needsRecalc.map(p => recalcParlay(p)));
+    setParlays([...recalced, ...settled].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    ));
     setPicksLoading(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, licenseKey]);
 
   useEffect(() => { fetchPlays(); fetchPicksAndParlays(); }, [fetchPlays, fetchPicksAndParlays]);
@@ -173,19 +271,65 @@ const ProfitTrackerPage = () => {
   const addParlayPlay = async (legs: any[], stake: number, combinedOdds: number) => {
     if (!user) return;
     const potential = stake * americanToDecimal(combinedOdds);
-    const legData = legs.map((l: any) => ({
-      sport: l.sport.toUpperCase(),
-      pick: l.line && l.direction
-        ? `${l.player} ${l.direction.toUpperCase()} ${l.line} ${l.betType}`
-        : `${l.player} - ${l.betType}`,
-      confidence: 0,
-      grade: "lean",
+
+    // Build lookup inputs for each leg
+    const legInputs: LegInput[] = legs.map((l: any) => ({
+      sport: l.sport?.toLowerCase(),
+      player: l.player,
+      betType: l.betType,
+      line: l.line ? parseFloat(l.line) : null,
+      direction: l.direction,
+      odds: l.odds,
     }));
+
+    // Batch fetch daily_picks for all legs (most recent per player/prop)
+    const sports = [...new Set(legInputs.map(l => l.sport).filter(Boolean))];
+    const players = [...new Set(legInputs.map(l => l.player).filter(Boolean))];
+    const { data: dailyRows } = await supabase
+      .from("daily_picks")
+      .select("id, sport, player_name, prop_type, direction, line, hit_rate, result, pick_date")
+      .in("sport", sports)
+      .in("player_name", players)
+      .order("pick_date", { ascending: false })
+      .limit(200);
+
+    const { data: historyRows } = await supabase
+      .from("pick_history")
+      .select("id, sport, player_name, prop_type, direction, line, hit_rate, result")
+      .eq("license_key", licenseKey)
+      .in("player_name", players)
+      .limit(200);
+
+    const legProbs: number[] = [];
+    const legData = legs.map((l: any, i: number) => {
+      const input = legInputs[i];
+      const dm = matchPickRow<DailyPickRow>(dailyRows as DailyPickRow[] | null, input);
+      const hm = matchPickRow<PickHistoryRow>(historyRows as PickHistoryRow[] | null, input);
+      const resolved = resolveLegConfidence(input, dm, hm);
+      legProbs.push(resolved.probability);
+      const { label } = parlayLabel(resolved.probability);
+      return {
+        sport: l.sport.toUpperCase(),
+        pick: l.line && l.direction
+          ? `${l.player} ${l.direction.toUpperCase()} ${l.line} ${l.betType}`
+          : `${l.player} - ${l.betType}`,
+        confidence: Math.round(resolved.probability * 100),
+        grade: label.toLowerCase(),
+        pick_id: resolved.pickId,
+        confidence_source: resolved.source,
+        result: resolved.result,
+      };
+    });
+
+    const combined = combineLegProbabilities(legProbs);
+    const { label: overallLabel } = parlayLabel(combined);
+
     await supabase.from("parlay_history" as any).insert({
       user_id: user.id, stake, parlay_odds: combinedOdds,
       potential_payout: parseFloat(potential.toFixed(2)),
       legs: legData, result: "pending", profit: 0,
-      overall_confidence: 0, overall_grade: "lean",
+      overall_confidence: Math.round(combined * 100),
+      overall_grade: overallLabel.toLowerCase(),
     } as any);
     setShowParlayForm(false);
     fetchPicksAndParlays();
@@ -291,6 +435,34 @@ const ProfitTrackerPage = () => {
     }
     return { total: picks.length, wins, losses, pending, winRate, streak, streakType };
   }, [picks]);
+
+  const overUnderStats = useMemo(() => {
+    const dirOf = (bet_type: string): "over" | "under" | null => {
+      const m = bet_type?.match(/\b(OVER|UNDER)\b/i);
+      return m ? (m[1].toLowerCase() as "over" | "under") : null;
+    };
+    const bucket = (dir: "over" | "under") => {
+      const playsForDir = plays.filter((p) => dirOf(p.bet_type) === dir);
+      const picksForDir = picks.filter((p) => p.direction?.toLowerCase() === dir);
+
+      const settledPlays = playsForDir.filter((p) => p.result === "win" || p.result === "loss");
+      const settledPicks = picksForDir.filter((p) => p.result === "win" || p.result === "loss");
+
+      const playWins = settledPlays.filter((p) => p.result === "win").length;
+      const pickWins = settledPicks.filter((p) => p.result === "win").length;
+      const wins = playWins + pickWins;
+      const losses = (settledPlays.length - playWins) + (settledPicks.length - pickWins);
+      const total = wins + losses;
+      const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
+
+      const profit = settledPlays.reduce((s, p) => s + (p.payout || 0), 0);
+      const staked = settledPlays.reduce((s, p) => s + p.stake, 0);
+      const units = staked > 0 ? profit / (staked / settledPlays.length) : 0;
+
+      return { wins, losses, total, winRate, profit, units, hasProfit: settledPlays.length > 0 };
+    };
+    return { over: bucket("over"), under: bucket("under") };
+  }, [plays, picks]);
 
   const parlayStats = useMemo(() => {
     const wins = parlays.filter(p => p.result === "win").length;
@@ -448,6 +620,73 @@ const ProfitTrackerPage = () => {
                   </motion.div>
                 ))}
               </div>
+
+              {/* ── Over / Under Performance ── */}
+              {allPlays.length === 0 && picks.length === 0 ? (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="vision-card p-6 text-center">
+                  <TrendingUp className="w-7 h-7 mx-auto mb-2 text-muted-foreground/45" />
+                  <p className="text-[12px] font-semibold">No Over/Under bets yet</p>
+                  <p className="text-[10px] text-muted-foreground/50 mt-1">Log an Over or Under play to see direction performance</p>
+                </motion.div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70 px-1">Over / Under Performance</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      {
+                        key: "over" as const,
+                        stat: overUnderStats.over,
+                        icon: TrendingUp,
+                        label: "Over",
+                        gradient: "from-[hsl(142,100%,50%)] to-[hsl(158,64%,52%)]",
+                        glow: "hsla(142,100%,50%,0.15)",
+                      },
+                      {
+                        key: "under" as const,
+                        stat: overUnderStats.under,
+                        icon: TrendingDown,
+                        label: "Under",
+                        gradient: "from-[hsl(0,72%,51%)] to-[hsl(340,65%,47%)]",
+                        glow: "hsla(0,72%,51%,0.15)",
+                      },
+                    ].map((b, i) => (
+                      <motion.div
+                        key={b.key}
+                        initial={{ opacity: 0, y: 20, scale: 0.97 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ delay: i * 0.07, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+                        className="vision-card-animated p-4 group cursor-default"
+                        whileHover={{ scale: 1.02, y: -2 }}
+                      >
+                        <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full opacity-[0.06] pointer-events-none"
+                          style={{ background: `radial-gradient(circle, ${b.glow.replace('0.15', '1')}, transparent)` }} />
+                        <div className="relative z-10">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${b.gradient} flex items-center justify-center shadow-lg transition-all group-hover:shadow-xl group-hover:scale-105`}
+                              style={{ boxShadow: `0 4px 14px -2px ${b.glow}` }}>
+                              <b.icon className="w-5 h-5 text-white" />
+                            </div>
+                            <span className="text-[8px] font-bold px-2 py-0.5 rounded-md text-muted-foreground/65 uppercase tracking-wider"
+                              style={{ background: 'hsla(228, 20%, 15%, 0.5)' }}>{b.stat.winRate}%</span>
+                          </div>
+                          <p className="text-2xl font-extrabold text-foreground tabular-nums tracking-tight">
+                            {b.stat.wins}<span className="text-muted-foreground/50">W</span> – {b.stat.losses}<span className="text-muted-foreground/50">L</span>
+                          </p>
+                          <p className="text-[10px] text-muted-foreground/65 font-semibold mt-0.5 uppercase tracking-wider">{b.label}</p>
+                          {b.stat.hasProfit && (
+                            <p className={`text-[11px] font-bold tabular-nums mt-1.5 ${b.stat.profit >= 0 ? "text-nba-green" : "text-nba-red"}`}>
+                              {b.stat.profit >= 0 ? "+" : ""}${b.stat.profit.toFixed(2)}
+                              <span className="text-muted-foreground/50 font-semibold ml-1.5">
+                                {b.stat.units >= 0 ? "+" : ""}{b.stat.units.toFixed(2)}u
+                              </span>
+                            </p>
+                          )}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Charts */}
               <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
@@ -872,7 +1111,8 @@ const ProfitTrackerPage = () => {
               ) : parlays.map((parlay, i) => {
                 const resultConf = RESULT_CONFIG[parlay.result || "pending"];
                 const legs = Array.isArray(parlay.legs) ? parlay.legs : [];
-                const gradeColor = parlay.overall_grade === "strong" ? "text-nba-green" : parlay.overall_grade === "lean" ? "text-nba-yellow" : "text-nba-red";
+                const overallGrade = gradeFromString(parlay.overall_grade);
+                const { text: gradeText, bg: gradeBg } = gradeColorClasses(overallGrade);
                 return (
                   <motion.div key={parlay.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
                     className="vision-card p-4 relative overflow-hidden">
@@ -885,16 +1125,27 @@ const ProfitTrackerPage = () => {
                       <div className="flex items-center gap-2">
                         <Layers className="w-3.5 h-3.5 text-accent" />
                         <span className="text-[12px] font-bold text-foreground">{legs.length}-Leg Parlay</span>
-                        <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full ${
-                          parlay.overall_grade === "strong" ? "bg-nba-green/15 text-nba-green" :
-                          parlay.overall_grade === "lean" ? "bg-nba-yellow/15 text-nba-yellow" : "bg-nba-red/15 text-nba-red"
-                        }`}>{parlay.overall_grade}</span>
-                        <span className={`text-[11px] font-extrabold ${gradeColor}`}>{parlay.overall_confidence.toFixed(0)}%</span>
+                        <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full ${gradeBg}`}>
+                          {overallGrade}
+                        </span>
+                        <span className={`text-[11px] font-extrabold ${gradeText}`}>
+                          {parlay.overall_confidence > 0 ? `${parlay.overall_confidence.toFixed(0)}%` : "—"}
+                        </span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span className="text-[9px] text-muted-foreground/50">
                           {new Date(parlay.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                         </span>
+                        <button
+                          onClick={async () => {
+                            const updated = await recalcParlay(parlay);
+                            setParlays(prev => prev.map(p => p.id === parlay.id ? updated : p));
+                          }}
+                          title="Recalculate confidence"
+                          className="p-1 rounded-lg text-muted-foreground/40 hover:text-accent transition-colors"
+                        >
+                          <TrendingUp className="w-3 h-3" />
+                        </button>
                         <button onClick={() => removeParlay(parlay.id)} className="p-1 rounded-lg text-muted-foreground/40 hover:text-nba-red transition-colors">
                           <Trash2 className="w-3 h-3" />
                         </button>
@@ -917,32 +1168,43 @@ const ProfitTrackerPage = () => {
 
                     {/* Legs */}
                     <div className="space-y-1 mb-2">
-                      {legs.map((leg: any, li: number) => (
-                        <div key={li} className="flex items-center justify-between text-[10px] py-1 px-2 rounded-lg" style={{ background: 'hsla(228, 20%, 10%, 0.3)' }}>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-muted-foreground/50 font-bold">#{li + 1}</span>
-                            <span className="font-bold uppercase text-[8px] text-accent/70">{leg.sport}</span>
-                            <button
-                              onClick={() => {
-                                const parsed = parseLegPick(leg.pick);
-                                if (parsed) {
-                                  const sport = (leg.sport || "NBA").toLowerCase();
-                                  const route = sport === "nba" || sport === "mlb" || sport === "nhl"
-                                    ? `/dashboard/${sport}`
-                                    : `/dashboard/analyze`;
-                                  navigate(route, { state: { autoAnalyze: true, ...parsed, sport: leg.sport } });
-                                }
-                              }}
-                              className="font-medium text-accent/90 hover:text-accent underline decoration-accent/30 hover:decoration-accent truncate max-w-[180px] text-left transition-colors"
-                            >
-                              {leg.pick}
-                            </button>
+                      {legs.map((leg: any, li: number) => {
+                        const legGrade = gradeFromString(leg.grade);
+                        const { text: legText } = gradeColorClasses(legGrade);
+                        const showConf = leg.confidence_source !== "fallback" && leg.confidence > 0;
+                        const legResult = (leg.result ?? "").toLowerCase();
+                        return (
+                          <div key={li} className="flex items-center justify-between text-[10px] py-1 px-2 rounded-lg" style={{ background: 'hsla(228, 20%, 10%, 0.3)' }}>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-muted-foreground/50 font-bold">#{li + 1}</span>
+                              <span className="font-bold uppercase text-[8px] text-accent/70">{leg.sport}</span>
+                              <button
+                                onClick={() => {
+                                  const parsed = parseLegPick(leg.pick);
+                                  if (parsed) {
+                                    const sport = (leg.sport || "NBA").toLowerCase();
+                                    const route = sport === "nba" || sport === "mlb" || sport === "nhl"
+                                      ? `/dashboard/${sport}`
+                                      : `/dashboard/analyze`;
+                                    navigate(route, { state: { autoAnalyze: true, ...parsed, sport: leg.sport } });
+                                  }
+                                }}
+                                className="font-medium text-accent/90 hover:text-accent underline decoration-accent/30 hover:decoration-accent truncate max-w-[180px] text-left transition-colors"
+                              >
+                                {leg.pick}
+                              </button>
+                              {legResult && legResult !== "pending" && (
+                                <span className={`text-[8px] font-bold uppercase ${legResult === "win" || legResult === "hit" ? "text-nba-green" : legResult === "push" ? "text-muted-foreground" : "text-nba-red"}`}>
+                                  {legResult === "win" || legResult === "hit" ? "✓" : legResult === "push" ? "~" : "✗"}
+                                </span>
+                              )}
+                            </div>
+                            <span className={`font-bold ${showConf ? legText : "text-muted-foreground/40"}`}>
+                              {showConf ? `${leg.confidence}%` : "N/A"}
+                            </span>
                           </div>
-                          <span className={`font-bold ${
-                            leg.grade === "strong" ? "text-nba-green" : leg.grade === "lean" ? "text-nba-yellow" : "text-nba-red"
-                          }`}>{leg.confidence?.toFixed(0)}%</span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     {/* Result buttons */}

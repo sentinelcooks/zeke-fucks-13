@@ -32,6 +32,7 @@ import { useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png";
 import { EdgeHistoryTab } from "@/components/admin/EdgeHistoryTab";
 import { PicksHistoryTab } from "@/components/admin/PicksHistoryTab";
+import { resolveDisplayName } from "@/lib/displayName";
 
 interface LicenseKey {
   id: string;
@@ -959,12 +960,12 @@ const AdminPage = () => {
                                 <div className="flex items-center gap-2.5">
                                   <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
                                     <span className="text-xs font-bold text-primary">
-                                      {(r.display_name || r.email || "U")[0].toUpperCase()}
+                                      {resolveDisplayName({ display_name: r.display_name, email: r.email }, null, "U")[0].toUpperCase()}
                                     </span>
                                   </div>
                                   <div className="min-w-0">
                                     <p className="text-xs font-semibold text-foreground truncate max-w-[160px]">
-                                      {r.display_name || r.email?.split("@")[0] || "Unknown"}
+                                      {resolveDisplayName({ display_name: r.display_name, email: r.email }, null, "Unknown")}
                                     </p>
                                     <p className="text-[10px] text-muted-foreground truncate max-w-[160px]">
                                       {r.email || "No email"}

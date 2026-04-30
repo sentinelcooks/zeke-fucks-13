@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { resolveDisplayName } from "@/lib/displayName";
 
 const TIMEZONES = [
   { value: "America/New_York", label: "Eastern (ET)" },
@@ -227,7 +228,7 @@ const SettingsPage = () => {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[13px] font-bold text-foreground truncate">
-              {profile?.display_name || user?.email?.split("@")[0] || "User"}
+              {resolveDisplayName(profile, user, "User")}
             </p>
             <p className="text-[10px] text-muted-foreground/65 truncate">{user?.email}</p>
           </div>
