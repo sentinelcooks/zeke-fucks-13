@@ -15,6 +15,7 @@ import { formatPropType } from "@/lib/formatPickLabel";
 import { PlayerAutocomplete, getLinePlaceholder } from "@/components/tracker/PlayerAutocomplete";
 import { BetTypeDropdown } from "@/components/tracker/BetTypeDropdown";
 import { ParlayPlayForm } from "@/components/tracker/ParlayPlayForm";
+import { isGameTotal, isTeamMarket, needsDirection, formatBetLabel } from "@/components/tracker/marketType";
 import { americanToDecimal } from "@/utils/oddsFormat";
 import {
   parlayLabel, combineLegProbabilities, gradeParlayFromLegResults,
@@ -249,7 +250,7 @@ const ProfitTrackerPage = () => {
   /* ── Play CRUD ── */
   const addPlay = async () => {
     if (!form.player_or_fighter || !form.bet_type || !form.stake || !user) return;
-    const isPlayerProp = !["moneyline", "spread", "run line", "puck line"].some(t => form.bet_type.toLowerCase().includes(t));
+    const directional = needsDirection(form.bet_type);
     let odds: number;
     if (oddsFormat === "decimal") {
       const dec = parseFloat(form.odds) || 1.91;
@@ -261,7 +262,7 @@ const ProfitTrackerPage = () => {
     await supabase.from("plays").insert({
       user_id: user.id, license_key: user.id, sport: form.sport,
       player_or_fighter: form.player_or_fighter,
-      bet_type: isPlayerProp ? `${form.bet_type} (${form.direction.toUpperCase()})` : form.bet_type,
+      bet_type: directional ? `${form.bet_type} (${form.direction.toUpperCase()})` : form.bet_type,
       line: form.line ? parseFloat(form.line) : null, odds, stake, result: "pending", payout: 0,
     });
     setForm({ sport: "nba", player_or_fighter: "", bet_type: "", line: "", odds: defaultOdds, stake: "", direction: "over" });
@@ -511,11 +512,13 @@ const ProfitTrackerPage = () => {
   }, [filteredPicks]);
 
   const exportToCSV = () => {
-    const headers = ["Date", "Sport", "Player", "Bet", "Odds", "Stake", "Result", "P/L"];
+    const headers = ["Date", "Sport", "Subject", "Bet", "Odds", "Stake", "Result", "P/L"];
     const csvRows = [headers.join(",")];
     for (const p of allPlays) {
+      const { detail } = formatBetLabel({ subject: p.player_or_fighter, betType: p.bet_type, line: p.line });
+      const betCell = isGameTotal(p.bet_type) ? detail : `${p.bet_type}${p.line ? ` (${p.line})` : ""}`;
       csvRows.push([new Date(p.created_at).toLocaleDateString(), p.sport.toUpperCase(),
-        `"${p.player_or_fighter.replace(/"/g, '""')}"`, `"${p.bet_type}${p.line ? ` (${p.line})` : ""}"`,
+        `"${p.player_or_fighter.replace(/"/g, '""')}"`, `"${betCell}"`,
         fmt(p.odds), p.stake, p.result, p.result === "pending" ? "" : (p.payout || 0).toFixed(2)].join(","));
     }
     const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
@@ -735,9 +738,9 @@ const ProfitTrackerPage = () => {
                         </VisionSelect>
                         <PlayerAutocomplete sport={form.sport} value={form.player_or_fighter} onChange={(v) => setForm({ ...form, player_or_fighter: v })} betType={form.bet_type} />
                         <BetTypeDropdown sport={form.sport} value={form.bet_type} onChange={(v) => setForm({ ...form, bet_type: v, player_or_fighter: "" })} />
-                        {!["moneyline", "spread", "run line", "puck line"].some(t => form.bet_type.toLowerCase().includes(t)) && (
+                        {needsDirection(form.bet_type) && (
                           <>
-                            <VisionInput label="Line" placeholder={getLinePlaceholder(form.sport)} type="number" step="0.5" value={form.line} onChange={(e) => setForm({ ...form, line: e.target.value })} />
+                            <VisionInput label={isGameTotal(form.bet_type) ? "Total Line" : "Line"} placeholder={isGameTotal(form.bet_type) ? "224.5" : getLinePlaceholder(form.sport)} type="number" step="0.5" value={form.line} onChange={(e) => setForm({ ...form, line: e.target.value })} />
                             <div>
                               <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Direction</label>
                               <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
@@ -852,8 +855,16 @@ const ProfitTrackerPage = () => {
                           )}
                           <span className="text-[9px] text-muted-foreground/55">{new Date(p.created_at).toLocaleDateString()}</span>
                         </div>
-                        <p className="text-[13px] font-bold text-foreground truncate">{p.player_or_fighter}</p>
-                        <p className="text-[11px] text-muted-foreground/50 mt-0.5">{p.bet_type}{p.line ? ` (${p.line})` : ""} · {fmt(p.odds)} · ${p.stake}</p>
+                        {(() => {
+                          const isTotal = isGameTotal(p.bet_type);
+                          const { headline, detail } = formatBetLabel({ subject: p.player_or_fighter, betType: p.bet_type, line: p.line });
+                          return (
+                            <>
+                              <p className="text-[13px] font-bold text-foreground truncate">{headline}</p>
+                              <p className="text-[11px] text-muted-foreground/50 mt-0.5">{isTotal ? detail : `${p.bet_type}${p.line ? ` (${p.line})` : ""}`} · {fmt(p.odds)} · ${p.stake}</p>
+                            </>
+                          );
+                        })()}
                       </div>
                       <div className="flex items-center gap-2 ml-3">
                         {p.result === "pending" ? (
@@ -1050,7 +1061,9 @@ const ProfitTrackerPage = () => {
                                   <p className="text-[12px] font-bold text-foreground truncate">{pick.player_name}</p>
                                   <span className={`text-[10px] font-semibold ${isOver ? "text-nba-green/80" : "text-nba-red/80"}`}>
                                     <PropIcon className="w-2.5 h-2.5 inline mr-0.5" />
-                                    {pick.direction.toUpperCase()} {pick.line} {formatPropType(pick.prop_type)}
+                                    {isGameTotal(pick.prop_type)
+                                      ? `${pick.direction.toUpperCase()} ${pick.line} Total`
+                                      : `${pick.direction.toUpperCase()} ${pick.line} ${formatPropType(pick.prop_type)}`}
                                   </span>
                                 </div>
                               </div>

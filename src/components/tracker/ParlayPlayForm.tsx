@@ -3,6 +3,7 @@ import { Plus, X, Layers } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PlayerAutocomplete, getLinePlaceholder } from "./PlayerAutocomplete";
 import { BetTypeDropdown } from "./BetTypeDropdown";
+import { isGameTotal, isTeamMarket, needsDirection } from "./marketType";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { americanToDecimal } from "@/utils/oddsFormat";
 
@@ -20,16 +21,6 @@ interface ParlayPlayFormProps {
   onCancel: () => void;
 }
 
-const TEAM_MARKET_TYPES = [
-  "moneyline", "ml", "money line", "winner",
-  "spread", "run line", "puck line", "rl", "pl", "ats", "handicap", "line",
-];
-
-function isTeamMarket(betType: string) {
-  const normalized = betType.toLowerCase();
-  return TEAM_MARKET_TYPES.some((type) => normalized.includes(type));
-}
-
 export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
   const { oddsFormat } = useOddsFormat();
   const defaultOdds = oddsFormat === "decimal" ? "1.91" : "-110";
@@ -43,7 +34,9 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
         if (i !== idx) return leg;
         if (field === "sport") return { ...emptyLeg(), sport: val, odds: leg.odds };
         if (field === "betType") {
-          const modeChanged = isTeamMarket(leg.betType) !== isTeamMarket(val);
+          const modeChanged =
+            isTeamMarket(leg.betType) !== isTeamMarket(val) ||
+            isGameTotal(leg.betType) !== isGameTotal(val);
           return { ...leg, betType: val, player: modeChanged ? "" : leg.player, line: "", direction: "over" };
         }
         return { ...leg, [field]: val };
@@ -86,7 +79,8 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
 
       <AnimatePresence>
         {legs.map((leg, idx) => {
-          const isProp = leg.betType && !isTeamMarket(leg.betType);
+          const showDirection = leg.betType && needsDirection(leg.betType);
+          const totalLeg = isGameTotal(leg.betType);
           return (
             <motion.div key={idx} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
               className="relative rounded-xl p-3 space-y-2" style={{ background: 'hsla(228, 20%, 10%, 0.4)', border: '1px solid hsla(228, 20%, 20%, 0.2)' }}>
@@ -120,12 +114,12 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
                 <PlayerAutocomplete sport={leg.sport} value={leg.player} onChange={(v) => updateLeg(idx, "player", v)} betType={leg.betType} />
                 <BetTypeDropdown sport={leg.sport} value={leg.betType} onChange={(v) => updateLeg(idx, "betType", v)} />
 
-                {/* Line + Direction for player props */}
-                {isProp && (
+                {/* Line + Direction for player props and game totals */}
+                {showDirection && (
                   <>
                     <div>
-                      <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Line</label>
-                      <input type="number" step="0.5" placeholder={getLinePlaceholder(leg.sport)} value={leg.line}
+                      <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">{totalLeg ? "Total Line" : "Line"}</label>
+                      <input type="number" step="0.5" placeholder={totalLeg ? "224.5" : getLinePlaceholder(leg.sport)} value={leg.line}
                         onChange={(e) => updateLeg(idx, "line", e.target.value)}
                         className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/55 outline-none"
                         style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }} />

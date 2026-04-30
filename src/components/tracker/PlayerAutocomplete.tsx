@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { searchPlayers, searchUfcFighters } from "@/services/api";
 import { getTeamLogoUrl } from "@/utils/teamLogos";
+import { isGameTotal, isTeamMarket } from "./marketType";
 
 interface PlayerAutocompleteProps {
   sport: string;
@@ -42,7 +43,13 @@ export function getLinePlaceholder(sport: string): string {
   return LINE_PLACEHOLDER_BY_SPORT[sport] || "0.5";
 }
 
-const MONEYLINE_TYPES = ["moneyline", "ml", "money line", "spread", "run line", "puck line"];
+const MATCHUP_PLACEHOLDER_BY_SPORT: Record<string, string> = {
+  nba: "Lakers vs Celtics",
+  mlb: "Yankees vs Mets",
+  nhl: "Bruins vs Rangers",
+  nfl: "Chiefs vs Bills",
+  ufc: "Jones vs Aspinall",
+};
 
 // Hardcoded team lists so we don't need an API call
 const TEAMS_BY_SPORT: Record<string, string[]> = {
@@ -83,7 +90,8 @@ const TEAMS_BY_SPORT: Record<string, string[]> = {
 };
 
 export function PlayerAutocomplete({ sport, value, onChange, betType = "" }: PlayerAutocompleteProps) {
-  const isTeamMode = MONEYLINE_TYPES.some(t => betType.toLowerCase().includes(t));
+  const matchupMode = isGameTotal(betType);
+  const isTeamMode = !matchupMode && isTeamMarket(betType);
   const [suggestions, setSuggestions] = useState<PlayerResult[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -112,7 +120,7 @@ export function PlayerAutocomplete({ sport, value, onChange, betType = "" }: Pla
 
   // Player search (non-team mode)
   const search = useCallback(async (q: string) => {
-    if (isTeamMode) return;
+    if (isTeamMode || matchupMode) return;
     if (q.length < 2) { setSuggestions([]); return; }
     setLoading(true);
     try {
@@ -133,14 +141,14 @@ export function PlayerAutocomplete({ sport, value, onChange, betType = "" }: Pla
       setOpen(list.length > 0);
     } catch { setSuggestions([]); }
     setLoading(false);
-  }, [sport, isTeamMode]);
+  }, [sport, isTeamMode, matchupMode]);
 
   useEffect(() => {
-    if (isTeamMode) return;
+    if (isTeamMode || matchupMode) return;
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => search(value), 300);
     return () => clearTimeout(debounceRef.current);
-  }, [value, search, isTeamMode]);
+  }, [value, search, isTeamMode, matchupMode]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -150,8 +158,10 @@ export function PlayerAutocomplete({ sport, value, onChange, betType = "" }: Pla
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const label = isTeamMode ? "Team" : "Player";
-  const placeholder = isTeamMode
+  const label = matchupMode ? "Matchup" : isTeamMode ? "Team" : "Player";
+  const placeholder = matchupMode
+    ? (MATCHUP_PLACEHOLDER_BY_SPORT[sport] || "Team A vs Team B")
+    : isTeamMode
     ? (TEAM_PLACEHOLDER_BY_SPORT[sport] || "Team name")
     : (PLACEHOLDER_BY_SPORT[sport] || "Player name");
 
@@ -162,6 +172,10 @@ export function PlayerAutocomplete({ sport, value, onChange, betType = "" }: Pla
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => {
+          if (matchupMode) {
+            setOpen(false);
+            return;
+          }
           if (isTeamMode) {
             if (suggestions.length === 0) {
               setSuggestions(allTeams.slice(0, 8));
