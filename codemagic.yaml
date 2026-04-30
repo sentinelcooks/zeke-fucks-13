@@ -20,7 +20,7 @@ workflows:
         - sentinel_ios_env
 
       vars:
-        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
         XCODE_SCHEME: "App"
         BUNDLE_ID: "com.sentinelprops.app"
 
@@ -41,10 +41,6 @@ workflows:
         script: |
           npx cap sync ios
 
-      - name: Install iOS pods
-        script: |
-          cd ios/App
-          pod install
 
       - name: Set exempt encryption flag
         script: |
@@ -59,11 +55,11 @@ workflows:
         script: |
           xcode-project use-profiles
 
-      - name: Build IPA
-        script: |
-          xcode-project build-ipa \
-            --workspace "$CM_BUILD_DIR/$XCODE_WORKSPACE" \
-            --scheme "$XCODE_SCHEME"
+- name: Build IPA
+  script: |
+    xcode-project build-ipa \
+      --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+      --scheme "$XCODE_SCHEME"
 
     artifacts:
       - build/ios/ipa/*.ipa
