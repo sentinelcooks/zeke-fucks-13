@@ -9,7 +9,6 @@ workflows:
 
     environment:
       xcode: latest
-      cocoapods: default
       node: latest
 
       ios_signing:
@@ -41,7 +40,6 @@ workflows:
         script: |
           npx cap sync ios
 
-
       - name: Set exempt encryption flag
         script: |
           /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" ios/App/App/Info.plist || /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" ios/App/App/Info.plist
@@ -55,11 +53,11 @@ workflows:
         script: |
           xcode-project use-profiles
 
-- name: Build IPA
-  script: |
-    xcode-project build-ipa \
-      --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
-      --scheme "$XCODE_SCHEME"
+      - name: Build IPA
+        script: |
+          xcode-project build-ipa \
+            --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
 
     artifacts:
       - build/ios/ipa/*.ipa
