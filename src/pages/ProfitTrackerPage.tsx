@@ -15,7 +15,10 @@ import { formatPropType } from "@/lib/formatPickLabel";
 import { PlayerAutocomplete, getLinePlaceholder } from "@/components/tracker/PlayerAutocomplete";
 import { BetTypeDropdown } from "@/components/tracker/BetTypeDropdown";
 import { ParlayPlayForm } from "@/components/tracker/ParlayPlayForm";
-import { isGameTotal, isTeamMarket, needsDirection, formatBetLabel } from "@/components/tracker/marketType";
+import {
+  isGameTotal, isTeamMarket, needsDirection, formatBetLabel,
+  isUfcFightTotal, isUfcFighterStat, getDirectionMode, type DirectionMode,
+} from "@/components/tracker/marketType";
 import { americanToDecimal } from "@/utils/oddsFormat";
 import {
   parlayLabel, combineLegProbabilities, gradeParlayFromLegResults,
@@ -116,7 +119,7 @@ const ProfitTrackerPage = () => {
   const [showForm, setShowForm] = useState(false);
   const [showParlayForm, setShowParlayForm] = useState(false);
   const defaultOdds = oddsFormat === "decimal" ? "1.91" : "-110";
-  const [form, setForm] = useState({ sport: "nba", player_or_fighter: "", bet_type: "", line: "", odds: defaultOdds, stake: "", direction: "over" as "over" | "under" });
+  const [form, setForm] = useState({ sport: "nba", player_or_fighter: "", bet_type: "", line: "", odds: defaultOdds, stake: "", direction: "over" as "over" | "under", method: "", roundNumber: "", roundResult: "" });
   const [playsResultFilter, setPlaysResultFilter] = useState<ResultFilter>("all");
   const [playsSportFilter, setPlaysSportFilter] = useState<SportFilter>("all");
   const [playsDateFilter, setPlaysDateFilter] = useState<string>("all");
@@ -250,7 +253,6 @@ const ProfitTrackerPage = () => {
   /* ── Play CRUD ── */
   const addPlay = async () => {
     if (!form.player_or_fighter || !form.bet_type || !form.stake || !user) return;
-    const directional = needsDirection(form.bet_type);
     let odds: number;
     if (oddsFormat === "decimal") {
       const dec = parseFloat(form.odds) || 1.91;
@@ -259,13 +261,26 @@ const ProfitTrackerPage = () => {
       odds = parseInt(form.odds) || -110;
     }
     const stake = parseFloat(form.stake) || 0;
+
+    // Encode bet_type based on UFC market type
+    const dirMode: DirectionMode = getDirectionMode(form.sport, form.bet_type);
+    let finalBetType = form.bet_type;
+    if (dirMode === "method" && form.method) {
+      finalBetType = `${form.bet_type}: ${form.method}`;
+    } else if (dirMode === "round_prop" && form.roundNumber) {
+      const roundResult = form.roundResult === "ends" ? "Ends" : "Starts";
+      finalBetType = `Round Props: Round ${form.roundNumber} ${roundResult}`;
+    } else if (dirMode === "over_under") {
+      finalBetType = `${form.bet_type} (${form.direction.toUpperCase()})`;
+    }
+
     await supabase.from("plays").insert({
       user_id: user.id, license_key: user.id, sport: form.sport,
       player_or_fighter: form.player_or_fighter,
-      bet_type: directional ? `${form.bet_type} (${form.direction.toUpperCase()})` : form.bet_type,
+      bet_type: finalBetType,
       line: form.line ? parseFloat(form.line) : null, odds, stake, result: "pending", payout: 0,
     });
-    setForm({ sport: "nba", player_or_fighter: "", bet_type: "", line: "", odds: defaultOdds, stake: "", direction: "over" });
+    setForm({ sport: "nba", player_or_fighter: "", bet_type: "", line: "", odds: defaultOdds, stake: "", direction: "over", method: "", roundNumber: "", roundResult: "" });
     setShowForm(false); fetchPlays();
   };
 
@@ -732,15 +747,20 @@ const ProfitTrackerPage = () => {
                         <span className="text-[13px] font-bold text-foreground">New Play</span>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <VisionSelect label="Sport" value={form.sport} onChange={(e) => setForm({ ...form, sport: e.target.value, bet_type: "", player_or_fighter: "" })}>
+                        <VisionSelect label="Sport" value={form.sport} onChange={(e) => setForm({ ...form, sport: e.target.value, bet_type: "", player_or_fighter: "", method: "", roundNumber: "", roundResult: "" })}>
                           <option value="nba">NBA</option><option value="mlb">MLB</option><option value="nhl">NHL</option>
                           <option value="ufc">UFC</option><option value="other">Other</option>
                         </VisionSelect>
                         <PlayerAutocomplete sport={form.sport} value={form.player_or_fighter} onChange={(v) => setForm({ ...form, player_or_fighter: v })} betType={form.bet_type} />
-                        <BetTypeDropdown sport={form.sport} value={form.bet_type} onChange={(v) => setForm({ ...form, bet_type: v, player_or_fighter: "" })} />
-                        {needsDirection(form.bet_type) && (
+                        <BetTypeDropdown sport={form.sport} value={form.bet_type} onChange={(v) => setForm({ ...form, bet_type: v, player_or_fighter: "", line: "", method: "", roundNumber: "", roundResult: "" })} />
+
+                        {/* Over/Under: player props, game totals, UFC fighter stats, UFC fight totals */}
+                        {getDirectionMode(form.sport, form.bet_type) === "over_under" && (
                           <>
-                            <VisionInput label={isGameTotal(form.bet_type) ? "Total Line" : "Line"} placeholder={isGameTotal(form.bet_type) ? "224.5" : getLinePlaceholder(form.sport)} type="number" step="0.5" value={form.line} onChange={(e) => setForm({ ...form, line: e.target.value })} />
+                            <VisionInput
+                              label={isUfcFightTotal(form.bet_type) ? "Total Rounds" : isGameTotal(form.bet_type) ? "Total Line" : isUfcFighterStat(form.bet_type) ? `${form.bet_type} Line` : "Line"}
+                              placeholder={getLinePlaceholder(form.sport, form.bet_type) || (isGameTotal(form.bet_type) ? "224.5" : "0.5")}
+                              type="number" step="0.5" value={form.line} onChange={(e) => setForm({ ...form, line: e.target.value })} />
                             <div>
                               <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Direction</label>
                               <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
@@ -755,6 +775,84 @@ const ProfitTrackerPage = () => {
                                   UNDER
                                 </button>
                               </div>
+                            </div>
+                          </>
+                        )}
+
+                        {/* Method selector for UFC method markets */}
+                        {getDirectionMode(form.sport, form.bet_type) === "method" && (
+                          <div className="col-span-2">
+                            <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Method</label>
+                            <select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })}
+                              className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground outline-none appearance-none"
+                              style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+                              <option value="">Select method...</option>
+                              {["KO/TKO", "Submission", "Decision", "KO/TKO or Submission", "KO/TKO or Decision", "Submission or Decision"].map((m) => (
+                                <option key={m} value={m}>{m}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        {/* Goes Distance: binary toggle */}
+                        {getDirectionMode(form.sport, form.bet_type) === "goes_distance" && (
+                          <div className="col-span-2">
+                            <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Result</label>
+                            <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+                              <button type="button" onClick={() => setForm({ ...form, direction: "over" })}
+                                className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "over" ? "text-emerald-400" : "text-muted-foreground/50 hover:text-foreground/70"}`}
+                                style={{ background: form.direction === "over" ? 'hsla(160, 84%, 39%, 0.12)' : 'hsla(228, 20%, 10%, 0.6)' }}>
+                                GOES DISTANCE
+                              </button>
+                              <button type="button" onClick={() => setForm({ ...form, direction: "under" })}
+                                className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "under" ? "text-red-400" : "text-muted-foreground/50 hover:text-foreground/70"}`}
+                                style={{ background: form.direction === "under" ? 'hsla(0, 84%, 60%, 0.12)' : 'hsla(228, 20%, 10%, 0.6)' }}>
+                                DOES NOT
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Inside Distance: binary toggle */}
+                        {getDirectionMode(form.sport, form.bet_type) === "inside_distance" && (
+                          <div className="col-span-2">
+                            <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Result</label>
+                            <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+                              <button type="button" onClick={() => setForm({ ...form, direction: "over" })}
+                                className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "over" ? "text-emerald-400" : "text-muted-foreground/50 hover:text-foreground/70"}`}
+                                style={{ background: form.direction === "over" ? 'hsla(160, 84%, 39%, 0.12)' : 'hsla(228, 20%, 10%, 0.6)' }}>
+                                INSIDE DISTANCE
+                              </button>
+                              <button type="button" onClick={() => setForm({ ...form, direction: "under" })}
+                                className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "under" ? "text-red-400" : "text-muted-foreground/50 hover:text-foreground/70"}`}
+                                style={{ background: form.direction === "under" ? 'hsla(0, 84%, 60%, 0.12)' : 'hsla(228, 20%, 10%, 0.6)' }}>
+                                NOT INSIDE
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Round prop: round + ends/starts selectors */}
+                        {getDirectionMode(form.sport, form.bet_type) === "round_prop" && (
+                          <>
+                            <div>
+                              <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Round</label>
+                              <select value={form.roundNumber} onChange={(e) => setForm({ ...form, roundNumber: e.target.value })}
+                                className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground outline-none appearance-none"
+                                style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+                                <option value="">Round...</option>
+                                {["1","2","3","4","5"].map((r) => <option key={r} value={r}>Round {r}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Result</label>
+                              <select value={form.roundResult} onChange={(e) => setForm({ ...form, roundResult: e.target.value })}
+                                className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground outline-none appearance-none"
+                                style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+                                <option value="">Result...</option>
+                                <option value="ends">Fight Ends This Round</option>
+                                <option value="starts">Fight Starts This Round</option>
+                              </select>
                             </div>
                           </>
                         )}
@@ -856,12 +954,11 @@ const ProfitTrackerPage = () => {
                           <span className="text-[9px] text-muted-foreground/55">{new Date(p.created_at).toLocaleDateString()}</span>
                         </div>
                         {(() => {
-                          const isTotal = isGameTotal(p.bet_type);
-                          const { headline, detail } = formatBetLabel({ subject: p.player_or_fighter, betType: p.bet_type, line: p.line });
+                          const { headline, detail } = formatBetLabel({ subject: p.player_or_fighter, betType: p.bet_type, line: p.line, sport: p.sport });
                           return (
                             <>
                               <p className="text-[13px] font-bold text-foreground truncate">{headline}</p>
-                              <p className="text-[11px] text-muted-foreground/50 mt-0.5">{isTotal ? detail : `${p.bet_type}${p.line ? ` (${p.line})` : ""}`} · {fmt(p.odds)} · ${p.stake}</p>
+                              <p className="text-[11px] text-muted-foreground/50 mt-0.5">{detail} · {fmt(p.odds)} · ${p.stake}</p>
                             </>
                           );
                         })()}

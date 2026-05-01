@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { searchPlayers, searchUfcFighters } from "@/services/api";
 import { getTeamLogoUrl } from "@/utils/teamLogos";
-import { isGameTotal, isTeamMarket } from "./marketType";
+import { getSubjectMode, isUfcFighterStat, isUfcFightTotal } from "./marketType";
 
 interface PlayerAutocompleteProps {
   sport: string;
@@ -16,11 +16,13 @@ interface PlayerResult {
   team?: string;
 }
 
-const PLACEHOLDER_BY_SPORT: Record<string, string> = {
+// Cycling fighter name suggestions for UFC fighter fields
+const UFC_FIGHTER_PLACEHOLDERS = ["Jon Jones", "Tom Aspinall", "Islam Makhachev", "Conor McGregor"];
+
+const PLAYER_PLACEHOLDER_BY_SPORT: Record<string, string> = {
   nba: "LeBron James",
   mlb: "Shohei Ohtani",
   nhl: "Connor McDavid",
-  ufc: "Conor McGregor",
   nfl: "Patrick Mahomes",
 };
 
@@ -31,18 +33,6 @@ const TEAM_PLACEHOLDER_BY_SPORT: Record<string, string> = {
   nfl: "Kansas City Chiefs",
 };
 
-const LINE_PLACEHOLDER_BY_SPORT: Record<string, string> = {
-  nba: "25.5",
-  mlb: "1.5",
-  nhl: "0.5",
-  ufc: "",
-  nfl: "275.5",
-};
-
-export function getLinePlaceholder(sport: string): string {
-  return LINE_PLACEHOLDER_BY_SPORT[sport] || "0.5";
-}
-
 const MATCHUP_PLACEHOLDER_BY_SPORT: Record<string, string> = {
   nba: "Lakers vs Celtics",
   mlb: "Yankees vs Mets",
@@ -50,6 +40,36 @@ const MATCHUP_PLACEHOLDER_BY_SPORT: Record<string, string> = {
   nfl: "Chiefs vs Bills",
   ufc: "Jones vs Aspinall",
 };
+
+const LINE_PLACEHOLDER_BY_SPORT: Record<string, string> = {
+  nba: "25.5",
+  mlb: "1.5",
+  nhl: "0.5",
+  nfl: "275.5",
+};
+
+const UFC_STAT_LINE_PLACEHOLDERS: Record<string, string> = {
+  "significant strikes": "45.5",
+  "takedowns": "1.5",
+  "submission attempts": "0.5",
+  "knockdowns": "0.5",
+  "control time": "4.5",
+};
+
+export function getLinePlaceholder(sport: string, betType?: string): string {
+  if (sport === "ufc") {
+    if (isUfcFighterStat(betType)) {
+      const t = (betType || "").toLowerCase().trim();
+      for (const [key, ph] of Object.entries(UFC_STAT_LINE_PLACEHOLDERS)) {
+        if (t.includes(key)) return ph;
+      }
+      return "0.5";
+    }
+    if (isUfcFightTotal(betType)) return "2.5";
+    return "";
+  }
+  return LINE_PLACEHOLDER_BY_SPORT[sport] || "0.5";
+}
 
 // Hardcoded team lists so we don't need an API call
 const TEAMS_BY_SPORT: Record<string, string[]> = {
@@ -90,8 +110,11 @@ const TEAMS_BY_SPORT: Record<string, string[]> = {
 };
 
 export function PlayerAutocomplete({ sport, value, onChange, betType = "" }: PlayerAutocompleteProps) {
-  const matchupMode = isGameTotal(betType);
-  const isTeamMode = !matchupMode && isTeamMarket(betType);
+  const subjectMode = getSubjectMode(sport, betType);
+  const matchupMode = subjectMode === "matchup" || subjectMode === "fight";
+  const isTeamMode = subjectMode === "team";
+  const isFighter = subjectMode === "fighter";
+
   const [suggestions, setSuggestions] = useState<PlayerResult[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -118,14 +141,14 @@ export function PlayerAutocomplete({ sport, value, onChange, betType = "" }: Pla
     }
   }, [isTeamMode, value, sport]);
 
-  // Player search (non-team mode)
+  // Player / fighter search
   const search = useCallback(async (q: string) => {
     if (isTeamMode || matchupMode) return;
     if (q.length < 2) { setSuggestions([]); return; }
     setLoading(true);
     try {
       let results: any;
-      if (sport === "ufc") {
+      if (sport === "ufc" || isFighter) {
         results = await searchUfcFighters(q);
       } else {
         results = await searchPlayers(q, sport);
@@ -141,7 +164,7 @@ export function PlayerAutocomplete({ sport, value, onChange, betType = "" }: Pla
       setOpen(list.length > 0);
     } catch { setSuggestions([]); }
     setLoading(false);
-  }, [sport, isTeamMode, matchupMode]);
+  }, [sport, isTeamMode, matchupMode, isFighter]);
 
   useEffect(() => {
     if (isTeamMode || matchupMode) return;
@@ -158,12 +181,19 @@ export function PlayerAutocomplete({ sport, value, onChange, betType = "" }: Pla
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const label = matchupMode ? "Matchup" : isTeamMode ? "Team" : "Player";
-  const placeholder = matchupMode
-    ? (MATCHUP_PLACEHOLDER_BY_SPORT[sport] || "Team A vs Team B")
-    : isTeamMode
-    ? (TEAM_PLACEHOLDER_BY_SPORT[sport] || "Team name")
-    : (PLACEHOLDER_BY_SPORT[sport] || "Player name");
+  const label =
+    subjectMode === "matchup" ? "Matchup" :
+    subjectMode === "fight"   ? "Fight" :
+    subjectMode === "team"    ? "Team" :
+    subjectMode === "fighter" ? "Fighter" :
+    "Player";
+
+  const placeholder =
+    subjectMode === "fight"   ? (MATCHUP_PLACEHOLDER_BY_SPORT[sport] || "Fighter A vs Fighter B") :
+    subjectMode === "matchup" ? (MATCHUP_PLACEHOLDER_BY_SPORT[sport] || "Team A vs Team B") :
+    subjectMode === "team"    ? (TEAM_PLACEHOLDER_BY_SPORT[sport] || "Team name") :
+    subjectMode === "fighter" ? UFC_FIGHTER_PLACEHOLDERS[0] :
+    (PLAYER_PLACEHOLDER_BY_SPORT[sport] || "Player name");
 
   return (
     <div ref={containerRef} className="relative">

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import {
   Target, Shield, Hand, Crosshair, Zap, Trophy, Swords,
-  CircleDot, Timer, Activity, Gauge, Star, Flame,
+  CircleDot, Timer, Activity, Gauge, Star, Flame, Dumbbell,
 } from "lucide-react";
 
 const SPORT_BET_TYPES: Record<string, { label: string; aliases: string[]; icon: typeof Target }[]> = {
@@ -53,12 +53,35 @@ const SPORT_BET_TYPES: Record<string, { label: string; aliases: string[]; icon: 
     { label: "Puck Line", aliases: ["pl", "spread", "handicap"], icon: Star },
   ],
   ufc: [
-    { label: "Method of Victory", aliases: ["mov", "method", "ko", "sub", "decision", "tko", "submission"], icon: Swords },
-    { label: "Round Props", aliases: ["round", "rnd", "rd", "rounds"], icon: Timer },
-    { label: "Fight to Go Distance", aliases: ["distance", "goes the distance", "gtd", "full fight"], icon: CircleDot },
-    { label: "Total Rounds", aliases: ["over under rounds", "o/u rounds"], icon: Activity },
-    { label: "Game Total", aliases: ["total", "o/u", "over under", "game o/u", "game total", "gt"], icon: Activity },
-    { label: "Moneyline", aliases: ["ml", "money line", "winner", "to win"], icon: Trophy },
+    // ── Fight Outcome ──
+    { label: "Moneyline", aliases: ["ml", "money line", "winner", "to win", "fight winner"], icon: Trophy },
+    // ── Method Markets ──
+    { label: "Method of Victory", aliases: ["mov", "method", "how fight ends", "method victory"], icon: Swords },
+    { label: "Win by KO/TKO", aliases: ["ko", "tko", "knockout", "stoppage", "by ko", "win ko"], icon: Flame },
+    { label: "Win by Submission", aliases: ["sub", "submission", "tap", "tap out", "by sub", "win sub"], icon: Crosshair },
+    { label: "Win by Decision", aliases: ["dec", "decision", "points", "judges", "by dec", "win dec"], icon: Star },
+    // ── Distance Markets ──
+    { label: "Fight Goes the Distance", aliases: ["distance", "goes the distance", "gtd", "full fight", "all rounds", "goes distance"], icon: CircleDot },
+    { label: "Fight Ends Inside Distance", aliases: ["inside distance", "early finish", "stoppage", "before distance", "eid"], icon: CircleDot },
+    // ── Total Rounds ──
+    { label: "Total Rounds", aliases: ["over under rounds", "o/u rounds", "round total", "rounds total", "total rds"], icon: Activity },
+    // ── Round Props ──
+    { label: "Round Props", aliases: ["round", "rnd", "rd", "round prop", "which round"], icon: Timer },
+    { label: "Fight Starts Round 2", aliases: ["starts r2", "round 2 start", "past r1", "go r2"], icon: Timer },
+    { label: "Fight Starts Round 3", aliases: ["starts r3", "round 3 start", "past r2", "go r3"], icon: Timer },
+    { label: "Fight Starts Round 4", aliases: ["starts r4", "round 4 start", "past r3", "go r4"], icon: Timer },
+    { label: "Fight Starts Round 5", aliases: ["starts r5", "round 5 start", "past r4", "go r5"], icon: Timer },
+    { label: "Fight Ends in Round 1", aliases: ["ends r1", "round 1 finish", "first round finish", "frf", "r1 finish"], icon: Timer },
+    { label: "Fight Ends in Round 2", aliases: ["ends r2", "round 2 finish", "r2 finish"], icon: Timer },
+    { label: "Fight Ends in Round 3", aliases: ["ends r3", "round 3 finish", "r3 finish"], icon: Timer },
+    { label: "Fight Ends in Round 4", aliases: ["ends r4", "round 4 finish", "r4 finish"], icon: Timer },
+    { label: "Fight Ends in Round 5", aliases: ["ends r5", "round 5 finish", "r5 finish"], icon: Timer },
+    // ── Fighter Stat Props ──
+    { label: "Significant Strikes", aliases: ["sig strikes", "sig str", "strikes", "significant", "ss"], icon: Dumbbell },
+    { label: "Takedowns", aliases: ["td", "tds", "takedown", "wrestling", "grappling"], icon: Dumbbell },
+    { label: "Submission Attempts", aliases: ["sub attempts", "submission att", "suba", "attempts"], icon: Dumbbell },
+    { label: "Knockdowns", aliases: ["kd", "kds", "knockdown", "floor"], icon: Dumbbell },
+    { label: "Control Time", aliases: ["ctrl", "control", "ground control", "top time"], icon: Timer },
   ],
   nfl: [
     { label: "Passing Yards", aliases: ["pass yds", "pass yards", "py", "passing"], icon: Target },
@@ -129,7 +152,6 @@ export function BetTypeDropdown({ sport, value, onChange }: BetTypeDropdownProps
             </button>
           ) : filtered.map((opt, i) => {
             const Icon = opt.icon;
-            // Show matching alias as hint
             const matchedAlias = filterLower
               ? opt.aliases.find(a => a.includes(filterLower) || filterLower.includes(a))
               : null;
