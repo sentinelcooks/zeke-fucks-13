@@ -661,9 +661,6 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     }}
                   >
 
-                    <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full opacity-[0.06] pointer-events-none"
-                      style={{ background: `radial-gradient(circle, ${isGameBet ? 'hsl(190 90% 55%)' : 'hsl(142 100% 50%)'}, transparent)` }} />
-
                     {/* HEADER ROW */}
                     <div className="relative z-10" style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                       {/* Left: Image or Sport Icon */}
