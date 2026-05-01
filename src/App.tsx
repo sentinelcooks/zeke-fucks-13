@@ -24,6 +24,7 @@ import ArbitragePage from "./pages/ArbitragePage";
 
 import NotFound from "./pages/NotFound";
 import LandingPage from "./pages/LandingPage";
+import { DeepLinkHandler } from "./components/DeepLinkHandler";
 
 const AuthPage = lazy(() => import("./pages/AuthPage"));
 const AuthCallbackPage = lazy(() => import("./pages/AuthCallbackPage"));
@@ -80,7 +81,9 @@ function OnboardingGuard({ children }: { children: React.ReactNode }) {
 
 function AppRoutes() {
   return (
-    <Routes>
+    <>
+      <DeepLinkHandler />
+      <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/auth" element={
         <Suspense fallback={<LoadingSpinner />}>
@@ -143,6 +146,7 @@ function AppRoutes() {
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </>
   );
 }
 

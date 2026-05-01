@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session } from "@supabase/supabase-js";
+import { getAuthRedirectUrl } from "@/lib/authRedirect";
 
 interface Profile {
   id: string;
@@ -132,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         data: { display_name: displayName },
         // Ensure email confirmation links always point to the current production
         // domain, not localhost or a stale Lovable URL from Supabase's Site URL setting.
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: getAuthRedirectUrl(),
       },
     });
     if (error) return { error: error.message };

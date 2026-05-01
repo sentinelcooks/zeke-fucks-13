@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Eye, EyeOff, ArrowRight, ArrowLeft, Mail, CheckCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useLocation, Link } from "react-router-dom";
+import { getAuthRedirectUrl } from "@/lib/authRedirect";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -186,7 +187,7 @@ const AuthPage = () => {
       persistRememberChoice(remember);
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider,
-        options: { redirectTo: window.location.origin + "/auth/callback" },
+        options: { redirectTo: getAuthRedirectUrl() },
       });
       if (oauthError) {
         setError(oauthError.message || `${provider} sign-in failed`);
