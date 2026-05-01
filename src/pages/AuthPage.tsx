@@ -162,8 +162,9 @@ const AuthPage = () => {
       if (result.error) {
         setError(result.error);
       } else if (result.needsConfirmation) {
-        // Email/password signup requires email confirmation — show pending screen.
-        // Do NOT navigate; the onAuthStateChange listener handles post-confirm routing.
+        // Persist the remember-me choice now so AuthContext's fresh-tab guard
+        // does not sign the user out when they return via the confirmation link.
+        persistRememberChoice(remember);
         setConfirmationPending(true);
       } else {
         persistRememberChoice(remember);

@@ -97,7 +97,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const isNewTab = !sessionStorage.getItem("primal-tab-active");
       sessionStorage.setItem("primal-tab-active", "true");
 
-      if (!remember && isNewTab && existingSession) {
+      // Skip sign-out when the URL is an auth callback — the session was just
+      // established by OAuth or email confirmation and must not be destroyed.
+      const isAuthCallback =
+        window.location.pathname === "/auth/callback" ||
+        window.location.hash.includes("access_token") ||
+        window.location.search.includes("code=");
+
+      if (!remember && isNewTab && existingSession && !isAuthCallback) {
         await supabase.auth.signOut();
         setSession(null);
         setUser(null);
