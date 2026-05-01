@@ -109,22 +109,32 @@ export type Database = {
           avg_value: number | null
           away_team: string | null
           bet_type: string
+          clv: number | null
+          closing_odds: string | null
           created_at: string
           direction: string
+          edge_value: number | null
+          graded_at: string | null
           hit_rate: number
           home_team: string | null
           id: string
           last_n_games: number
+          league: string | null
           line: number
+          model_used: string | null
+          model_version: string | null
           odds: string | null
+          opening_odds: string | null
           opponent: string | null
           pick_date: string
           player_name: string
+          profit_units: number | null
           prop_type: string
           reasoning: string | null
           result: string | null
           sport: string
           spread_line: number | null
+          stake_units: number | null
           team: string | null
           tier: string
           total_line: number | null
@@ -133,22 +143,32 @@ export type Database = {
           avg_value?: number | null
           away_team?: string | null
           bet_type?: string
+          clv?: number | null
+          closing_odds?: string | null
           created_at?: string
           direction?: string
+          edge_value?: number | null
+          graded_at?: string | null
           hit_rate?: number
           home_team?: string | null
           id?: string
           last_n_games?: number
+          league?: string | null
           line: number
+          model_used?: string | null
+          model_version?: string | null
           odds?: string | null
+          opening_odds?: string | null
           opponent?: string | null
           pick_date?: string
           player_name: string
+          profit_units?: number | null
           prop_type: string
           reasoning?: string | null
           result?: string | null
           sport?: string
           spread_line?: number | null
+          stake_units?: number | null
           team?: string | null
           tier?: string
           total_line?: number | null
@@ -157,22 +177,32 @@ export type Database = {
           avg_value?: number | null
           away_team?: string | null
           bet_type?: string
+          clv?: number | null
+          closing_odds?: string | null
           created_at?: string
           direction?: string
+          edge_value?: number | null
+          graded_at?: string | null
           hit_rate?: number
           home_team?: string | null
           id?: string
           last_n_games?: number
+          league?: string | null
           line?: number
+          model_used?: string | null
+          model_version?: string | null
           odds?: string | null
+          opening_odds?: string | null
           opponent?: string | null
           pick_date?: string
           player_name?: string
+          profit_units?: number | null
           prop_type?: string
           reasoning?: string | null
           result?: string | null
           sport?: string
           spread_line?: number | null
+          stake_units?: number | null
           team?: string | null
           tier?: string
           total_line?: number | null
