@@ -12,6 +12,12 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { resolveDisplayName } from "@/lib/displayName";
+import {
+  isPushSupported,
+  requestAndRegisterPush,
+  checkPushPermission,
+  unregisterPushToken,
+} from "@/services/pushNotificationService";
 
 const TIMEZONES = [
   { value: "America/New_York", label: "Eastern (ET)" },
@@ -186,16 +192,46 @@ const SettingsPage = () => {
   };
 
   const handleNotifToggle = async () => {
-    if (!notifEnabled && "Notification" in window) {
-      const perm = await Notification.requestPermission();
-      if (perm !== "granted") return;
+    const turningOn = !notifEnabled;
+
+    if (turningOn) {
+      if (isPushSupported()) {
+        // Native iOS — triggers system "Allow Notifications?" dialog
+        const status = await requestAndRegisterPush();
+        if (status === "denied") {
+          toast.error("Notifications denied. Enable in iPhone Settings > Sentinel.");
+          return;
+        }
+        if (status === "error") {
+          toast.error("Could not register for notifications. Try again.");
+          return;
+        }
+        // status === "granted": APNs token saved by registration listener
+      } else if ("Notification" in window) {
+        // Web fallback
+        const perm = await Notification.requestPermission();
+        if (perm !== "granted") return;
+      }
+    } else {
+      if (isPushSupported()) await unregisterPushToken();
     }
-    const newVal = !notifEnabled;
-    setNotifEnabled(newVal);
+
+    setNotifEnabled(turningOn);
     setSaving(true);
-    await updateProfile({ notification_enabled: newVal });
+    await updateProfile({ notification_enabled: turningOn });
     setSaving(false);
   };
+
+  // Sync UI if iOS permissions were revoked externally (Settings > Sentinel)
+  useEffect(() => {
+    if (!profile?.id || !isPushSupported()) return;
+    checkPushPermission().then((status) => {
+      if (status === "denied" && profile.notification_enabled) {
+        setNotifEnabled(false);
+        updateProfile({ notification_enabled: false });
+      }
+    });
+  }, [profile?.id]);
 
   const handleOddsFormatChange = async (format: "american" | "decimal") => {
     setOddsFormat(format);

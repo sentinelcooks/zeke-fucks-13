@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import logoNba from "@/assets/logo-nba.png";
 import logoMlb from "@/assets/logo-mlb.png";
 import logoNhl from "@/assets/logo-nhl.png";
@@ -15,6 +15,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchNbaOdds } from "@/services/oddsApi";
 import { getTeamLogoUrl } from "@/utils/teamLogos";
 import { toast } from "sonner";
+import {
+  isPushSupported,
+  checkPushPermission,
+  requestAndRegisterPush,
+} from "@/services/pushNotificationService";
 
 type SportFilter = "nba" | "mlb" | "ufc" | "nhl" | "nfl";
 
@@ -131,48 +136,23 @@ const GamesPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [oddsMap, setOddsMap] = useState<Record<string, RealOdds>>({});
-  const [notifiedGames, setNotifiedGames] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem("sentinel_game_notifications");
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch { return new Set(); }
-  });
-  const notifTimeouts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const [notifiedGames, setNotifiedGames] = useState<Set<string>>(new Set());
   const fetchAbort = useRef<AbortController | null>(null);
 
   // Per-sport cache to enable instant switching
   const sportCache = useRef<Partial<Record<SportFilter, { games: Game[]; ufcEvents: UfcEvent[]; oddsMap: Record<string, RealOdds> }>>>({});
 
-
-  // Sync notifiedGames to localStorage & schedule/clear notifications
+  // Load subscribed game IDs from Supabase (replaces localStorage)
   useEffect(() => {
-    localStorage.setItem("sentinel_game_notifications", JSON.stringify([...notifiedGames]));
-  }, [notifiedGames]);
-
-  const scheduleNotification = useCallback((gameId: string, title: string, commenceTime: string) => {
-    if (notifTimeouts.current.has(gameId)) return;
-    const gameMs = new Date(commenceTime).getTime();
-    const delay = gameMs - 10 * 60 * 1000 - Date.now(); // 10 min before
-    if (delay <= 0) {
-      // Game already started or within 10 min — fire immediately
-      if (Notification.permission === "granted") {
-        new Notification("🏟️ Game Starting Soon!", { body: title, icon: "/placeholder.svg" });
-      }
-      return;
-    }
-    const tid = setTimeout(() => {
-      if (Notification.permission === "granted") {
-        new Notification("🏟️ Game Starting Soon!", { body: `${title} starts in 10 minutes!`, icon: "/placeholder.svg" });
-      }
-      notifTimeouts.current.delete(gameId);
-    }, delay);
-    notifTimeouts.current.set(gameId, tid);
-  }, []);
-
-  const clearScheduledNotification = useCallback((gameId: string) => {
-    const tid = notifTimeouts.current.get(gameId);
-    if (tid) { clearTimeout(tid); notifTimeouts.current.delete(gameId); }
-  }, []);
+    if (!profile?.id) return;
+    supabase
+      .from("game_notifications")
+      .select("game_id")
+      .eq("user_id", profile.id)
+      .then(({ data }) => {
+        if (data) setNotifiedGames(new Set(data.map((r: any) => r.game_id)));
+      });
+  }, [profile?.id]);
 
   const fetchOdds = async (s: SportFilter, signal?: AbortSignal): Promise<Record<string, RealOdds>> => {
     try {
@@ -516,26 +496,62 @@ const GamesPage = () => {
     });
   };
 
-  const toggleNotification = async (gameId: string, label: string, commenceTime: string) => {
-    if (!("Notification" in window)) { toast.error("Notifications not supported"); return; }
-    if (Notification.permission === "default") {
-      await Notification.requestPermission();
-    }
-    if (Notification.permission !== "granted") { toast.error("Notification permission denied"); return; }
+  const toggleNotification = async (
+    gameId: string,
+    label: string,
+    commenceTime: string,
+    sportKey: string,
+    homeTeam: string,
+    awayTeam: string,
+  ) => {
+    if (!profile) return;
+    const alreadySubscribed = notifiedGames.has(gameId);
 
-    setNotifiedGames((prev) => {
-      const next = new Set(prev);
-      if (next.has(gameId)) {
-        next.delete(gameId);
-        clearScheduledNotification(gameId);
-        toast("Notification removed");
-      } else {
-        next.add(gameId);
-        scheduleNotification(gameId, label, commenceTime);
-        toast.success(`Notification set for ${label}`);
+    if (!alreadySubscribed) {
+      // Ensure push permission before saving the preference
+      if (isPushSupported()) {
+        const permStatus = await checkPushPermission();
+        if (permStatus !== "granted") {
+          const result = await requestAndRegisterPush();
+          if (result !== "granted") {
+            toast.error("Enable notifications in Settings first.");
+            return;
+          }
+        }
+      } else if ("Notification" in window) {
+        if (Notification.permission === "default") await Notification.requestPermission();
+        if (Notification.permission !== "granted") {
+          toast.error("Notification permission denied");
+          return;
+        }
       }
-      return next;
-    });
+    }
+
+    if (alreadySubscribed) {
+      const { error } = await supabase
+        .from("game_notifications")
+        .delete()
+        .eq("user_id", profile.id)
+        .eq("game_id", gameId);
+      if (error) { toast.error("Could not remove alert"); return; }
+      setNotifiedGames((prev) => { const n = new Set(prev); n.delete(gameId); return n; });
+      toast("Alert removed");
+    } else {
+      const { error } = await supabase.from("game_notifications").upsert(
+        {
+          user_id: profile.id,
+          game_id: gameId,
+          sport_key: sportKey,
+          home_team: homeTeam,
+          away_team: awayTeam,
+          commence_time: commenceTime,
+        },
+        { onConflict: "user_id,game_id" },
+      );
+      if (error) { toast.error("Could not set alert"); return; }
+      setNotifiedGames((prev) => new Set([...prev, gameId]));
+      toast.success(`Alert set for ${label} — 10 min before kickoff`);
+    }
   };
 
   const getGameOdds = (game: Game): RealOdds | null => {
@@ -614,7 +630,7 @@ const GamesPage = () => {
           </div>
         ) : (
           <button
-            onClick={(e) => { e.stopPropagation(); toggleNotification(game.id, `${game.away_team} vs ${game.home_team}`, game.commence_time); }}
+            onClick={(e) => { e.stopPropagation(); toggleNotification(game.id, `${game.away_team} vs ${game.home_team}`, game.commence_time, game.sport_key, game.home_team, game.away_team); }}
             className="absolute top-3 right-3 z-10 p-1.5 rounded-full transition-all"
             style={{
               background: isNotified ? 'hsla(142, 100%, 50%, 0.15)' : 'transparent',
@@ -847,7 +863,7 @@ const GamesPage = () => {
           </div>
         )}
         <button
-          onClick={(e) => { e.stopPropagation(); toggleNotification(fight.id, fightLabel, fight.time); }}
+          onClick={(e) => { e.stopPropagation(); toggleNotification(fight.id, fightLabel, fight.time, "mma_ufc", fight.fighter1, fight.fighter2); }}
           className="p-1.5 rounded-full transition-all relative z-10 pointer-events-auto"
           style={{
             background: isNotified ? 'hsla(142, 100%, 50%, 0.15)' : 'transparent',

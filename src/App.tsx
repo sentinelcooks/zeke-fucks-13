@@ -3,8 +3,9 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { setupPushListeners } from "@/services/pushNotificationService";
 import {
   DeviceVerificationProvider,
   useDeviceVerification,
@@ -94,10 +95,32 @@ function OnboardingGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function PushNotificationBootstrap() {
+  const { isAuthenticated } = useAuth();
+  const cleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      cleanupRef.current?.();
+      cleanupRef.current = null;
+      return;
+    }
+    setupPushListeners().then((cleanup) => {
+      cleanupRef.current = cleanup;
+    });
+    return () => {
+      cleanupRef.current?.();
+    };
+  }, [isAuthenticated]);
+
+  return null;
+}
+
 function AppRoutes() {
   return (
     <>
       <DeepLinkHandler />
+      <PushNotificationBootstrap />
       <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/auth" element={
