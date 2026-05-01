@@ -30,6 +30,7 @@ import ArbitragePage from "./pages/ArbitragePage";
 import NotFound from "./pages/NotFound";
 import LandingPage from "./pages/LandingPage";
 import { DeepLinkHandler } from "./components/DeepLinkHandler";
+import { SplashScreen } from "@/components/SplashScreen";
 
 const AuthPage = lazy(() => import("./pages/AuthPage"));
 const AuthCallbackPage = lazy(() => import("./pages/AuthCallbackPage"));
@@ -50,14 +51,14 @@ function LoadingSpinner() {
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
-  if (isLoading) return <LoadingSpinner />;
+  if (isLoading) return <SplashScreen persistent />;
   if (!isAuthenticated) return <Navigate to="/auth" replace />;
   return <>{children}</>;
 }
 
 function DeviceGate({ children }: { children: React.ReactNode }) {
   const { status } = useDeviceVerification();
-  if (status === "checking" || status === "idle") return <LoadingSpinner />;
+  if (status === "checking" || status === "idle") return <SplashScreen persistent />;
   if (status === "blocked") return <DeviceLimitScreen />;
   // "allowed" or "error" — fail open on transient errors so a network blip
   // does not lock paid users out. Server-side hash + RLS remain authoritative.

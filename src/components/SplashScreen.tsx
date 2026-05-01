@@ -2,15 +2,22 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import sentinelLogo from "@/assets/sentinel-logo.jpg";
 
-export function SplashScreen({ onFinished }: { onFinished: () => void }) {
+export function SplashScreen({
+  onFinished,
+  persistent = false,
+}: {
+  onFinished?: () => void;
+  persistent?: boolean;
+}) {
   const [phase, setPhase] = useState<"enter" | "hold" | "exit">("enter");
 
   useEffect(() => {
     const t1 = setTimeout(() => setPhase("hold"), 600);
+    if (persistent) return () => clearTimeout(t1);
     const t2 = setTimeout(() => setPhase("exit"), 2200);
-    const t3 = setTimeout(onFinished, 2800);
+    const t3 = setTimeout(() => onFinished?.(), 2800);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
-  }, [onFinished]);
+  }, [onFinished, persistent]);
 
   return (
     <AnimatePresence>

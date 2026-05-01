@@ -5,6 +5,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { SplashScreen } from "@/components/SplashScreen";
 
 export default function AuthCallbackPage() {
   const navigate = useNavigate();
@@ -60,9 +61,5 @@ export default function AuthCallbackPage() {
     };
   }, [navigate]);
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-    </div>
-  );
+  return <SplashScreen persistent />;
 }
