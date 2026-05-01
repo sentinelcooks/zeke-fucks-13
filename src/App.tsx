@@ -5,6 +5,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import {
+  DeviceVerificationProvider,
+  useDeviceVerification,
+} from "@/contexts/DeviceVerificationContext";
+import { DeviceLimitScreen } from "@/components/DeviceLimitScreen";
 import { ParlaySlipProvider } from "@/contexts/ParlaySlipContext";
 import DashboardLayout from "./pages/DashboardLayout";
 import NbaPropsPage from "./pages/NbaPropsPage";
@@ -47,6 +52,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   if (isLoading) return <LoadingSpinner />;
   if (!isAuthenticated) return <Navigate to="/auth" replace />;
+  return <>{children}</>;
+}
+
+function DeviceGate({ children }: { children: React.ReactNode }) {
+  const { status } = useDeviceVerification();
+  if (status === "checking" || status === "idle") return <LoadingSpinner />;
+  if (status === "blocked") return <DeviceLimitScreen />;
+  // "allowed" or "error" — fail open on transient errors so a network blip
+  // does not lock paid users out. Server-side hash + RLS remain authoritative.
   return <>{children}</>;
 }
 
@@ -124,7 +138,9 @@ function AppRoutes() {
       } />
       <Route path="/dashboard" element={
         <ProtectedRoute>
-          <DashboardLayout />
+          <DeviceGate>
+            <DashboardLayout />
+          </DeviceGate>
         </ProtectedRoute>
       }>
         <Route index element={<Navigate to="home" replace />} />
@@ -157,11 +173,13 @@ const App = () => {
         <Toaster />
         <Sonner />
         <AuthProvider>
-          <ParlaySlipProvider>
-            <BrowserRouter>
-              <AppRoutes />
-            </BrowserRouter>
-          </ParlaySlipProvider>
+          <DeviceVerificationProvider>
+            <ParlaySlipProvider>
+              <BrowserRouter>
+                <AppRoutes />
+              </BrowserRouter>
+            </ParlaySlipProvider>
+          </DeviceVerificationProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
