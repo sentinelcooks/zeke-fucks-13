@@ -16,7 +16,7 @@ import { ParlaySlipProvider } from "@/contexts/ParlaySlipContext";
 import DashboardLayout from "./pages/DashboardLayout";
 import NbaPropsPage from "./pages/NbaPropsPage";
 
-import { initRevenueCat } from "./lib/revenuecat";
+import { initRevenueCat, loginRevenueCatUser, logoutRevenueCatUser } from "./lib/revenuecat";
 
 import UfcPage from "./pages/UfcPage";
 import ParlayPage from "./pages/ParlayPage";
@@ -114,13 +114,24 @@ function PushNotificationBootstrap() {
   return null;
 }
 
-// ✅ NEW: RevenueCat init
 function RevenueCatBootstrap() {
+  const { user } = useAuth();
+
   useEffect(() => {
     initRevenueCat().catch((error) => {
       console.error("RevenueCat init failed:", error);
     });
   }, []);
+
+  useEffect(() => {
+    if (user?.id) {
+      loginRevenueCatUser(user.id).catch((error) => {
+        console.error("RevenueCat login failed:", error);
+      });
+    } else {
+      logoutRevenueCatUser().catch(() => {});
+    }
+  }, [user?.id]);
 
   return null;
 }

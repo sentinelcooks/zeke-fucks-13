@@ -3,13 +3,27 @@ import { Purchases } from "@revenuecat/purchases-capacitor";
 import { RevenueCatUI, PAYWALL_RESULT } from "@revenuecat/purchases-capacitor-ui";
 
 const API_KEY = "appl_wmSrROmrGLyeBmcpgxydApKAxLl";
-const ENTITLEMENT_ID = "premium";
+const ENTITLEMENT_ID = "Sentinel Pro";
 
 // 🔧 Initialize RevenueCat
 export async function initRevenueCat() {
   if (!Capacitor.isNativePlatform()) return;
 
   await Purchases.configure({ apiKey: API_KEY });
+}
+
+// 👤 Identify the logged-in Supabase user so purchases link to their account
+export async function loginRevenueCatUser(userId: string) {
+  if (!Capacitor.isNativePlatform()) return;
+
+  await Purchases.logIn({ appUserID: userId });
+}
+
+// 🚪 Clear the RevenueCat user on sign-out
+export async function logoutRevenueCatUser() {
+  if (!Capacitor.isNativePlatform()) return;
+
+  await Purchases.logOut();
 }
 
 // 💰 Custom purchase (uses your UI plan selection)

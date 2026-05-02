@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Star, Shield, Zap, BarChart3, TrendingUp, Crown, ChevronDown, Lock } from "lucide-react";
+import { purchasePlan, restorePurchases } from "@/lib/revenuecat";
 
 type PlanInterval = "weekly" | "monthly" | "yearly";
 
@@ -179,11 +180,49 @@ export default function PaywallPage() {
   const navigate = useNavigate();
   const [selectedPlan, setSelectedPlan] = useState<PlanInterval>("monthly");
   const [expandedFeature, setExpandedFeature] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubscribe = () => {
-    localStorage.setItem("sentinel_subscription", "trial");
-    localStorage.setItem("sentinel_selected_plan", selectedPlan);
-    navigate("/welcome", { replace: true });
+  const handleSubscribe = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const success = await purchasePlan(selectedPlan);
+      if (success) {
+        navigate("/welcome", { replace: true });
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Something went wrong.";
+      if (msg.includes("only work inside the iOS app")) {
+        setError("Purchases are only available in the iOS app.");
+      } else {
+        setError(msg);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const success = await restorePurchases();
+      if (success) {
+        navigate("/welcome", { replace: true });
+      } else {
+        setError("No active subscription found to restore.");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Restore failed.";
+      if (msg.includes("only works inside the iOS app")) {
+        setError("Restore is only available in the iOS app.");
+      } else {
+        setError(msg);
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const ctaLabel = CTA_LABEL;
@@ -436,14 +475,32 @@ export default function PaywallPage() {
       >
         <div className="mx-auto max-w-md" style={{ pointerEvents: "auto" }}>
           <motion.button
-            whileTap={{ scale: 0.97 }}
+            whileTap={isLoading ? {} : { scale: 0.97 }}
             onClick={handleSubscribe}
-            style={{ animation: "pulse-cta 2.5s ease-in-out infinite" }}
-            className="w-full py-[18px] rounded-full bg-[#00FF6A] text-black font-extrabold text-[17px] shadow-[0_0_22px_rgba(0,255,106,0.25)]"
+            disabled={isLoading}
+            style={{ animation: isLoading ? undefined : "pulse-cta 2.5s ease-in-out infinite" }}
+            className="w-full py-[18px] rounded-full bg-[#00FF6A] text-black font-extrabold text-[17px] shadow-[0_0_22px_rgba(0,255,106,0.25)] disabled:opacity-60 flex items-center justify-center gap-2"
           >
-            {ctaLabel}
+            {isLoading ? (
+              <>
+                <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                Processing…
+              </>
+            ) : (
+              ctaLabel
+            )}
           </motion.button>
+          {error && (
+            <p className="text-center text-[11px] text-red-400 mt-2 px-2">{error}</p>
+          )}
           <p className="text-center text-[11px] text-white/55 mt-2">No charge today • Cancel anytime</p>
+          <button
+            onClick={handleRestore}
+            disabled={isLoading}
+            className="w-full text-center text-[11px] text-white/35 mt-1 disabled:opacity-40"
+          >
+            Restore Purchases
+          </button>
         </div>
       </div>
     </div>
