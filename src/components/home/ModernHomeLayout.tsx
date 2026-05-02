@@ -1,10 +1,9 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Flame, ChevronRight, Sparkles, CheckCircle2, XCircle,
   BarChart3, Layers, Crosshair, Activity, Trophy, Percent,
-  Users, TrendingDown, Zap, DollarSign, Target, RefreshCw
+  Users, TrendingDown, Zap, DollarSign, Target
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
@@ -238,7 +237,6 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const [yesterdayPicks, setYesterdayPicks] = useState<DailyPick[]>([]);
   const [picksLoading, setPicksLoading] = useState(true);
   const [userSports, setUserSports] = useState<string[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [headshots, setHeadshots] = useState<Record<string, string>>({});
   const [rotatingTip, setRotatingTip] = useState<{ tip: string; focus_area: string } | null>(null);
@@ -400,31 +398,6 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     }, 60000);
     return () => clearInterval(interval);
   }, [fetchTodayPicks]);
-
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("force-refresh-edge");
-      if (error || !data?.ok) {
-        toast.error("Failed to refresh picks. Try again later.");
-        return;
-      }
-      const total = data?.counts?.total ?? 0;
-      const edgeCount = data?.counts?.todaysEdge ?? 0;
-      const edgeRows = (data?.edge as DailyPick[]) || [];
-      const dailyRows = (data?.daily as DailyPick[]) || [];
-      // Force-update state from response payload — bypasses any broken/cached frontend read.
-      setTodayPicks(sortByPref([...edgeRows]));
-      setDailyTierPicks(sortByPref([...dailyRows]));
-      setPicksLoading(false);
-      setLastRefreshed(new Date());
-      toast.success(total > 0 ? `${edgeCount} edge picks · ${total} total generated` : "No games available for picks right now.");
-    } catch {
-      toast.error("Failed to refresh picks. Try again later.");
-    } finally {
-      setRefreshing(false);
-    }
-  }, [sortByPref]);
 
   // Fetch player headshots for prop picks only
   useEffect(() => {
@@ -599,14 +572,6 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               <span className="text-[10px] text-muted-foreground/40">
                 Updated {Math.max(1, Math.round((Date.now() - lastRefreshed.getTime()) / 60000))}m ago
               </span>
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="p-1 rounded-md hover:bg-secondary/30 transition-colors disabled:opacity-50"
-                title="Refresh picks"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 text-muted-foreground/60 ${refreshing ? "animate-spin" : ""}`} />
-              </button>
             </div>
           </div>
 
@@ -1137,3 +1102,4 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     </div>
   );
 }
+
