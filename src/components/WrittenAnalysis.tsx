@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { FileText, Brain, TrendingUp, Swords, BarChart3, AlertTriangle, Loader2, ChevronDown, ChevronUp, CheckCircle, XCircle, MinusCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { formatPropType } from "@/lib/formatPickLabel";
 
 export interface Decision {
   winning_side: "team1" | "team2" | "over" | "under" | null;
@@ -65,16 +66,45 @@ const SECTION_COLORS = [
   "text-nba-red",
 ];
 
+const RISK_TITLE_RE = /^risk(?:\s*&\s*verdict)?$/i;
+const UNIT_SIZING_RE = /(?:recommended\s+sizing|unit\s+sizing|sized\s+at|wager|stake|proceed\s+at|bet\s+size)[^.?!]*(?:units?|u)\.?/gi;
+const PROP_CODE_RE = /\b(?:(?:NHL|NBA|MLB)_[A-Z0-9_]+|SOG|3PM|TOTAL_BASES)\b/g;
+
+function displayPropLabel(propDisplay: string | null | undefined): string {
+  return formatPropType(propDisplay) || propDisplay || "";
+}
+
+function formatDisplayText(text: string): string {
+  return text.replace(PROP_CODE_RE, (match) => formatPropType(match) || match);
+}
+
+function normalizeAnalysisSection(section: AnalysisSection): AnalysisSection {
+  const title = RISK_TITLE_RE.test((section.title || "").trim()) ? "Risk" : section.title;
+  if (title !== "Risk") return { ...section, title, content: formatDisplayText(section.content || "") };
+
+  const content = formatDisplayText(section.content || "")
+    .replace(UNIT_SIZING_RE, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.!?])/g, "$1")
+    .trim();
+
+  return { title, content };
+}
+
+function normalizeAnalysisSections(sections: AnalysisSection[]): AnalysisSection[] {
+  return sections.map(normalizeAnalysisSection);
+}
+
 function generateFallbackSections(data: WrittenAnalysisProps): AnalysisSection[] {
   const { verdict, confidence, playerOrTeam, line, propDisplay, overUnder, reasoning = [], factors = [] } = data;
   const ev = (data as any).ev;
   const edge = (data as any).edge;
   const source = reasoning.length > 0 ? reasoning : factors;
   const direction = overUnder?.toUpperCase() || "OVER";
-  const lineProp = line ? `${direction} ${line}${propDisplay ? ` ${propDisplay}` : ""}` : direction;
+  const propLabel = displayPropLabel(propDisplay);
+  const lineProp = line ? `${direction} ${line}${propLabel ? ` ${propLabel}` : ""}` : direction;
   const evStr = typeof ev === "number" && ev !== 0 ? ` · +${ev.toFixed(1)}% EV` : "";
   const edgeStr = typeof edge === "number" && edge !== 0 ? ` · ${edge > 0 ? "+" : ""}${edge.toFixed(1)}% edge` : "";
-  const sizingStr = confidence >= 65 ? "1.5–2 units" : confidence >= 55 ? "1 unit" : "0.5 units";
 
   const sections: AnalysisSection[] = [];
 
@@ -87,7 +117,7 @@ function generateFallbackSections(data: WrittenAnalysisProps): AnalysisSection[]
     });
     sections.push({
       title: "Matchup Breakdown",
-      content: source[1] || `Opponent defensive profile and game pace both factor into this ${direction} lean for ${playerOrTeam} at ${line ?? "this"} ${propDisplay || "line"}.`,
+      content: source[1] || `Opponent defensive profile and game pace both factor into this ${direction} lean for ${playerOrTeam} at ${line ?? "this"} ${propLabel || "line"}.`,
     });
     sections.push({
       title: "Recent Form",
@@ -98,10 +128,10 @@ function generateFallbackSections(data: WrittenAnalysisProps): AnalysisSection[]
       content: source[3] || `The ${lineProp} line offers ${edge != null && edge > 3 ? "clear" : "marginal"} market value${evStr}. Stale line or sharp action may tighten before tip.`,
     });
     sections.push({
-      title: "Risk & Verdict",
+      title: "Risk",
       content: verdict === "STRONG PICK"
-        ? `${playerOrTeam} ${lineProp} — ${confidence}% confidence${edgeStr}. High-conviction play, sized at ${sizingStr}. Primary risk: early blowout or unexpected DNP.`
-        : `${playerOrTeam} ${lineProp} — ${confidence}% confidence${edgeStr}. Lean play, sized at ${sizingStr}. ${source[4] || "Monitor lineup status. Standard bankroll management applies."}`,
+        ? `${playerOrTeam} ${lineProp} — ${confidence}% confidence${edgeStr}. Primary risk: early blowout or unexpected DNP.`
+        : `${playerOrTeam} ${lineProp} — ${confidence}% confidence${edgeStr}. ${source[4] || "Monitor lineup status. Standard bankroll management applies."}`,
     });
   } else {
     sections.push({
@@ -110,19 +140,19 @@ function generateFallbackSections(data: WrittenAnalysisProps): AnalysisSection[]
     });
     factors.slice(0, 4).forEach((f, i) => {
       sections.push({
-        title: ["Matchup Analysis", "Situational Factors", "Market Assessment", "Risk & Verdict"][i] || `Factor ${i + 2}`,
+        title: ["Matchup Analysis", "Situational Factors", "Market Assessment", "Risk"][i] || `Factor ${i + 2}`,
         content: f,
       });
     });
     while (sections.length < 5) {
       sections.push({
         title: "Additional Context",
-        content: `${confidence}% model confidence${edgeStr}. Proceed at ${sizingStr} with standard bankroll management.`,
+        content: `${confidence}% model confidence${edgeStr}. Standard bankroll management applies.`,
       });
     }
   }
 
-  return sections.slice(0, 5);
+  return normalizeAnalysisSections(sections.slice(0, 5));
 }
 
 type Tier = "noBet" | "low" | "medium" | "high" | "veryHigh";
@@ -183,7 +213,8 @@ function computeMoneylineTier(props: WrittenAnalysisProps): { tier: Tier; favorT
 function generateOverallSummary(props: WrittenAnalysisProps): { rating: "take" | "lean" | "fade"; summary: string; unitSize: string | null } {
   const { confidence, playerOrTeam, line, propDisplay, overUnder, seasonHitRate, last10, last5, h2hAvg, ev, edge, minutesTrend, injuries, sport, type, verdict, decision } = props;
   const direction = overUnder?.toUpperCase() || "OVER";
-  const pickLabel = line != null ? `${playerOrTeam} ${direction} ${line} ${propDisplay || ""}`.trim() : playerOrTeam;
+  const propLabel = displayPropLabel(propDisplay);
+  const pickLabel = line != null ? `${playerOrTeam} ${direction} ${line} ${propLabel || ""}`.trim() : playerOrTeam;
 
   // ── SINGLE SOURCE OF TRUTH: if backend provided a decision, honor it. Never recompute. ──
   if (decision && decision.winning_team_name && type === "moneyline") {
@@ -385,7 +416,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
             confidence: props.confidence,
             playerOrTeam: props.playerOrTeam,
             line: props.line,
-            propDisplay: props.propDisplay,
+            propDisplay: displayPropLabel(props.propDisplay),
             overUnder: props.overUnder,
             reasoning: props.reasoning,
             factors: props.factors,
@@ -409,7 +440,8 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
         }
 
         // ── Validation guardrail: detect contradictions vs the locked decision ──
-        const offendingSection = validateAgainstDecision(data.sections);
+        const normalizedSections = normalizeAnalysisSections(data.sections);
+        const offendingSection = validateAgainstDecision(normalizedSections);
         if (offendingSection && attempts < MAX_RETRIES) {
           attempts++;
           const detail = {
@@ -440,7 +472,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
           return;
         }
 
-        setSections(data.sections);
+        setSections(normalizedSections);
       } catch {
         if (!cancelled) setSections(generateFallbackSections(props));
       } finally {
