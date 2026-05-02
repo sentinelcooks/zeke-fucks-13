@@ -17,7 +17,7 @@ import { BetTypeDropdown } from "@/components/tracker/BetTypeDropdown";
 import { ParlayPlayForm } from "@/components/tracker/ParlayPlayForm";
 import {
   isGameTotal, isTeamMarket, needsDirection, formatBetLabel,
-  isUfcFightTotal, isUfcFighterStat, getDirectionMode, type DirectionMode,
+  formatMarketLabel, isUfcFightTotal, isUfcFighterStat, getDirectionMode, type DirectionMode,
 } from "@/components/tracker/marketType";
 import { americanToDecimal } from "@/utils/oddsFormat";
 import {
@@ -327,8 +327,17 @@ const ProfitTrackerPage = () => {
       return {
         sport: l.sport.toUpperCase(),
         pick: l.line && l.direction
-          ? `${l.player} ${l.direction.toUpperCase()} ${l.line} ${l.betType}`
-          : `${l.player} - ${l.betType}`,
+          ? (() => {
+              const { headline, detail } = formatBetLabel({
+                subject: l.player,
+                betType: l.betType,
+                line: parseFloat(l.line),
+                direction: l.direction,
+                sport: l.sport?.toLowerCase(),
+              });
+              return `${headline} ${detail}`.trim();
+            })()
+          : `${l.player} - ${l.sport?.toLowerCase() === "nba" ? formatMarketLabel(l.betType) : l.betType}`,
         confidence: Math.round(resolved.probability * 100),
         grade: label.toLowerCase(),
         pick_id: resolved.pickId,
@@ -530,8 +539,8 @@ const ProfitTrackerPage = () => {
     const headers = ["Date", "Sport", "Subject", "Bet", "Odds", "Stake", "Result", "P/L"];
     const csvRows = [headers.join(",")];
     for (const p of allPlays) {
-      const { detail } = formatBetLabel({ subject: p.player_or_fighter, betType: p.bet_type, line: p.line });
-      const betCell = isGameTotal(p.bet_type) ? detail : `${p.bet_type}${p.line ? ` (${p.line})` : ""}`;
+      const { detail } = formatBetLabel({ subject: p.player_or_fighter, betType: p.bet_type, line: p.line, sport: p.sport });
+      const betCell = detail;
       csvRows.push([new Date(p.created_at).toLocaleDateString(), p.sport.toUpperCase(),
         `"${p.player_or_fighter.replace(/"/g, '""')}"`, `"${betCell}"`,
         fmt(p.odds), p.stake, p.result, p.result === "pending" ? "" : (p.payout || 0).toFixed(2)].join(","));

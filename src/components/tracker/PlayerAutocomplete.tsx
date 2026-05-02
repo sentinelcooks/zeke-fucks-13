@@ -56,6 +56,16 @@ const UFC_STAT_LINE_PLACEHOLDERS: Record<string, string> = {
   "control time": "4.5",
 };
 
+const NBA_LINE_PLACEHOLDERS: Record<string, string> = {
+  "free throw attempts": "6.5",
+  "free throws made": "4.5",
+  "free throws": "4.5",
+  fta: "6.5",
+  ftm: "4.5",
+  ft_attempts: "6.5",
+  free_throws: "4.5",
+};
+
 export function getLinePlaceholder(sport: string, betType?: string): string {
   if (sport === "ufc") {
     if (isUfcFighterStat(betType)) {
@@ -67,6 +77,12 @@ export function getLinePlaceholder(sport: string, betType?: string): string {
     }
     if (isUfcFightTotal(betType)) return "2.5";
     return "";
+  }
+  if (sport === "nba") {
+    const t = (betType || "").toLowerCase().trim();
+    for (const [key, ph] of Object.entries(NBA_LINE_PLACEHOLDERS)) {
+      if (t.includes(key)) return ph;
+    }
   }
   return LINE_PLACEHOLDER_BY_SPORT[sport] || "0.5";
 }

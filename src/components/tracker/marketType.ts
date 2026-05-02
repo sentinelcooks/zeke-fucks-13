@@ -129,6 +129,96 @@ function stripDirection(betType: string): { base: string; direction: "over" | "u
   return { base: betType.trim(), direction: null };
 }
 
+const MARKET_LABELS: Record<string, string> = {
+  points: "Points",
+  pts: "Points",
+  nba_points: "Points",
+  rebounds: "Rebounds",
+  reb: "Rebounds",
+  rebs: "Rebounds",
+  nba_rebounds: "Rebounds",
+  assists: "Assists",
+  ast: "Assists",
+  nba_assists: "Assists",
+  "3-pointers": "3-Pointers",
+  "3 pointers": "3-Pointers",
+  "3pt": "3-Pointers",
+  "3pm": "3-Pointers",
+  nba_3pt: "3-Pointers",
+  nba_3pm: "3-Pointers",
+  steals: "Steals",
+  stl: "Steals",
+  blocks: "Blocks",
+  blk: "Blocks",
+  turnovers: "Turnovers",
+  turnover: "Turnovers",
+  tov: "Turnovers",
+  to: "Turnovers",
+  "pts+reb": "Points + Rebounds",
+  pts_reb: "Points + Rebounds",
+  nba_pts_reb: "Points + Rebounds",
+  "points+rebounds": "Points + Rebounds",
+  "points rebounds": "Points + Rebounds",
+  "points + rebounds": "Points + Rebounds",
+  "pts+ast": "Points + Assists",
+  pts_ast: "Points + Assists",
+  nba_pts_ast: "Points + Assists",
+  "points+assists": "Points + Assists",
+  "points assists": "Points + Assists",
+  "points + assists": "Points + Assists",
+  "reb+ast": "Rebounds + Assists",
+  reb_ast: "Rebounds + Assists",
+  nba_reb_ast: "Rebounds + Assists",
+  "rebounds+assists": "Rebounds + Assists",
+  "rebounds assists": "Rebounds + Assists",
+  "rebounds + assists": "Rebounds + Assists",
+  pra: "Points + Rebounds + Assists",
+  nba_pra: "Points + Rebounds + Assists",
+  pts_reb_ast: "Points + Rebounds + Assists",
+  points_rebounds_assists: "Points + Rebounds + Assists",
+  "pts+reb+ast": "Points + Rebounds + Assists",
+  "points+rebounds+assists": "Points + Rebounds + Assists",
+  "points rebounds assists": "Points + Rebounds + Assists",
+  "points + rebounds + assists": "Points + Rebounds + Assists",
+  "free throws made": "Free Throws Made",
+  "free throws": "Free Throws Made",
+  free_throws: "Free Throws Made",
+  ftm: "Free Throws Made",
+  nba_ftm: "Free Throws Made",
+  "free throw attempts": "Free Throw Attempts",
+  "free throws attempted": "Free Throw Attempts",
+  "ft attempts": "Free Throw Attempts",
+  ft_attempts: "Free Throw Attempts",
+  free_throw_attempts: "Free Throw Attempts",
+  fta: "Free Throw Attempts",
+  nba_fta: "Free Throw Attempts",
+};
+
+function titleCaseMarket(s: string): string {
+  return s
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+export function formatMarketLabel(betType: string | null | undefined): string {
+  const raw = (betType || "").trim();
+  if (!raw) return "";
+  const { base } = stripDirection(raw);
+  const lower = base.toLowerCase().trim();
+  const compactPlus = lower.replace(/\s*\+\s*/g, "+");
+  const compactWords = compactPlus.replace(/[^a-z0-9+_]+/g, " ").trim();
+  return (
+    MARKET_LABELS[lower] ||
+    MARKET_LABELS[compactPlus] ||
+    MARKET_LABELS[compactWords] ||
+    titleCaseMarket(base)
+  );
+}
+
 export interface BetLabelInput {
   subject: string;
   betType: string;
@@ -213,11 +303,12 @@ export function formatBetLabel({
     };
   }
 
-  const detailParts: string[] = [base];
-  if (dir) detailParts[0] = `${base} (${dir.toUpperCase()})`;
-  if (line != null) detailParts.push(`(${line})`);
+  const label = formatMarketLabel(base);
+  const dirLabel = dir ? dir.charAt(0).toUpperCase() + dir.slice(1) : "";
+  const lineStr = line != null ? String(line) : "";
+  const detailParts = [dirLabel, lineStr, label].filter(Boolean);
   return {
     headline: sub,
-    detail: detailParts.filter(Boolean).join(" "),
+    detail: detailParts.join(" ").trim(),
   };
 }
