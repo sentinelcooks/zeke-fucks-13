@@ -2173,6 +2173,8 @@ const NbaPropsPage = () => {
                 last10={results.last_10}
                 last5={results.last_5}
                 h2hAvg={h2h.avg}
+                h2hData={results.head_to_head}
+                recentGameValues={(results.game_log || []).slice(-10).map((g: any) => g.stat_value).filter((v: any): v is number => typeof v === "number")}
                 ev={results.ev}
                 edge={results.edge}
                 minutesTrend={results.minutes_trend?.trend}

@@ -12,8 +12,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-/* ── Truncate a section to ~50 words ── */
-function truncateSection(text: string, maxChars = 280): string {
+/* ── Truncate a section to ~100 words ── */
+function truncateSection(text: string, maxChars = 500): string {
   if (text.length <= maxChars) return text;
   const cut = text.slice(0, maxChars);
   const lastSentence = cut.lastIndexOf('.');
@@ -123,6 +123,67 @@ function buildPaceContextString(paceContext: any, sport: string): string {
   return s;
 }
 
+/* ── Infer whether H2H games are from an active playoff series ── */
+function inferPlayoffContext(h2hGames: any[] | undefined, opponent: string | undefined): string | null {
+  if (!h2hGames?.length || !opponent) return null;
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000);
+  const recentGames = h2hGames.filter((g: any) => g.date && new Date(g.date) > cutoff);
+  if (recentGames.length === h2hGames.length && h2hGames.length >= 3) {
+    return `NOTE: All ${h2hGames.length} meetings vs ${opponent} appear to be from the current 2025 playoff series.`;
+  }
+  return null;
+}
+
+/* ── Build rich context string from actual game data ── */
+function buildRichContextString(body: any): string {
+  const { h2hData, recentGameValues, line, overUnder } = body;
+  const parts: string[] = [];
+
+  if (Array.isArray(recentGameValues) && recentGameValues.length > 0) {
+    const l10 = recentGameValues.slice(-10);
+    const l10Avg = (l10.reduce((a: number, b: number) => a + b, 0) / l10.length).toFixed(1);
+    const mostRecent = l10[l10.length - 1];
+    const l10Hits = line != null
+      ? l10.filter((v: number) => overUnder === "UNDER" ? v < line : v > line).length
+      : null;
+    const l10HitPct = l10Hits != null ? Math.round((l10Hits / l10.length) * 100) : null;
+    let block = `RECENT FORM DATA:\nL10 stat values (oldest→newest): ${l10.join(", ")}\nL10 average: ${l10Avg}`;
+    if (l10HitPct != null) block += `\nL10 hit rate: ${l10Hits}/${l10.length} (${l10HitPct}%) ${overUnder || "OVER"} ${line}`;
+    block += `\nMost recent: ${mostRecent}`;
+    parts.push(block);
+  }
+
+  if (h2hData) {
+    const { games, opponent, rate, hits, total, avg } = h2hData;
+    if (Array.isArray(games) && games.length > 0) {
+      const statVals = games
+        .map((g: any) => typeof g.stat_value === "number" ? g.stat_value : null)
+        .filter((v: any): v is number => v !== null);
+      if (statVals.length > 0) {
+        const h2hFloor = Math.min(...statVals);
+        const h2hCeiling = Math.max(...statVals);
+        const playoffNote = inferPlayoffContext(games, opponent);
+        let block = `H2H vs ${opponent || "Opponent"} (${games.length} games):\nValues most recent first: ${statVals.join(", ")}`;
+        if (rate != null && hits != null && total != null)
+          block += `\nH2H hit rate: ${hits}/${total} (${Math.round(rate)}%) ${overUnder || "OVER"} ${line}`;
+        if (avg != null) block += `, average ${avg}`;
+        block += `\nH2H floor: ${h2hFloor}, ceiling: ${h2hCeiling}`;
+        if (playoffNote) block += `\n${playoffNote}`;
+        parts.push(block);
+      }
+    } else if (avg != null) {
+      let block = `H2H vs ${opponent || "Opponent"}:\nH2H average: ${avg}`;
+      if (rate != null) block += `, hit rate: ${Math.round(rate)}%`;
+      parts.push(block);
+    }
+  }
+
+  return parts.length > 0
+    ? "\n\nACTUAL GAME DATA (USE THESE SPECIFIC NUMBERS):\n" + parts.join("\n\n")
+    : "";
+}
+
 /* ── Sport-specific prop prompts ── */
 function getPropPrompt(body: any, injurySection: string, teammatesSection: string): string {
   const { playerOrTeam, overUnder, line, verdict, confidence, sport } = body;
@@ -131,20 +192,28 @@ function getPropPrompt(body: any, injurySection: string, teammatesSection: strin
   const dataPoints = stripPropCodes(dataPointsRaw);
   const s = (sport || "").toLowerCase();
 
-  const formatRule = `Write exactly 3 sections. Each MUST be 2-3 sentences and under 50 words. NO EXCEPTIONS — output is auto-truncated.
+  const richContext = buildRichContextString(body);
+
+  const formatRule = `Write exactly 5 sections. Each MUST be 3-5 sentences and under 100 words. NO EXCEPTIONS — output is auto-truncated.
 Format each as: **Section Title**: plain text analysis.
 Do NOT use markdown inside the text — no asterisks, no bold, no bullets. Only the title is wrapped in **.`;
 
+  const directionInstruction = (overUnder || "OVER").toUpperCase() === "UNDER"
+    ? `Direction: UNDER ${line}. Explain why ${playerOrTeam} is likely to stay BELOW this line, not why they exceed it.`
+    : `Direction: OVER ${line}. Explain the realistic path for ${playerOrTeam} to clear this line.`;
+
+  const antiHype = `AVOID these phrases: "checks the boxes", "lock", "free money", "guaranteed", "smash", "easy", "must bet". PREFER neutral phrasing: "The case is strongest through...", "The main risk is...", "This is more of a lean than a full edge if..."
+Only reference values included in the context above. Never create or estimate missing game-log values.`;
+
   const overallRating = body.overallRating || "";
   const ratingInstruction = overallRating === "fade"
-    ? `The overall verdict is FADE. Do NOT recommend betting. Acknowledge the risks clearly. Your Verdict & Risk MUST say to pass or avoid.`
+    ? `The overall verdict is FADE. Do NOT recommend betting. Acknowledge the risks clearly.`
     : overallRating === "lean"
       ? `The overall verdict is LEAN. Be cautiously optimistic. Mention it's a small-unit play with caveats.`
       : overallRating === "take"
         ? `The overall verdict is TAKE. Be assertive and confident. Recommend the bet clearly.`
         : `Your final verdict MUST ALIGN with "${verdict}".`;
 
-  // Build pace context string
   const paceStr = buildPaceContextString(body.paceContext, s);
 
   if (s === "mlb") return `You are a sharp MLB betting analyst. Be concise and data-driven. Use baseball terminology throughout.
@@ -155,15 +224,19 @@ Verdict: ${verdict}
 Model Confidence: ${confidence}%
 
 Data points:
-- ${dataPoints || "No additional data"}${paceStr}${injurySection}${teammatesSection}
+- ${dataPoints || "No additional data"}${paceStr}${richContext}${injurySection}${teammatesSection}
 
-CRITICAL: ${ratingInstruction} The direction is ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the overall rating.
+CRITICAL: ${ratingInstruction} Never contradict the overall rating.
+${directionInstruction}
+${antiHype}
 
 ${formatRule}
 
-1. Statistical Edge — Reference ${playerOrTeam}'s season stats, L10 trends, platoon splits, K rate / ERA / WHIP / OPS that support ${overUnder || "OVER"} ${line || "N/A"} ${propDisplay || ""}. Use specific numbers from the data points.
-2. Matchup & Park Factor — Opposing pitcher/hitter matchup, park dimensions, weather, bullpen state.${paceStr ? " Factor in game pace/total context." : ""}
-3. Risk — Name ONE specific risk factor (opposing pitcher form, park, lineup spot, weather) that could kill this pick. Risk factors only. DO NOT recommend a unit size, mention "u" or "units", or write "checks the boxes" / "strong play".`;
+1. Statistical Edge — Season hit rate, sample size, L10 and L5 trend; platoon splits, K rate / ERA / WHIP / OPS supporting ${overUnder || "OVER"} ${line || "N/A"} ${propDisplay || ""}. Use specific numbers from the data.
+2. Matchup / Context — Opposing pitcher/hitter matchup, park dimensions, weather, bullpen state. Reference opponent H2H history if provided.${paceStr ? " Factor in game pace/total context." : ""}
+3. Recent Form — Use actual values from the game data block above. State the most recent value, L10 floor, and ceiling explicitly. Do not estimate any value not in the data.
+4. Line Value — Compare the line to season avg, L10 avg, and H2H avg. State the floor cushion above or below the line and any variance risk.
+5. Risk — Name ONE specific risk factor (opposing pitcher form, park, lineup spot, weather) that could kill this pick. Risk factors only. DO NOT recommend a unit size, mention "u" or "units".`;
 
   if (s === "nhl") return `You are a sharp NHL betting analyst. Be concise and data-driven. Use hockey terminology throughout.
 
@@ -173,18 +246,22 @@ Verdict: ${verdict}
 Model Confidence: ${confidence}%
 
 Data points:
-- ${dataPoints || "No additional data"}${paceStr}${injurySection}${teammatesSection}
+- ${dataPoints || "No additional data"}${paceStr}${richContext}${injurySection}${teammatesSection}
 
-CRITICAL: ${ratingInstruction} The direction is ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the overall rating.
+CRITICAL: ${ratingInstruction} Never contradict the overall rating.
+${directionInstruction}
+${antiHype}
 
 ${formatRule}
 
-1. Statistical Edge — Reference ${playerOrTeam}'s SOG trends, shooting %, TOI, PP1/PP2 placement that support ${overUnder || "OVER"} ${line || "N/A"} ${propDisplay || ""}. Use specific numbers from the data points.
-2. Matchup & Lineup — Opposing goalie save %, line combinations, PP/PK time, fatigue.${paceStr ? " Factor in game pace/total context." : ""}
-3. Risk — Name ONE specific risk factor (opposing goalie, line/PP demotion, TOI volatility, low team total) that could kill this pick. Risk factors only. DO NOT recommend a unit size, mention "u" or "units", or write "checks the boxes" / "strong play".`;
+1. Statistical Edge — Season hit rate, sample size, L10 trend; Shots on Goal trends, shooting %, TOI, PP1/PP2 placement supporting ${overUnder || "OVER"} ${line || "N/A"} ${propDisplay || ""}. Use specific numbers.
+2. Matchup / Context — Opposing goalie save %, line combinations, PP/PK time, fatigue. Reference opponent H2H history and any series note if provided.${paceStr ? " Factor in game pace/total context." : ""}
+3. Recent Form — Use actual values from the game data block above. State the most recent value, L10 floor, and ceiling. Do not estimate any value not in the data.
+4. Line Value — Compare the line to season avg, L10 avg, and H2H avg. State the floor cushion above or below the line.
+5. Risk — Name ONE specific risk factor (opposing goalie, line/PP demotion, TOI volatility, low team total) that could kill this pick. Risk factors only. DO NOT recommend a unit size, mention "u" or "units".`;
 
-  // NBA / default
-  return `You are a sharp sports betting analyst. Be concise, data-driven, and persuasive.
+  // NBA / UFC / default
+  return `You are a sharp sports betting analyst. Be concise, data-driven, and specific to this pick.
 
 Player: ${playerOrTeam}
 Prop: ${propDisplay || "N/A"} ${overUnder || "OVER"} ${line || "N/A"}
@@ -193,25 +270,38 @@ Model Confidence: ${confidence}%
 Sport: ${sport || "nba"}
 
 Data points:
-- ${dataPoints || "No additional data"}${paceStr}${injurySection}${teammatesSection}
+- ${dataPoints || "No additional data"}${paceStr}${richContext}${injurySection}${teammatesSection}
 
-CRITICAL: ${ratingInstruction} The direction is ${overUnder || "OVER"} ${line || "N/A"}. Never contradict the overall rating.
+CRITICAL: ${ratingInstruction} Never contradict the overall rating.
+${directionInstruction}
+${antiHype}
 
 ${formatRule}
 
-1. Statistical Edge — Reference ${playerOrTeam}'s hit rates, averages, minutes/usage trends that support ${overUnder || "OVER"} ${line || "N/A"} ${propDisplay || ""}. Use specific numbers from the data points.
-2. Matchup & Pace — Opponent defensive profile vs this prop, pace, injuries affecting tonight's role.${paceStr ? " Use the game pace/total context provided." : ""}
-3. Risk — Name ONE specific risk factor (injury, blowout risk, pace shift, matchup advantage for the defense) that could kill this pick. Risk factors only. DO NOT recommend a unit size, mention "u" or "units", or write "checks the boxes" / "strong play".`;
+1. Statistical Edge — Season hit rate and sample size; L10 and L5 trend; usage and minutes trends supporting ${overUnder || "OVER"} ${line || "N/A"} ${propDisplay || ""}. Use specific numbers.
+2. Matchup / Context — Opponent defensive profile vs this prop type, pace, any series context. Reference opponent H2H history and series note if provided.${paceStr ? " Use the game pace/total context provided." : ""}
+3. Recent Form — Use actual values from the game data block above. State the most recent value, L10 floor, and ceiling. Do not estimate any value not in the data.
+4. Line Value — Compare the line to season avg, L10 avg, and H2H avg. State the cushion above (OVER) or margin of safety below (UNDER) the line explicitly.
+5. Risk — Name ONE specific risk factor (injury, blowout risk, tight cushion, pace shift) that could kill this pick. Risk factors only. DO NOT recommend a unit size, mention "u" or "units".`;
 }
 
 /* ── Sport-specific system messages ── */
 function getSystemMessage(sport: string, type: string): string {
-  const base = "STRICT RULES: Each section MUST be 2-3 sentences and under 50 words. No exceptions. No paragraphs. No markdown inside text. Only use **Title**: format for section headers. Output that exceeds 50 words per section will be auto-truncated.";
   const s = (sport || "").toLowerCase();
+
+  if (type === "prop") {
+    const propBase = "STRICT RULES: Write exactly 5 sections. Each section MUST be 3-5 sentences and under 100 words. No markdown inside text. Only use **Title**: format for section headers. Only cite numbers that appear in the provided data — never invent statistics.";
+    if (s === "ufc") return `You are an expert MMA betting analyst. Be concise. Never hedge — take a clear stance. Use specific numbers from the data. ${propBase}`;
+    if (s === "nhl") return `You are an expert NHL betting analyst. Be concise. Never hedge. Use hockey terminology: save %, GAA, puck line, PP, PK, Shots on Goal, Corsi, TOI. ${propBase}`;
+    if (s === "mlb") return `You are an expert MLB betting analyst. Be concise. Never hedge. Use baseball terminology: ERA, WHIP, K/9, OPS, wOBA, park factor. ${propBase}`;
+    return `You are an expert sports betting analyst. Be concise. Never hedge — take a clear stance. Current injuries matter MORE than historical data. ${propBase}`;
+  }
+
+  // Moneyline / spread / total: keep original 3-section, 50-word rules
+  const base = "STRICT RULES: Each section MUST be 2-3 sentences and under 50 words. No exceptions. No paragraphs. No markdown inside text. Only use **Title**: format for section headers. Output that exceeds 50 words per section will be auto-truncated.";
   if (s === "ufc") return `You are an expert MMA betting analyst. Be concise. Never hedge — take a clear stance. Use specific numbers. ${base}`;
   if (s === "nhl") return `You are an expert NHL betting analyst. Be concise. Never hedge — take a clear stance. Use hockey terminology: save %, GAA, puck line, PP, PK, SOG, Corsi, TOI. ${base}`;
   if (s === "mlb") return `You are an expert MLB betting analyst. Be concise. Never hedge — take a clear stance. Use baseball terminology: ERA, WHIP, K/9, OPS, wOBA, park factor. ${base}`;
-  if (type === "prop") return `You are an expert sports betting analyst. Be concise. Never hedge — take a clear stance. Current injuries matter MORE than historical data. ${base}`;
   return `You are an expert sports betting analyst. Be concise. Never hedge — take a clear stance. Current injuries matter MORE than historical data. ${base}`;
 }
 
@@ -433,7 +523,7 @@ ${formatRule}
           { role: "system", content: systemMessage },
           { role: "user", content: prompt },
         ],
-        maxTokens: 600,
+        maxTokens: type === "prop" ? 1200 : 600,
         temperature: 0.3,
       });
       content = aiResult.output as string;
@@ -464,17 +554,18 @@ ${formatRule}
     );
 
     // Parse sections using multi-format parser
-    const sections = parseSections(content).slice(0, 3);
+    const maxSections = type === "prop" ? 5 : 3;
+    const sections = parseSections(content).slice(0, maxSections);
 
     // Fallback if parsing still fails
     if (sections.length === 0) {
       const lines = content.split("\n").filter((l: string) => l.trim().length > 0);
-      for (const line of lines.slice(0, 3)) {
+      for (const line of lines.slice(0, maxSections)) {
         sections.push({ title: "", content: truncateSection(line.replace(/\*\*/g, "").replace(/\*/g, "").replace(/^#+\s*/gm, "").trim()) });
       }
     }
 
-    return new Response(JSON.stringify({ sections: sections.slice(0, 3) }), {
+    return new Response(JSON.stringify({ sections: sections.slice(0, maxSections) }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

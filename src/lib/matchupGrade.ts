@@ -93,3 +93,52 @@ export function buildMatchupGrade(
     warnings: [],
   };
 }
+
+/* ── Confidence / parlay grade helpers ── */
+
+export type ConfidenceGrade = "strong" | "lean" | "risky";
+
+const STRONG = 60;
+const LEAN = 45;
+
+export function safeConfidence(input: unknown, fallback = 0): number {
+  const n =
+    typeof input === "number"
+      ? input
+      : typeof input === "string"
+      ? parseFloat(input)
+      : NaN;
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(100, n));
+}
+
+export function gradeFromConfidence(conf: unknown): ConfidenceGrade {
+  const n = typeof conf === "number" ? conf : safeConfidence(conf, NaN);
+  if (!Number.isFinite(n)) return "risky";
+  if (n >= STRONG) return "strong";
+  if (n >= LEAN) return "lean";
+  return "risky";
+}
+
+export function formatConfidence(conf: unknown): string {
+  const n =
+    typeof conf === "number" && Number.isFinite(conf)
+      ? Math.max(0, Math.min(100, conf))
+      : NaN;
+  return Number.isFinite(n) ? `${n.toFixed(0)}%` : "—";
+}
+
+export function extractConfidence(data: any): number {
+  if (typeof data?.confidence === "number") return safeConfidence(data.confidence);
+  if (typeof data?.confidence?.overall_confidence === "number")
+    return safeConfidence(data.confidence.overall_confidence);
+  if (typeof data?.ml_pick?.probability === "number")
+    return safeConfidence(data.ml_pick.probability);
+  if (typeof data?.probability === "number") return safeConfidence(data.probability);
+  return 0;
+}
+
+export function normalizeGrade(grade: unknown): ConfidenceGrade {
+  if (grade === "strong" || grade === "lean" || grade === "risky") return grade;
+  return "risky";
+}

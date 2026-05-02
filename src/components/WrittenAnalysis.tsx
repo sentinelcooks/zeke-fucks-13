@@ -43,6 +43,16 @@ interface WrittenAnalysisProps {
   // Names of the two teams — used for the validation guardrail
   team1Name?: string;
   team2Name?: string;
+  // Rich data forwarded to ai-analysis for contextual, value-specific analysis
+  h2hData?: {
+    rate?: number;
+    hits?: number;
+    total?: number;
+    avg?: number;
+    games?: Array<{ stat_value?: number; matchup?: string; date?: string }>;
+    opponent?: string;
+  };
+  recentGameValues?: number[];
 }
 
 interface AnalysisSection {
@@ -429,6 +439,9 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
             decision: props.decision || null,
             team1Name: props.team1Name,
             team2Name: props.team2Name,
+            h2hData: props.h2hData,
+            recentGameValues: props.recentGameValues,
+            last5: props.last5,
           },
         });
 

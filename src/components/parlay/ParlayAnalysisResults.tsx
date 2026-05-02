@@ -5,6 +5,7 @@ import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useParlaySlip } from "@/contexts/ParlaySlipContext";
+import { gradeFromConfidence, formatConfidence, safeConfidence } from "@/lib/matchupGrade";
 
 interface LegAnalysis {
   legIndex: number;
@@ -74,8 +75,9 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
   const { clearSlip } = useParlaySlip();
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
-  const overallGrade = overallConfidence >= 60 ? "strong" : overallConfidence >= 40 ? "lean" : "risky";
-  const unitSizing = getUnitSizing(overallConfidence, legs.length, parlayOdds);
+  const safeOverallConfidence = safeConfidence(overallConfidence, 0);
+  const overallGrade = gradeFromConfidence(safeOverallConfidence);
+  const unitSizing = getUnitSizing(safeOverallConfidence, legs.length, parlayOdds);
 
   const handleSave = async () => {
     if (!user || saved) return;
@@ -83,7 +85,7 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
     try {
       await supabase.from("parlay_history" as any).insert({
         user_id: user.id, stake, parlay_odds: parlayOdds, potential_payout: potentialPayout,
-        profit, overall_confidence: overallConfidence, overall_grade: overallGrade,
+        profit, overall_confidence: safeOverallConfidence, overall_grade: overallGrade,
         overall_writeup: overallWriteup, unit_sizing: unitSizing.units,
         legs: JSON.stringify(legs), result: "pending",
       } as any);
@@ -94,7 +96,7 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
   };
 
   const statCards = [
-    { icon: BarChart3, label: "Confidence", value: `${overallConfidence.toFixed(0)}%`, color: getGradeColor(overallGrade), glow: getGradeGlow(overallGrade), highlight: true },
+    { icon: BarChart3, label: "Confidence", value: formatConfidence(safeOverallConfidence), color: getGradeColor(overallGrade), glow: getGradeGlow(overallGrade), highlight: true },
     { icon: Calculator, label: "Parlay Odds", value: fmt(parlayOdds), color: "text-accent", glow: "", highlight: false },
     { icon: DollarSign, label: "Payout", value: `$${potentialPayout.toFixed(2)}`, color: "text-nba-green", glow: "", highlight: false },
     { icon: Trophy, label: "Profit", value: `$${profit.toFixed(2)}`, color: "text-nba-yellow", glow: "", highlight: false },
@@ -202,7 +204,7 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
                       Best: {leg.bestBook}
                     </span>
                   )}
-                  <span className={`text-sm font-black ${getGradeColor(leg.grade)}`}>{leg.confidence.toFixed(0)}%</span>
+                  <span className={`text-sm font-black ${getGradeColor(leg.grade)}`}>{formatConfidence(leg.confidence)}</span>
                   <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${getGradeBg(leg.grade)}`}>{leg.grade}</span>
                 </div>
               </div>

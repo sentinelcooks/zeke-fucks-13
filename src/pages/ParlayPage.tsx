@@ -6,6 +6,7 @@ import NbaLegInput, { NbaLegData } from "@/components/parlay/NbaLegInput";
 import UfcLegInput, { UfcLegData } from "@/components/parlay/UfcLegInput";
 import ParlayAnalysisResults from "@/components/parlay/ParlayAnalysisResults";
 import { analyzeProp, analyzeUfcMatchup } from "@/services/api";
+import { safeConfidence, gradeFromConfidence, extractConfidence } from "@/lib/matchupGrade";
 import { fetchPlayerOdds } from "@/services/oddsApi";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { useParlaySlip } from "@/contexts/ParlaySlipContext";
@@ -176,14 +177,15 @@ const ParlayPage = () => {
         try {
           if (leg.sport === "UFC") {
             const data = await analyzeUfcMatchup(leg.ufc.fighter1, leg.ufc.fighter2);
-            if (data.error) return { legIndex: idx, sport: leg.sport, pick: getLegPickLabel(leg), odds: leg.odds, confidence: 30, grade: "risky" as const, summary: `Could not analyze: ${data.error}`, keyStats: [], bestBook: leg.bestBook };
+            if (data.error) return { legIndex: idx, sport: leg.sport, pick: getLegPickLabel(leg), odds: leg.odds, confidence: 0, grade: "risky" as const, summary: `Could not analyze: ${data.error}`, keyStats: [], bestBook: leg.bestBook };
             const mlPick = data.ml_pick;
             const pickedFighter = leg.ufc.pickFighter === "fighter1" ? leg.ufc.fighter1 : leg.ufc.fighter2;
             const mlPickName = mlPick?.pick || "";
             const isAligned = mlPickName.toLowerCase().includes(pickedFighter.split(" ").pop()?.toLowerCase() || "");
-            let conf = mlPick?.probability || 50;
-            if (!isAligned) conf = 100 - conf;
-            const grade = conf >= 60 ? "strong" as const : conf >= 45 ? "lean" as const : "risky" as const;
+            const rawProb = safeConfidence(mlPick?.probability, NaN);
+            let conf = Number.isFinite(rawProb) ? (isAligned ? rawProb : 100 - rawProb) : 0;
+            conf = safeConfidence(conf, 0);
+            const grade = gradeFromConfidence(conf);
             const keyStats: string[] = [];
             const f1Stats = data.fighter1?.stats; const f2Stats = data.fighter2?.stats;
             const f1Age = data.fighter1?.age || data.fighter1?.fighter?.age;
@@ -197,9 +199,15 @@ const ParlayPage = () => {
           } else {
             const lineNum = parseFloat(leg.nba.line);
             const data = await analyzeProp({ player: leg.nba.player, prop_type: leg.nba.propType, line: lineNum, over_under: leg.nba.overUnder, opponent: leg.nba.opponent || undefined, sport: leg.sport.toLowerCase() });
-            if (data.error) return { legIndex: idx, sport: leg.sport, pick: getLegPickLabel(leg), odds: leg.odds, confidence: 30, grade: "risky" as const, summary: `Could not analyze: ${data.error}`, keyStats: [], bestBook: leg.bestBook };
-            const conf = typeof data.confidence === "number" ? data.confidence : (data.confidence?.overall_confidence || 50);
-            const grade = conf >= 65 ? "strong" as const : conf >= 45 ? "lean" as const : "risky" as const;
+            if (data.error) {
+              const sportLabel = leg.sport;
+              const summary = sportLabel === "NFL" && /not\s+supported|unsupported|unknown\s+sport/i.test(String(data.error))
+                ? "NFL analysis is not yet supported. Treating leg as risky."
+                : `Could not analyze: ${data.error}`;
+              return { legIndex: idx, sport: leg.sport, pick: getLegPickLabel(leg), odds: leg.odds, confidence: 0, grade: "risky" as const, summary, keyStats: [], bestBook: leg.bestBook };
+            }
+            const conf = safeConfidence(extractConfidence(data), 0);
+            const grade = gradeFromConfidence(conf);
             const reasoning: string[] = Array.isArray(data.reasoning) ? data.reasoning : (data.confidence?.reasoning || []);
             const keyStats: string[] = [];
             if (data.season_hit_rate) keyStats.push(`Season: ${data.season_hit_rate.rate}% (${data.season_hit_rate.hits}/${data.season_hit_rate.total})`);
@@ -209,10 +217,14 @@ const ParlayPage = () => {
             return { legIndex: idx, sport: leg.sport, pick: getLegPickLabel(leg), odds: leg.odds, confidence: conf, grade, summary: reasoning.slice(0, 3).join(". ") + ".", keyStats, bestBook: leg.bestBook };
           }
         } catch {
-          return { legIndex: idx, sport: leg.sport, pick: getLegPickLabel(leg), odds: leg.odds, confidence: 30, grade: "risky" as const, summary: "Failed to fetch analysis data.", keyStats: [], bestBook: leg.bestBook };
+          return { legIndex: idx, sport: leg.sport, pick: getLegPickLabel(leg), odds: leg.odds, confidence: 0, grade: "risky" as const, summary: "Failed to fetch analysis data.", keyStats: [], bestBook: leg.bestBook };
         }
       }));
-      const overallConf = legAnalyses.reduce((acc, l) => acc * (l.confidence / 100), 1) * 100;
+      const overallConfRaw = legAnalyses.reduce((acc, l) => {
+        const c = safeConfidence(l.confidence, 0);
+        return acc * (c / 100);
+      }, 1) * 100;
+      const overallConf = Number.isFinite(overallConfRaw) ? Math.max(0, Math.min(100, overallConfRaw)) : 0;
       const strongLegs = legAnalyses.filter(l => l.grade === "strong").length;
       const riskyLegs = legAnalyses.filter(l => l.grade === "risky").length;
       let writeup = "";
