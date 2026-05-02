@@ -1,5 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { callAI, AIProviderError, ANTI_GENERIC_INSTRUCTION } from "../_shared/ai-provider.ts";
+import { formatPropTypeServer, stripPropCodes } from "../_shared/format_labels.ts";
+
+// Risk section must contain risk factors only — unit sizing comes from the
+// Overall Verdict (decision.recommended_units), never from the AI text.
+const UNIT_SIZING_RE = /(?:recommended\s+sizing|unit\s+sizing|sized\s+at|wager|stake|proceed\s+at|bet\s+size)[^.?!]*(?:units?|u)\.?/gi;
+const TRAILING_UNITS_RE = /\b\d+(?:\.\d+)?\s*(?:units?|u)\b\.?/gi;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -119,8 +125,10 @@ function buildPaceContextString(paceContext: any, sport: string): string {
 
 /* ── Sport-specific prop prompts ── */
 function getPropPrompt(body: any, injurySection: string, teammatesSection: string): string {
-  const { playerOrTeam, propDisplay, overUnder, line, verdict, confidence, sport } = body;
-  const dataPoints = (body.reasoning || body.factors || []).join("\n- ");
+  const { playerOrTeam, overUnder, line, verdict, confidence, sport } = body;
+  const propDisplay = formatPropTypeServer(body.propDisplay) || body.propDisplay || "";
+  const dataPointsRaw = (body.reasoning || body.factors || []).join("\n- ");
+  const dataPoints = stripPropCodes(dataPointsRaw);
   const s = (sport || "").toLowerCase();
 
   const formatRule = `Write exactly 3 sections. Each MUST be 2-3 sentences and under 50 words. NO EXCEPTIONS — output is auto-truncated.
@@ -153,9 +161,9 @@ CRITICAL: ${ratingInstruction} The direction is ${overUnder || "OVER"} ${line ||
 
 ${formatRule}
 
-1. Statistical Edge — Season stats, L10 trends, platoon splits, K rate / ERA / WHIP / OPS.
+1. Statistical Edge — Reference ${playerOrTeam}'s season stats, L10 trends, platoon splits, K rate / ERA / WHIP / OPS that support ${overUnder || "OVER"} ${line || "N/A"} ${propDisplay || ""}. Use specific numbers from the data points.
 2. Matchup & Park Factor — Opposing pitcher/hitter matchup, park dimensions, weather, bullpen state.${paceStr ? " Factor in game pace/total context." : ""}
-3. Verdict & Risk — Name the bet direction and line (${overUnder || "OVER"} ${line || "N/A"}) explicitly. State the model confidence (${confidence}%) and edge vs market. Name the ONE specific risk that could kill this pick. Give a unit size (0.5–3u). NEVER write "this pick checks the boxes", "strong play here", or any generic template phrase.`;
+3. Risk — Name ONE specific risk factor (opposing pitcher form, park, lineup spot, weather) that could kill this pick. Risk factors only. DO NOT recommend a unit size, mention "u" or "units", or write "checks the boxes" / "strong play".`;
 
   if (s === "nhl") return `You are a sharp NHL betting analyst. Be concise and data-driven. Use hockey terminology throughout.
 
@@ -171,9 +179,9 @@ CRITICAL: ${ratingInstruction} The direction is ${overUnder || "OVER"} ${line ||
 
 ${formatRule}
 
-1. Statistical Edge — SOG trends, shooting %, ice time, power-play involvement.
+1. Statistical Edge — Reference ${playerOrTeam}'s SOG trends, shooting %, TOI, PP1/PP2 placement that support ${overUnder || "OVER"} ${line || "N/A"} ${propDisplay || ""}. Use specific numbers from the data points.
 2. Matchup & Lineup — Opposing goalie save %, line combinations, PP/PK time, fatigue.${paceStr ? " Factor in game pace/total context." : ""}
-3. Verdict & Risk — Name the bet direction and line (${overUnder || "OVER"} ${line || "N/A"}) explicitly. State the model confidence (${confidence}%) and edge vs market. Name the ONE specific risk factor (goalie, line matchup, TOI volatility) that could kill this pick. Give a unit size (0.5–3u). NEVER write "this pick checks the boxes", "strong play here", or any generic template phrase.`;
+3. Risk — Name ONE specific risk factor (opposing goalie, line/PP demotion, TOI volatility, low team total) that could kill this pick. Risk factors only. DO NOT recommend a unit size, mention "u" or "units", or write "checks the boxes" / "strong play".`;
 
   // NBA / default
   return `You are a sharp sports betting analyst. Be concise, data-driven, and persuasive.
@@ -191,9 +199,9 @@ CRITICAL: ${ratingInstruction} The direction is ${overUnder || "OVER"} ${line ||
 
 ${formatRule}
 
-1. Statistical Edge — Hit rates, averages, trends supporting the bet.
-2. Matchup & Pace — Opponent matchup, pace of play, injuries affecting this prop.${paceStr ? " Use the game pace/total context provided." : ""}
-3. Verdict & Risk — Name the bet direction and line (${overUnder || "OVER"} ${line || "N/A"}) explicitly. State the model confidence (${confidence}%) and edge vs market. Name the ONE specific risk factor (injury, blowout risk, pace, matchup) that could kill this pick. Give a unit size (0.5–3u). NEVER write "this pick checks the boxes", "strong play here", or any generic template phrase.`;
+1. Statistical Edge — Reference ${playerOrTeam}'s hit rates, averages, minutes/usage trends that support ${overUnder || "OVER"} ${line || "N/A"} ${propDisplay || ""}. Use specific numbers from the data points.
+2. Matchup & Pace — Opponent defensive profile vs this prop, pace, injuries affecting tonight's role.${paceStr ? " Use the game pace/total context provided." : ""}
+3. Risk — Name ONE specific risk factor (injury, blowout risk, pace shift, matchup advantage for the defense) that could kill this pick. Risk factors only. DO NOT recommend a unit size, mention "u" or "units", or write "checks the boxes" / "strong play".`;
 }
 
 /* ── Sport-specific system messages ── */
@@ -248,16 +256,14 @@ serve(async (req) => {
 - Matchup: ${matchupLine}
 - Side: ${decision.winning_team_name}
 - Conviction: ${tierToHuman(decision.conviction_tier)}
-- Recommended sizing: ${decision.recommended_units} units
 - Win probability: ${decision.win_probability}%
 - Edge over market: ${decision.edge ?? "n/a"}%
 
 ABSOLUTE RULES:
 1. You MUST write rationale supporting THIS pick. Do NOT recommend the opposite side.
-2. Do NOT change the unit size. Use exactly ${decision.recommended_units} units.
-3. Your final "Verdict & Risk" section MUST explicitly say: "${decision.recommended_units} units on ${decision.winning_team_name}".
-4. Reference the specific matchup (${matchupLine}) by name — do NOT write generic copy.
-5. Never reference the losing side as the recommended play. Never use the phrase "noBet" or "noBet tier".\n`
+2. Reference the specific matchup (${matchupLine}) by name — do NOT write generic copy.
+3. The "Risk" section is RISK FACTORS ONLY. Do NOT mention unit sizing, "X units on Y", "u", or "units" anywhere — sizing is rendered separately in the Overall Verdict block from the structured decision.
+4. Never reference the losing side as the recommended play. Never use the phrase "noBet" or "noBet tier".\n`
           : `\n\nLOCKED PICK (DO NOT CONTRADICT — THIS IS A PASS):
 - Matchup: ${matchupLine}
 - Recommendation: PASS on this line
@@ -266,7 +272,7 @@ ABSOLUTE RULES:
 
 ABSOLUTE RULES:
 1. This is a PASS. Do NOT push either side. Do NOT write "0 units on [team]".
-2. In your final "Verdict & Risk" section, write a PASS recommendation that names BOTH teams (${team1Name || "team 1"} vs ${team2Name || "team 2"}) and the specific line. Use phrasing like "Passing on ${matchupLine} — [matchup-specific reason from the data points]".
+2. In your final "Risk" section, name a matchup-specific risk that explains why this is a pass — e.g., "Passing on ${matchupLine} — [reason]". Risk factors only. NEVER mention unit sizing, "u", or "units".
 3. Never use the phrases "noBet", "noBet tier", "0 units on", or any internal model labels.
 4. Be specific to this matchup — reference team names, recent form, or injury state. Do NOT write generic template copy.\n`)
       : "";
@@ -348,7 +354,7 @@ ${formatRule}
 
 1. Goaltending Edge — Starting goalie matchup, save %, GAA, recent form.
 2. Special Teams & Matchup — PP/PK efficiency, pace, shot volume, fatigue, injuries.${paceStr ? " Reference game pace/total context." : ""}
-3. Verdict & Puck Line Value — Final recommendation with unit sizing and key risk.`;
+3. Risk — Name ONE specific risk factor (goalie volatility, special-teams mismatch, back-to-back fatigue, key injury). Risk factors only. DO NOT recommend a unit size, mention "u" or "units", or repeat the verdict — sizing is shown separately in the Overall Verdict block.`;
 
     const ufcMoneylinePrompt = `You are a sharp MMA betting analyst. Be concise and data-driven. NEVER reference team sports concepts.
 
@@ -363,7 +369,7 @@ ${formatRule}
 
 1. Statistical Edge — Strike differential, accuracy, takedown defense, win probability.
 2. Style Matchup — How styles interact, reach, finishing tendencies.
-3. Verdict & Risk — Final recommendation with unit sizing and key risk.`;
+3. Risk — Name ONE specific risk factor (finish risk, cardio, reach disadvantage, weight cut concern). Risk factors only. DO NOT recommend a unit size, mention "u" or "units" — sizing is shown separately in the Overall Verdict block.`;
 
     const mlbMoneylinePrompt = `You are a sharp MLB betting analyst. Be concise and data-driven. Use baseball terminology throughout.
 
@@ -380,7 +386,7 @@ ${formatRule}
 
 1. Pitching Matchup — Starting pitcher ERA, WHIP, K/9, recent form, pitch mix.
 2. Lineup & Park Factor — Offensive splits, OPS, park dimensions, bullpen depth.${paceStr ? " Reference game total context." : ""}
-3. Verdict & Run Line Value — Final recommendation with unit sizing and key risk.`;
+3. Risk — Name ONE specific risk factor (bullpen volatility, weather, lineup uncertainty, opposing pitcher's ceiling). Risk factors only. DO NOT recommend a unit size, mention "u" or "units" — sizing is shown separately in the Overall Verdict block.`;
 
     const genericMoneylinePrompt = `You are a sharp sports betting analyst writing a moneyline/spread/total breakdown. Be specific, data-driven, and concise.
 
@@ -398,7 +404,7 @@ ${formatRule}
 
 1. Statistical Edge — Why the model favors this side, win probability vs implied odds.${paceStr ? " Reference pace/total context." : ""}
 2. Injury & Lineup Reality — Current injuries and what they mean for each team.
-3. Verdict & Risk — Final recommendation with unit sizing. Match "${verdict}".`;
+3. Risk — Name ONE specific risk factor (key injury, blowout risk, situational fade, opponent strength). Risk factors only. DO NOT recommend a unit size, mention "u" or "units" — sizing is shown separately in the Overall Verdict block.`;
 
     // Select the right prompt
     let prompt: string;
@@ -444,6 +450,18 @@ ${formatRule}
       .replace(/\bnoBet\b/gi, "pass")
       .replace(/\b0\s*units?\s+on\s+[A-Za-z .'-]+/gi, passLabel)
       .replace(/\bstick with 0 units\b/gi, passLabel);
+
+    // Strip any unit-sizing language that slipped through despite the prompt
+    // (Risk should never mention sizing — that's the Overall Verdict block).
+    // Also strip any raw prop codes (NHL_SOG, NBA_THREES, MLB_RBI, etc.).
+    content = stripPropCodes(
+      content
+        .replace(UNIT_SIZING_RE, "")
+        .replace(TRAILING_UNITS_RE, "")
+        .replace(/\s{2,}/g, " ")
+        .replace(/\s+([,.!?])/g, "$1")
+        .trim()
+    );
 
     // Parse sections using multi-format parser
     const sections = parseSections(content).slice(0, 3);

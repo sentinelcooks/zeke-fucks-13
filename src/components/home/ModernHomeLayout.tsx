@@ -834,7 +834,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                         display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
                         marginBottom: 0,
                       }}>
-                        {pick.reasoning?.replace(/NaN%/g, 'N/A')}
+                        {pick.reasoning?.replace(/^\[VERDICT:[^\]]+\]\s*/i, '').replace(/NaN%/g, 'N/A')}
                       </p>
                     )}
 

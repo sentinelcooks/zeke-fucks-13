@@ -11,6 +11,7 @@ import {
   scorePrecomputed,
   type ScoredPlay,
 } from "./edge_scoring.ts";
+import { stripPropCodes } from "./format_labels.ts";
 
 // App slate timezone — matches the public-display assumption in src/lib/gameDate.ts.
 const APP_TZ = "America/New_York";
@@ -1323,10 +1324,15 @@ export async function scanSport(sport: string): Promise<{
     validated.push(rescored);
   }
 
-  // Tier assignment: top-N by quality_score → 'edge', rest split into
-  // 'daily' (>=0.70 confidence) or 'value'. This guarantees the public
-  // Picks tab gets daily/value rows alongside Today's Edge.
-  const sortedByQuality = [...validated].sort((a, b) => b.quality_score - a.quality_score);
+  // PASS picks are excluded from every public surface (no edge / daily / value).
+  // Only non-PASS scored plays are eligible for tiering and insertion.
+  const passPicks = validated.filter((p) => p.verdict === "Pass");
+  const eligible = validated.filter((p) => p.verdict !== "Pass");
+
+  // Tier assignment over PASS-free set: top-N by quality_score → 'edge',
+  // rest split into 'daily' (>=0.70 confidence) or 'value'. The public
+  // Picks tab still gets daily/value rows, but only for non-PASS leans.
+  const sortedByQuality = [...eligible].sort((a, b) => b.quality_score - a.quality_score);
   const edgeCap = EDGE_CAP_PER_SPORT[sport] ?? 5;
   const edgeKeySet = new Set<string>();
   const tierKey = (p: ScoredPlay) =>
@@ -1351,13 +1357,23 @@ export async function scanSport(sport: string): Promise<{
   const today = new Date().toISOString().slice(0, 10);
 
   let droppedNoGameDate = 0;
-  const rows = validated
+  // Defense-in-depth: if anything PASS leaks into `eligible`, drop it.
+  let passVerdictBlocked = 0;
+  const rows = eligible
     .map((p) => {
+      if (p.verdict === "Pass") {
+        passVerdictBlocked++;
+        return null;
+      }
       const gameDate = p.game_date ?? (p.commence_time ? toETDate(p.commence_time) : null);
       if (!gameDate) {
         droppedNoGameDate++;
         return null;
       }
+      const verdictTag = p.verdict === "Strong" || p.verdict === "Lean"
+        ? `[VERDICT:${p.verdict}] `
+        : "";
+      const cleanReasoning = stripPropCodes(p.reasoning ?? "");
       return {
         pick_date: today,
         event_id: p.event_id ?? null,
@@ -1380,7 +1396,7 @@ export async function scanSport(sport: string): Promise<{
         last_n_games: 10,
         avg_value: p.ev_pct,
         odds: String(p.odds),
-        reasoning: p.reasoning,
+        reasoning: `${verdictTag}${cleanReasoning}`.trim(),
         tier: assignTier(p),
       };
     })
@@ -1444,8 +1460,18 @@ export async function scanSport(sport: string): Promise<{
       tierCounts[t as "edge" | "daily" | "value"]++;
     }
   }
-  // Anything that cleared prefilter but was not validated/inserted counts as 'pass'.
-  tierCounts.pass = Math.max(0, prefiltered.length - validated.length);
+  // PASS = analyzer-emitted Pass verdicts plus anything that cleared
+  // prefilter but never returned from the analyzer. Both are excluded
+  // from public pick surfaces.
+  const analyzerSilent = Math.max(0, prefiltered.length - validated.length);
+  tierCounts.pass = passPicks.length + analyzerSilent;
+
+  const rejected = {
+    passVerdict: passPicks.length,
+    lowConfidence: drops.conf,
+    missingData: droppedNoGameDate + analyzerSilent,
+    contradictoryVerdict: passVerdictBlocked,
+  };
 
   console.log(
     `[${sport}] games=${stats.games} scheduled=${stats.scheduled_games} ` +
@@ -1455,6 +1481,7 @@ export async function scanSport(sport: string): Promise<{
     `prefiltered=${prefiltered.length} validated=${validated.length} ` +
     `inserted=${inserted} droppedNoGameDate=${droppedNoGameDate} ` +
     `tiers=${JSON.stringify(tierCounts)} ` +
+    `rejected=${JSON.stringify(rejected)} ` +
     `analyzer=${JSON.stringify(analyzerDiagnostics)} (minConf=${minConf})`
   );
 
@@ -1465,6 +1492,7 @@ export async function scanSport(sport: string): Promise<{
     inserted,
     stats,
     tiers: tierCounts,
+    rejected,
     analyzer: analyzerDiagnostics,
     droppedNoGameDate,
   };
