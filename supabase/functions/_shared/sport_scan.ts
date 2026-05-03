@@ -12,6 +12,7 @@ import {
   type ScoredPlay,
 } from "./edge_scoring.ts";
 import { stripPropCodes } from "./format_labels.ts";
+import { summarizeMarket } from "./odds_intelligence.ts";
 
 // App slate timezone — matches the public-display assumption in src/lib/gameDate.ts.
 const APP_TZ = "America/New_York";
@@ -1047,29 +1048,43 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
 
             if (edge <= 0.005) continue;
 
-            plays.push(
-              scorePrecomputed({
-                sport,
-                bet_type: "prop",
-                player_name: playerName,
-                team: null,
-                opponent: null,
-                home_team: homeTeam,
-                away_team: awayTeam,
-                prop_type: marketKey,
-                line,
-                direction: side,
-                odds: pick.bestPrice,
-                projected_prob: projected,
-                implied_prob: impliedSide,
-                edge,
-                ev_pct: calcEv(projected, pick.bestPrice),
-                confidence: projected,
-                event_id: ev.id ?? null,
-                commence_time: ev.commence_time ?? null,
-                game_date: toETDate(ev.commence_time ?? null),
-              })
-            );
+            const scored = scorePrecomputed({
+              sport,
+              bet_type: "prop",
+              player_name: playerName,
+              team: null,
+              opponent: null,
+              home_team: homeTeam,
+              away_team: awayTeam,
+              prop_type: marketKey,
+              line,
+              direction: side,
+              odds: pick.bestPrice,
+              projected_prob: projected,
+              implied_prob: impliedSide,
+              edge,
+              ev_pct: calcEv(projected, pick.bestPrice),
+              confidence: projected,
+              event_id: ev.id ?? null,
+              commence_time: ev.commence_time ?? null,
+              game_date: toETDate(ev.commence_time ?? null),
+            });
+            // Phase-1 diagnostics: market-side summary from outcomes already
+            // fetched (no new API calls). Analyzer may merge ESPN-side
+            // diagnostics on top of this in validateWithAnalyzer.
+            try {
+              const market = summarizeMarket({
+                outcomes: outcomes as any[],
+                standardLine,
+                side,
+                bestPrice: pick.bestPrice,
+                oppBestPrice: oppPick?.bestPrice ?? null,
+              });
+              scored.model_diagnostics = { ...market };
+            } catch (e) {
+              console.error(`[${sport}] summarizeMarket failed:`, (e as Error).message);
+            }
+            plays.push(scored);
           }
         }
       }
@@ -1191,6 +1206,17 @@ async function validateWithAnalyzer(
     ? reasoningArr.slice(0, 3).join(" ")
     : play.reasoning;
 
+  // Merge analyzer-emitted ESPN/playoff diagnostics on top of the market-side
+  // summary that was already attached in evaluatePlayerProps. Phase-1: pure
+  // diagnostic merge — never mutates confidence behavior.
+  const analyzerDiag =
+    analyzed && typeof analyzed.model_diagnostics === "object" && analyzed.model_diagnostics !== null
+      ? (analyzed.model_diagnostics as Record<string, unknown>)
+      : null;
+  const mergedDiagnostics: Record<string, unknown> | null = analyzerDiag || play.model_diagnostics
+    ? { ...(play.model_diagnostics ?? {}), ...(analyzerDiag ?? {}) }
+    : null;
+
   return {
     ...play,
     projected_prob: projected,
@@ -1202,6 +1228,7 @@ async function validateWithAnalyzer(
     })(),
     confidence: projected,
     reasoning,
+    model_diagnostics: mergedDiagnostics,
   };
 }
 
@@ -1321,6 +1348,7 @@ export async function scanSport(sport: string): Promise<{
     });
 
     rescored.reasoning = r.reasoning || rescored.reasoning;
+    rescored.model_diagnostics = r.model_diagnostics ?? null;
     validated.push(rescored);
   }
 
@@ -1398,6 +1426,7 @@ export async function scanSport(sport: string): Promise<{
         odds: String(p.odds),
         reasoning: `${verdictTag}${cleanReasoning}`.trim(),
         tier: assignTier(p),
+        model_diagnostics: p.model_diagnostics ?? null,
       };
     })
     .filter((r): r is NonNullable<typeof r> => r !== null);

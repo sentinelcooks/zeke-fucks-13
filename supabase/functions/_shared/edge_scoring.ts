@@ -71,6 +71,11 @@ export interface ScoredPlay {
   event_id?: string | null;
   commence_time?: string | null;
   game_date?: string | null;
+  // Phase-1 model/debug diagnostics (playoff series, line cushion, market depth,
+  // data quality). Structured fields only — never user-facing prose. Persisted
+  // into daily_picks.model_diagnostics for admin/history visibility. Verdict
+  // tiering and unit sizing do NOT consult this field.
+  model_diagnostics?: Record<string, unknown> | null;
 }
 
 // Back-compat exports — new callers should import from prob_math.ts directly.

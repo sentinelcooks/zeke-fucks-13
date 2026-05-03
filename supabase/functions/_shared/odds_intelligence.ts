@@ -177,6 +177,150 @@ export function sharpBookDivergence(current: BookPrice[]): {
   };
 }
 
+// ── Per-prop market summary (no new API calls) ─────────────
+// Phase-1 diagnostic helper. Builds a small market snapshot from the outcomes
+// already returned by the active player-props request. Designed to plug into
+// daily_picks.model_diagnostics. Never alters scoring or verdict tiering.
+//
+// `outcomes` is the raw Odds API outcomes array for ONE market on one event
+// (the same array sport_scan iterates over to pick bestPrice). Pass the chosen
+// side's standard line, best price, and (if available) the opposing-side best
+// price — the function returns null fields for anything it can't derive
+// without a new fetch.
+export interface MarketSummary {
+  oddsLine: number | null;
+  oddsAmerican: number | null;
+  bestBook: string | null;
+  bookCount: number | null;
+  consensusLine: number | null;
+  impliedProbability: number | null;
+  juicePenalty: number | null;
+  marketDepth: 'thin' | 'normal' | 'deep' | null;
+  marketDataQuality: 'high' | 'medium' | 'low' | null;
+}
+
+export function summarizeMarket(args: {
+  outcomes: any[] | undefined | null;
+  standardLine: number | null;
+  side: 'over' | 'under';
+  bestPrice: number | null;
+  oppBestPrice?: number | null;
+}): MarketSummary {
+  const empty: MarketSummary = {
+    oddsLine: null, oddsAmerican: null, bestBook: null, bookCount: null,
+    consensusLine: null, impliedProbability: null, juicePenalty: null,
+    marketDepth: null, marketDataQuality: null,
+  };
+  const outcomes = Array.isArray(args.outcomes) ? args.outcomes : [];
+  if (outcomes.length === 0) return empty;
+
+  const sideLower = args.side;
+  const sideMatches = (o: any) => {
+    const name = String(o?.name || '').toLowerCase();
+    if (sideLower === 'over') return name.includes('over');
+    return name.includes('under');
+  };
+
+  // Books quoting THIS side at the standard line
+  const sideAtLine = outcomes.filter(
+    (o) => sideMatches(o) && (args.standardLine === null || Number(o?.point ?? 0) === args.standardLine),
+  );
+  const bookCount = sideAtLine.length || null;
+
+  // Best book (best price for the side)
+  let bestBook: string | null = null;
+  let bestPrice: number | null = args.bestPrice ?? null;
+  if (bestPrice !== null) {
+    const winner = sideAtLine.reduce<any | null>((acc, o) => {
+      if (!acc || (Number(o?.price) > Number(acc?.price))) return o;
+      return acc;
+    }, null);
+    bestBook = winner?.bookmaker || winner?.book || winner?.key || null;
+  } else {
+    const winner = sideAtLine.reduce<any | null>((acc, o) => {
+      if (!acc || (Number(o?.price) > Number(acc?.price))) return o;
+      return acc;
+    }, null);
+    bestBook = winner?.bookmaker || winner?.book || winner?.key || null;
+    bestPrice = winner ? Number(winner.price) : null;
+  }
+
+  // Consensus line = median of distinct points across both sides quoted
+  const allPoints = outcomes
+    .map((o) => Number(o?.point))
+    .filter((n) => Number.isFinite(n));
+  let consensusLine: number | null = null;
+  if (allPoints.length > 0) {
+    const sorted = [...allPoints].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    consensusLine = sorted.length % 2 === 0
+      ? Math.round(((sorted[mid - 1] + sorted[mid]) / 2) * 100) / 100
+      : sorted[mid];
+  }
+
+  // Implied probability (fair, vig-stripped if opposing price provided)
+  let impliedProbability: number | null = null;
+  if (bestPrice !== null) {
+    impliedProbability = americanToImplied(bestPrice);
+    if (args.oppBestPrice !== null && args.oppBestPrice !== undefined) {
+      impliedProbability = fairImpliedFromPair(bestPrice, args.oppBestPrice);
+    }
+    impliedProbability = Math.round(impliedProbability * 1000) / 1000;
+  }
+
+  // Juice penalty: average distance from -110 across this side at the standard line
+  let juicePenalty: number | null = null;
+  if (sideAtLine.length > 0) {
+    const sum = sideAtLine.reduce((s, o) => s + Math.abs(Number(o?.price ?? -110) - -110), 0);
+    juicePenalty = Math.round((sum / sideAtLine.length) * 100) / 100;
+  }
+
+  // Market depth from book count
+  let marketDepth: MarketSummary['marketDepth'] = null;
+  if (bookCount !== null) {
+    if (bookCount < 3) marketDepth = 'thin';
+    else if (bookCount <= 6) marketDepth = 'normal';
+    else marketDepth = 'deep';
+  }
+
+  // Market data quality combines book count and line dispersion
+  let marketDataQuality: MarketSummary['marketDataQuality'] = null;
+  if (bookCount !== null && allPoints.length > 0) {
+    const min = Math.min(...allPoints);
+    const max = Math.max(...allPoints);
+    const dispersion = max - min;
+    if (bookCount >= 6 && dispersion <= 1) marketDataQuality = 'high';
+    else if (bookCount >= 3 && dispersion <= 2) marketDataQuality = 'medium';
+    else marketDataQuality = 'low';
+  }
+
+  return {
+    oddsLine: args.standardLine ?? null,
+    oddsAmerican: bestPrice,
+    bestBook,
+    bookCount,
+    consensusLine,
+    impliedProbability,
+    juicePenalty,
+    marketDepth,
+    marketDataQuality,
+  };
+}
+
+// americanToImplied / fairImpliedFromPair are imported lazily — scoped helpers
+function americanToImplied(american: number): number {
+  if (!Number.isFinite(american) || american === 0) return 0;
+  return american > 0 ? 100 / (american + 100) : -american / (-american + 100);
+}
+
+function fairImpliedFromPair(american: number, oppAmerican: number): number {
+  const a = americanToImplied(american);
+  const b = americanToImplied(oppAmerican);
+  const sum = a + b;
+  if (sum <= 0) return a;
+  return a / sum;
+}
+
 // ── Quota guard ────────────────────────────────────────────
 export interface QuotaStatus {
   ok: boolean;

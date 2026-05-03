@@ -539,6 +539,11 @@ interface GameRow {
   toi: number; // time on ice (minutes)
   // Event ID for quarter-level lookups
   eventId?: string;
+  // ESPN season-type tag (regular/preseason/postseason). Defaults to 'regular'
+  // when ESPN's seasonTypes payload is missing or unparseable. Used by playoff
+  // diagnostics; never overrides regular-season behavior unless explicit
+  // playoff signal is detected.
+  seasonType?: 'regular' | 'preseason' | 'postseason';
   // 1Q stats (populated separately)
   q1_pts?: number;
   q1_reb?: number;
@@ -564,13 +569,30 @@ async function getGameLog(playerId: string, season?: number, config?: EspnConfig
 
     // Build stat rows from seasonTypes -> categories -> events
     const statRows: Record<string, string[]> = {};
+    // Tag each event with its ESPN season type so downstream logic can
+    // distinguish regular-season from postseason games. ESPN encodes type as
+    // either a numeric `type` (1=pre, 2=regular, 3=post) or a `displayName`
+    // string. We accept both and fall back to 'regular' if absent.
+    const eventSeasonType: Record<string, 'regular' | 'preseason' | 'postseason'> = {};
+    const classifySeason = (st: any): 'regular' | 'preseason' | 'postseason' => {
+      const num = Number(st?.type ?? st?.id);
+      if (num === 1) return 'preseason';
+      if (num === 3) return 'postseason';
+      if (num === 2) return 'regular';
+      const name = String(st?.displayName || st?.name || '').toLowerCase();
+      if (name.includes('post')) return 'postseason';
+      if (name.includes('pre')) return 'preseason';
+      return 'regular';
+    };
 
     for (const st of seasonTypes) {
+      const tag = classifySeason(st);
       for (const cat of st?.categories || []) {
         for (const ev of cat?.events || []) {
           const eventId = String(ev?.eventId || ev?.id || "");
           if (eventId && ev?.stats) {
             statRows[eventId] = ev.stats;
+            eventSeasonType[eventId] = tag;
           }
         }
       }
@@ -696,6 +718,7 @@ async function getGameLog(playerId: string, season?: number, config?: EspnConfig
         opponent: oppAbbr,
         isHome,
         eventId,
+        seasonType: eventSeasonType[eventId] || 'regular',
         // Shooting splits (NBA)
         fgm: fgIdx >= 0 ? parseStat(stats[fgIdx]) : 0,
         fga: fgIdx >= 0 ? parseAttempted(stats[fgIdx]) : 0,
@@ -1802,6 +1825,179 @@ function weightedHitRate(
   const rate = totalWeightSum > 0 ? Math.round((hitWeightSum / totalWeightSum) * 1000) / 10 : 0;
   const weightedAvg = totalWeightSum > 0 ? Math.round((valueWeightSum / totalWeightSum) * 10) / 10 : 0;
   return { rate, weightedAvg };
+}
+
+// ── Phase 1: Playoff diagnostics (read-only) ────────────────────────────
+// These helpers do NOT alter confidence weights. They only emit structured
+// diagnostic fields on the analyzer response so we can observe playoff signal
+// before tuning behavior in a later phase. ESPN-only inputs.
+
+type PlayoffContext = {
+  isPlayoff: boolean;
+  signalConfidence: 'high' | 'medium' | 'low' | 'none';
+  signalReason: string | null;
+  sameOpponentSeriesGames: number;
+};
+
+function detectPlayoffContext(
+  games: GameRow[] | undefined | null,
+  opponent: string | undefined | null,
+): PlayoffContext {
+  const list = Array.isArray(games) ? games : [];
+  if (list.length === 0) {
+    return { isPlayoff: false, signalConfidence: 'none', signalReason: null, sameOpponentSeriesGames: 0 };
+  }
+  const oppKey = (opponent || '').toUpperCase();
+  const now = Date.now();
+  const dayMs = 86400000;
+  const within = (g: GameRow, days: number) => {
+    const t = new Date(g.date).getTime();
+    return Number.isFinite(t) && (now - t) <= days * dayMs && (now - t) >= 0;
+  };
+  const isPost = (g: GameRow) => g.seasonType === 'postseason';
+
+  const sameOppPostseason30 = list.filter(g => isPost(g) && within(g, 30) && (g.opponent || '').toUpperCase() === oppKey);
+  const anyPostseason21 = list.filter(g => isPost(g) && within(g, 21));
+  const sameOppRecent21 = list.filter(g => within(g, 21) && (g.opponent || '').toUpperCase() === oppKey);
+  const sameOppRecent21Postseason = sameOppRecent21.filter(isPost);
+
+  if (sameOppPostseason30.length >= 2) {
+    return {
+      isPlayoff: true,
+      signalConfidence: sameOppPostseason30.length >= 3 ? 'high' : 'medium',
+      signalReason: `${sameOppPostseason30.length} postseason games vs ${oppKey} in last 30d`,
+      sameOpponentSeriesGames: sameOppPostseason30.length,
+    };
+  }
+  if (anyPostseason21.length >= 3) {
+    return {
+      isPlayoff: true,
+      signalConfidence: 'medium',
+      signalReason: `${anyPostseason21.length} postseason games in last 21d`,
+      sameOpponentSeriesGames: sameOppPostseason30.length,
+    };
+  }
+  if (sameOppRecent21.length >= 2 && sameOppRecent21Postseason.length >= 1) {
+    return {
+      isPlayoff: true,
+      signalConfidence: 'low',
+      signalReason: `${sameOppRecent21.length} recent same-opponent games (≥1 postseason)`,
+      sameOpponentSeriesGames: sameOppRecent21Postseason.length,
+    };
+  }
+  return { isPlayoff: false, signalConfidence: 'none', signalReason: null, sameOpponentSeriesGames: 0 };
+}
+
+type SeriesContext = {
+  current_series_games: number;
+  current_series_values: number[];
+  current_series_hit_rate: number | null;
+  current_series_average: number | null;
+  current_series_floor: number | null;
+  current_series_ceiling: number | null;
+  current_series_minutes_average: number | null;
+  current_series_minutes_range: number | null;
+  playoff_recent_average: number | null;
+  playoff_recent_hit_rate: number | null;
+};
+
+function buildSeriesContext(
+  games: GameRow[] | undefined | null,
+  opponent: string | undefined | null,
+  propType: string,
+  line: number,
+  overUnder: string,
+): SeriesContext {
+  const empty: SeriesContext = {
+    current_series_games: 0,
+    current_series_values: [],
+    current_series_hit_rate: null,
+    current_series_average: null,
+    current_series_floor: null,
+    current_series_ceiling: null,
+    current_series_minutes_average: null,
+    current_series_minutes_range: null,
+    playoff_recent_average: null,
+    playoff_recent_hit_rate: null,
+  };
+  const list = Array.isArray(games) ? games : [];
+  if (list.length === 0) return empty;
+
+  const oppKey = (opponent || '').toUpperCase();
+  const now = Date.now();
+  const dayMs = 86400000;
+  const within = (g: GameRow, days: number) => {
+    const t = new Date(g.date).getTime();
+    return Number.isFinite(t) && (now - t) <= days * dayMs && (now - t) >= 0;
+  };
+
+  const seriesGames = list.filter(g =>
+    g.seasonType === 'postseason' &&
+    within(g, 30) &&
+    (g.opponent || '').toUpperCase() === oppKey
+  );
+  const values = seriesGames.map(g => getStatValue(g, propType));
+  const minutes = seriesGames.map(g => Number(g.min) || 0).filter(m => m > 0);
+
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  const ctx: SeriesContext = { ...empty, current_series_games: seriesGames.length, current_series_values: values };
+  if (values.length > 0) {
+    const sum = values.reduce((a, b) => a + b, 0);
+    ctx.current_series_average = round1(sum / values.length);
+    ctx.current_series_floor = Math.min(...values);
+    ctx.current_series_ceiling = Math.max(...values);
+    ctx.current_series_hit_rate = hitRate(values, line, overUnder).rate;
+  }
+  if (minutes.length > 0) {
+    const minSum = minutes.reduce((a, b) => a + b, 0);
+    ctx.current_series_minutes_average = round1(minSum / minutes.length);
+    ctx.current_series_minutes_range = round1(Math.max(...minutes) - Math.min(...minutes));
+  }
+
+  // Playoff-recent: any-opponent postseason games, last ≤7
+  const playoffRecent = list
+    .filter(g => g.seasonType === 'postseason')
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 7);
+  if (playoffRecent.length > 0) {
+    const prVals = playoffRecent.map(g => getStatValue(g, propType));
+    const sum = prVals.reduce((a, b) => a + b, 0);
+    ctx.playoff_recent_average = round1(sum / prVals.length);
+    ctx.playoff_recent_hit_rate = hitRate(prVals, line, overUnder).rate;
+  }
+  return ctx;
+}
+
+// Composite line cushion in roughly [-1, +1]. Only a diagnostic this phase —
+// confidence is NOT nudged. Returns null when there is not enough data.
+function computeLineCushion(args: {
+  avg: number | null | undefined;
+  floor: number | null | undefined;
+  ceiling: number | null | undefined;
+  recentAvg: number | null | undefined;
+  line: number;
+  direction: string;
+}): number | null {
+  const { line, direction } = args;
+  const isOver = (direction || '').toLowerCase() !== 'under';
+  const parts: number[] = [];
+  const denom = Math.max(1, Math.abs(line));
+  const push = (numerator: number | null | undefined) => {
+    if (numerator === null || numerator === undefined || !Number.isFinite(numerator)) return;
+    parts.push(Math.max(-1, Math.min(1, numerator / denom)));
+  };
+  if (isOver) {
+    push(args.avg !== null && args.avg !== undefined ? args.avg - line : null);
+    push(args.floor !== null && args.floor !== undefined ? args.floor - line : null);
+    push(args.recentAvg !== null && args.recentAvg !== undefined ? args.recentAvg - line : null);
+  } else {
+    push(args.avg !== null && args.avg !== undefined ? line - args.avg : null);
+    push(args.ceiling !== null && args.ceiling !== undefined ? line - args.ceiling : null);
+    push(args.recentAvg !== null && args.recentAvg !== undefined ? line - args.recentAvg : null);
+  }
+  if (parts.length === 0) return null;
+  const composite = parts.reduce((a, b) => a + b, 0) / parts.length;
+  return Math.round(composite * 1000) / 1000;
 }
 
 function avg(values: number[]): number {
@@ -3375,6 +3571,62 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
   else if (confidence >= 58) result.verdict = "LEAN";
   else if (confidence >= 42) result.verdict = "RISKY";
   else result.verdict = "FADE";
+
+  // ── Phase 1: emit structured model diagnostics (NBA only, read-only) ──
+  // These fields are observed by the slate scanner and persisted into
+  // daily_picks.model_diagnostics. They do NOT alter confidence, verdict,
+  // or unit sizing. Behavior remains byte-stable for regular-season picks.
+  if (cfg.searchLeague === "nba") {
+    try {
+      const opponentForCtx = h2hOpp || nextGame?.opponent_abbr || "";
+      const playoff = detectPlayoffContext(games, opponentForCtx);
+      const series = buildSeriesContext(games, opponentForCtx, propType, line, overUnder);
+      const recentAvg = typeof last10?.avg === 'number' ? last10.avg : null;
+      const seasonAvgVal = typeof seasonHitRate?.avg === 'number' ? seasonHitRate.avg : null;
+      const cushion = computeLineCushion({
+        avg: series.current_series_average ?? seasonAvgVal,
+        floor: series.current_series_floor,
+        ceiling: series.current_series_ceiling,
+        recentAvg,
+        line,
+        direction: overUnder,
+      });
+
+      const sampleSize = (gameLog?.length || games.length || 0);
+      const dataQuality: 'high' | 'medium' | 'low' =
+        sampleSize >= 25 ? 'high' : sampleSize >= 10 ? 'medium' : 'low';
+
+      const espnDiag = {
+        playoffMode: playoff.isPlayoff,
+        playoffSignalConfidence: playoff.signalConfidence,
+        playoffSignalReason: playoff.signalReason,
+        seriesSampleSize: series.current_series_games,
+        seriesHitRate: series.current_series_hit_rate,
+        seriesAverage: series.current_series_average,
+        seriesFloor: series.current_series_floor,
+        seriesCeiling: series.current_series_ceiling,
+        seriesMinutesAverage: series.current_series_minutes_average,
+        seriesMinutesRange: series.current_series_minutes_range,
+        playoffRecentAverage: series.playoff_recent_average,
+        playoffRecentHitRate: series.playoff_recent_hit_rate,
+        lineCushion: cushion,
+        // Rotation context not yet active in Phase 1; future phase will populate.
+        rotationContextApplied: false,
+        rotationRole: null,
+        rotationBoost: null,
+        rotationCollision: null,
+        minutesVolatility: null,
+        dataQuality,
+      };
+
+      result.model_diagnostics = {
+        ...(result.model_diagnostics ?? {}),
+        ...espnDiag,
+      };
+    } catch (e) {
+      console.error("model_diagnostics emit failed:", (e as Error).message);
+    }
+  }
 
   return result;
 }
