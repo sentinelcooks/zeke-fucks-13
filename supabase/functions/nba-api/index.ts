@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { callAI, AIProviderError, ANTI_GENERIC_INSTRUCTION } from "../_shared/ai-provider.ts";
+import { normalizeNbaTeam } from "../_shared/nba_teams.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1943,7 +1944,11 @@ function detectPlayoffContext(
   if (list.length === 0) {
     return { isPlayoff: false, signalConfidence: 'none', signalReason: null, sameOpponentSeriesGames: 0 };
   }
-  const oppKey = (opponent || '').toUpperCase();
+  const oppKey = normalizeNbaTeam(opponent) || (opponent || '').toUpperCase();
+  const oppMatches = (g: GameRow) => {
+    const norm = normalizeNbaTeam(g.opponent) || (g.opponent || '').toUpperCase();
+    return norm === oppKey;
+  };
   const now = Date.now();
   const dayMs = 86400000;
   const within = (g: GameRow, days: number) => {
@@ -1952,9 +1957,9 @@ function detectPlayoffContext(
   };
   const isPost = (g: GameRow) => g.seasonType === 'postseason';
 
-  const sameOppPostseason30 = list.filter(g => isPost(g) && within(g, 30) && (g.opponent || '').toUpperCase() === oppKey);
+  const sameOppPostseason30 = list.filter(g => isPost(g) && within(g, 30) && oppMatches(g));
   const anyPostseason21 = list.filter(g => isPost(g) && within(g, 21));
-  const sameOppRecent21 = list.filter(g => within(g, 21) && (g.opponent || '').toUpperCase() === oppKey);
+  const sameOppRecent21 = list.filter(g => within(g, 21) && oppMatches(g));
   const sameOppRecent21Postseason = sameOppRecent21.filter(isPost);
 
   if (sameOppPostseason30.length >= 2) {
@@ -2019,7 +2024,11 @@ function buildSeriesContext(
   const list = Array.isArray(games) ? games : [];
   if (list.length === 0) return empty;
 
-  const oppKey = (opponent || '').toUpperCase();
+  const oppKey = normalizeNbaTeam(opponent) || (opponent || '').toUpperCase();
+  const oppMatches = (g: GameRow) => {
+    const norm = normalizeNbaTeam(g.opponent) || (g.opponent || '').toUpperCase();
+    return norm === oppKey;
+  };
   const now = Date.now();
   const dayMs = 86400000;
   const within = (g: GameRow, days: number) => {
@@ -2030,7 +2039,7 @@ function buildSeriesContext(
   const seriesGames = list.filter(g =>
     g.seasonType === 'postseason' &&
     within(g, 30) &&
-    (g.opponent || '').toUpperCase() === oppKey
+    oppMatches(g)
   );
   const values = seriesGames.map(g => getStatValue(g, propType));
   const minutes = seriesGames.map(g => Number(g.min) || 0).filter(m => m > 0);
@@ -3249,7 +3258,17 @@ function calculateConfidence(data: any) {
 }
 
 // ── Full Analysis ───────────────────────────────────────────
-async function analyzeProp(playerName: string, propType: string, line: number, overUnder: string, opponent?: string, sport?: string) {
+async function analyzeProp(
+  playerName: string,
+  propType: string,
+  line: number,
+  overUnder: string,
+  opponent?: string,
+  sport?: string,
+  teamHint?: string | null,
+  eventHomeTeam?: string | null,
+  eventAwayTeam?: string | null,
+) {
   const cfg = getEspnConfig(sport || "nba");
   const matches = await searchPlayers(playerName, cfg);
   if (!matches.length) return { error: `Player '${playerName}' not found.` };
@@ -3342,7 +3361,7 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
   // ── Fetch pace/total context for both teams ──
   let paceContext: any = null;
   try {
-    const oppAbbr2 = opponent?.toUpperCase() || nextGame?.opponent_abbr;
+    const oppAbbr2 = (cfg.searchLeague === "nba" ? normalizeNbaTeam(opponent) : null) || opponent?.toUpperCase() || nextGame?.opponent_abbr;
     if (oppAbbr2) {
       const espnBase = `https://site.api.espn.com/apis/site/v2/sports/${cfg.searchSport}/${cfg.searchLeague}`;
       const [teamStatsResp, oppStatsResp] = await Promise.all([
@@ -3398,12 +3417,23 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
     homeAway = { location, ...hitRate(locVals, line, overUnder), avg: avg(locVals) };
   }
 
-  const h2hOpp = opponent?.toUpperCase() || nextGame?.opponent_abbr;
+  const oppAbbrCanon = cfg.searchLeague === "nba"
+    ? (normalizeNbaTeam(opponent) || (nextGame?.opponent_abbr ? normalizeNbaTeam(nextGame.opponent_abbr) : null))
+    : null;
+  const h2hOpp = oppAbbrCanon || opponent?.toUpperCase() || nextGame?.opponent_abbr;
   let headToHead: any = { games: [], rate: 0, hits: 0, total: 0, avg: 0, opponent: "" };
   let otherGames: any = { games: [], rate: 0, hits: 0, total: 0, avg: 0, opponent: "" };
 
+  const matchesOpp = (g: any): boolean => {
+    if (cfg.searchLeague === "nba") {
+      const norm = normalizeNbaTeam(g.opponent) || (g.opponent || "").toUpperCase();
+      return !!h2hOpp && norm === h2hOpp;
+    }
+    return !!h2hOpp && (g.opponent || "").toUpperCase().includes(h2hOpp);
+  };
+
   if (h2hOpp) {
-    const h2hGamesList = analysisGames.filter(g => g.opponent.toUpperCase().includes(h2hOpp));
+    const h2hGamesList = analysisGames.filter(g => matchesOpp(g));
     const h2hVals = h2hGamesList.map(g => getStatValue(g, propType));
     const buildRow = (g: any, sv: number) => ({
       date: g.date ? new Date(g.date).toLocaleDateString("en-US", { year: "numeric", month: "2-digit", day: "2-digit" }) : "",
@@ -3423,7 +3453,7 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
     headToHead = { games: h2hGameLog, ...hitRate(h2hVals, line, overUnder), avg: avg(h2hVals), opponent: h2hOpp };
 
     // Other games (excluding H2H opponent)
-    const nonH2hGames = analysisGames.filter(g => !g.opponent.toUpperCase().includes(h2hOpp));
+    const nonH2hGames = analysisGames.filter(g => !matchesOpp(g));
     const nonH2hVals = nonH2hGames.map(g => getStatValue(g, propType));
     const nonH2hGameLog = nonH2hGames.map((g, i) => buildRow(g, nonH2hVals[i]));
     otherGames = { games: nonH2hGameLog, ...hitRate(nonH2hVals, line, overUnder), avg: avg(nonH2hVals), opponent: h2hOpp };
@@ -3599,11 +3629,48 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
   let phase1Playoff: any = null;
   let phase1Cushion: number | null = null;
   let phase1DataQuality: 'high' | 'medium' | 'low' = 'low';
+  let opponentResolutionStatus: "resolved" | "missing" | "ambiguous" | "team_mismatch" = "missing";
+  let seriesCandidateGames = 0;
+  let seriesMatchFailureReason: string | null = null;
   if (cfg.searchLeague === "nba") {
     try {
-      const opponentForCtx = h2hOpp || nextGame?.opponent_abbr || "";
+      const opponentForCtx = oppAbbrCanon || h2hOpp || nextGame?.opponent_abbr || "";
       phase1Playoff = detectPlayoffContext(games, opponentForCtx);
       phase1Series = buildSeriesContext(games, opponentForCtx, propType, line, overUnder);
+
+      // Resolution + match diagnostics (no behavior change).
+      const playerTeamCanon = normalizeNbaTeam(player.team_abbr) || null;
+      const teamHintCanon = normalizeNbaTeam(teamHint) || null;
+      if (!opponentForCtx) {
+        opponentResolutionStatus = "missing";
+      } else if (teamHintCanon && playerTeamCanon && teamHintCanon !== playerTeamCanon) {
+        opponentResolutionStatus = "team_mismatch";
+      } else if (oppAbbrCanon || normalizeNbaTeam(opponentForCtx)) {
+        opponentResolutionStatus = "resolved";
+      } else {
+        opponentResolutionStatus = "ambiguous";
+      }
+
+      const now = Date.now();
+      const dayMs = 86400000;
+      const within30Post = (Array.isArray(games) ? games : []).filter((g: any) => {
+        if (g.seasonType !== 'postseason') return false;
+        const t = new Date(g.date).getTime();
+        return Number.isFinite(t) && (now - t) <= 30 * dayMs && (now - t) >= 0;
+      });
+      seriesCandidateGames = within30Post.length;
+
+      if ((phase1Series.current_series_games ?? 0) >= 2) {
+        seriesMatchFailureReason = null;
+      } else if (within30Post.length === 0) {
+        seriesMatchFailureReason = "no_postseason_games";
+      } else if (!opponentForCtx) {
+        seriesMatchFailureReason = "opponent_unresolved";
+      } else if (within30Post.length > 0 && (phase1Series.current_series_games ?? 0) === 0) {
+        seriesMatchFailureReason = "opponent_mismatch";
+      } else {
+        seriesMatchFailureReason = "insufficient_postseason_same_opponent";
+      }
       const recentAvg = typeof last10?.avg === 'number' ? last10.avg : null;
       const seasonAvgVal = typeof seasonHitRate?.avg === 'number' ? seasonHitRate.avg : null;
       phase1Cushion = computeLineCushion({
@@ -3636,6 +3703,13 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
         rotationCollision: null,
         minutesVolatility: null,
         dataQuality: phase1DataQuality,
+        opponentResolved: oppAbbrCanon || null,
+        opponentResolutionStatus,
+        currentTeamResolved: normalizeNbaTeam(player.team_abbr) || null,
+        eventHomeTeam: eventHomeTeam ?? null,
+        eventAwayTeam: eventAwayTeam ?? null,
+        seriesCandidateGames,
+        seriesMatchFailureReason,
       };
     } catch (e) {
       console.error("phase1 diagnostics computation failed:", (e as Error).message);
@@ -3908,9 +3982,9 @@ serve(async (req) => {
 
     if (path === "analyze" && req.method === "POST") {
       const body = await req.json();
-      const { player, prop_type, line, over_under, opponent, sport: reqSport, bet_type } = body;
+      const { player, prop_type, line, over_under, opponent, sport: reqSport, bet_type, team, home_team, away_team } = body;
       if (!player) return new Response(JSON.stringify({ error: "Player name is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      const result = await analyzeProp(player, prop_type, parseFloat(line), over_under, opponent, reqSport);
+      const result = await analyzeProp(player, prop_type, parseFloat(line), over_under, opponent, reqSport, team ?? null, home_team ?? null, away_team ?? null);
 
       // MLB: supplement with 20-factor team context from mlb-model
       if (reqSport === "mlb" && result.player?.team_abbr) {

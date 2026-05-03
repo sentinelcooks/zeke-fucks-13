@@ -945,6 +945,8 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
     ]);
 
     const rosterPool = [...homeRoster, ...awayRoster];
+    const homeRosterLc = new Set(homeRoster.map((n) => n.toLowerCase()));
+    const awayRosterLc = new Set(awayRoster.map((n) => n.toLowerCase()));
 
     for (const [rawPlayerName, markets] of Object.entries(
       players as Record<string, any>
@@ -952,6 +954,24 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
       const playerName = rosterPool.length
         ? resolveFullName(rawPlayerName, rosterPool)
         : rawPlayerName;
+
+      const playerNameLc = playerName.toLowerCase();
+      const onHome = homeRosterLc.has(playerNameLc);
+      const onAway = awayRosterLc.has(playerNameLc);
+      let playerTeamRaw: string | null = null;
+      let opponentRaw: string | null = null;
+      let opponentResolutionStatus: "resolved" | "missing" | "ambiguous" = "missing";
+      if (onHome && !onAway) {
+        playerTeamRaw = homeTeam;
+        opponentRaw = awayTeam;
+        opponentResolutionStatus = playerTeamRaw && opponentRaw ? "resolved" : "missing";
+      } else if (onAway && !onHome) {
+        playerTeamRaw = awayTeam;
+        opponentRaw = homeTeam;
+        opponentResolutionStatus = playerTeamRaw && opponentRaw ? "resolved" : "missing";
+      } else if (onHome && onAway) {
+        opponentResolutionStatus = "ambiguous";
+      }
 
       playerSet.add(playerName);
 
@@ -1052,8 +1072,8 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
               sport,
               bet_type: "prop",
               player_name: playerName,
-              team: null,
-              opponent: null,
+              team: playerTeamRaw,
+              opponent: opponentRaw,
               home_team: homeTeam,
               away_team: awayTeam,
               prop_type: marketKey,
@@ -1080,7 +1100,12 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
                 bestPrice: pick.bestPrice,
                 oppBestPrice: oppPick?.bestPrice ?? null,
               });
-              scored.model_diagnostics = { ...market };
+              scored.model_diagnostics = {
+                ...market,
+                opponentResolutionStatus,
+                eventHomeTeam: homeTeam ?? null,
+                eventAwayTeam: awayTeam ?? null,
+              };
             } catch (e) {
               console.error(`[${sport}] summarizeMarket failed:`, (e as Error).message);
             }
@@ -1137,10 +1162,7 @@ async function validateWithAnalyzer(
   let analyzed = cache.get(cacheKey);
 
   if (!analyzed) {
-    const opponent =
-      play.opponent ||
-      (play.home_team && play.away_team ? play.away_team : "") ||
-      "";
+    const opponent = play.opponent || "";
 
     const body = {
       player: play.player_name,
@@ -1148,6 +1170,9 @@ async function validateWithAnalyzer(
       line: play.line,
       over_under: play.direction,
       opponent,
+      team: play.team || null,
+      home_team: play.home_team || null,
+      away_team: play.away_team || null,
       sport: play.sport,
       bet_type: "player_prop",
     };
