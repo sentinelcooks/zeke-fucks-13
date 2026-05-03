@@ -1207,8 +1207,7 @@ async function validateWithAnalyzer(
     : play.reasoning;
 
   // Merge analyzer-emitted ESPN/playoff diagnostics on top of the market-side
-  // summary that was already attached in evaluatePlayerProps. Phase-1: pure
-  // diagnostic merge — never mutates confidence behavior.
+  // summary that was already attached in evaluatePlayerProps.
   const analyzerDiag =
     analyzed && typeof analyzed.model_diagnostics === "object" && analyzed.model_diagnostics !== null
       ? (analyzed.model_diagnostics as Record<string, unknown>)
@@ -1217,16 +1216,60 @@ async function validateWithAnalyzer(
     ? { ...(play.model_diagnostics ?? {}), ...(analyzerDiag ?? {}) }
     : null;
 
+  // ── Phase 2: NBA playoff market-quality modifier ──
+  // Activated only when NBA playoff overlay was already applied upstream
+  // (playoffWeightsApplied=true) — that gate already encodes playoffMode +
+  // seriesSampleSize>=2 + dataQuality !== 'low'. Bounded ±3 confidence pts.
+  // Never alone moves a Pass/Lean to Strong (downstream tiering is unchanged).
+  let adjustedProjected = projected;
+  let adjustedEdge = edge;
+  let marketQualityApplied = false;
+  let marketQualityImpact: number | null = null;
+  if (
+    play.sport === "nba" &&
+    play.bet_type === "prop" &&
+    mergedDiagnostics &&
+    mergedDiagnostics.playoffWeightsApplied === true
+  ) {
+    const md = mergedDiagnostics as Record<string, unknown>;
+    const bookCount = typeof md.bookCount === "number" ? (md.bookCount as number) : null;
+    const marketDepth = typeof md.marketDepth === "string" ? (md.marketDepth as string) : null;
+    const marketDataQuality = typeof md.marketDataQuality === "string" ? (md.marketDataQuality as string) : null;
+    if (marketDataQuality !== null) {
+      let mImpact = 0;
+      if (bookCount != null && bookCount >= 6 && marketDepth === "deep") mImpact += 1.5;
+      if ((bookCount != null && bookCount <= 2) || marketDepth === "thin") mImpact -= 2;
+      if (marketDataQuality === "low") mImpact -= 2;
+      if (bookCount != null && bookCount < 3) mImpact = Math.min(mImpact, 0);
+      mImpact = Math.max(-3, Math.min(3, mImpact));
+      if (mImpact !== 0) {
+        // Apply in confidence-point space (0-100), then convert back to 0-1.
+        const conf100 = Math.max(0, Math.min(100, projected * 100 + mImpact));
+        adjustedProjected = conf100 / 100;
+        adjustedEdge = adjustedProjected - implied;
+        marketQualityApplied = true;
+        marketQualityImpact = Math.round(mImpact * 10) / 10;
+        // Update post-playoff confidence to reflect the market modifier.
+        const postExisting =
+          typeof md.postPlayoffConfidence === "number" ? (md.postPlayoffConfidence as number) : null;
+        (mergedDiagnostics as Record<string, unknown>).postPlayoffConfidence =
+          postExisting != null ? Math.round(postExisting + mImpact) : Math.round(conf100);
+      }
+      (mergedDiagnostics as Record<string, unknown>).marketQualityApplied = marketQualityApplied;
+      (mergedDiagnostics as Record<string, unknown>).marketQualityImpact = marketQualityImpact;
+    }
+  }
+
   return {
     ...play,
-    projected_prob: projected,
-    edge,
+    projected_prob: adjustedProjected,
+    edge: adjustedEdge,
     ev_pct: (() => {
       const o = play.odds;
       const decimal = o > 0 ? o / 100 + 1 : 100 / -o + 1;
-      return (projected * (decimal - 1) - (1 - projected)) * 100;
+      return (adjustedProjected * (decimal - 1) - (1 - adjustedProjected)) * 100;
     })(),
-    confidence: projected,
+    confidence: adjustedProjected,
     reasoning,
     model_diagnostics: mergedDiagnostics,
   };

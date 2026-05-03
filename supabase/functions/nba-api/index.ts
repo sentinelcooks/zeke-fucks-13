@@ -289,6 +289,102 @@ function detectMlbPropCategory(propType: string | null | undefined): keyof typeo
 }
 
 // ─────────────────────────────────────────────────────────────
+// Phase 2 — NBA playoff-aware weight table & helpers
+// Activated only for NBA player props when playoffMode=true,
+// seriesSampleSize>=2, and dataQuality !== 'low'. Regular-season
+// behavior is preserved by the gate; this overlay never runs otherwise.
+// ─────────────────────────────────────────────────────────────
+const NBA_PLAYOFF_WEIGHTS = {
+  current_series_hit_rate: 0.22,
+  playoff_recent_hit_rate: 0.14,
+  last_10:                 0.12,
+  last_5:                  0.08,
+  season_hit_rate:         0.10,
+  h2h:                     0.06,
+  home_away:               0.06,
+  minutes_trend:           0.08,
+  opp_injuries:            0.05,
+};
+
+type NbaPropProfile =
+  | "default"
+  | "rebounds"
+  | "assists"
+  | "threes"
+  | "fta"
+  | "ftm"
+  | "fta_no_data"
+  | "steals_blocks"
+  | "combo";
+
+function detectNbaPropCategory(propType: string | null | undefined): NbaPropProfile {
+  const p = (propType || "").toLowerCase().replace(/\s+/g, "_");
+  if (p.includes("steal") || p.includes("block") || p === "stl_blk" || p === "stocks") return "steals_blocks";
+  if (p === "rebounds" || p.includes("rebound")) return "rebounds";
+  if (p === "assists" || p.includes("assist")) return "assists";
+  if (p.includes("three") || p === "3pm" || p === "3pa" || p === "threes") return "threes";
+  if (p === "ftm" || p.includes("free_throws_made")) return "ftm";
+  if (p === "fta" || p.includes("free_throw_attempt")) return "fta";
+  if (p === "pra" || p === "pr" || p === "pa" || p === "ra" || p === "pts_reb_ast" || p.includes("+")) return "combo";
+  return "default";
+}
+
+function gamelogHasFreeThrows(games: GameRow[] | undefined | null): boolean {
+  if (!games || !games.length) return false;
+  return games.some((g: any) =>
+    typeof g?.free_throws === "number" || typeof g?.ft_attempts === "number"
+  );
+}
+
+interface PlayoffOverlayResult {
+  confidence: number;
+  factorsUsed: number;
+}
+function computeNbaPlayoffOverlay(
+  data: any,
+  series: { current_series_hit_rate: number | null; playoff_recent_hit_rate: number | null; current_series_minutes_average: number | null },
+): PlayoffOverlayResult {
+  const W = NBA_PLAYOFF_WEIGHTS;
+  let weightedSum = 0;
+  let totalWeight = 0;
+  let factorsUsed = 0;
+
+  const add = (val: number | null | undefined, w: number) => {
+    if (val == null || !isFinite(val)) return;
+    weightedSum += val * w;
+    totalWeight += w;
+    factorsUsed++;
+  };
+
+  add(series.current_series_hit_rate, W.current_series_hit_rate);
+  add(series.playoff_recent_hit_rate, W.playoff_recent_hit_rate);
+  if (data.last_10?.total > 0) add(data.last_10.rate, W.last_10);
+  if (data.last_5?.total > 0)  add(data.last_5.rate,  W.last_5);
+  if (data.season_hit_rate?.total > 0) add(data.season_hit_rate.rate, W.season_hit_rate);
+  if (data.head_to_head?.total > 0)    add(data.head_to_head.rate,    W.h2h);
+  if (data.home_away?.total > 0)       add(data.home_away.rate,       W.home_away);
+
+  // Playoff minutes trend: map seriesMinutesAverage to a 20-85 score around 30mpg
+  const sma = series.current_series_minutes_average;
+  if (sma != null && isFinite(sma)) {
+    const minutesScore = Math.max(20, Math.min(85, 50 + (sma - 30) * 1.5));
+    add(minutesScore, W.minutes_trend);
+  }
+
+  // Opponent injuries: same-direction nudge toward the bet side
+  const oppInj = (data.opponent_injuries || []).filter((i: any) =>
+    ["out", "doubtful"].includes((i.status || "").toLowerCase())
+  );
+  if (oppInj.length > 0) {
+    const oppScore = (data.over_under || "").toLowerCase() === "over" ? 62 : 42;
+    add(oppScore, W.opp_injuries);
+  }
+
+  if (totalWeight === 0 || factorsUsed === 0) return { confidence: 0, factorsUsed: 0 };
+  return { confidence: Math.round(weightedSum / totalWeight), factorsUsed };
+}
+
+// ─────────────────────────────────────────────────────────────
 // Snapshot logging — fire and forget
 // ─────────────────────────────────────────────────────────────
 async function logSnapshot(payload: Record<string, any>): Promise<void> {
@@ -3494,14 +3590,81 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
     return result;
   }
 
+  // ── Phase 1 diagnostics: hoisted so Phase 2 overlay can read them ──
+  // These were previously computed only in the emission block AFTER confidence
+  // was finalized. Phase 2 (NBA-only) needs the playoff/series/cushion/dataQuality
+  // values up front. Computation itself is byte-identical to Phase 1.
+  let phase1Diag: Record<string, unknown> | null = null;
+  let phase1Series: any = null;
+  let phase1Playoff: any = null;
+  let phase1Cushion: number | null = null;
+  let phase1DataQuality: 'high' | 'medium' | 'low' = 'low';
+  if (cfg.searchLeague === "nba") {
+    try {
+      const opponentForCtx = h2hOpp || nextGame?.opponent_abbr || "";
+      phase1Playoff = detectPlayoffContext(games, opponentForCtx);
+      phase1Series = buildSeriesContext(games, opponentForCtx, propType, line, overUnder);
+      const recentAvg = typeof last10?.avg === 'number' ? last10.avg : null;
+      const seasonAvgVal = typeof seasonHitRate?.avg === 'number' ? seasonHitRate.avg : null;
+      phase1Cushion = computeLineCushion({
+        avg: phase1Series.current_series_average ?? seasonAvgVal,
+        floor: phase1Series.current_series_floor,
+        ceiling: phase1Series.current_series_ceiling,
+        recentAvg,
+        line,
+        direction: overUnder,
+      });
+      const sampleSize = (gameLog?.length || games.length || 0);
+      phase1DataQuality = sampleSize >= 25 ? 'high' : sampleSize >= 10 ? 'medium' : 'low';
+      phase1Diag = {
+        playoffMode: phase1Playoff.isPlayoff,
+        playoffSignalConfidence: phase1Playoff.signalConfidence,
+        playoffSignalReason: phase1Playoff.signalReason,
+        seriesSampleSize: phase1Series.current_series_games,
+        seriesHitRate: phase1Series.current_series_hit_rate,
+        seriesAverage: phase1Series.current_series_average,
+        seriesFloor: phase1Series.current_series_floor,
+        seriesCeiling: phase1Series.current_series_ceiling,
+        seriesMinutesAverage: phase1Series.current_series_minutes_average,
+        seriesMinutesRange: phase1Series.current_series_minutes_range,
+        playoffRecentAverage: phase1Series.playoff_recent_average,
+        playoffRecentHitRate: phase1Series.playoff_recent_hit_rate,
+        lineCushion: phase1Cushion,
+        rotationContextApplied: false,
+        rotationRole: null,
+        rotationBoost: null,
+        rotationCollision: null,
+        minutesVolatility: null,
+        dataQuality: phase1DataQuality,
+      };
+    } catch (e) {
+      console.error("phase1 diagnostics computation failed:", (e as Error).message);
+    }
+  }
+
   // ── NBA/NHL: Use generic confidence engine ──
   const { confidence: rawConf, reasoning, consensusFloorApplied, playerIsOut } = calculateConfidence(result);
-  
+
   // If player is OUT, skip all discretion and set verdict immediately
   if (playerIsOut) {
     result.confidence = 0;
     result.reasoning = reasoning;
     result.verdict = "DO NOT BET";
+    if (phase1Diag) {
+      result.model_diagnostics = {
+        ...(result.model_diagnostics ?? {}),
+        ...phase1Diag,
+        playoffWeightsApplied: false,
+        playoffWeightProfile: null,
+        lineCushionApplied: false,
+        lineCushionImpact: null,
+        marketQualityApplied: false,
+        marketQualityImpact: null,
+        propSpecificProfile: null,
+        prePlayoffConfidence: null,
+        postPlayoffConfidence: null,
+      };
+    }
     return result;
   }
 
@@ -3564,6 +3727,89 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
     }
   }
   
+  // ── Phase 2 overlay: NBA playoff-aware confidence tuning ──
+  // Gates: NBA player props only, playoffMode=true, seriesSampleSize>=2, dataQuality !== 'low'.
+  // All other paths (regular-season NBA, MLB/NHL/UFC, low sample, low quality)
+  // run the existing logic with byte-stable confidence.
+  let prePlayoffConfidence: number | null = null;
+  let postPlayoffConfidence: number | null = null;
+  let playoffWeightsApplied = false;
+  let playoffWeightProfile: string | null = null;
+  let lineCushionApplied = false;
+  let lineCushionImpact: number | null = null;
+  let propSpecificProfile: string | null = null;
+
+  const playoffActive =
+    cfg.searchLeague === "nba" &&
+    !!phase1Playoff?.isPlayoff &&
+    (phase1Series?.current_series_games ?? 0) >= 2 &&
+    phase1DataQuality !== 'low';
+
+  if (playoffActive) {
+    prePlayoffConfidence = confidence;
+    let propCat = detectNbaPropCategory(propType);
+
+    // FTA/FTM: only run if ESPN gamelog actually exposes free-throw data
+    if ((propCat === 'fta' || propCat === 'ftm') && !gamelogHasFreeThrows(games)) {
+      propCat = 'fta_no_data';
+    }
+    propSpecificProfile = propCat;
+
+    // 1. Playoff weight overlay — blend with base confidence so existing
+    // injury-driven and OUT/short-circuit logic from calculateConfidence
+    // remains intact. 65/35 blend favors verified playoff signal.
+    if (propCat !== 'fta_no_data') {
+      const overlay = computeNbaPlayoffOverlay(result, {
+        current_series_hit_rate: phase1Series.current_series_hit_rate,
+        playoff_recent_hit_rate: phase1Series.playoff_recent_hit_rate,
+        current_series_minutes_average: phase1Series.current_series_minutes_average,
+      });
+      if (overlay.factorsUsed >= 2) {
+        const blended = Math.round(overlay.confidence * 0.65 + confidence * 0.35);
+        confidence = Math.max(0, Math.min(100, blended));
+        playoffWeightsApplied = true;
+        playoffWeightProfile = propCat;
+      }
+    }
+
+    // 2. Line cushion nudge — capped per profile.
+    //    threes: ±3, steals/blocks: 0, others: ±6.
+    //    Never alone enough to flip a Pass/Lean to Strong (verdict thresholds untouched).
+    if (phase1Cushion != null && isFinite(phase1Cushion) && line && (overUnder === 'over' || overUnder === 'under')) {
+      const cushionCap = propCat === 'threes' ? 3 : propCat === 'steals_blocks' ? 0 : 6;
+      if (cushionCap > 0) {
+        let impact = phase1Cushion * cushionCap;
+        impact = Math.max(-cushionCap, Math.min(cushionCap, impact));
+        confidence = Math.max(0, Math.min(100, confidence + impact));
+        lineCushionApplied = true;
+        lineCushionImpact = Math.round(impact * 10) / 10;
+      }
+    }
+
+    // 3. Prop-specific clamps
+    if (propCat === 'steals_blocks') {
+      const seriesHR = phase1Series.current_series_hit_rate ?? 0;
+      const l5HR = result.last_5?.rate ?? 0;
+      const triple = seriesHR >= 65 && l5HR >= 60 && (phase1Series.current_series_games ?? 0) >= 3;
+      if (!triple) confidence = Math.min(confidence, 70);
+    }
+
+    // 4. Combo (PRA / PR / PA / RA): if all needed component series averages
+    // exist on the result (computed elsewhere), nudge toward combined avg vs line.
+    if (propCat === 'combo') {
+      const sa = phase1Series.current_series_average;
+      if (typeof sa === 'number' && isFinite(sa) && sa > 0 && line > 0) {
+        const direction = (overUnder || '').toLowerCase();
+        const margin = direction === 'over' ? (sa - line) / line : (line - sa) / line;
+        const comboNudge = Math.max(-4, Math.min(4, margin * 8));
+        confidence = Math.max(0, Math.min(100, confidence + comboNudge));
+      }
+    }
+
+    confidence = Math.round(Math.max(0, Math.min(100, confidence)));
+    postPlayoffConfidence = confidence;
+  }
+
   result.confidence = confidence;
   result.reasoning = reasoning;
 
@@ -3572,60 +3818,25 @@ async function analyzeProp(playerName: string, propType: string, line: number, o
   else if (confidence >= 42) result.verdict = "RISKY";
   else result.verdict = "FADE";
 
-  // ── Phase 1: emit structured model diagnostics (NBA only, read-only) ──
-  // These fields are observed by the slate scanner and persisted into
-  // daily_picks.model_diagnostics. They do NOT alter confidence, verdict,
-  // or unit sizing. Behavior remains byte-stable for regular-season picks.
-  if (cfg.searchLeague === "nba") {
-    try {
-      const opponentForCtx = h2hOpp || nextGame?.opponent_abbr || "";
-      const playoff = detectPlayoffContext(games, opponentForCtx);
-      const series = buildSeriesContext(games, opponentForCtx, propType, line, overUnder);
-      const recentAvg = typeof last10?.avg === 'number' ? last10.avg : null;
-      const seasonAvgVal = typeof seasonHitRate?.avg === 'number' ? seasonHitRate.avg : null;
-      const cushion = computeLineCushion({
-        avg: series.current_series_average ?? seasonAvgVal,
-        floor: series.current_series_floor,
-        ceiling: series.current_series_ceiling,
-        recentAvg,
-        line,
-        direction: overUnder,
-      });
-
-      const sampleSize = (gameLog?.length || games.length || 0);
-      const dataQuality: 'high' | 'medium' | 'low' =
-        sampleSize >= 25 ? 'high' : sampleSize >= 10 ? 'medium' : 'low';
-
-      const espnDiag = {
-        playoffMode: playoff.isPlayoff,
-        playoffSignalConfidence: playoff.signalConfidence,
-        playoffSignalReason: playoff.signalReason,
-        seriesSampleSize: series.current_series_games,
-        seriesHitRate: series.current_series_hit_rate,
-        seriesAverage: series.current_series_average,
-        seriesFloor: series.current_series_floor,
-        seriesCeiling: series.current_series_ceiling,
-        seriesMinutesAverage: series.current_series_minutes_average,
-        seriesMinutesRange: series.current_series_minutes_range,
-        playoffRecentAverage: series.playoff_recent_average,
-        playoffRecentHitRate: series.playoff_recent_hit_rate,
-        lineCushion: cushion,
-        // Rotation context not yet active in Phase 1; future phase will populate.
-        rotationContextApplied: false,
-        rotationRole: null,
-        rotationBoost: null,
-        rotationCollision: null,
-        minutesVolatility: null,
-        dataQuality,
-      };
-
-      result.model_diagnostics = {
-        ...(result.model_diagnostics ?? {}),
-        ...espnDiag,
-      };
-    } catch (e) {
-      console.error("model_diagnostics emit failed:", (e as Error).message);
-    }
+  // ── Emit structured model diagnostics (NBA only) ──
+  // Phase 1 fields persisted as before. Phase 2 fields describe the playoff
+  // overlay, cushion nudge, and prop-specific profile that affected confidence.
+  // Market-quality modifier is applied downstream in sport_scan after the
+  // analyzer/market diagnostics are merged; its fields are populated there.
+  if (cfg.searchLeague === "nba" && phase1Diag) {
+    result.model_diagnostics = {
+      ...(result.model_diagnostics ?? {}),
+      ...phase1Diag,
+      playoffWeightsApplied,
+      playoffWeightProfile,
+      lineCushionApplied,
+      lineCushionImpact,
+      marketQualityApplied: false,
+      marketQualityImpact: null,
+      propSpecificProfile,
+      prePlayoffConfidence,
+      postPlayoffConfidence,
+    };
   }
 
   return result;
