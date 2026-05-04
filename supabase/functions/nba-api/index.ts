@@ -1996,8 +1996,10 @@ type SeriesContext = {
   current_series_average: number | null;
   current_series_floor: number | null;
   current_series_ceiling: number | null;
+  current_series_minutes: number[];
   current_series_minutes_average: number | null;
   current_series_minutes_range: number | null;
+  current_series_minutes_floor: number | null;
   playoff_recent_average: number | null;
   playoff_recent_hit_rate: number | null;
 };
@@ -2016,8 +2018,10 @@ function buildSeriesContext(
     current_series_average: null,
     current_series_floor: null,
     current_series_ceiling: null,
+    current_series_minutes: [],
     current_series_minutes_average: null,
     current_series_minutes_range: null,
+    current_series_minutes_floor: null,
     playoff_recent_average: null,
     playoff_recent_hit_rate: null,
   };
@@ -2055,8 +2059,10 @@ function buildSeriesContext(
   }
   if (minutes.length > 0) {
     const minSum = minutes.reduce((a, b) => a + b, 0);
+    ctx.current_series_minutes = minutes.slice();
     ctx.current_series_minutes_average = round1(minSum / minutes.length);
     ctx.current_series_minutes_range = round1(Math.max(...minutes) - Math.min(...minutes));
+    ctx.current_series_minutes_floor = round1(Math.min(...minutes));
   }
 
   // Playoff-recent: any-opponent postseason games, last ≤7
@@ -2071,6 +2077,206 @@ function buildSeriesContext(
     ctx.playoff_recent_hit_rate = hitRate(prVals, line, overUnder).rate;
   }
   return ctx;
+}
+
+// ── Phase 3: NBA playoff rotation context (minutes-derived only) ───────────
+// Pure ESPN minutes signal. No lineup combinations, no usage rate, no DRtg,
+// no touch/drive metrics, no new providers. Returns diagnostics regardless of
+// playoffMode; the analyzer decides whether to apply confidence impact under
+// playoff/data-quality guards.
+type RotationRole = "starter" | "closer" | "rotation" | "bench" | "spot";
+type RotationVolatility = "low" | "medium" | "high";
+type RotationConfidence = "high" | "medium" | "low" | "none";
+type RotationPropClass = "volume" | "variance" | "neutral";
+
+type RotationContext = {
+  rotationContextApplied: boolean;
+  rotationRole: RotationRole | null;
+  rotationBoost: number | null;
+  rotationCollision: number | null;
+  minutesVolatility: RotationVolatility | null;
+  minutesSampleSize: number;
+  seasonMinutesAverage: number | null;
+  playoffMinutesAverage: number | null;
+  seriesMinutesAverage: number | null;
+  seriesMinutesRange: number | null;
+  minutesDeltaVsSeason: number | null;
+  rotationConfidence: RotationConfidence;
+  rotationFailureReason: string | null;
+  rotationPropClass: RotationPropClass;
+};
+
+function classifyRotationProp(propType: string | null | undefined): RotationPropClass {
+  const cat = detectNbaPropCategory(propType);
+  if (cat === "steals_blocks") return "variance";
+  if (
+    cat === "rebounds" ||
+    cat === "assists" ||
+    cat === "threes" ||
+    cat === "fta" ||
+    cat === "ftm" ||
+    cat === "combo" ||
+    cat === "default"
+  ) return "volume";
+  return "neutral";
+}
+
+function buildRotationContext(args: {
+  gameLog: GameRow[] | null | undefined;
+  seriesContext: SeriesContext | null;
+  playerName: string;
+  propType: string;
+  direction: "over" | "under" | string;
+  line: number;
+  team: string | null;
+  opponent: string | null;
+  teammateInjuries: Array<{ player_name?: string; status?: string; role?: string }>;
+  rosterMinutes: Array<{ name?: string; avgMinutes?: number; role?: string }> | null;
+  isPlayoff: boolean;
+}): RotationContext {
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  const propClass = classifyRotationProp(args.propType);
+  const log = Array.isArray(args.gameLog) ? args.gameLog : [];
+
+  const regularMinutes = log
+    .filter(g => g.seasonType === "regular" && Number(g.min) > 0)
+    .map(g => Number(g.min));
+  const playoffMinutes = log
+    .filter(g => g.seasonType === "postseason" && Number(g.min) > 0)
+    .map(g => Number(g.min));
+
+  const seasonMinutesAverage = regularMinutes.length
+    ? round1(regularMinutes.reduce((a, b) => a + b, 0) / regularMinutes.length)
+    : null;
+  const playoffMinutesAverage = playoffMinutes.length
+    ? round1(playoffMinutes.reduce((a, b) => a + b, 0) / playoffMinutes.length)
+    : null;
+  const seriesMinutesAverage = args.seriesContext?.current_series_minutes_average ?? null;
+  const seriesMinutesRange = args.seriesContext?.current_series_minutes_range ?? null;
+  const seriesMinutesFloor = args.seriesContext?.current_series_minutes_floor ?? null;
+  const seriesGames = args.seriesContext?.current_series_games ?? 0;
+  const seriesMinList = Array.isArray(args.seriesContext?.current_series_minutes)
+    ? (args.seriesContext!.current_series_minutes as number[])
+    : [];
+
+  // Volatility source: prefer current-series minutes, fallback to recent playoff minutes.
+  const volSource = seriesMinList.length >= 2
+    ? seriesMinList
+    : (playoffMinutes.length >= 2 ? playoffMinutes.slice(-7) : []);
+  const minutesSampleSize = volSource.length;
+
+  let minutesVolatility: RotationVolatility | null = null;
+  if (volSource.length >= 2) {
+    const mean = volSource.reduce((a, b) => a + b, 0) / volSource.length;
+    const variance = volSource.reduce((s, x) => s + (x - mean) * (x - mean), 0) / volSource.length;
+    const stdDev = Math.sqrt(variance);
+    const range = Math.max(...volSource) - Math.min(...volSource);
+    if (range <= 6 || stdDev <= 3) minutesVolatility = "low";
+    else if (range <= 12 || stdDev <= 6) minutesVolatility = "medium";
+    else minutesVolatility = "high";
+  }
+
+  // Confidence is sample-size + volatility driven.
+  let rotationConfidence: RotationConfidence = "none";
+  if (minutesSampleSize >= 4 && minutesVolatility === "low") rotationConfidence = "high";
+  else if (minutesSampleSize >= 3 && (minutesVolatility === "low" || minutesVolatility === "medium")) rotationConfidence = "medium";
+  else if (minutesSampleSize >= 2) rotationConfidence = "low";
+
+  // Applied gate: closer-grade evidence (per spec). Below this we still emit
+  // numeric diagnostics but flag rotationContextApplied=false.
+  const applied = seriesGames >= 3 || playoffMinutes.length >= 4;
+  const rotationFailureReason: string | null = applied ? null : "insufficient_minutes_sample";
+
+  // Primary average: prefer playoff signals when present, else season.
+  const primaryAvg = playoffMinutesAverage ?? seriesMinutesAverage ?? seasonMinutesAverage;
+  const minutesDeltaVsSeason =
+    seasonMinutesAverage != null && (playoffMinutesAverage ?? seriesMinutesAverage) != null
+      ? round1((playoffMinutesAverage ?? (seriesMinutesAverage as number)) - seasonMinutesAverage)
+      : null;
+
+  let rotationRole: RotationRole | null = null;
+  if (applied && primaryAvg != null) {
+    const closerSampleOk = seriesGames >= 3 || playoffMinutes.length >= 4;
+    const closerByAvg =
+      (playoffMinutesAverage != null && playoffMinutesAverage >= 34) ||
+      (seriesMinutesAverage != null && seriesMinutesAverage >= 34);
+    const closerByFloor =
+      seriesMinutesFloor != null && seriesMinutesFloor >= 30 && seriesGames >= 3;
+    if (closerSampleOk && (closerByAvg || closerByFloor)) rotationRole = "closer";
+    else if (primaryAvg >= 28) rotationRole = "starter";
+    else if (primaryAvg >= 18) rotationRole = "rotation";
+    else if (primaryAvg >= 10) rotationRole = "bench";
+    else rotationRole = "spot";
+  }
+
+  // ── Boost / collision computation (bounded). Numbers here are CANDIDATES;
+  // the analyzer applies the impact only under playoff + data-quality guards.
+  let boost = 0;
+  let collision = 0;
+
+  const sigTeammateOut = (args.teammateInjuries || []).filter(
+    i => ["out", "doubtful"].includes((i?.status || "").toLowerCase()),
+  );
+  const starterTeammateOut = sigTeammateOut.some(i => {
+    const name = (i?.player_name || "").toLowerCase();
+    if (!name) return false;
+    const r = (args.rosterMinutes || []).find(p => (p?.name || "").toLowerCase() === name);
+    return (r?.role || "").toLowerCase() === "starter";
+  });
+
+  // Boost candidates (only volume props receive positive boost)
+  if (propClass === "volume" && applied) {
+    if (
+      seasonMinutesAverage != null &&
+      seriesMinutesAverage != null &&
+      seriesMinutesAverage >= seasonMinutesAverage + 4
+    ) boost += 2;
+    if (seriesMinutesFloor != null && seriesMinutesFloor >= 30 && seriesGames >= 3) boost += 1;
+    if (
+      (rotationRole === "starter" || rotationRole === "closer") &&
+      minutesVolatility === "low"
+    ) boost += 1;
+    if (starterTeammateOut) boost += 1;
+  }
+
+  // Collision candidates (apply to volume and variance; conservative for variance)
+  if (applied) {
+    if (
+      seasonMinutesAverage != null &&
+      seriesMinutesAverage != null &&
+      seriesMinutesAverage <= seasonMinutesAverage - 4
+    ) collision -= 2;
+    if (propClass === "volume" && minutesVolatility === "high") collision -= 2;
+    if (
+      (rotationRole === "bench" || rotationRole === "spot") &&
+      primaryAvg != null && args.line > primaryAvg
+    ) collision -= 2;
+    if (minutesDeltaVsSeason != null && minutesDeltaVsSeason < -6) collision -= 1;
+  }
+
+  // Apply caps per spec
+  boost = Math.max(0, Math.min(4, boost));
+  collision = Math.max(-5, Math.min(0, collision));
+
+  // Variance-only props receive NO positive minutes boost
+  if (propClass === "variance") boost = 0;
+
+  return {
+    rotationContextApplied: applied,
+    rotationRole,
+    rotationBoost: applied ? boost : null,
+    rotationCollision: applied ? collision : null,
+    minutesVolatility,
+    minutesSampleSize,
+    seasonMinutesAverage,
+    playoffMinutesAverage,
+    seriesMinutesAverage,
+    seriesMinutesRange,
+    minutesDeltaVsSeason,
+    rotationConfidence,
+    rotationFailureReason,
+    rotationPropClass: propClass,
+  };
 }
 
 // Composite line cushion in roughly [-1, +1]. Only a diagnostic this phase —
@@ -3632,6 +3838,7 @@ async function analyzeProp(
   let opponentResolutionStatus: "resolved" | "missing" | "ambiguous" | "team_mismatch" = "missing";
   let seriesCandidateGames = 0;
   let seriesMatchFailureReason: string | null = null;
+  let phase1Rotation: RotationContext | null = null;
   if (cfg.searchLeague === "nba") {
     try {
       const opponentForCtx = oppAbbrCanon || h2hOpp || nextGame?.opponent_abbr || "";
@@ -3683,6 +3890,30 @@ async function analyzeProp(
       });
       const sampleSize = (gameLog?.length || games.length || 0);
       phase1DataQuality = sampleSize >= 25 ? 'high' : sampleSize >= 10 ? 'medium' : 'low';
+
+      // Phase 3: minutes-derived rotation context (NBA only). Diagnostics
+      // computed regardless of playoffMode; impact gated downstream.
+      try {
+        phase1Rotation = buildRotationContext({
+          gameLog: games,
+          seriesContext: phase1Series,
+          playerName: player.full_name || "",
+          propType,
+          direction: overUnder,
+          line,
+          team: normalizeNbaTeam(player.team_abbr) || null,
+          opponent: oppAbbrCanon || null,
+          teammateInjuries: result.teammate_injuries || [],
+          rosterMinutes: (result.team_roster_context?.keyPlaying || []).concat(
+            result.team_roster_context?.keyOut || [],
+          ),
+          isPlayoff: !!phase1Playoff?.isPlayoff,
+        });
+      } catch (e) {
+        console.error("phase3 rotation context computation failed:", (e as Error).message);
+        phase1Rotation = null;
+      }
+
       phase1Diag = {
         playoffMode: phase1Playoff.isPlayoff,
         playoffSignalConfidence: phase1Playoff.signalConfidence,
@@ -3697,11 +3928,18 @@ async function analyzeProp(
         playoffRecentAverage: phase1Series.playoff_recent_average,
         playoffRecentHitRate: phase1Series.playoff_recent_hit_rate,
         lineCushion: phase1Cushion,
-        rotationContextApplied: false,
-        rotationRole: null,
-        rotationBoost: null,
-        rotationCollision: null,
-        minutesVolatility: null,
+        rotationContextApplied: phase1Rotation?.rotationContextApplied ?? false,
+        rotationRole: phase1Rotation?.rotationRole ?? null,
+        rotationBoost: phase1Rotation?.rotationBoost ?? null,
+        rotationCollision: phase1Rotation?.rotationCollision ?? null,
+        minutesVolatility: phase1Rotation?.minutesVolatility ?? null,
+        minutesSampleSize: phase1Rotation?.minutesSampleSize ?? 0,
+        seasonMinutesAverage: phase1Rotation?.seasonMinutesAverage ?? null,
+        playoffMinutesAverage: phase1Rotation?.playoffMinutesAverage ?? null,
+        minutesDeltaVsSeason: phase1Rotation?.minutesDeltaVsSeason ?? null,
+        rotationConfidence: phase1Rotation?.rotationConfidence ?? "none",
+        rotationFailureReason: phase1Rotation?.rotationFailureReason ?? null,
+        rotationPropClass: phase1Rotation?.rotationPropClass ?? null,
         dataQuality: phase1DataQuality,
         opponentResolved: oppAbbrCanon || null,
         opponentResolutionStatus,
@@ -3737,6 +3975,8 @@ async function analyzeProp(
         propSpecificProfile: null,
         prePlayoffConfidence: null,
         postPlayoffConfidence: null,
+        rotationImpactApplied: false,
+        rotationImpact: 0,
       };
     }
     return result;
@@ -3884,6 +4124,47 @@ async function analyzeProp(
     postPlayoffConfidence = confidence;
   }
 
+  // ── Phase 3: rotation context impact (NBA only, playoff-gated) ──
+  // Diagnostics already computed in Phase 1 block. Apply confidence impact
+  // only when playoff weights successfully applied AND data quality is good
+  // AND rotation confidence is medium/high. Total impact bounded to [-6, +4].
+  let rotationImpactApplied = false;
+  let rotationImpact = 0;
+  if (
+    cfg.searchLeague === "nba" &&
+    phase1Rotation &&
+    phase1Rotation.rotationContextApplied &&
+    playoffWeightsApplied &&
+    !!phase1Playoff?.isPlayoff &&
+    (phase1Series?.current_series_games ?? 0) >= 2 &&
+    phase1DataQuality !== 'low' &&
+    (phase1Rotation.rotationConfidence === "medium" || phase1Rotation.rotationConfidence === "high")
+  ) {
+    const boost = phase1Rotation.rotationBoost ?? 0;
+    const collision = phase1Rotation.rotationCollision ?? 0;
+    let volPenalty = 0;
+    if (phase1Rotation.minutesVolatility === "high") volPenalty -= 3;
+    else if (phase1Rotation.minutesVolatility === "medium") volPenalty -= 1;
+    volPenalty = Math.max(-4, volPenalty);
+
+    let combined = boost + collision + volPenalty;
+    combined = Math.max(-6, Math.min(4, combined));
+
+    if (combined !== 0) {
+      const before = confidence;
+      confidence = Math.max(0, Math.min(100, Math.round(before + combined)));
+      rotationImpactApplied = true;
+      rotationImpact = combined;
+      const sign = combined > 0 ? "+" : "";
+      reasoning.push(
+        `🧠 ROTATION CONTEXT: ${before}% → ${confidence}% (${sign}${combined}) — role=${phase1Rotation.rotationRole ?? "n/a"}, vol=${phase1Rotation.minutesVolatility ?? "n/a"}, sample=${phase1Rotation.minutesSampleSize}`,
+      );
+    } else {
+      rotationImpactApplied = true;
+      rotationImpact = 0;
+    }
+  }
+
   result.confidence = confidence;
   result.reasoning = reasoning;
 
@@ -3910,6 +4191,8 @@ async function analyzeProp(
       propSpecificProfile,
       prePlayoffConfidence,
       postPlayoffConfidence,
+      rotationImpactApplied,
+      rotationImpact,
     };
   }
 
