@@ -446,6 +446,7 @@ const NbaPropsPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [results, setResults] = useState<any>(null);
+  const [snapshotAvgValue, setSnapshotAvgValue] = useState<number | null>(null);
   const [corrProps, setCorrProps] = useState<Array<{ correlated_player: string; correlated_prop: string; correlated_line?: number; correlated_team: string | null; hit_rate: number; sample_size: number; is_opponent?: boolean; reasoning?: string }>>([]);
   const [corrLoading, setCorrLoading] = useState(false);
   const [parlaySlip, setParlaySlip] = useState<Array<{ player: string; prop: string; team: string | null; hit_rate: number }>>([]);
@@ -551,6 +552,7 @@ const NbaPropsPage = () => {
       pick_snapshot?: {
         confidence?: number;
         reasoning?: string | null;
+        avg_value?: number | null;
       };
     } | null;
 
@@ -614,6 +616,9 @@ const NbaPropsPage = () => {
                   line: navState.line || data.line,
                 }
               : data;
+            if (navState.pick_snapshot?.avg_value != null) {
+              setSnapshotAvgValue(navState.pick_snapshot.avg_value);
+            }
 
             setResults(mergedData);
             if (s === "nba") {
@@ -2012,6 +2017,7 @@ const NbaPropsPage = () => {
                   last10HitRate={results.last_10?.rate}
                   last5HitRate={results.last_5?.rate}
                   h2hHitRate={h2h.rate}
+                  backendEvPct={snapshotAvgValue}
                 />
               </Section>
 

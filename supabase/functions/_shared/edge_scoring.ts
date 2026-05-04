@@ -96,12 +96,20 @@ const MID_RELIABILITY_PROPS = new Set([
   "rbi", "runs", "singles",
   "points_nhl", "saves",
 ]);
-const LOW_RELIABILITY_PROPS = new Set([
+export const LOW_RELIABILITY_PROPS = new Set([
   "steals", "blocks", "stl_blk",
   "home_runs", "hr", "strikeouts", "ks", "pitcher_strikeouts",
   "first_basket", "first_td", "anytime_td",
   "goals",  // NHL goals — high variance
 ]);
+
+// NBA high-variance prop keys used by the NBA edge gate
+export const NBA_HIGH_VARIANCE_KEYS = new Set([
+  "steals", "blocks", "stl_blk", "turnovers",
+]);
+
+// Low-line threshold: props at or below this line need stricter gates
+export const NBA_LOW_LINE_MAX = 1.5;
 
 export function getMarketReliability(
   betType: string,

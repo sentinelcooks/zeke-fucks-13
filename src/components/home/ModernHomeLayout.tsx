@@ -862,6 +862,11 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                                 line: Number(pick.line),
                                 over_under: pick.direction,
                                 opponent: pick.opponent || '',
+                                pick_snapshot: {
+                                  confidence: pick.confidence ?? pick.hit_rate ?? undefined,
+                                  reasoning: pick.reasoning ?? null,
+                                  avg_value: pick.avg_value ?? null,
+                                },
                               },
                             });
                           }

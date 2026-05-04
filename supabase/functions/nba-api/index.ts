@@ -2000,7 +2000,6 @@ type SeriesContext = {
   current_series_minutes_average: number | null;
   current_series_minutes_range: number | null;
   current_series_minutes_floor: number | null;
-  current_series_minutes_ceiling: number | null;
   playoff_recent_average: number | null;
   playoff_recent_hit_rate: number | null;
 };
@@ -2023,7 +2022,6 @@ function buildSeriesContext(
     current_series_minutes_average: null,
     current_series_minutes_range: null,
     current_series_minutes_floor: null,
-    current_series_minutes_ceiling: null,
     playoff_recent_average: null,
     playoff_recent_hit_rate: null,
   };
@@ -2065,7 +2063,6 @@ function buildSeriesContext(
     ctx.current_series_minutes_average = round1(minSum / minutes.length);
     ctx.current_series_minutes_range = round1(Math.max(...minutes) - Math.min(...minutes));
     ctx.current_series_minutes_floor = round1(Math.min(...minutes));
-    ctx.current_series_minutes_ceiling = round1(Math.max(...minutes));
   }
 
   // Playoff-recent: any-opponent postseason games, last ≤7
@@ -2157,24 +2154,19 @@ function buildRotationContext(args: {
   const seriesMinutesAverage = args.seriesContext?.current_series_minutes_average ?? null;
   const seriesMinutesRange = args.seriesContext?.current_series_minutes_range ?? null;
   const seriesMinutesFloor = args.seriesContext?.current_series_minutes_floor ?? null;
-  const seriesMinutesCeiling = args.seriesContext?.current_series_minutes_ceiling ?? null;
   const seriesGames = args.seriesContext?.current_series_games ?? 0;
   const seriesMinList = Array.isArray(args.seriesContext?.current_series_minutes)
     ? (args.seriesContext!.current_series_minutes as number[])
     : [];
 
-  // Volatility source: prefer current-series raw list, fallback to recent playoff minutes,
-  // then fallback to range-derived estimate from series context when raw list is unavailable.
+  // Volatility source: prefer current-series minutes, fallback to recent playoff minutes.
   const volSource = seriesMinList.length >= 2
     ? seriesMinList
     : (playoffMinutes.length >= 2 ? playoffMinutes.slice(-7) : []);
+  const minutesSampleSize = volSource.length;
 
-  let minutesSampleSize: number;
   let minutesVolatility: RotationVolatility | null = null;
-  let usingFallbackSample = false;
-
   if (volSource.length >= 2) {
-    minutesSampleSize = volSource.length;
     const mean = volSource.reduce((a, b) => a + b, 0) / volSource.length;
     const variance = volSource.reduce((s, x) => s + (x - mean) * (x - mean), 0) / volSource.length;
     const stdDev = Math.sqrt(variance);
@@ -2182,34 +2174,17 @@ function buildRotationContext(args: {
     if (range <= 6 || stdDev <= 3) minutesVolatility = "low";
     else if (range <= 12 || stdDev <= 6) minutesVolatility = "medium";
     else minutesVolatility = "high";
-  } else if (seriesMinutesAverage != null && seriesGames >= 2) {
-    // Raw list unavailable but series context has average + range — use for role inference.
-    minutesSampleSize = seriesGames;
-    usingFallbackSample = true;
-    if (seriesMinutesRange != null) {
-      if (seriesMinutesRange <= 6) minutesVolatility = "low";
-      else if (seriesMinutesRange <= 12) minutesVolatility = "medium";
-      else minutesVolatility = "high";
-    }
-  } else {
-    minutesSampleSize = 0;
   }
 
-  // Confidence is sample-size + volatility driven. Fallback path gets one tier lower.
+  // Confidence is sample-size + volatility driven.
   let rotationConfidence: RotationConfidence = "none";
-  if (!usingFallbackSample) {
-    if (minutesSampleSize >= 4 && minutesVolatility === "low") rotationConfidence = "high";
-    else if (minutesSampleSize >= 3 && (minutesVolatility === "low" || minutesVolatility === "medium")) rotationConfidence = "medium";
-    else if (minutesSampleSize >= 2) rotationConfidence = "low";
-  } else {
-    if (minutesSampleSize >= 4 && minutesVolatility === "low") rotationConfidence = "medium";
-    else if (minutesSampleSize >= 3) rotationConfidence = "low";
-    else if (minutesSampleSize >= 2) rotationConfidence = "low";
-  }
+  if (minutesSampleSize >= 4 && minutesVolatility === "low") rotationConfidence = "high";
+  else if (minutesSampleSize >= 3 && (minutesVolatility === "low" || minutesVolatility === "medium")) rotationConfidence = "medium";
+  else if (minutesSampleSize >= 2) rotationConfidence = "low";
 
-  // Applied gate: series sample >= 2 (per spec). Below this we still emit
+  // Applied gate: closer-grade evidence (per spec). Below this we still emit
   // numeric diagnostics but flag rotationContextApplied=false.
-  const applied = seriesGames >= 2 || playoffMinutes.length >= 4;
+  const applied = seriesGames >= 3 || playoffMinutes.length >= 4;
   const rotationFailureReason: string | null = applied ? null : "insufficient_minutes_sample";
 
   // Primary average: prefer playoff signals when present, else season.
@@ -2219,9 +2194,8 @@ function buildRotationContext(args: {
       ? round1((playoffMinutesAverage ?? (seriesMinutesAverage as number)) - seasonMinutesAverage)
       : null;
 
-  // Role is emitted as a diagnostic regardless of applied; impact is still gated downstream.
   let rotationRole: RotationRole | null = null;
-  if (primaryAvg != null) {
+  if (applied && primaryAvg != null) {
     const closerSampleOk = seriesGames >= 3 || playoffMinutes.length >= 4;
     const closerByAvg =
       (playoffMinutesAverage != null && playoffMinutesAverage >= 34) ||

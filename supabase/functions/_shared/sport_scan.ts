@@ -10,6 +10,8 @@ import {
   calcEv,
   scorePrecomputed,
   type ScoredPlay,
+  NBA_HIGH_VARIANCE_KEYS,
+  NBA_LOW_LINE_MAX,
 } from "./edge_scoring.ts";
 import { stripPropCodes } from "./format_labels.ts";
 import { summarizeMarket } from "./odds_intelligence.ts";
@@ -1300,6 +1302,124 @@ async function validateWithAnalyzer(
   };
 }
 
+// ── NBA Today's Edge hard eligibility gate ────────────────
+// Applied only when sport='nba', before tier assignment. Returns ok=true if
+// the pick is clean enough to be Today's Edge. All failures carry reasons so
+// downstream code can route to daily/value or drop entirely.
+const NBA_EDGE_GATE_VERSION = "2026-05-04.v1";
+
+interface NbaEdgeGateResult {
+  ok: boolean;
+  reasons: string[];
+  hardSafetyFail: boolean;
+}
+
+function passNbaEdgeGate(p: ScoredPlay): NbaEdgeGateResult {
+  const reasons: string[] = [];
+  const md = (p.model_diagnostics ?? {}) as Record<string, unknown>;
+
+  const propKey = (p.prop_type || "").toLowerCase().replace(/\s+/g, "_");
+  const isHighVariance = NBA_HIGH_VARIANCE_KEYS.has(propKey);
+  const isLowLine = typeof p.line === "number" && p.line <= NBA_LOW_LINE_MAX;
+
+  // 1. Confidence floor
+  const confMin = isHighVariance ? 0.78 : isLowLine ? 0.76 : 0.72;
+  if (p.confidence < confMin) reasons.push("confidence_below_nba_edge_min");
+
+  // 2. Verdict — Lean is allowed in daily/value but not edge
+  if (p.verdict === "Pass") reasons.push("pass_verdict");
+  if ((p.verdict as string) === "Risky") reasons.push("risky_verdict");
+  if (p.verdict === "Lean") reasons.push("risky_verdict"); // Lean → daily, not edge
+
+  // 3. EV / market gate
+  if (p.edge <= 0) reasons.push("negative_ev");
+  if (p.ev_pct <= 0) {
+    if (!reasons.includes("negative_ev")) reasons.push("negative_ev");
+  }
+
+  const marketDataQuality = typeof md.marketDataQuality === "string" ? md.marketDataQuality : null;
+  const marketDepth = typeof md.marketDepth === "string" ? md.marketDepth : null;
+  const bookCount = typeof md.bookCount === "number" ? md.bookCount : null;
+
+  if (marketDataQuality === "low") reasons.push("market_quality_low");
+  if (marketDepth === "thin") reasons.push("market_depth_thin");
+  if (bookCount !== null && bookCount < 3) {
+    if (!reasons.includes("market_depth_thin")) reasons.push("market_depth_thin");
+  }
+
+  // 4. Juice gate
+  if (p.odds <= -200) {
+    reasons.push("heavy_juice");
+  } else if (p.odds <= -180) {
+    const juiceExempt = p.confidence >= 0.82 && marketDataQuality !== "low" && p.edge > 0;
+    if (!juiceExempt) reasons.push("heavy_juice");
+  }
+
+  // 5. Opponent/team resolution
+  const opponentStatus = typeof md.opponentResolutionStatus === "string" ? md.opponentResolutionStatus : null;
+  if (!p.team || !p.opponent || opponentStatus !== "resolved") {
+    reasons.push("opponent_unresolved");
+  }
+
+  // 6. Playoff diagnostics
+  const playoffMode =
+    md.playoffMode === true || md.playoffMode === "true";
+  if (playoffMode) {
+    const seriesSampleSize =
+      typeof md.seriesSampleSize === "number"
+        ? md.seriesSampleSize
+        : typeof md.seriesSampleSize === "string"
+        ? parseInt(md.seriesSampleSize, 10)
+        : 0;
+    const seriesMatchFailureReason =
+      md.seriesMatchFailureReason != null ? String(md.seriesMatchFailureReason) : null;
+    const playoffWeightsApplied = md.playoffWeightsApplied === true;
+
+    if (seriesSampleSize < 2) reasons.push("playoff_series_missing");
+    if (seriesMatchFailureReason) reasons.push("playoff_series_missing");
+    if (!playoffWeightsApplied) {
+      const strongEnough = p.confidence >= 0.80 && p.edge > 0 && marketDataQuality !== "low";
+      if (!strongEnough) reasons.push("playoff_series_missing");
+    }
+  }
+
+  // 7. Low-line gate — extra conditions beyond what's already caught above
+  if (isLowLine) {
+    const alreadyCaught = reasons.some(r =>
+      ["negative_ev", "market_quality_low", "opponent_unresolved"].includes(r)
+    );
+    if (!alreadyCaught && (p.ev_pct <= 0 || marketDataQuality === "low" || !p.team || !p.opponent)) {
+      reasons.push("low_line_extra_risk");
+    }
+  }
+
+  // 8. High-variance prop gate
+  if (isHighVariance) {
+    const cleanForHighVariance =
+      p.confidence >= 0.78 &&
+      (marketDataQuality === "medium" || marketDataQuality === "high") &&
+      p.edge > 0 &&
+      !reasons.includes("opponent_unresolved");
+    if (!cleanForHighVariance) {
+      if (!reasons.includes("confidence_below_nba_edge_min") && !reasons.includes("market_quality_low") && !reasons.includes("negative_ev") && !reasons.includes("opponent_unresolved")) {
+        reasons.push("high_variance_prop");
+      }
+    }
+  }
+
+  const ok = reasons.length === 0;
+
+  // Hard safety fail = drop from ALL public surfaces, not just edge
+  const hardSafetyFail =
+    reasons.includes("pass_verdict") ||
+    (reasons.includes("negative_ev") && reasons.includes("market_quality_low")) ||
+    (reasons.includes("opponent_unresolved") && p.confidence < 0.70) ||
+    (reasons.includes("heavy_juice") && p.odds <= -200) ||
+    (reasons.includes("playoff_series_missing") && playoffMode);
+
+  return { ok, reasons, hardSafetyFail };
+}
+
 // ── Main per-sport entry ──────────────
 export async function scanSport(sport: string): Promise<{
   sport: string;
@@ -1425,19 +1545,50 @@ export async function scanSport(sport: string): Promise<{
   const passPicks = validated.filter((p) => p.verdict === "Pass");
   const eligible = validated.filter((p) => p.verdict !== "Pass");
 
+  const tierKey = (p: ScoredPlay) =>
+    `${p.sport}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`;
+
+  // ── NBA edge gate: compute results once, cache by tierKey ──
+  // For NBA picks, run hard eligibility gates before deciding which go to edge.
+  // Non-NBA sports keep the original top-N-by-quality_score behavior unchanged.
+  const nbaGateCache = new Map<string, NbaEdgeGateResult>();
+  if (sport === "nba") {
+    for (const p of eligible) {
+      nbaGateCache.set(tierKey(p), passNbaEdgeGate(p));
+    }
+  }
+
   // Tier assignment over PASS-free set: top-N by quality_score → 'edge',
   // rest split into 'daily' (>=0.70 confidence) or 'value'. The public
   // Picks tab still gets daily/value rows, but only for non-PASS leans.
   const sortedByQuality = [...eligible].sort((a, b) => b.quality_score - a.quality_score);
   const edgeCap = EDGE_CAP_PER_SPORT[sport] ?? 5;
   const edgeKeySet = new Set<string>();
-  const tierKey = (p: ScoredPlay) =>
-    `${p.sport}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`;
-  for (const p of sortedByQuality.slice(0, edgeCap)) {
-    edgeKeySet.add(tierKey(p));
+
+  if (sport === "nba") {
+    // Only gate-passing NBA picks are eligible for Today's Edge.
+    // No fallback to ungated picks — fewer edge picks is acceptable.
+    let nbaEdgeCount = 0;
+    for (const p of sortedByQuality) {
+      if (nbaEdgeCount >= edgeCap) break;
+      const gate = nbaGateCache.get(tierKey(p));
+      if (gate?.ok) {
+        edgeKeySet.add(tierKey(p));
+        nbaEdgeCount++;
+      }
+    }
+  } else {
+    for (const p of sortedByQuality.slice(0, edgeCap)) {
+      edgeKeySet.add(tierKey(p));
+    }
   }
-  const assignTier = (p: ScoredPlay): "edge" | "daily" | "value" => {
+
+  const assignTier = (p: ScoredPlay): "edge" | "daily" | "value" | null => {
     if (edgeKeySet.has(tierKey(p))) return "edge";
+    if (sport === "nba") {
+      const gate = nbaGateCache.get(tierKey(p));
+      if (gate?.hardSafetyFail) return null; // drop from all public surfaces
+    }
     if (p.confidence >= 0.70) return "daily";
     return "value";
   };
@@ -1453,12 +1604,19 @@ export async function scanSport(sport: string): Promise<{
   const today = new Date().toISOString().slice(0, 10);
 
   let droppedNoGameDate = 0;
+  let nbaHardSafetyDropped = 0;
   // Defense-in-depth: if anything PASS leaks into `eligible`, drop it.
   let passVerdictBlocked = 0;
   const rows = eligible
     .map((p) => {
       if (p.verdict === "Pass") {
         passVerdictBlocked++;
+        return null;
+      }
+      const tier = assignTier(p);
+      if (tier === null) {
+        // NBA hard safety fail — drop from all public surfaces
+        nbaHardSafetyDropped++;
         return null;
       }
       const gameDate = p.game_date ?? (p.commence_time ? toETDate(p.commence_time) : null);
@@ -1470,6 +1628,27 @@ export async function scanSport(sport: string): Promise<{
         ? `[VERDICT:${p.verdict}] `
         : "";
       const cleanReasoning = stripPropCodes(p.reasoning ?? "");
+
+      // Attach NBA gate diagnostics + EV fields to model_diagnostics
+      let diagExtras: Record<string, unknown> = {};
+      if (sport === "nba") {
+        const gate = nbaGateCache.get(tierKey(p));
+        const preGateTier: "edge" | "daily" | "value" =
+          sortedByQuality.indexOf(p) < edgeCap ? "edge"
+          : p.confidence >= 0.70 ? "daily"
+          : "value";
+        diagExtras = {
+          edgeEligible: gate?.ok ?? true,
+          edgeRejectionReasons: gate?.reasons ?? [],
+          edgeDowngradeReason: gate && !gate.ok && gate.reasons.length > 0 ? gate.reasons[0] : null,
+          nbaEdgeGateVersion: NBA_EDGE_GATE_VERSION,
+          preGateTier,
+          postGateTier: tier,
+          evPct: Math.round(p.ev_pct * 100) / 100,
+          modelEdge: Math.round(p.edge * 10000) / 10000,
+        };
+      }
+
       return {
         pick_date: today,
         event_id: p.event_id ?? null,
@@ -1493,8 +1672,8 @@ export async function scanSport(sport: string): Promise<{
         avg_value: p.ev_pct,
         odds: String(p.odds),
         reasoning: `${verdictTag}${cleanReasoning}`.trim(),
-        tier: assignTier(p),
-        model_diagnostics: p.model_diagnostics ?? null,
+        tier,
+        model_diagnostics: { ...(p.model_diagnostics ?? {}), ...diagExtras },
       };
     })
     .filter((r): r is NonNullable<typeof r> => r !== null);
@@ -1563,12 +1742,19 @@ export async function scanSport(sport: string): Promise<{
   const analyzerSilent = Math.max(0, prefiltered.length - validated.length);
   tierCounts.pass = passPicks.length + analyzerSilent;
 
-  const rejected = {
+  const rejected: Record<string, number> = {
     passVerdict: passPicks.length,
     lowConfidence: drops.conf,
     missingData: droppedNoGameDate + analyzerSilent,
     contradictoryVerdict: passVerdictBlocked,
   };
+  if (sport === "nba") {
+    rejected.nbaHardSafetyDropped = nbaHardSafetyDropped;
+    rejected.nbaEdgeGateBlocked = eligible.filter(p => {
+      const g = nbaGateCache.get(tierKey(p));
+      return g && !g.ok;
+    }).length;
+  }
 
   console.log(
     `[${sport}] games=${stats.games} scheduled=${stats.scheduled_games} ` +

@@ -15,6 +15,10 @@ interface OddsProjectionProps {
   last10HitRate?: number;
   last5HitRate?: number;
   h2hHitRate?: number;
+  // Backend EV from daily_picks.avg_value — authoritative source of truth.
+  // When provided, the EV badge reflects the scanner's calibrated EV rather
+  // than a live recompute (which can drift negative after price movement).
+  backendEvPct?: number | null;
 }
 
 // formatOdds removed — using useOddsFormat hook instead
@@ -247,9 +251,10 @@ function EdgeExplainer({ modelRate, impliedRate, edge, ev }: { modelRate: number
   );
 }
 
-export function OddsProjection({ 
+export function OddsProjection({
   playerName, propType, line, overUnder, sport = "nba",
-  modelHitRate, seasonHitRate, last10HitRate, last5HitRate, h2hHitRate
+  modelHitRate, seasonHitRate, last10HitRate, last5HitRate, h2hHitRate,
+  backendEvPct,
 }: OddsProjectionProps) {
   const { fmt: formatOdds } = useOddsFormat();
   const [loading, setLoading] = useState(false);
@@ -342,7 +347,10 @@ export function OddsProjection({
 
   const bestEV = booksWithEV[0];
   const edgeInfo = getEdgeLabel(bestEV.edge);
-  const hasPositiveEV = bestEV.ev > 0;
+  // Use backend EV as source of truth when available (it's calibrated + vig-removed
+  // at scan time). Live-computed bestEV.ev is shown as a secondary drift indicator.
+  const hasPositiveEV = backendEvPct != null ? backendEvPct > 0 : bestEV.ev > 0;
+  const liveDrift = backendEvPct != null ? Math.round((bestEV.ev - backendEvPct) * 10) / 10 : null;
 
   return (
     <div className="space-y-3">
@@ -387,7 +395,11 @@ export function OddsProjection({
                   <p className={`text-[13px] font-extrabold ${hasPositiveEV ? "text-nba-green" : "text-nba-red"}`}>
                     {hasPositiveEV ? "+EV Opportunity" : "Negative EV"}
                   </p>
-                  <p className="text-[9px] text-muted-foreground/65">Model vs Market comparison</p>
+                  <p className="text-[9px] text-muted-foreground/65">
+                    {backendEvPct != null
+                      ? `Model EV: ${backendEvPct > 0 ? "+" : ""}${backendEvPct.toFixed(1)}%${liveDrift != null && Math.abs(liveDrift) >= 1 ? ` · Live drift: ${liveDrift > 0 ? "+" : ""}${liveDrift.toFixed(1)}%` : ""}`
+                      : "Model vs Market comparison"}
+                  </p>
                 </div>
               </div>
               <div className={`px-2.5 py-1 rounded-lg text-[10px] font-black tracking-wider ${edgeInfo.bg} ${edgeInfo.color}`}>
