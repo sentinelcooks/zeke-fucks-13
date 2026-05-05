@@ -27,6 +27,7 @@ import { ShotChart } from "@/components/mobile/ShotChart";
 import { OddsProjection } from "@/components/mobile/OddsProjection";
 import { StrengthWeakness } from "@/components/mobile/StrengthWeakness";
 import { InjuryStatusBadge } from "@/components/mobile/InjuryStatusBadge";
+import { formatPropType } from "@/lib/formatPickLabel";
 
 import { Bar } from "react-chartjs-2";
 import {
@@ -418,6 +419,11 @@ function splitSavedReasoning(reasoning?: string | null) {
     .map((part) => `${part}.`);
 }
 
+function formatDisplayPropType(propType: string | null | undefined): string {
+  const normalized = String(propType ?? "").trim().toUpperCase();
+  return formatPropType(normalized === "NHL_ASSIST" ? "NHL_ASSISTS" : propType);
+}
+
 const NbaPropsPage = () => {
   const location = useLocation();
   const globalSlip = useParlaySlip();
@@ -529,7 +535,7 @@ const NbaPropsPage = () => {
     }
 
     if (!autoAnalyzePrefillRef.current) {
-      setPlayer(""); setResults(null); setError(""); setOpponent(""); setLine("");
+      setPlayer(""); setResults(null); setError(""); setOpponent(""); setLine(""); setSnapshotAvgValue(null);
       setFighter1(""); setFighter2("");
     }
 
@@ -592,7 +598,7 @@ const NbaPropsPage = () => {
       window.history.replaceState({}, "");
 
       setTimeout(async () => {
-        setLoading(true); setError(""); setResults(null); setCorrProps([]);
+        setLoading(true); setError(""); setResults(null); setCorrProps([]); setSnapshotAvgValue(null);
         try {
           const data = await analyzeProp({
             player: navState.player!,
@@ -744,7 +750,7 @@ const NbaPropsPage = () => {
   const handleAnalyze = async (overrides?: { player?: string; propType?: string; line?: string; overUnder?: "over" | "under" }) => {
     if (sport === "ufc") {
       if (!fighter1 || !fighter2) { setError("Enter both fighter names"); return; }
-      setLoading(true); setError(""); setResults(null);
+      setLoading(true); setError(""); setResults(null); setSnapshotAvgValue(null);
       try {
         const data = await analyzeUfcMatchup(fighter1, fighter2);
         if (data.error) setError(data.error);
@@ -762,7 +768,7 @@ const NbaPropsPage = () => {
     if (!effPlayer) { setError("Enter a player name"); return; }
     const lineNum = parseFloat(effLine);
     if (isNaN(lineNum) || lineNum <= 0) { setError("Enter a valid line value"); return; }
-    setLoading(true); setError(""); setResults(null); setCorrProps([]);
+    setLoading(true); setError(""); setResults(null); setCorrProps([]); setSnapshotAvgValue(null);
     try {
       const data = await analyzeProp({ player: effPlayer, prop_type: effPropType, line: lineNum, over_under: effOverUnder, opponent: opponent || undefined, sport });
       if (data.error) setError(data.error);
@@ -1901,7 +1907,7 @@ const NbaPropsPage = () => {
                   verdict={results.verdict}
                   overUnder={results.over_under}
                   line={results.line}
-                  propDisplay={results.prop_display}
+                  propDisplay={formatDisplayPropType(results.prop_display || propType)}
                 />
               </motion.div>
 
@@ -2201,7 +2207,7 @@ const NbaPropsPage = () => {
                   ) : corrProps.length > 0 ? (
                     <div className="space-y-1.5">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-accent/50 mb-2">
-                        When {player.split(" ").pop()} {propType.toUpperCase()} goes {(results.over_under || "over").toUpperCase()}, these also tend to go {(results.over_under || "over").toUpperCase()}:
+                        When {player.split(" ").pop()} {formatDisplayPropType(propType)} goes {(results.over_under || "over").toUpperCase()}, these also tend to go {(results.over_under || "over").toUpperCase()}:
                       </p>
                       {corrProps.map((c, ci) => {
                         const corrLineStr = String(c.correlated_line ?? "");
@@ -2227,7 +2233,7 @@ const NbaPropsPage = () => {
                                 <div className="flex items-center gap-1.5 mt-0.5">
                                   {c.correlated_team && <span className="text-[10px] text-muted-foreground/50">{c.correlated_team}</span>}
                                   <span className="text-[10px] text-muted-foreground/55">·</span>
-                                  <span className="text-[10px] text-muted-foreground/50">{analyzedDir.toUpperCase()} {c.correlated_line || "?"} {c.correlated_prop.toUpperCase()}</span>
+                                  <span className="text-[10px] text-muted-foreground/50">{analyzedDir.toUpperCase()} {c.correlated_line || "?"} {formatDisplayPropType(c.correlated_prop)}</span>
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
@@ -2318,7 +2324,7 @@ const NbaPropsPage = () => {
                               <div className="flex items-center justify-between py-1.5 border-b border-border/10">
                                 <div>
                                   <span className="text-[11px] font-bold text-foreground">{player}</span>
-                                  <span className="text-[9px] text-muted-foreground/50 ml-1.5">{overUnder.toUpperCase()} {line} {propType.toUpperCase()}</span>
+                                  <span className="text-[9px] text-muted-foreground/50 ml-1.5">{overUnder.toUpperCase()} {line} {formatDisplayPropType(propType)}</span>
                                 </div>
                                 <span className="text-[9px] font-bold text-accent">Source</span>
                               </div>
@@ -2326,7 +2332,7 @@ const NbaPropsPage = () => {
                                 <div key={li} className="flex items-center justify-between py-1.5 border-b border-border/10 last:border-0">
                                   <div>
                                     <span className="text-[11px] font-bold text-foreground">{leg.player}</span>
-                                    <span className="text-[9px] text-muted-foreground/50 ml-1.5">{leg.prop.toUpperCase()}</span>
+                                    <span className="text-[9px] text-muted-foreground/50 ml-1.5">{formatDisplayPropType(leg.prop)}</span>
                                   </div>
                                   <div className="flex items-center gap-2">
                                     <span className={`text-[10px] font-bold tabular-nums ${leg.hit_rate >= 70 ? "text-nba-green" : "text-nba-blue"}`}>{leg.hit_rate}%</span>

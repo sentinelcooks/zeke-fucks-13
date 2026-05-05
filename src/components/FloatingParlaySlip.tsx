@@ -3,6 +3,12 @@ import { useParlaySlip } from "@/contexts/ParlaySlipContext";
 import { Layers, Trash2, X, ChevronUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
+import { formatPropType } from "@/lib/formatPickLabel";
+
+function formatDisplayPropType(propType: string | null | undefined): string {
+  const normalized = String(propType ?? "").trim().toUpperCase();
+  return formatPropType(normalized === "NHL_ASSIST" ? "NHL_ASSISTS" : propType);
+}
 
 export function FloatingParlaySlip() {
   const { legs, removeLeg, clearSlip } = useParlaySlip();
@@ -57,7 +63,7 @@ export function FloatingParlaySlip() {
                     <div className="min-w-0 flex-1 space-y-1">
                       <p className="text-[11px] font-bold text-foreground truncate">{leg.player}</p>
                       <p className="text-[10px] text-muted-foreground/60">
-                        {leg.overUnder.toUpperCase()} {leg.line} {leg.propType.toUpperCase()}
+                        {leg.overUnder.toUpperCase()} {leg.line} {formatDisplayPropType(leg.propType)}
                       </p>
                     </div>
                     <button onClick={() => removeLeg(leg.id)} className="ml-2 shrink-0">

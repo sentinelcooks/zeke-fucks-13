@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface PlayerCardProps {
   name: string;
@@ -12,8 +12,12 @@ interface PlayerCardProps {
 
 export function PlayerCard({ name, team, position, jersey, headshotUrl }: PlayerCardProps) {
   const [imgError, setImgError] = useState(false);
-  const initials = name.split(" ").map(n => n[0]).join("");
+  const initials = name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map(n => n[0]).join("").toUpperCase() || "?";
   const showImg = headshotUrl && !imgError;
+
+  useEffect(() => {
+    setImgError(false);
+  }, [headshotUrl]);
 
   return (
     <motion.div

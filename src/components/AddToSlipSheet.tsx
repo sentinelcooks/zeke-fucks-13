@@ -7,6 +7,7 @@ import { fetchPlayerOdds } from "@/services/oddsApi";
 import { getSportsbookInfo } from "@/utils/sportsbookLogos";
 import { toast } from "@/hooks/use-toast";
 import { Layers, Loader2 } from "lucide-react";
+import { formatPropType } from "@/lib/formatPickLabel";
 
 export interface SlipSheetPick {
   sport: ParlaySlipLeg["sport"];
@@ -23,6 +24,11 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   pick: SlipSheetPick | null;
+}
+
+function formatDisplayPropType(propType: string | null | undefined): string {
+  const normalized = String(propType ?? "").trim().toUpperCase();
+  return formatPropType(normalized === "NHL_ASSIST" ? "NHL_ASSISTS" : propType);
 }
 
 export function AddToSlipSheet({ open, onOpenChange, pick }: Props) {
@@ -73,6 +79,7 @@ export function AddToSlipSheet({ open, onOpenChange, pick }: Props) {
   const payout = (stakeNum * decOdds).toFixed(2);
   const oddsLabel = fmt(displayOdds);
   const bookInfo = bestBook ? getSportsbookInfo(bestBook) : null;
+  const propLabel = formatDisplayPropType(pick.propType);
 
   const handleConfirm = () => {
     addLeg({
@@ -86,7 +93,7 @@ export function AddToSlipSheet({ open, onOpenChange, pick }: Props) {
       confidence: pick.confidence,
     });
     onOpenChange(false);
-    toast({ title: "Added to slip", description: `${pick.player} — ${pick.overUnder.toUpperCase()} ${pick.line} ${pick.propType}` });
+    toast({ title: "Added to slip", description: `${pick.player} — ${pick.overUnder.toUpperCase()} ${pick.line} ${propLabel}` });
   };
 
   return (
@@ -104,7 +111,7 @@ export function AddToSlipSheet({ open, onOpenChange, pick }: Props) {
                 {pick.overUnder}
               </span>
               <span className="text-[13px] font-bold text-foreground">{pick.line}</span>
-              <span className="text-[11px] text-muted-foreground uppercase">{pick.propType}</span>
+              <span className="text-[11px] text-muted-foreground">{propLabel}</span>
             </div>
             <div className="flex items-center gap-3 mt-2">
               <span className="text-[11px] text-muted-foreground">Best Odds</span>

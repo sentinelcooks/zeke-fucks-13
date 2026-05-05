@@ -10,6 +10,7 @@ import { safeConfidence, gradeFromConfidence, extractConfidence } from "@/lib/ma
 import { fetchPlayerOdds } from "@/services/oddsApi";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { useParlaySlip } from "@/contexts/ParlaySlipContext";
+import { formatPropType } from "@/lib/formatPickLabel";
 
 type Sport = "NBA" | "MLB" | "NHL" | "UFC" | "NFL";
 const ALL_SPORTS: Sport[] = ["NBA", "MLB", "NHL", "UFC", "NFL"];
@@ -53,6 +54,11 @@ const ODDS_SPORT_KEY: Record<string, string> = {
   NFL: "americanfootball_nfl",
   UFC: "mma_mixed_martial_arts",
 };
+
+function formatDisplayPropType(propType: string | null | undefined): string {
+  const normalized = String(propType ?? "").trim().toUpperCase();
+  return formatPropType(normalized === "NHL_ASSIST" ? "NHL_ASSISTS" : propType);
+}
 
 const ParlayPage = () => {
   const { fmt } = useOddsFormat();
@@ -158,7 +164,7 @@ const ParlayPage = () => {
       return `${pick} ML (${u.fighter1} vs ${u.fighter2})`;
     }
     const p = leg.nba;
-    return `${p.player} ${p.overUnder.toUpperCase()} ${p.line} ${p.propType}`;
+    return `${p.player} ${p.overUnder.toUpperCase()} ${p.line} ${formatDisplayPropType(p.propType)}`;
   };
 
   const validLegs = legs.filter(isLegValid);
