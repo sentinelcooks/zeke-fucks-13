@@ -1,144 +1,93 @@
 /**
- * Phase C — Source-of-Truth Fix: unit tests
- * Covers: pick_snapshot normalizer, getSavedPickVerdict thresholds, agreement gate logic.
+ * Phase C source-of-truth tests.
+ *
+ * These intentionally import the shared frontend verdict utility instead of
+ * mirroring page-local threshold logic. If ModernHomeLayout, NbaPropsPage, or
+ * WrittenAnalysis need a label, they should flow through this same utility.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, expect, it } from "vitest";
+import {
+  normalizeConfidence01,
+  normalizeConfidencePercent,
+  normalizeVerdict,
+  verdictFromConfidence,
+} from "@/lib/matchupGrade";
 
-// ── Normalizer ──────────────────────────────────────────────────────────────
-// Mirrors the logic in ModernHomeLayout.tsx:610 and WrittenAnalysis.tsx confPct
-function normalizeConfPct(c: number | null | undefined): number | null {
-  if (c == null) return null;
-  return c <= 1 ? Math.round(c * 100) : Math.round(c);
-}
+const renderModernHomeLabel = (confidence: unknown, verdict?: unknown) =>
+  normalizeVerdict(verdict, normalizeConfidencePercent(confidence));
 
-describe("normalizeConfPct", () => {
-  it("converts decimal 0.83 → 83", () => expect(normalizeConfPct(0.83)).toBe(83));
-  it("passes through percent 83 → 83", () => expect(normalizeConfPct(83)).toBe(83));
-  it("converts 0 → 0", () => expect(normalizeConfPct(0)).toBe(0));
-  it("returns null for null", () => expect(normalizeConfPct(null)).toBeNull());
-  it("returns null for undefined", () => expect(normalizeConfPct(undefined)).toBeNull());
-  // Edge case: the value 1 is ambiguous (could be 1% or decimal 1.0 = 100%).
-  // The normalizer uses c <= 1 branch so 1.0 → 100. This is acceptable because
-  // no real confidence score is exactly 1%, and decimal 1.0 (certainty) maps correctly.
-  it("edge case: 1 → 100 (treated as decimal 1.0 = certainty)", () => expect(normalizeConfPct(1)).toBe(100));
-  it("converts 0.70 → 70", () => expect(normalizeConfPct(0.70)).toBe(70));
-  it("passes through 100 → 100", () => expect(normalizeConfPct(100)).toBe(100));
-});
+const renderAnalyzePageLabel = (confidence: unknown, verdict?: unknown) =>
+  normalizeVerdict(verdict, normalizeConfidencePercent(confidence));
 
-// ── getSavedPickVerdict ─────────────────────────────────────────────────────
-// Mirrors the function in NbaPropsPage.tsx (without the DEV assertion branch)
-function getSavedPickVerdict(confidence?: number): string {
-  if (!confidence) return "LEAN";
-  if (confidence >= 80) return "STRONG PICK";
-  if (confidence >= 70) return "LEAN";
-  return "RISKY";
-}
+const renderSavedPickLabel = (confidence: unknown, verdict?: unknown) =>
+  normalizeVerdict(verdict, normalizeConfidencePercent(confidence));
 
-describe("getSavedPickVerdict (percent-scale input)", () => {
-  it("returns STRONG PICK for 83", () => expect(getSavedPickVerdict(83)).toBe("STRONG PICK"));
-  it("returns STRONG PICK at boundary 80", () => expect(getSavedPickVerdict(80)).toBe("STRONG PICK"));
-  it("returns LEAN for 70", () => expect(getSavedPickVerdict(70)).toBe("LEAN"));
-  it("returns LEAN for 75", () => expect(getSavedPickVerdict(75)).toBe("LEAN"));
-  it("returns RISKY for 60", () => expect(getSavedPickVerdict(60)).toBe("RISKY"));
-  it("returns LEAN for undefined (falsy fallback)", () => expect(getSavedPickVerdict(undefined)).toBe("LEAN"));
-  it("returns LEAN for 0 (falsy fallback)", () => expect(getSavedPickVerdict(0)).toBe("LEAN"));
-});
-
-describe("getSavedPickVerdict — decimal-leak detection (DEV guard)", () => {
-  let consoleError: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(() => {
-    consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    // Simulate DEV environment for the guard
-    (import.meta as any).env = { DEV: true };
+describe("canonical confidence normalization", () => {
+  it.each([
+    [0.83, 83],
+    [83, 83],
+    [72, 72],
+    [0.72, 72],
+    [-5, 0],
+    [105, 100],
+  ])("normalizes %s to %s percent", (input, expected) => {
+    expect(normalizeConfidencePercent(input)).toBe(expected);
   });
 
-  afterEach(() => {
-    consoleError.mockRestore();
-  });
-
-  it("a decimal input 0.83 falls through to RISKY (wrong input is treated safely)", () => {
-    // Without the DEV guard we can only test the outcome: 0.83 < 70 → RISKY
-    expect(getSavedPickVerdict(0.83)).toBe("RISKY");
+  it("normalizes to decimal after fixing percent/decimal scale", () => {
+    expect(normalizeConfidence01(0.83)).toBeCloseTo(0.83, 5);
+    expect(normalizeConfidence01(83)).toBeCloseTo(0.83, 5);
   });
 });
 
-// ── Agreement gate logic ────────────────────────────────────────────────────
-// Mirrors the logic inside validateWithAnalyzer (sport_scan.ts) and assignTier.
+describe("canonical verdict mapping", () => {
+  it("maps 72 the same everywhere", () => {
+    expect(verdictFromConfidence(72)).toBe("STRONG");
+    expect(renderModernHomeLabel(72)).toBe("STRONG");
+    expect(renderSavedPickLabel(72)).toBe("STRONG");
+    expect(renderAnalyzePageLabel(72)).toBe("STRONG");
+  });
 
-interface AgreementResult {
-  analyzerAgreement: "agree" | "disagree" | "unavailable";
-  analyzerDisagreementReason: string | null;
-}
+  it("does not leak decimals as tiny percentages", () => {
+    expect(renderModernHomeLabel(0.72)).toBe("STRONG");
+    expect(renderSavedPickLabel(0.83)).toBe("STRONG");
+  });
 
-function computeAgreement(
-  scannerConfidence: number,
-  analyzerConfidence: number | null,
-): AgreementResult {
-  if (analyzerConfidence === null) {
-    return { analyzerAgreement: "unavailable", analyzerDisagreementReason: null };
-  }
-  const diff = Math.abs(scannerConfidence - analyzerConfidence);
-  if (diff <= 0.10) {
-    return { analyzerAgreement: "agree", analyzerDisagreementReason: null };
-  }
-  if (analyzerConfidence < scannerConfidence) {
-    return {
-      analyzerAgreement: "disagree",
-      analyzerDisagreementReason: `analyzer_lower_by_${Math.round(diff * 100)}`,
+  it("preserves explicit canonical analyzer verdicts across renderers", () => {
+    for (const verdict of ["STRONG", "LEAN", "RISKY", "PASS"] as const) {
+      expect(renderModernHomeLabel(99, verdict)).toBe(verdict);
+      expect(renderSavedPickLabel(99, verdict)).toBe(verdict);
+      expect(renderAnalyzePageLabel(99, verdict)).toBe(verdict);
+    }
+  });
+
+  it("keeps a saved Today Edge NBA pick within exact verdict and 1 point confidence tolerance", () => {
+    const savedPick = { confidence: 0.72, verdict: "LEAN" };
+    const manualAnalyze = { confidence: 72, verdict: "LEAN" };
+
+    const savedConfidence = Math.round(normalizeConfidencePercent(savedPick.confidence));
+    const manualConfidence = Math.round(normalizeConfidencePercent(manualAnalyze.confidence));
+
+    expect(renderModernHomeLabel(savedConfidence, savedPick.verdict)).toBe(
+      renderAnalyzePageLabel(manualConfidence, manualAnalyze.verdict),
+    );
+    expect(Math.abs(savedConfidence - manualConfidence)).toBeLessThanOrEqual(1);
+  });
+
+  it("daily_picks rows carry the stored canonical fields required by the UI", () => {
+    const row = {
+      confidence: normalizeConfidence01(72),
+      hit_rate: Math.round(normalizeConfidencePercent(72)),
+      verdict: normalizeVerdict("LEAN", 72),
+      tier: "edge",
     };
-  }
-  // analyzer is higher than scanner — rule: never raise into edge, treat as agree
-  return { analyzerAgreement: "agree", analyzerDisagreementReason: null };
-}
 
-function shouldPassStrictFloor(confidence: number, floor = 0.72): boolean {
-  return confidence >= floor;
-}
-
-describe("computeAgreement", () => {
-  it("scanner=0.83, analyzer=null (NHL) → unavailable", () => {
-    const r = computeAgreement(0.83, null);
-    expect(r.analyzerAgreement).toBe("unavailable");
-    expect(r.analyzerDisagreementReason).toBeNull();
+    expect(row).toMatchObject({
+      confidence: 0.72,
+      hit_rate: 72,
+      verdict: "LEAN",
+      tier: "edge",
+    });
   });
-
-  it("scanner=0.83, analyzer=0.01 (NBA cross-sport noise) → disagree", () => {
-    const r = computeAgreement(0.83, 0.01);
-    expect(r.analyzerAgreement).toBe("disagree");
-    expect(r.analyzerDisagreementReason).toBe("analyzer_lower_by_82");
-  });
-
-  it("scanner=0.65, analyzer=0.70 (within 0.10) → agree", () => {
-    const r = computeAgreement(0.65, 0.70);
-    expect(r.analyzerAgreement).toBe("agree");
-    expect(r.analyzerDisagreementReason).toBeNull();
-  });
-
-  it("scanner=0.65, analyzer=0.55 (diff=0.10 boundary) → agree", () => {
-    // exactly 0.10 is within threshold
-    const r = computeAgreement(0.65, 0.55);
-    expect(r.analyzerAgreement).toBe("agree");
-  });
-
-  it("scanner=0.65, analyzer=0.54 (diff=0.11) → disagree", () => {
-    const r = computeAgreement(0.65, 0.54);
-    expect(r.analyzerAgreement).toBe("disagree");
-    expect(r.analyzerDisagreementReason).toBe("analyzer_lower_by_11");
-  });
-
-  it("analyzer higher than scanner → agree (never raise into edge)", () => {
-    const r = computeAgreement(0.60, 0.85);
-    expect(r.analyzerAgreement).toBe("agree");
-  });
-});
-
-describe("strict floor gate (NHL/MLB no-analyzer)", () => {
-  it("confidence=0.83 passes floor 0.72", () => expect(shouldPassStrictFloor(0.83)).toBe(true));
-  it("confidence=0.72 passes floor 0.72 (boundary inclusive)", () => expect(shouldPassStrictFloor(0.72)).toBe(true));
-  it("confidence=0.71 fails floor 0.72", () => expect(shouldPassStrictFloor(0.71)).toBe(false));
-  it("confidence=0.50 fails floor 0.72", () => expect(shouldPassStrictFloor(0.50)).toBe(false));
-  it("custom floor 0.80: 0.79 fails", () => expect(shouldPassStrictFloor(0.79, 0.80)).toBe(false));
-  it("custom floor 0.80: 0.80 passes", () => expect(shouldPassStrictFloor(0.80, 0.80)).toBe(true));
 });

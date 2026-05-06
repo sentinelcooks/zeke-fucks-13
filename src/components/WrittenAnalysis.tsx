@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FileText, Brain, TrendingUp, Swords, BarChart3, AlertTriangle, Loader2, ChevronDown, ChevronUp, CheckCircle, XCircle, MinusCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatPropType } from "@/lib/formatPickLabel";
+import { normalizeConfidencePercent, normalizeVerdict } from "@/lib/matchupGrade";
 
 export interface Decision {
   winning_side: "team1" | "team2" | "over" | "under" | null;
@@ -146,7 +147,7 @@ function generateFallbackSections(data: WrittenAnalysisProps): AnalysisSection[]
     });
     sections.push({
       title: "Risk",
-      content: verdict === "STRONG PICK"
+      content: normalizeVerdict(verdict, confidence) === "STRONG"
         ? `${playerOrTeam} ${lineProp} — ${confidence}% confidence${edgeStr}. Primary risk: early blowout or unexpected DNP.`
         : `${playerOrTeam} ${lineProp} — ${confidence}% confidence${edgeStr}. ${source[4] || "Monitor lineup status. Standard bankroll management applies."}`,
     });
@@ -371,10 +372,12 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
   // phase-c.v1: belt-and-suspenders decimal guard — upstream normalizer should have
   // already converted to percent, but protect against legacy snapshots in flight.
   // Remove after one release cycle.
-  const confPct = props.confidence == null ? 0
-    : props.confidence <= 1 ? Math.round(props.confidence * 100)
-    : Math.round(props.confidence);
-  const resolvedProps = confPct !== props.confidence ? { ...props, confidence: confPct } : props;
+  const confPct = Math.round(normalizeConfidencePercent(props.confidence, 0));
+  const resolvedProps = {
+    ...props,
+    confidence: confPct,
+    verdict: normalizeVerdict(props.verdict, confPct),
+  };
 
   const rawSummary = generateOverallSummary(resolvedProps);
   // Belt-and-suspenders scrub: if forbidden language appears in the summary text,
@@ -649,36 +652,19 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
                   )}
                 </motion.div>
 
-                {/* Confidence footer — dual display when saved scanner and fresh analyzer disagree */}
+                {/* Confidence footer */}
                 <div className="pt-3 border-t border-border/10 space-y-1.5">
-                  {props.savedSnapshot && Math.abs(props.savedSnapshot.confidence - confPct) >= 5 ? (
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${props.savedSnapshot.confidence >= 70 ? "bg-nba-green" : props.savedSnapshot.confidence >= 55 ? "bg-nba-blue" : "bg-nba-yellow"} opacity-70`} />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/55">
-                          Scanner: {props.savedSnapshot.confidence}% — {props.savedSnapshot.verdict}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${confPct >= 70 ? "bg-nba-green" : confPct >= 55 ? "bg-nba-blue" : "bg-nba-yellow"} animate-pulse`} />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/65">
-                          Fresh Analyzer: {confPct}%
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${confPct >= 70 ? "bg-nba-green" : confPct >= 55 ? "bg-nba-blue" : "bg-nba-yellow"} animate-pulse`} />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/65">
-                          AI Confidence: {confPct}%
-                        </span>
-                      </div>
-                      <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground/50">
-                        Powered by Sentinel AI
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${confPct >= 72 ? "bg-nba-green" : confPct >= 58 ? "bg-nba-blue" : confPct >= 42 ? "bg-nba-yellow" : "bg-nba-red"} animate-pulse`} />
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/65">
+                        Canonical Confidence: {confPct}% — {resolvedProps.verdict}
                       </span>
                     </div>
-                  )}
+                    <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground/50">
+                      Powered by Sentinel AI
+                    </span>
+                  </div>
                 </div>
               </div>
             )}

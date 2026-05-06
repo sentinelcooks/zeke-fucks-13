@@ -97,11 +97,13 @@ export function buildMatchupGrade(
 /* ── Confidence / parlay grade helpers ── */
 
 export type ConfidenceGrade = "strong" | "lean" | "risky";
+export type CanonicalVerdict = "STRONG" | "LEAN" | "RISKY" | "PASS";
 
-const STRONG = 60;
-const LEAN = 45;
+const STRONG = 72;
+const LEAN = 58;
+const RISKY = 42;
 
-export function safeConfidence(input: unknown, fallback = 0): number {
+export function normalizeConfidencePercent(input: unknown, fallback = 0): number {
   const n =
     typeof input === "number"
       ? input
@@ -109,11 +111,50 @@ export function safeConfidence(input: unknown, fallback = 0): number {
       ? parseFloat(input)
       : NaN;
   if (!Number.isFinite(n)) return fallback;
-  return Math.max(0, Math.min(100, n));
+  const percent = n <= 1 ? n * 100 : n;
+  return Math.max(0, Math.min(100, percent));
+}
+
+export function normalizeConfidence01(input: unknown, fallback = 0): number {
+  return normalizeConfidencePercent(input, fallback * 100) / 100;
+}
+
+export function safeConfidence(input: unknown, fallback = 0): number {
+  return normalizeConfidencePercent(input, fallback);
+}
+
+export function verdictFromConfidence(confidence: unknown): CanonicalVerdict {
+  const n = normalizeConfidencePercent(confidence, 0);
+  if (n >= STRONG) return "STRONG";
+  if (n >= LEAN) return "LEAN";
+  if (n >= RISKY) return "RISKY";
+  return "PASS";
+}
+
+export function normalizeVerdict(verdict: unknown, confidence?: unknown): CanonicalVerdict {
+  const v = String(verdict ?? "").trim().toUpperCase();
+  if (v.includes("STRONG")) return "STRONG";
+  if (v.includes("LEAN")) return "LEAN";
+  if (v.includes("RISKY") || v.includes("SLIGHT") || v.includes("MARGINAL")) return "RISKY";
+  if (v.includes("PASS") || v.includes("FADE") || v.includes("DO NOT BET") || v.includes("NO BET")) return "PASS";
+  return verdictFromConfidence(confidence);
+}
+
+export function verdictDisplayText(verdict: unknown, confidence?: unknown): string {
+  return normalizeVerdict(verdict, confidence);
+}
+
+export function verdictColorHex(verdict: unknown, confidence?: unknown): string {
+  switch (normalizeVerdict(verdict, confidence)) {
+    case "STRONG": return "#22c55e";
+    case "LEAN": return "#22d3ee";
+    case "RISKY": return "#f59e0b";
+    case "PASS": return "#ef4444";
+  }
 }
 
 export function gradeFromConfidence(conf: unknown): ConfidenceGrade {
-  const n = typeof conf === "number" ? conf : safeConfidence(conf, NaN);
+  const n = safeConfidence(conf, NaN);
   if (!Number.isFinite(n)) return "risky";
   if (n >= STRONG) return "strong";
   if (n >= LEAN) return "lean";
@@ -121,10 +162,7 @@ export function gradeFromConfidence(conf: unknown): ConfidenceGrade {
 }
 
 export function formatConfidence(conf: unknown): string {
-  const n =
-    typeof conf === "number" && Number.isFinite(conf)
-      ? Math.max(0, Math.min(100, conf))
-      : NaN;
+  const n = safeConfidence(conf, NaN);
   return Number.isFinite(n) ? `${n.toFixed(0)}%` : "—";
 }
 

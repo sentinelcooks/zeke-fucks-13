@@ -19,6 +19,7 @@ import { isEdgeHistoryPick, isPicksHistoryPick, isActiveTodayPick } from "@/lib/
 import { todayInTZ, getGameDate } from "@/lib/gameDate";
 import { formatPropType } from "@/lib/formatPickLabel";
 import { resolveDisplayName } from "@/lib/displayName";
+import { normalizeConfidencePercent, normalizeVerdict, verdictColorHex } from "@/lib/matchupGrade";
 
 interface Play {
   id: string;
@@ -40,6 +41,7 @@ interface DailyPick {
   direction: string;
   hit_rate: number;
   confidence?: number | null;
+  verdict?: string | null;
   odds: string | null;
   reasoning: string | null;
   result: string | null;
@@ -56,6 +58,8 @@ interface DailyPick {
   event_id?: string | null;
   commence_time?: string | null;
   game_date?: string | null;
+  model_used?: string | null;
+  model_diagnostics?: Record<string, unknown> | null;
 }
 
 const stagger = (i: number) => ({
@@ -106,17 +110,11 @@ function CountUp({ target, duration = 1200 }: { target: number; duration?: numbe
 }
 
 function getConfidenceColor(rate: number): string {
-  if (rate >= 75) return '#22c55e';   // green — strong
-  if (rate >= 60) return '#22d3ee';   // blue — lean
-  if (rate >= 50) return '#f59e0b';   // amber — slight edge
-  return '#ef4444';                   // red — pass
+  return verdictColorHex(undefined, rate);
 }
 
 function getConfidenceLabel(rate: number): string {
-  if (rate >= 75) return 'STRONG';
-  if (rate >= 60) return 'LEAN';
-  if (rate >= 50) return 'SLIGHT EDGE';
-  return 'PASS';
+  return normalizeVerdict(undefined, rate);
 }
 
 function ConfidenceRing({ rate }: { rate: number }) {
@@ -607,7 +605,15 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                 {todayPicks.slice(0, 5).map((pick, i) => {
                   const isGameBet = pick.bet_type && pick.bet_type !== 'prop';
                   const rawConf = pick.confidence ?? pick.hit_rate ?? 0;
-                  const confPercent = rawConf > 1 ? Math.round(rawConf) : Math.round(rawConf * 100);
+                  const confPercent = Math.round(normalizeConfidencePercent(rawConf));
+                  const canonicalVerdict = normalizeVerdict(pick.verdict, confPercent);
+                  const diagnostics = pick.model_diagnostics ?? {};
+                  const sourceContractVersion = String(diagnostics.sourceContractVersion ?? "");
+                  const savedCanonical =
+                    pick.sport !== "nba" ||
+                    sourceContractVersion.startsWith("canonical.") ||
+                    diagnostics.confidenceSource === "analyzer" ||
+                    (pick.model_used === "nba-api/analyze" && diagnostics.stored_verdict != null);
                   return (
                   <motion.div
                     key={`${pick.id}-${i}`}
@@ -771,7 +777,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
 
                     {/* VERDICT BADGE */}
                     {(() => {
-                      const label = getConfidenceLabel(confPercent);
+                      const label = canonicalVerdict;
                       const ou = pick.bet_type === 'over_under'
                         ? (pick.direction === "over" ? "OVER" : "UNDER")
                         : pick.bet_type === 'moneyline'
@@ -780,7 +786,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                             ? `${pick.direction === 'home' ? (pick.home_team || pick.team) : (pick.away_team || pick.opponent)} ${pick.spread_line && pick.spread_line > 0 ? '+' : ''}${pick.spread_line}`
                             : (pick.direction === "over" ? "OVER" : "UNDER");
                       const colorMap: Record<string, string> = {
-                        'STRONG': '#22c55e', 'LEAN': '#22d3ee', 'SLIGHT EDGE': '#f59e0b', 'PASS': '#ef4444',
+                        'STRONG': '#22c55e', 'LEAN': '#22d3ee', 'RISKY': '#f59e0b', 'PASS': '#ef4444',
                       };
                       const dotColor = colorMap[label] || '#ef4444';
                       const bgColor = dotColor.replace('#', '').match(/.{2}/g)!;
@@ -865,10 +871,14 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                                 pick_snapshot: {
                                   // phase-c.v1: always percent-scale so every reader agrees
                                   confidence: confPercent || undefined,
-                                  confidenceSource: 'scanner' as const,
-                                  sourceContractVersion: 'phase-c.v1' as const,
+                                  verdict: canonicalVerdict,
+                                  confidenceSource: savedCanonical && pick.sport === 'nba' ? 'analyzer' as const : 'scanner' as const,
+                                  sourceContractVersion: savedCanonical ? 'canonical.v1' as const : 'legacy.scanner' as const,
                                   reasoning: pick.reasoning ?? null,
                                   avg_value: pick.avg_value ?? null,
+                                  odds: pick.odds ?? null,
+                                  tier: pick.tier ?? null,
+                                  model_diagnostics: pick.model_diagnostics ?? null,
                                 },
                               },
                             });

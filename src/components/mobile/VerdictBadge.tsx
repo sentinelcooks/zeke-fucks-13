@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { normalizeConfidencePercent, normalizeVerdict } from "@/lib/matchupGrade";
 
 interface VerdictBadgeProps {
   confidence: number;
@@ -9,9 +10,7 @@ interface VerdictBadgeProps {
 }
 
 function getVerdictTheme(v: string) {
-  switch (v) {
-    case "STRONG PICK":
-    case "STRONG BET":
+  switch (normalizeVerdict(v)) {
     case "STRONG":
       return {
         bg: "bg-nba-green-dim",
@@ -36,7 +35,7 @@ function getVerdictTheme(v: string) {
         glow: "",
         gradient: "from-[hsla(43,96%,56%,0.1)] to-transparent",
       };
-    case "DO NOT BET":
+    case "PASS":
       return {
         bg: "bg-nba-red-dim",
         border: "border-destructive/30",
@@ -56,7 +55,9 @@ function getVerdictTheme(v: string) {
 }
 
 export function VerdictBadge({ confidence, verdict, overUnder, line, propDisplay }: VerdictBadgeProps) {
-  const theme = getVerdictTheme(verdict);
+  const confPct = Math.round(normalizeConfidencePercent(confidence));
+  const canonicalVerdict = normalizeVerdict(verdict, confPct);
+  const theme = getVerdictTheme(canonicalVerdict);
 
   return (
     <motion.div
@@ -76,10 +77,10 @@ export function VerdictBadge({ confidence, verdict, overUnder, line, propDisplay
           transition={{ delay: 0.15, type: "spring", stiffness: 400, damping: 20 }}
           className={`text-5xl font-black ${theme.text} tabular-nums`}
         >
-          {Math.round(confidence)}%
+          {confPct}%
         </motion.div>
         <div className={`text-sm font-black tracking-[3px] mt-1 ${theme.text}`}>
-          {verdict}
+          {canonicalVerdict}
         </div>
         <div className="text-xs text-muted-foreground/60 mt-2.5 font-medium">
           {overUnder.toUpperCase()} {line} {propDisplay}

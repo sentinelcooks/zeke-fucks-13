@@ -8,6 +8,11 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { rankAndDistribute, scorePrecomputed, type ScoredPlay } from "../_shared/edge_scoring.ts";
+import {
+  canonicalToScoredVerdict,
+  normalizeCanonicalVerdict,
+  normalizeConfidencePercent,
+} from "../_shared/canonical_verdict.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -95,7 +100,8 @@ Deno.serve(async (req) => {
     const implied = oddsNum > 0 ? 100 / (oddsNum + 100) : -oddsNum / (-oddsNum + 100);
     const edge = Math.max(0, confidence - implied);
     const ev_pct = (confidence * (decimal - 1) - (1 - confidence)) * 100;
-    return scorePrecomputed({
+    const canonicalVerdict = normalizeCanonicalVerdict(r.verdict, confidence * 100);
+    const scored = scorePrecomputed({
       sport: r.sport,
       bet_type: r.bet_type as any,
       player_name: r.player_name,
@@ -114,7 +120,14 @@ Deno.serve(async (req) => {
       edge,
       ev_pct,
       confidence,
+      raw_confidence: confidence,
+      model_diagnostics: {
+        ...(r.model_diagnostics ?? {}),
+        canonical_verdict: canonicalVerdict,
+      },
     });
+    scored.verdict = canonicalToScoredVerdict(canonicalVerdict);
+    return scored;
   });
 
   const { todaysEdge, dailyPicks, freePicks } = rankAndDistribute(validated);
@@ -168,6 +181,8 @@ Deno.serve(async (req) => {
     const confidence01 = r.confidence != null
       ? Number(r.confidence)
       : Number(r.hit_rate ?? 0) / 100;
+    const storedConfidence = Math.round(normalizeConfidencePercent(confidence01));
+    const storedVerdict = normalizeCanonicalVerdict(r.verdict, storedConfidence);
     return {
       pick_date: today,
       event_id: r.event_id ?? null,
@@ -187,11 +202,20 @@ Deno.serve(async (req) => {
       direction: r.direction,
       hit_rate: r.hit_rate,
       confidence: Math.round(confidence01 * 1000) / 1000,
+      verdict: storedVerdict,
       last_n_games: r.last_n_games ?? 10,
       avg_value: r.avg_value,
       odds: r.odds,
       reasoning: r.reasoning,
       tier,
+      model_diagnostics: {
+        ...(r.model_diagnostics ?? {}),
+        stored_confidence: storedConfidence,
+        stored_verdict: storedVerdict,
+        tier,
+        sport: r.sport,
+        source_function: "slate-scanner",
+      },
     };
   });
 

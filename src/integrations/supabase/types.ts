@@ -111,9 +111,13 @@ export type Database = {
           bet_type: string
           clv: number | null
           closing_odds: string | null
+          commence_time: string | null
+          confidence: number | null
           created_at: string
           direction: string
           edge_value: number | null
+          event_id: string | null
+          game_date: string | null
           graded_at: string | null
           hit_rate: number
           home_team: string | null
@@ -121,6 +125,7 @@ export type Database = {
           last_n_games: number
           league: string | null
           line: number
+          model_diagnostics: Json | null
           model_used: string | null
           model_version: string | null
           odds: string | null
@@ -135,9 +140,11 @@ export type Database = {
           sport: string
           spread_line: number | null
           stake_units: number | null
+          status: string | null
           team: string | null
           tier: string
           total_line: number | null
+          verdict: string | null
         }
         Insert: {
           avg_value?: number | null
@@ -145,9 +152,13 @@ export type Database = {
           bet_type?: string
           clv?: number | null
           closing_odds?: string | null
+          commence_time?: string | null
+          confidence?: number | null
           created_at?: string
           direction?: string
           edge_value?: number | null
+          event_id?: string | null
+          game_date?: string | null
           graded_at?: string | null
           hit_rate?: number
           home_team?: string | null
@@ -155,6 +166,7 @@ export type Database = {
           last_n_games?: number
           league?: string | null
           line: number
+          model_diagnostics?: Json | null
           model_used?: string | null
           model_version?: string | null
           odds?: string | null
@@ -169,9 +181,11 @@ export type Database = {
           sport?: string
           spread_line?: number | null
           stake_units?: number | null
+          status?: string | null
           team?: string | null
           tier?: string
           total_line?: number | null
+          verdict?: string | null
         }
         Update: {
           avg_value?: number | null
@@ -179,9 +193,13 @@ export type Database = {
           bet_type?: string
           clv?: number | null
           closing_odds?: string | null
+          commence_time?: string | null
+          confidence?: number | null
           created_at?: string
           direction?: string
           edge_value?: number | null
+          event_id?: string | null
+          game_date?: string | null
           graded_at?: string | null
           hit_rate?: number
           home_team?: string | null
@@ -189,6 +207,7 @@ export type Database = {
           last_n_games?: number
           league?: string | null
           line?: number
+          model_diagnostics?: Json | null
           model_used?: string | null
           model_version?: string | null
           odds?: string | null
@@ -203,9 +222,11 @@ export type Database = {
           sport?: string
           spread_line?: number | null
           stake_units?: number | null
+          status?: string | null
           team?: string | null
           tier?: string
           total_line?: number | null
+          verdict?: string | null
         }
         Relationships: []
       }

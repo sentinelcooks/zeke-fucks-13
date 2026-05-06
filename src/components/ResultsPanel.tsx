@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Bar } from "react-chartjs-2";
+import { normalizeConfidencePercent, normalizeVerdict } from "@/lib/matchupGrade";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -41,14 +42,15 @@ function getHitRateBg(rate: number) {
 }
 
 function VerdictCard({ data }: { data: any }) {
-  const v = data.verdict;
+  const confidence = Math.round(normalizeConfidencePercent(data.confidence));
+  const v = normalizeVerdict(data.verdict, confidence);
   const borderClass =
-    v === "STRONG PICK" ? "border-[hsl(var(--nba-green))] shadow-[0_0_30px_hsl(var(--nba-green)/0.3)]" :
+    v === "STRONG" ? "border-[hsl(var(--nba-green))] shadow-[0_0_30px_hsl(var(--nba-green)/0.3)]" :
     v === "LEAN" ? "border-[hsl(var(--nba-blue))] shadow-[0_0_20px_hsl(var(--nba-blue)/0.2)]" :
     v === "RISKY" ? "border-[hsl(var(--nba-yellow))] shadow-[0_0_20px_hsl(var(--nba-yellow)/0.2)]" :
     "border-destructive shadow-[0_0_20px_hsl(var(--nba-red)/0.2)]";
   const textClass =
-    v === "STRONG PICK" ? "text-nba-green" :
+    v === "STRONG" ? "text-nba-green" :
     v === "LEAN" ? "text-nba-blue" :
     v === "RISKY" ? "text-nba-yellow" : "text-nba-red";
 
@@ -58,7 +60,7 @@ function VerdictCard({ data }: { data: any }) {
 
   return (
     <div className={`bg-card border-2 ${borderClass} rounded-2xl p-5 text-center flex flex-col items-center justify-center`}>
-      <div className={`text-5xl font-extrabold ${textClass}`}>{data.confidence}%</div>
+      <div className={`text-5xl font-extrabold ${textClass}`}>{confidence}%</div>
       <div className={`text-base font-extrabold tracking-[2px] mt-1 ${textClass}`}>{v}</div>
       <div className="text-muted-foreground text-xs mt-1.5">
         {data.over_under.toUpperCase()} {data.line} {data.prop_display}

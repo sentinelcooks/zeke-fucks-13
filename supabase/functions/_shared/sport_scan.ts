@@ -15,6 +15,13 @@ import {
 } from "./edge_scoring.ts";
 import { stripPropCodes } from "./format_labels.ts";
 import { summarizeMarket } from "./odds_intelligence.ts";
+import {
+  canonicalToScoredVerdict,
+  normalizeCanonicalVerdict,
+  normalizeConfidencePercent,
+  scoredVerdictToCanonical,
+} from "./canonical_verdict.ts";
+import { buildDailyPickRow } from "./daily_pick_rows.ts";
 
 // App slate timezone — matches the public-display assumption in src/lib/gameDate.ts.
 const APP_TZ = "America/New_York";
@@ -1156,6 +1163,7 @@ async function validateWithAnalyzer(
 
   // phase-c.v1: capture scanner confidence before any analyzer modification
   const scannerConfidence = play.confidence;
+  const scannerConfidencePercent = normalizeConfidencePercent(scannerConfidence);
 
   const endpoint = ANALYZER_ENDPOINT[play.sport] ?? null;
   if (!endpoint) {
@@ -1163,9 +1171,13 @@ async function validateWithAnalyzer(
     // phase-c.v1: no analyzer endpoint — record unavailable agreement
     const phaseCDiag: Record<string, unknown> = {
       scannerConfidence,
+      scanner_confidence_raw: play.raw_confidence ?? scannerConfidence,
+      scanner_confidence_percent: scannerConfidencePercent,
       analyzerConfidence: null,
+      analyzer_confidence_percent: null,
       confidenceSource: "scanner",
       verdictSource: "scanner",
+      canonical_verdict: scoredVerdictToCanonical(play.verdict),
       analyzerAgreement: "unavailable",
       analyzerDisagreementReason: null,
       publishedSource: "scanner",
@@ -1215,13 +1227,19 @@ async function validateWithAnalyzer(
 
   if (analyzed.playerIsOut === true) return null;
 
-  const conf = Number(analyzed.confidence ?? analyzed.displayConfidence ?? 0);
+  const conf = normalizeConfidencePercent(
+    analyzed.canonical_confidence ?? analyzed.confidence ?? analyzed.displayConfidence ?? 0,
+  );
 
   if (!conf || conf <= 0) return null;
 
-  const verdict = String(analyzed.verdict || "").toUpperCase();
+  const canonicalVerdict = normalizeCanonicalVerdict(
+    analyzed.canonical_verdict ?? analyzed.verdict ?? analyzed.decision?.verdict,
+    conf,
+  );
+  const verdict = canonicalVerdict;
 
-  if (verdict === "PASS" || verdict === "FADE") return null;
+  if (verdict === "PASS") return null;
 
   const seasonAvg = Number(
     analyzed.seasonAvg ??
@@ -1260,11 +1278,10 @@ async function validateWithAnalyzer(
     ? { ...(play.model_diagnostics ?? {}), ...(analyzerDiag ?? {}) }
     : null;
 
-  // ── Phase 2: NBA playoff market-quality modifier ──
+  // ── Phase 2: NBA playoff market-quality diagnostics ──
   // Activated only when NBA playoff overlay was already applied upstream
-  // (playoffWeightsApplied=true) — that gate already encodes playoffMode +
-  // seriesSampleSize>=2 + dataQuality !== 'low'. Bounded ±3 confidence pts.
-  // Never alone moves a Pass/Lean to Strong (downstream tiering is unchanged).
+  // (playoffWeightsApplied=true). This is intentionally diagnostic/gating-only:
+  // NBA saved confidence must remain the manual analyzer's canonical confidence.
   let adjustedProjected = projected;
   let adjustedEdge = edge;
   let marketQualityApplied = false;
@@ -1287,17 +1304,8 @@ async function validateWithAnalyzer(
       if (bookCount != null && bookCount < 3) mImpact = Math.min(mImpact, 0);
       mImpact = Math.max(-3, Math.min(3, mImpact));
       if (mImpact !== 0) {
-        // Apply in confidence-point space (0-100), then convert back to 0-1.
-        const conf100 = Math.max(0, Math.min(100, projected * 100 + mImpact));
-        adjustedProjected = conf100 / 100;
-        adjustedEdge = adjustedProjected - implied;
         marketQualityApplied = true;
         marketQualityImpact = Math.round(mImpact * 10) / 10;
-        // Update post-playoff confidence to reflect the market modifier.
-        const postExisting =
-          typeof md.postPlayoffConfidence === "number" ? (md.postPlayoffConfidence as number) : null;
-        (mergedDiagnostics as Record<string, unknown>).postPlayoffConfidence =
-          postExisting != null ? Math.round(postExisting + mImpact) : Math.round(conf100);
       }
       (mergedDiagnostics as Record<string, unknown>).marketQualityApplied = marketQualityApplied;
       (mergedDiagnostics as Record<string, unknown>).marketQualityImpact = marketQualityImpact;
@@ -1314,9 +1322,13 @@ async function validateWithAnalyzer(
 
   const phaseCDiag: Record<string, unknown> = {
     scannerConfidence,
+    scanner_confidence_raw: play.raw_confidence ?? scannerConfidence,
+    scanner_confidence_percent: scannerConfidencePercent,
     analyzerConfidence,
+    analyzer_confidence_percent: Math.round(analyzerConfidence * 100),
     confidenceSource: "analyzer",
     verdictSource: "analyzer",
+    canonical_verdict: canonicalVerdict,
     analyzerAgreement,
     analyzerDisagreementReason,
     publishedSource: "analyzer",
@@ -1333,6 +1345,7 @@ async function validateWithAnalyzer(
       return (adjustedProjected * (decimal - 1) - (1 - adjustedProjected)) * 100;
     })(),
     confidence: adjustedProjected,
+    verdict: canonicalToScoredVerdict(canonicalVerdict),
     reasoning,
     model_diagnostics: { ...(mergedDiagnostics ?? {}), ...phaseCDiag },
   };
@@ -1359,13 +1372,14 @@ function passNbaEdgeGate(p: ScoredPlay): NbaEdgeGateResult {
   const isLowLine = typeof p.line === "number" && p.line <= NBA_LOW_LINE_MAX;
 
   // 1. Confidence floor
-  const confMin = isHighVariance ? 0.78 : isLowLine ? 0.76 : 0.72;
+  const confMin = p.verdict === "Strong"
+    ? isHighVariance ? 0.78 : isLowLine ? 0.76 : 0.72
+    : 0.58;
   if (p.confidence < confMin) reasons.push("confidence_below_nba_edge_min");
 
-  // 2. Verdict — Lean is allowed in daily/value but not edge
+  // 2. Verdict — Strong and Lean are eligible; Pass is not.
   if (p.verdict === "Pass") reasons.push("pass_verdict");
   if ((p.verdict as string) === "Risky") reasons.push("risky_verdict");
-  if (p.verdict === "Lean") reasons.push("risky_verdict"); // Lean → daily, not edge
 
   // 3. EV / market gate
   if (p.edge <= 0) reasons.push("negative_ev");
@@ -1522,7 +1536,7 @@ export async function scanSport(sport: string): Promise<{
     );
   }
 
-  const ANALYZER_CAP = 45;
+  const ANALYZER_CAP = sport === "nba" ? 25 : 45;
   const top = prefiltered.sort((a, b) => b.edge - a.edge).slice(0, ANALYZER_CAP);
   const cache = new Map<string, any>();
   const analyzerDiagnostics = newAnalyzerDiagnostics(sport);
@@ -1573,6 +1587,10 @@ export async function scanSport(sport: string): Promise<{
 
     rescored.reasoning = r.reasoning || rescored.reasoning;
     rescored.model_diagnostics = r.model_diagnostics ?? null;
+    const canonicalVerdict = rescored.model_diagnostics?.canonical_verdict;
+    if (canonicalVerdict === "STRONG" || canonicalVerdict === "LEAN" || canonicalVerdict === "RISKY" || canonicalVerdict === "PASS") {
+      rescored.verdict = canonicalToScoredVerdict(canonicalVerdict);
+    }
     validated.push(rescored);
   }
 
@@ -1596,7 +1614,7 @@ export async function scanSport(sport: string): Promise<{
 
   // Tier assignment over PASS-free set: top-N by quality_score → 'edge',
   // rest split into 'daily' (>=0.70 confidence) or 'value'. The public
-  // Picks tab still gets daily/value rows, but only for non-PASS leans.
+  // Picks tab still gets daily/value rows, but only for non-PASS plays.
   const sortedByQuality = [...eligible].sort((a, b) => b.quality_score - a.quality_score);
   const edgeCap = EDGE_CAP_PER_SPORT[sport] ?? 5;
   const edgeKeySet = new Set<string>();
@@ -1731,32 +1749,25 @@ export async function scanSport(sport: string): Promise<{
         };
       }
 
-      return {
-        pick_date: today,
-        event_id: p.event_id ?? null,
-        commence_time: p.commence_time ?? null,
-        game_date: gameDate,
-        sport: p.sport,
-        bet_type: p.bet_type,
-        player_name: p.player_name,
-        team: p.team ?? null,
-        opponent: p.opponent ?? null,
-        home_team: p.home_team ?? null,
-        away_team: p.away_team ?? null,
-        prop_type: p.prop_type,
-        line: p.line,
-        spread_line: p.spread_line ?? null,
-        total_line: p.total_line ?? null,
-        direction: p.direction,
-        hit_rate: Math.round(p.confidence * 100),
-        confidence: Math.round(p.confidence * 1000) / 1000,
-        last_n_games: 10,
-        avg_value: p.ev_pct,
-        odds: String(p.odds),
-        reasoning: `${verdictTag}${cleanReasoning}`.trim(),
+      const row = buildDailyPickRow({
+        pickDate: today,
+        play: {
+          ...p,
+          model_diagnostics: { ...(p.model_diagnostics ?? {}), ...diagExtras },
+        },
         tier,
-        model_diagnostics: { ...(p.model_diagnostics ?? {}), ...diagExtras },
-      };
+        raw: {
+          event_id: p.event_id ?? null,
+          commence_time: p.commence_time ?? null,
+          game_date: gameDate,
+          odds: String(p.odds),
+        },
+        sourceFunction: `slate-scanner-${sport}`,
+        modelUsed: sport === "nba" ? "nba-api/analyze" : `${sport}-scanner`,
+        reasoning: `${verdictTag}${cleanReasoning}`.trim(),
+        avgValue: p.ev_pct,
+      });
+      return row;
     })
     .filter((r): r is NonNullable<typeof r> => r !== null);
 

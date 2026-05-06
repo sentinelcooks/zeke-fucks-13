@@ -10,6 +10,7 @@ import { isPicksHistoryPick, isActiveTodayPick } from "@/lib/pickHistoryFilters"
 import { todayInTZ, getGameDate } from "@/lib/gameDate";
 import { formatPropType } from "@/lib/formatPickLabel";
 import { pickMatchesCategory } from "@/lib/pickCategoryFilters";
+import { normalizeConfidencePercent, normalizeVerdict } from "@/lib/matchupGrade";
 
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 
@@ -22,6 +23,7 @@ interface Pick {
   direction: string;
   hit_rate: number;
   confidence?: number | null;
+  verdict?: string | null;
   sport: string;
   team: string | null;
   opponent: string | null;
@@ -266,10 +268,10 @@ const FreePicksPage = () => {
   }, []);
 
   // Normalize hit_rate (may be stored as decimal 0-1 or percent 0-100)
-  const normHr = (hr: number) => (hr > 1 ? Math.round(hr) : Math.round(hr * 100));
+  const normHr = (hr: number) => Math.round(normalizeConfidencePercent(hr));
   const normalized = picks.map(p => ({ ...p, hit_rate: normHr(p.hit_rate) }));
   // Score: prefer confidence field (0-1), fall back to normalized hit_rate
-  const scoreOf = (p: Pick) => (p.confidence != null ? p.confidence * 100 : p.hit_rate);
+  const scoreOf = (p: Pick) => normalizeConfidencePercent(p.confidence ?? p.hit_rate);
   // Apply sport/prop filters; tier gate already applied at query layer
   let filtered = normalized.filter(p => (p as any).status !== "empty_slate");
   if (sportFilter !== "all") filtered = filtered.filter(p => p.sport === sportFilter);
@@ -439,6 +441,16 @@ const FreePicksPage = () => {
                             line: Number(pick.line),
                             over_under: pick.direction,
                             opponent: pick.opponent || '',
+                            pick_snapshot: {
+                              confidence: scoreOf(pick),
+                              verdict: normalizeVerdict(pick.verdict, scoreOf(pick)),
+                              confidenceSource: pick.sport === "nba" ? "analyzer" : "scanner",
+                              sourceContractVersion: "canonical.v1",
+                              reasoning: pick.reasoning ?? null,
+                              avg_value: pick.avg_value ?? null,
+                              odds: pick.odds ?? null,
+                              tier: pick.tier ?? null,
+                            },
                           },
                         });
                       }

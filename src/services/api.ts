@@ -87,17 +87,14 @@ export interface AnalyzeRequest {
 }
 
 export async function analyzeProp(data: AnalyzeRequest) {
-  const result = await callEdgeFunction("nba-api", "analyze", data as any, "POST");
-  // phase-c.v1: tag NHL/MLB results so consumers know the model is NBA-trained.
-  // These sports have no dedicated analyzer endpoint; nba-api/analyze returns near-zero
-  // confidence on NHL/MLB inputs and should not be treated as authoritative.
-  if (data.sport === "nhl" || data.sport === "mlb") {
+  if (data.sport && data.sport !== "nba") {
     return {
-      ...result,
-      confidenceSource: "analyzer-cross-sport",
-      analyzerCrossSportHint: `Confidence derived from NBA-trained model on ${(data.sport).toUpperCase()} input — treat as directional only.`,
+      error: `${data.sport.toUpperCase()} player prop manual analysis is not supported by the NBA analyzer. Open saved picks from Today's Edge to view their stored canonical scanner result.`,
+      sport: data.sport,
     };
   }
+
+  const result = await callEdgeFunction("nba-api", "analyze", data as any, "POST");
   return result;
 }
 

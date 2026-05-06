@@ -322,11 +322,16 @@ async function analyzeGameBets(
   return picks;
 }
 
-// ── Use nba-api model for player props ──
+// ── Use nba-api model for NBA player props only ──
 async function analyzePlayerProp(
   player: string, propType: string, line: number, direction: string,
   opponent: string, sport: string, supabaseUrl: string, serviceKey: string
-): Promise<{ confidence: number; reasoning: string; avg_value: number; line: number; direction: string } | null> {
+): Promise<{ confidence: number; verdict: string; reasoning: string; avg_value: number; line: number; direction: string; model_diagnostics?: Record<string, unknown> | null } | null> {
+  if (sport !== "nba") {
+    console.log(`[daily-picks] skip ${sport} prop analyzer for ${player}/${propType}; nba-api/analyze is NBA canonical only`);
+    return null;
+  }
+
   try {
     const resp = await fetch(`${supabaseUrl}/functions/v1/nba-api/analyze`, {
       method: "POST",
@@ -341,12 +346,13 @@ async function analyzePlayerProp(
     const data = await resp.json();
     if (!data || data.error) return null;
 
-    const confidence = data.confidence ?? 50;
+    const confidence = Math.round(normalizeConfidencePercent(data.canonical_confidence ?? data.confidence ?? 50));
+    const verdict = normalizeCanonicalVerdict(data.canonical_verdict ?? data.verdict ?? data.decision?.verdict, confidence);
     const seasonAvg = data.season_avg && typeof data.season_avg === "object"
       ? (data.season_avg[propType] ?? data.season_avg.PTS ?? null) : null;
 
     const parts: string[] = [];
-    if (data.verdict) parts.push(data.verdict);
+    parts.push(verdict);
     const l5Rate = Number(data.last_5?.hitRate);
     if (Number.isFinite(l5Rate)) parts.push(`L5 hit rate: ${Math.round(l5Rate)}%`);
     const l10Rate = Number(data.last_10?.hitRate);
@@ -357,10 +363,12 @@ async function analyzePlayerProp(
 
     return {
       confidence: Math.round(confidence),
+      verdict,
       reasoning: parts.length > 0 ? parts.join(". ") + "." : `Model confidence: ${confidence}%`,
       avg_value: typeof seasonAvg === "number" ? seasonAvg : line,
       line: data.line ?? line,
       direction: data.recommended_direction || direction,
+      model_diagnostics: data.model_diagnostics ?? null,
     };
   } catch (e) {
     console.error(`Prop model error ${player}:`, e);
@@ -516,6 +524,7 @@ const SPORT_PROP_TYPES: Record<string, string[]> = {
 };
 
 const PLAYERS_PER_GAME_CAP = 12;
+const NBA_CANONICAL_FINALIZE_CAP = 25;
 
 function parseOdds(odds: string | null | undefined): number {
   if (!odds || odds === "N/A") return -110;
@@ -523,9 +532,16 @@ function parseOdds(odds: string | null | undefined): number {
   return Number.isFinite(n) ? n : -110;
 }
 
-import { score, rankAndDistribute, type ScoredPlay } from "../_shared/edge_scoring.ts";
+import { score, scorePrecomputed, rankAndDistribute, type ScoredPlay } from "../_shared/edge_scoring.ts";
 import { americanToImplied, fairImpliedFromPair, calcEvPct, clamp01 } from "../_shared/prob_math.ts";
 import { getCalibration } from "../_shared/calibration_cache.ts";
+import { buildDailyPickRow } from "../_shared/daily_pick_rows.ts";
+import {
+  canonicalToScoredVerdict,
+  normalizeCanonicalVerdict,
+  normalizeConfidencePercent,
+  scoredVerdictToCanonical,
+} from "../_shared/canonical_verdict.ts";
 // Back-compat aliases so existing local references keep working unchanged.
 const americanToImpliedProb = americanToImplied;
 const calcEv = calcEvPct;
@@ -611,6 +627,7 @@ Deno.serve(async (req) => {
 
     // ── Phase B: Grade all active players, both directions ──
     console.log("Phase B: scanning lineups for player props");
+    let nbaCanonicalFinalizeCalls = 0;
     const lineupResults = await Promise.allSettled(
       allGames.map(game => getGameLineup(game.gameId, game.sport).then(lineup => ({ game, lineup })))
     );
@@ -619,6 +636,8 @@ Deno.serve(async (req) => {
       if (isTimedOut()) { console.log("⏱️ Timeout — stopping Phase B"); break; }
       if (r.status !== "fulfilled" || r.value.lineup.length === 0) continue;
       const { game, lineup } = r.value;
+      if (game.sport !== "nba") continue;
+      if (nbaCanonicalFinalizeCalls >= NBA_CANONICAL_FINALIZE_CAP) break;
       const propTypes = SPORT_PROP_TYPES[game.sport] || [];
       if (propTypes.length === 0) continue;
 
@@ -626,11 +645,15 @@ Deno.serve(async (req) => {
 
       for (const player of players) {
         if (isTimedOut()) break;
+        if (nbaCanonicalFinalizeCalls >= NBA_CANONICAL_FINALIZE_CAP) break;
         for (const propType of propTypes) {
           if (isTimedOut()) break;
+          if (nbaCanonicalFinalizeCalls >= NBA_CANONICAL_FINALIZE_CAP) break;
           for (const direction of ["over", "under"] as const) {
             if (isTimedOut()) break;
+            if (nbaCanonicalFinalizeCalls >= NBA_CANONICAL_FINALIZE_CAP) break;
             try {
+              nbaCanonicalFinalizeCalls++;
               const result = await analyzePlayerProp(
                 player.name, propType, 0, direction, player.opponent, game.sport, supabaseUrl, serviceKey
               );
@@ -648,12 +671,14 @@ Deno.serve(async (req) => {
                 line: result.line,
                 direction: result.direction,
                 hit_rate: result.confidence,
+                canonical_verdict: result.verdict,
                 avg_value: result.avg_value,
                 reasoning: result.reasoning,
                 odds: realOdds,
                 spread_line: null,
                 total_line: null,
                 sport: game.sport,
+                model_diagnostics: result.model_diagnostics ?? null,
               });
             } catch (e) {
               console.error(`prop err ${player.name}/${propType}/${direction}:`, e);
@@ -663,7 +688,7 @@ Deno.serve(async (req) => {
         }
       }
     }
-    console.log(`Phase B done: ${rawPicks.length} total candidates (${Math.round((Date.now() - startTime) / 1000)}s)`);
+    console.log(`Phase B done: ${rawPicks.length} total candidates; NBA canonical finalizations=${nbaCanonicalFinalizeCalls}/${NBA_CANONICAL_FINALIZE_CAP} (${Math.round((Date.now() - startTime) / 1000)}s)`);
 
     // ── Phase C: Score, rank, gate strictly ──
     // Sanity filter: drop any candidate where the model<>market gap is mathematically impossible
@@ -713,6 +738,54 @@ Deno.serve(async (req) => {
       const betType = (p.bet_type === "over_under" ? "total" : p.bet_type) as
         "prop" | "moneyline" | "spread" | "total";
       const calibration = await calFor(p.sport, betType);
+      const canonicalVerdict =
+        p.canonical_verdict != null
+          ? normalizeCanonicalVerdict(p.canonical_verdict, p.hit_rate)
+          : null;
+      if (p.sport === "nba" && betType === "prop" && canonicalVerdict) {
+        const confidence = normalizeConfidencePercent(p.hit_rate) / 100;
+        const implied = oddsOpp != null
+          ? fairImpliedFromPair(oddsNum, oddsOpp)
+          : americanToImpliedProb(oddsNum);
+        const edge = confidence - implied;
+        const ev_pct = calcEv(confidence, oddsNum);
+        const scored = scorePrecomputed({
+          sport: p.sport,
+          bet_type: betType,
+          player_name: p.player_name,
+          team: p.team,
+          opponent: p.opponent,
+          home_team: p.home_team,
+          away_team: p.away_team,
+          prop_type: p.prop_type,
+          line: p.line,
+          spread_line: p.spread_line,
+          total_line: p.total_line,
+          direction: p.direction,
+          odds: oddsNum,
+          odds_opp: oddsOpp,
+          projected_prob: confidence,
+          implied_prob: implied,
+          edge,
+          ev_pct,
+          confidence,
+          raw_confidence: confidence,
+          raw_implied_prob: americanToImpliedProb(oddsNum),
+          model_diagnostics: {
+            ...(p.model_diagnostics ?? {}),
+            canonical_verdict: canonicalVerdict,
+            scanner_confidence_raw: p.hit_rate,
+            scanner_confidence_percent: normalizeConfidencePercent(p.hit_rate),
+            analyzer_confidence_percent: normalizeConfidencePercent(p.hit_rate),
+            confidenceSource: "analyzer",
+            verdictSource: "analyzer",
+            sourceContractVersion: "canonical.v1",
+          },
+        });
+        scored.verdict = canonicalToScoredVerdict(canonicalVerdict);
+        scoredPlays.push(scored);
+        continue;
+      }
       scoredPlays.push(
         score({
           sport: p.sport,
@@ -760,30 +833,15 @@ Deno.serve(async (req) => {
       const key = `${sp.sport}|${sp.player_name}|${sp.prop_type}|${sp.direction}|${sp.line}`;
       const tier = edgeKeySet.has(key) ? "edge" : "daily";
       console.log(`✓ persist [${tier}] ${sp.sport}/${sp.player_name}/${sp.prop_type} ${sp.direction} ${sp.line} | conf=${sp.confidence.toFixed(3)} rel=${sp.reliability.toFixed(2)} edge=${sp.edge.toFixed(3)} odds=${sp.odds} verdict=${sp.verdict}`);
-      return {
-        pick_date: today,
-        sport: sp.sport,
-        player_name: sp.player_name,
-        team: sp.team || null,
-        opponent: sp.opponent || null,
-        prop_type: sp.prop_type,
-        line: sp.line,
-        direction: sp.direction,
-        hit_rate: Math.round(sp.confidence * 100),
-        confidence: Math.round(sp.confidence * 1000) / 1000,
-        last_n_games: 10,
-        avg_value: raw?.avg_value ?? sp.line,
-        reasoning: raw?.reasoning || sp.reasoning,
-        odds: raw?.odds ?? (sp.odds > 0 ? `+${sp.odds}` : `${sp.odds}`),
-        result: "pending",
-        bet_type: sp.bet_type === "total" ? "over_under" : sp.bet_type,
-        spread_line: sp.spread_line ?? null,
-        total_line: sp.total_line ?? null,
-        home_team: sp.home_team ?? null,
-        away_team: sp.away_team ?? null,
+      return buildDailyPickRow({
+        pickDate: today,
+        play: sp,
         tier,
-        status: null,
-      };
+        raw,
+        sourceFunction: "daily-picks",
+        modelUsed: sp.sport === "nba" && sp.bet_type === "prop" ? "nba-api/analyze" : `${sp.sport}-scanner`,
+        avgValue: raw?.avg_value ?? sp.line,
+      });
     });
 
     // ── Empty-slate marker ──
@@ -793,16 +851,18 @@ Deno.serve(async (req) => {
       pickRows.push({
         pick_date: today,
         sport: "meta",
-        player_name: "No Strong picks today",
+        player_name: "No eligible picks today",
         team: null,
         opponent: null,
         prop_type: "empty_slate",
         line: 0,
         direction: "n/a",
         hit_rate: 0,
+        confidence: 0,
+        verdict: "PASS",
         last_n_games: 0,
         avg_value: 0,
-        reasoning: "No games cleared the Strong threshold. Check Daily Picks tab for Lean plays.",
+        reasoning: "No games cleared Today's Edge eligibility. Check Daily Picks tab for Lean plays.",
         odds: "0",
         result: "pending",
         bet_type: "meta",
@@ -812,6 +872,13 @@ Deno.serve(async (req) => {
         away_team: null,
         tier: "edge",
         status: "empty_slate",
+        model_diagnostics: {
+          stored_confidence: 0,
+          stored_verdict: "PASS",
+          tier: "edge",
+          sport: "meta",
+          source_function: "daily-picks",
+        },
       } as any);
     }
 
@@ -839,30 +906,15 @@ Deno.serve(async (req) => {
       .filter(sp => !edgeDailyKeys.has(`${sp.sport}|${sp.player_name}|${sp.prop_type}|${sp.direction}|${sp.line}`))
       .map(sp => {
         const raw = findRaw(sp);
-        return {
-          pick_date: today,
-          sport: sp.sport,
-          player_name: sp.player_name,
-          team: sp.team || null,
-          opponent: sp.opponent || null,
-          prop_type: sp.prop_type,
-          line: sp.line,
-          direction: sp.direction,
-          hit_rate: Math.round(sp.confidence * 100),
-          confidence: Math.round(sp.confidence * 1000) / 1000,
-          last_n_games: 10,
-          avg_value: raw?.avg_value ?? sp.line,
-          reasoning: raw?.reasoning || sp.reasoning,
-          odds: raw?.odds ?? (sp.odds > 0 ? `+${sp.odds}` : `${sp.odds}`),
-          result: "pending",
-          bet_type: sp.bet_type === "total" ? "over_under" : sp.bet_type,
-          spread_line: sp.spread_line ?? null,
-          total_line: sp.total_line ?? null,
-          home_team: sp.home_team ?? null,
-          away_team: sp.away_team ?? null,
+        return buildDailyPickRow({
+          pickDate: today,
+          play: sp,
           tier: "value",
-          status: null,
-        };
+          raw,
+          sourceFunction: "daily-picks",
+          modelUsed: sp.sport === "nba" && sp.bet_type === "prop" ? "nba-api/analyze" : `${sp.sport}-scanner`,
+          avgValue: raw?.avg_value ?? sp.line,
+        });
       });
 
     try {

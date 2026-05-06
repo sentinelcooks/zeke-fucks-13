@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { callAI, AIProviderError, ANTI_GENERIC_INSTRUCTION } from "../_shared/ai-provider.ts";
 import { normalizeNbaTeam } from "../_shared/nba_teams.ts";
+import { normalizeCanonicalVerdict, normalizeConfidencePercent } from "../_shared/canonical_verdict.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -3793,7 +3794,7 @@ async function analyzeProp(
     if (mlbResult.playerIsOut) {
       result.confidence = 0;
       result.reasoning = mlbResult.reasoning;
-      result.verdict = "DO NOT BET";
+      result.verdict = "PASS";
       return result;
     }
     
@@ -3803,10 +3804,10 @@ async function analyzeProp(
     result.prev_season_used = mlbResult.prevSeasonUsed;
     result.model = "mlb-20-factor-props";
     
-    if (mlbResult.confidence >= 72) result.verdict = "STRONG BET";
+    if (mlbResult.confidence >= 72) result.verdict = "STRONG";
     else if (mlbResult.confidence >= 58) result.verdict = "LEAN";
     else if (mlbResult.confidence >= 42) result.verdict = "RISKY";
-    else result.verdict = "FADE";
+    else result.verdict = "PASS";
     
     // Generate AI writeup
     const isPitcher = ["SP", "RP", "CP", "CL", "P"].includes((player.position || "").toUpperCase());
@@ -3961,7 +3962,7 @@ async function analyzeProp(
   if (playerIsOut) {
     result.confidence = 0;
     result.reasoning = reasoning;
-    result.verdict = "DO NOT BET";
+    result.verdict = "PASS";
     if (phase1Diag) {
       result.model_diagnostics = {
         ...(result.model_diagnostics ?? {}),
@@ -4168,10 +4169,10 @@ async function analyzeProp(
   result.confidence = confidence;
   result.reasoning = reasoning;
 
-  if (confidence >= 72) result.verdict = "STRONG BET";
+  if (confidence >= 72) result.verdict = "STRONG";
   else if (confidence >= 58) result.verdict = "LEAN";
   else if (confidence >= 42) result.verdict = "RISKY";
-  else result.verdict = "FADE";
+  else result.verdict = "PASS";
 
   // ── Emit structured model diagnostics (NBA only) ──
   // Phase 1 fields persisted as before. Phase 2 fields describe the playoff
@@ -4456,6 +4457,13 @@ serve(async (req) => {
       } catch (e: any) {
         console.error("Prediction/Decision layer failed:", e?.message);
       }
+
+      const canonicalConfidence = Math.round(normalizeConfidencePercent(result.confidence));
+      const canonicalVerdict = normalizeCanonicalVerdict(result.verdict ?? result.decision?.verdict, canonicalConfidence);
+      result.confidence = canonicalConfidence;
+      result.verdict = canonicalVerdict;
+      result.canonical_confidence = canonicalConfidence;
+      result.canonical_verdict = canonicalVerdict;
 
       return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }

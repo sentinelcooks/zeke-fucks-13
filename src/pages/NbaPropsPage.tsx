@@ -28,6 +28,7 @@ import { OddsProjection } from "@/components/mobile/OddsProjection";
 import { StrengthWeakness } from "@/components/mobile/StrengthWeakness";
 import { InjuryStatusBadge } from "@/components/mobile/InjuryStatusBadge";
 import { formatPropType } from "@/lib/formatPickLabel";
+import { normalizeConfidencePercent, normalizeVerdict } from "@/lib/matchupGrade";
 
 import { Bar } from "react-chartjs-2";
 import {
@@ -403,22 +404,6 @@ function normalizePickPropType(propType: string | undefined, sport: "nba" | "mlb
   return normalized;
 }
 
-function getSavedPickVerdict(confidence?: number) {
-  if (!confidence) return "LEAN";
-  // phase-c.v1: input MUST be percent-scale (>= 1 for any real confidence, or exactly 0).
-  // A decimal leak (0 < c <= 1) means upstream normalizer (ModernHomeLayout pick_snapshot) failed.
-  if (import.meta.env.DEV && confidence > 0 && confidence <= 1) {
-    console.error(
-      `[phase-c] getSavedPickVerdict: decimal input ${confidence} — expected percent-scale ≥ 1. ` +
-      `Normalizer at ModernHomeLayout.tsx pick_snapshot construction should convert before navigation.`
-    );
-    return "RISKY";
-  }
-  if (confidence >= 80) return "STRONG PICK";
-  if (confidence >= 70) return "LEAN";
-  return "RISKY";
-}
-
 function splitSavedReasoning(reasoning?: string | null) {
   if (!reasoning) return [];
   return reasoning
@@ -566,10 +551,14 @@ const NbaPropsPage = () => {
       sport?: string;
       pick_snapshot?: {
         confidence?: number;      // phase-c.v1: always percent-scale after ModernHomeLayout normalization
-        confidenceSource?: 'scanner' | 'analyzer' | 'analyzer-cross-sport';
+        verdict?: string;
+        confidenceSource?: 'scanner' | 'analyzer';
         sourceContractVersion?: string;
         reasoning?: string | null;
         avg_value?: number | null;
+        odds?: string | null;
+        tier?: string | null;
+        model_diagnostics?: Record<string, unknown> | null;
       };
     } | null;
 
@@ -611,6 +600,41 @@ const NbaPropsPage = () => {
       setTimeout(async () => {
         setLoading(true); setError(""); setResults(null); setCorrProps([]); setSnapshotAvgValue(null);
         try {
+          const savedReasoning = splitSavedReasoning(navState.pick_snapshot?.reasoning);
+          const savedConfRaw = navState.pick_snapshot?.confidence;
+          const savedConf = savedConfRaw == null ? null : Math.round(normalizeConfidencePercent(savedConfRaw));
+          const savedVerdict = savedConf == null
+            ? null
+            : normalizeVerdict(navState.pick_snapshot?.verdict, savedConf);
+          const savedCanonical =
+            navState.pick_snapshot?.sourceContractVersion?.startsWith("canonical.") ||
+            navState.pick_snapshot?.confidenceSource === "analyzer";
+
+          if (s !== "nba" && savedConf != null && savedVerdict) {
+            setResults({
+              sport: s,
+              player: { full_name: navState.player },
+              player_name: navState.player,
+              prop_type: nextPropType,
+              prop_display: formatPropType(nextPropType),
+              line: navState.line || 0,
+              over_under: navState.over_under || "over",
+              opponent: resolvedOpponent || undefined,
+              confidence: savedConf,
+              verdict: savedVerdict,
+              reasoning: savedReasoning,
+              _savedSnapshot: {
+                confidence: savedConf,
+                verdict: savedVerdict,
+                confidenceSource: navState.pick_snapshot?.confidenceSource ?? "scanner",
+                sourceContractVersion: navState.pick_snapshot?.sourceContractVersion ?? "canonical.v1",
+              },
+              _savedCanonicalOnly: true,
+            });
+            if (navState.pick_snapshot?.avg_value != null) setSnapshotAvgValue(navState.pick_snapshot.avg_value);
+            return;
+          }
+
           const data = await analyzeProp({
             player: navState.player!,
             prop_type: nextPropType,
@@ -622,26 +646,44 @@ const NbaPropsPage = () => {
           if (data.error) {
             setError(data.error);
           } else {
-            const savedReasoning = splitSavedReasoning(navState.pick_snapshot?.reasoning);
-            const savedConf = navState.pick_snapshot?.confidence;
-            // phase-c.v1: fresh analyzer result stands as primary. Saved scanner pick is
-            // attached as _savedSnapshot side-car so WrittenAnalysis can display both
-            // labeled, rather than merging them into one contradictory headline.
-            const mergedData = savedConf != null
-              ? {
+            const mergedData = savedConf != null && savedCanonical
+              ? (() => {
+                  const liveConf = Math.round(normalizeConfidencePercent(data.confidence));
+                  const liveVerdict = normalizeVerdict(data.verdict, liveConf);
+                  const mismatch = liveVerdict !== savedVerdict || Math.abs(liveConf - savedConf) > 1;
+                  if (mismatch) {
+                    console.error("[canonical-mismatch]", {
+                      player: navState.player,
+                      prop_type: nextPropType,
+                      line: navState.line,
+                      over_under: navState.over_under,
+                      saved_confidence: savedConf,
+                      saved_verdict: savedVerdict,
+                      analyzer_confidence: liveConf,
+                      analyzer_verdict: liveVerdict,
+                    });
+                  }
+                  return {
                   ...data,
-                  // Preserve nav-state line/direction for display accuracy, but NOT confidence or verdict.
                   over_under: navState.over_under || data.over_under,
                   line: navState.line || data.line,
+                  confidence: savedConf,
+                  verdict: savedVerdict,
                   reasoning: savedReasoning.length > 0 ? savedReasoning : data.reasoning,
                   _savedSnapshot: {
                     confidence: savedConf,
-                    verdict: getSavedPickVerdict(savedConf),
-                    confidenceSource: navState.pick_snapshot?.confidenceSource ?? 'scanner',
-                    sourceContractVersion: navState.pick_snapshot?.sourceContractVersion ?? 'legacy',
+                    verdict: savedVerdict,
+                    confidenceSource: navState.pick_snapshot?.confidenceSource ?? 'analyzer',
+                    sourceContractVersion: navState.pick_snapshot?.sourceContractVersion ?? 'canonical.v1',
                   },
-                }
-              : data;
+                  _canonicalMismatch: mismatch,
+                };
+                })()
+              : {
+                  ...data,
+                  over_under: navState.over_under || data.over_under,
+                  line: navState.line || data.line,
+                };
             if (navState.pick_snapshot?.avg_value != null) {
               setSnapshotAvgValue(navState.pick_snapshot.avg_value);
             }

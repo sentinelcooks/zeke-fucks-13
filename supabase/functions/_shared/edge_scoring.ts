@@ -363,33 +363,21 @@ export function rankAndDistribute(plays: ScoredPlay[]) {
     if (isLow) lowRelCount++;
   }
 
-  // ── Today's Edge: top 5 Strong picks, max 2 per sport for diversity ──
-  const strongs = sorted.filter((p) => p.verdict === "Strong");
+  // ── Today's Edge: top 5 canonical passing picks, max 2 per sport for diversity ──
   const todaysEdge: ScoredPlay[] = [];
   const edgeSportCount: Record<string, number> = {};
   const edgeKeys = new Set<string>();
   const keyOf = (p: ScoredPlay) =>
     `${p.sport}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`;
 
-  for (const p of strongs) {
+  for (const p of sorted) {
     if (todaysEdge.length >= TODAYS_EDGE_CAP) break;
     if ((edgeSportCount[p.sport] || 0) >= 2) continue;
     todaysEdge.push(p);
     edgeKeys.add(keyOf(p));
     edgeSportCount[p.sport] = (edgeSportCount[p.sport] || 0) + 1;
   }
-  // Fallback 1: fill remaining Strong slots ignoring the per-sport cap.
-  if (todaysEdge.length < TODAYS_EDGE_CAP) {
-    for (const p of strongs) {
-      if (todaysEdge.length >= TODAYS_EDGE_CAP) break;
-      const k = keyOf(p);
-      if (edgeKeys.has(k)) continue;
-      todaysEdge.push(p);
-      edgeKeys.add(k);
-    }
-  }
-  // Fallback 2: fill with the best Lean picks if we STILL don't have 5 Strongs.
-  // This prevents the carousel from silently rendering empty on slow slates.
+  // Fallback: fill remaining slots ignoring the per-sport cap.
   if (todaysEdge.length < TODAYS_EDGE_CAP) {
     for (const p of sorted) {
       if (todaysEdge.length >= TODAYS_EDGE_CAP) break;
