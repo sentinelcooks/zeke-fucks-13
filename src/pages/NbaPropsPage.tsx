@@ -405,6 +405,15 @@ function normalizePickPropType(propType: string | undefined, sport: "nba" | "mlb
 
 function getSavedPickVerdict(confidence?: number) {
   if (!confidence) return "LEAN";
+  // phase-c.v1: input MUST be percent-scale (>= 1 for any real confidence, or exactly 0).
+  // A decimal leak (0 < c <= 1) means upstream normalizer (ModernHomeLayout pick_snapshot) failed.
+  if (import.meta.env.DEV && confidence > 0 && confidence <= 1) {
+    console.error(
+      `[phase-c] getSavedPickVerdict: decimal input ${confidence} — expected percent-scale ≥ 1. ` +
+      `Normalizer at ModernHomeLayout.tsx pick_snapshot construction should convert before navigation.`
+    );
+    return "RISKY";
+  }
   if (confidence >= 80) return "STRONG PICK";
   if (confidence >= 70) return "LEAN";
   return "RISKY";
@@ -556,7 +565,9 @@ const NbaPropsPage = () => {
       opponent?: string;
       sport?: string;
       pick_snapshot?: {
-        confidence?: number;
+        confidence?: number;      // phase-c.v1: always percent-scale after ModernHomeLayout normalization
+        confidenceSource?: 'scanner' | 'analyzer' | 'analyzer-cross-sport';
+        sourceContractVersion?: string;
         reasoning?: string | null;
         avg_value?: number | null;
       };
@@ -612,14 +623,23 @@ const NbaPropsPage = () => {
             setError(data.error);
           } else {
             const savedReasoning = splitSavedReasoning(navState.pick_snapshot?.reasoning);
-            const mergedData = navState.pick_snapshot?.confidence
+            const savedConf = navState.pick_snapshot?.confidence;
+            // phase-c.v1: fresh analyzer result stands as primary. Saved scanner pick is
+            // attached as _savedSnapshot side-car so WrittenAnalysis can display both
+            // labeled, rather than merging them into one contradictory headline.
+            const mergedData = savedConf != null
               ? {
                   ...data,
-                  confidence: navState.pick_snapshot.confidence,
-                  verdict: getSavedPickVerdict(navState.pick_snapshot.confidence),
-                  reasoning: savedReasoning.length > 0 ? savedReasoning : data.reasoning,
+                  // Preserve nav-state line/direction for display accuracy, but NOT confidence or verdict.
                   over_under: navState.over_under || data.over_under,
                   line: navState.line || data.line,
+                  reasoning: savedReasoning.length > 0 ? savedReasoning : data.reasoning,
+                  _savedSnapshot: {
+                    confidence: savedConf,
+                    verdict: getSavedPickVerdict(savedConf),
+                    confidenceSource: navState.pick_snapshot?.confidenceSource ?? 'scanner',
+                    sourceContractVersion: navState.pick_snapshot?.sourceContractVersion ?? 'legacy',
+                  },
                 }
               : data;
             if (navState.pick_snapshot?.avg_value != null) {
@@ -2194,6 +2214,7 @@ const NbaPropsPage = () => {
                 sport={sport}
                 withoutTeammatesData={results.without_teammates_analysis}
                 paceContext={results.pace_context}
+                savedSnapshot={results._savedSnapshot}
               />
 
               {/* Correlated Props */}

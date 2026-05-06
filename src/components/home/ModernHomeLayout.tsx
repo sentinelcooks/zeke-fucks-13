@@ -863,7 +863,10 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                                 over_under: pick.direction,
                                 opponent: pick.opponent || '',
                                 pick_snapshot: {
-                                  confidence: pick.confidence ?? pick.hit_rate ?? undefined,
+                                  // phase-c.v1: always percent-scale so every reader agrees
+                                  confidence: confPercent || undefined,
+                                  confidenceSource: 'scanner' as const,
+                                  sourceContractVersion: 'phase-c.v1' as const,
                                   reasoning: pick.reasoning ?? null,
                                   avg_value: pick.avg_value ?? null,
                                 },

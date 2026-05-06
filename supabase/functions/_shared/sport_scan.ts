@@ -1154,10 +1154,27 @@ async function validateWithAnalyzer(
 ): Promise<ScoredPlay | null> {
   if (play.bet_type !== "prop") return play;
 
+  // phase-c.v1: capture scanner confidence before any analyzer modification
+  const scannerConfidence = play.confidence;
+
   const endpoint = ANALYZER_ENDPOINT[play.sport] ?? null;
   if (!endpoint) {
     diagnostics.skipped++;
-    return play;
+    // phase-c.v1: no analyzer endpoint — record unavailable agreement
+    const phaseCDiag: Record<string, unknown> = {
+      scannerConfidence,
+      analyzerConfidence: null,
+      confidenceSource: "scanner",
+      verdictSource: "scanner",
+      analyzerAgreement: "unavailable",
+      analyzerDisagreementReason: null,
+      publishedSource: "scanner",
+      sourceContractVersion: "phase-c.v1",
+    };
+    return {
+      ...play,
+      model_diagnostics: { ...(play.model_diagnostics ?? {}), ...phaseCDiag },
+    };
   }
 
   const cacheKey = `${play.sport}|${play.player_name}|${play.prop_type}|${play.line}|${play.direction}`;
@@ -1287,6 +1304,25 @@ async function validateWithAnalyzer(
     }
   }
 
+  // phase-c.v1: compute agreement between scanner and analyzer
+  const analyzerConfidence = adjustedProjected;
+  const diff = Math.abs(scannerConfidence - analyzerConfidence);
+  const analyzerAgreement = diff <= 0.10 ? "agree" : analyzerConfidence < scannerConfidence ? "disagree" : "agree";
+  const analyzerDisagreementReason = analyzerAgreement === "disagree"
+    ? `analyzer_lower_by_${Math.round(diff * 100)}`
+    : null;
+
+  const phaseCDiag: Record<string, unknown> = {
+    scannerConfidence,
+    analyzerConfidence,
+    confidenceSource: "analyzer",
+    verdictSource: "analyzer",
+    analyzerAgreement,
+    analyzerDisagreementReason,
+    publishedSource: "analyzer",
+    sourceContractVersion: "phase-c.v1",
+  };
+
   return {
     ...play,
     projected_prob: adjustedProjected,
@@ -1298,7 +1334,7 @@ async function validateWithAnalyzer(
     })(),
     confidence: adjustedProjected,
     reasoning,
-    model_diagnostics: mergedDiagnostics,
+    model_diagnostics: { ...(mergedDiagnostics ?? {}), ...phaseCDiag },
   };
 }
 
@@ -1578,13 +1614,59 @@ export async function scanSport(sport: string): Promise<{
       }
     }
   } else {
-    for (const p of sortedByQuality.slice(0, edgeCap)) {
+    // phase-c.v1: agreement gate for sports without a dedicated analyzer (NHL, MLB).
+    // Enabled via PHASE_C_GATE_ENABLED=true. Applies a stricter confidence floor
+    // since we cannot confirm the scanner's market-derived confidence via an analyzer.
+    const phaseCGateEnabled = Deno.env.get("PHASE_C_GATE_ENABLED") === "true";
+    const strictFloor = Number(Deno.env.get("STRICT_EDGE_FLOOR_NO_ANALYZER") || "0.72");
+    const hasAnalyzer = (ANALYZER_ENDPOINT[sport] ?? null) !== null;
+
+    let sportEdgeCount = 0;
+    for (const p of sortedByQuality) {
+      if (sportEdgeCount >= edgeCap) break;
+      if (phaseCGateEnabled && !hasAnalyzer && p.confidence < strictFloor) {
+        // Mark fallback-gated in diagnostics so we can audit without affecting display
+        if (p.model_diagnostics) {
+          (p.model_diagnostics as Record<string, unknown>).phaseCGateBlocked = true;
+          (p.model_diagnostics as Record<string, unknown>).phaseCGateReason = `confidence_${Math.round(p.confidence * 100)}_below_strict_floor_${Math.round(strictFloor * 100)}`;
+        }
+        continue;
+      }
       edgeKeySet.add(tierKey(p));
+      sportEdgeCount++;
+    }
+
+    // Fallback safety: if gate empties the edge slate for this sport, fall back to top-N
+    // with a diagnostic flag. Better to show scanner-only picks than an empty slate.
+    if (phaseCGateEnabled && edgeKeySet.size === 0 && sortedByQuality.length > 0) {
+      for (const p of sortedByQuality.slice(0, edgeCap)) {
+        edgeKeySet.add(tierKey(p));
+        if (p.model_diagnostics) {
+          (p.model_diagnostics as Record<string, unknown>).phaseCFallback = true;
+          (p.model_diagnostics as Record<string, unknown>).sourceContractVersion = "phase-c.v1.fallback";
+        }
+      }
     }
   }
 
   const assignTier = (p: ScoredPlay): "edge" | "daily" | "value" | null => {
-    if (edgeKeySet.has(tierKey(p))) return "edge";
+    if (edgeKeySet.has(tierKey(p))) {
+      // phase-c.v1: if PHASE_C_GATE_ENABLED and analyzer materially disagrees, block edge
+      const phaseCGateEnabled = Deno.env.get("PHASE_C_GATE_ENABLED") === "true";
+      if (phaseCGateEnabled) {
+        const md = (p.model_diagnostics ?? {}) as Record<string, unknown>;
+        const agreement = md.analyzerAgreement as string | undefined;
+        if (agreement === "disagree") {
+          if (p.model_diagnostics) {
+            (p.model_diagnostics as Record<string, unknown>).phaseCEdgeDemoted = true;
+            (p.model_diagnostics as Record<string, unknown>).phaseCDemoteReason = md.analyzerDisagreementReason ?? "analyzer_disagree";
+          }
+          // Demote to daily rather than dropping — the play may still have value
+          return p.confidence >= 0.70 ? "daily" : "value";
+        }
+      }
+      return "edge";
+    }
     if (sport === "nba") {
       const gate = nbaGateCache.get(tierKey(p));
       if (gate?.hardSafetyFail) return null; // drop from all public surfaces

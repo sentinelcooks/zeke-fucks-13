@@ -43,6 +43,13 @@ interface WrittenAnalysisProps {
   // Names of the two teams — used for the validation guardrail
   team1Name?: string;
   team2Name?: string;
+  // phase-c.v1: saved scanner pick side-car — shown alongside fresh result when they disagree
+  savedSnapshot?: {
+    confidence: number;    // percent-scale
+    verdict: string;
+    confidenceSource: string;
+    sourceContractVersion?: string;
+  };
   // Rich data forwarded to ai-analysis for contextual, value-specific analysis
   h2hData?: {
     rate?: number;
@@ -361,7 +368,15 @@ function generateOverallSummary(props: WrittenAnalysisProps): { rating: "take" |
 const FORBIDDEN_WHEN_SIZED = /(toss-?up|coin-?flip|\bpass\b|uncertainty)/i;
 
 const WrittenAnalysis = (props: WrittenAnalysisProps) => {
-  const rawSummary = generateOverallSummary(props);
+  // phase-c.v1: belt-and-suspenders decimal guard — upstream normalizer should have
+  // already converted to percent, but protect against legacy snapshots in flight.
+  // Remove after one release cycle.
+  const confPct = props.confidence == null ? 0
+    : props.confidence <= 1 ? Math.round(props.confidence * 100)
+    : Math.round(props.confidence);
+  const resolvedProps = confPct !== props.confidence ? { ...props, confidence: confPct } : props;
+
+  const rawSummary = generateOverallSummary(resolvedProps);
   // Belt-and-suspenders scrub: if forbidden language appears in the summary text,
   // force noBet so we never show a sizing line alongside "toss-up/coin-flip/pass/uncertainty".
   const overallSummary = (() => {
@@ -448,7 +463,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
         if (cancelled) return;
 
         if (error || !data?.sections?.length) {
-          setSections(generateFallbackSections(props));
+          setSections(generateFallbackSections(resolvedProps));
           return;
         }
 
@@ -481,13 +496,13 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
             expected: props.decision?.winning_team_name,
             section: offendingSection,
           });
-          setSections(generateFallbackSections(props));
+          setSections(generateFallbackSections(resolvedProps));
           return;
         }
 
         setSections(normalizedSections);
       } catch {
-        if (!cancelled) setSections(generateFallbackSections(props));
+        if (!cancelled) setSections(generateFallbackSections(resolvedProps));
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -500,15 +515,15 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
     return () => { cancelled = true; };
   }, [props.playerOrTeam, props.confidence, props.verdict, props.type, overallSummary.rating, props.decision?.winning_team_name]);
 
-  const borderColor = props.confidence >= 70
+  const borderColor = confPct >= 70
     ? "border-nba-green/30"
-    : props.confidence >= 55
+    : confPct >= 55
       ? "border-nba-blue/30"
       : "border-nba-yellow/30";
 
-  const accentGradient = props.confidence >= 70
+  const accentGradient = confPct >= 70
     ? "from-nba-green/20 to-transparent"
-    : props.confidence >= 55
+    : confPct >= 55
       ? "from-nba-blue/20 to-transparent"
       : "from-nba-yellow/20 to-transparent";
 
@@ -634,17 +649,36 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
                   )}
                 </motion.div>
 
-                {/* Confidence footer */}
-                <div className="flex items-center justify-between pt-3 border-t border-border/10">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${props.confidence >= 70 ? "bg-nba-green" : props.confidence >= 55 ? "bg-nba-blue" : "bg-nba-yellow"} animate-pulse`} />
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/65">
-                      AI Confidence: {props.confidence}%
-                    </span>
-                  </div>
-                  <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground/50">
-                    Powered by Sentinel AI
-                  </span>
+                {/* Confidence footer — dual display when saved scanner and fresh analyzer disagree */}
+                <div className="pt-3 border-t border-border/10 space-y-1.5">
+                  {props.savedSnapshot && Math.abs(props.savedSnapshot.confidence - confPct) >= 5 ? (
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${props.savedSnapshot.confidence >= 70 ? "bg-nba-green" : props.savedSnapshot.confidence >= 55 ? "bg-nba-blue" : "bg-nba-yellow"} opacity-70`} />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/55">
+                          Scanner: {props.savedSnapshot.confidence}% — {props.savedSnapshot.verdict}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${confPct >= 70 ? "bg-nba-green" : confPct >= 55 ? "bg-nba-blue" : "bg-nba-yellow"} animate-pulse`} />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/65">
+                          Fresh Analyzer: {confPct}%
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${confPct >= 70 ? "bg-nba-green" : confPct >= 55 ? "bg-nba-blue" : "bg-nba-yellow"} animate-pulse`} />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/65">
+                          AI Confidence: {confPct}%
+                        </span>
+                      </div>
+                      <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground/50">
+                        Powered by Sentinel AI
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
