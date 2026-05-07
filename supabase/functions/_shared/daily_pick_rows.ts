@@ -45,6 +45,11 @@ export function buildDailyPickRow({
   const modelDiagnostics = {
     ...rawDiagnostics,
     ...(play.model_diagnostics ?? {}),
+    canonical_confidence:
+      play.model_diagnostics?.canonical_confidence ??
+      play.model_diagnostics?.analyzer_confidence_percent ??
+      Math.round(confidencePercent),
+    canonical_verdict: storedVerdict,
     scanner_confidence_raw:
       play.model_diagnostics?.scanner_confidence_raw ??
       play.raw_confidence ??

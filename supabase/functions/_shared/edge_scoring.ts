@@ -37,7 +37,18 @@ import {
   MID_LONGSHOT_RELIABILITY_MIN,
   VOLATILE_UNDER_CONF_MIN,
   VOLATILE_UNDER_EDGE_MIN,
+  NBA_HEAVY_JUICE_ODDS,
+  NBA_EXTREME_JUICE_ODDS,
+  NBA_EXTREME_JUICE_EXEMPT_CONF_MIN,
+  NBA_EXTREME_JUICE_EXEMPT_EV_MIN,
+  NBA_EXTREME_JUICE_EXEMPT_EDGE_MIN,
 } from "./thresholds.ts";
+import {
+  normalizeCanonicalVerdict,
+  normalizeConfidencePercent,
+  scoredVerdictToCanonical,
+  type CanonicalVerdict,
+} from "./canonical_verdict.ts";
 
 export interface ScoredPlay {
   sport: string;
@@ -110,6 +121,297 @@ export const NBA_HIGH_VARIANCE_KEYS = new Set([
 
 // Low-line threshold: props at or below this line need stricter gates
 export const NBA_LOW_LINE_MAX = 1.5;
+
+export type NbaHeavyJuiceAction = "penalty" | "downgrade" | "hard_block";
+
+export interface NbaEdgeGateInputs {
+  canonical_confidence: number;
+  canonical_verdict: CanonicalVerdict;
+  stored_confidence: number;
+  stored_verdict: CanonicalVerdict;
+  oddsAmerican: number;
+  evPct: number;
+  modelEdge: number;
+  bookCount: number | null;
+  marketDataQuality: string | null;
+  marketDepth: string | null;
+  opponentResolutionStatus: string | null;
+  hasTeam: boolean;
+  hasOpponent: boolean;
+}
+
+export interface NbaEdgeGateResult {
+  ok: boolean;
+  reasons: string[];
+  hardSafetyFail: boolean;
+  edge_gate_result: "passed" | "failed";
+  edge_gate_decision: Record<string, unknown>;
+  inputs: NbaEdgeGateInputs;
+  heavyJuiceThreshold: number;
+  heavyJuiceAction: NbaHeavyJuiceAction;
+}
+
+function numberOrNull(value: unknown): number | null {
+  const n = typeof value === "number"
+    ? value
+    : typeof value === "string"
+      ? Number.parseFloat(value)
+      : Number.NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim().toLowerCase() : null;
+}
+
+function canonicalVerdictForGate(p: ScoredPlay, confidencePercent: number): CanonicalVerdict {
+  const md = (p.model_diagnostics ?? {}) as Record<string, unknown>;
+  if (md.canonical_verdict != null) {
+    return normalizeCanonicalVerdict(md.canonical_verdict, confidencePercent);
+  }
+  const scored = String(p.verdict ?? "").trim().toUpperCase();
+  if (scored === "RISKY") return "RISKY";
+  return scoredVerdictToCanonical(p.verdict);
+}
+
+export function evaluateNbaEdgeGate(p: ScoredPlay): NbaEdgeGateResult {
+  const reasons: string[] = [];
+  const md = (p.model_diagnostics ?? {}) as Record<string, unknown>;
+
+  const canonicalConfidence = Math.round(
+    normalizeConfidencePercent(
+      md.canonical_confidence ??
+        md.analyzer_confidence_percent ??
+        md.stored_confidence ??
+        p.confidence,
+    ),
+  );
+  const canonicalVerdict = canonicalVerdictForGate(p, canonicalConfidence);
+  const storedConfidence = Math.round(
+    normalizeConfidencePercent(md.stored_confidence ?? canonicalConfidence),
+  );
+  const storedVerdict = md.stored_verdict != null
+    ? normalizeCanonicalVerdict(md.stored_verdict, storedConfidence)
+    : canonicalVerdict;
+
+  const propKey = (p.prop_type || "").toLowerCase().replace(/\s+/g, "_");
+  const isHighVariance = NBA_HIGH_VARIANCE_KEYS.has(propKey);
+  const isLowLine = typeof p.line === "number" && p.line <= NBA_LOW_LINE_MAX;
+  const confidence01 = canonicalConfidence / 100;
+
+  const marketDataQuality = stringOrNull(md.marketDataQuality);
+  const marketDepth = stringOrNull(md.marketDepth);
+  const bookCount = numberOrNull(md.bookCount);
+  const opponentStatus = stringOrNull(md.opponentResolutionStatus);
+  const unusableMarket =
+    marketDataQuality === "unusable" ||
+    marketDataQuality === "very_low";
+  const lowMarketQuality = unusableMarket || marketDataQuality === "low";
+
+  const inputs: NbaEdgeGateInputs = {
+    canonical_confidence: canonicalConfidence,
+    canonical_verdict: canonicalVerdict,
+    stored_confidence: storedConfidence,
+    stored_verdict: storedVerdict,
+    oddsAmerican: p.odds,
+    evPct: Math.round(p.ev_pct * 100) / 100,
+    modelEdge: Math.round(p.edge * 10000) / 10000,
+    bookCount,
+    marketDataQuality,
+    marketDepth,
+    opponentResolutionStatus: opponentStatus,
+    hasTeam: !!p.team,
+    hasOpponent: !!p.opponent,
+  };
+
+  const confMin = canonicalVerdict === "STRONG"
+    ? isHighVariance ? 0.78 : isLowLine ? 0.76 : 0.72
+    : canonicalVerdict === "LEAN" ? 0.70 : 1;
+  if (confidence01 < confMin) reasons.push("confidence_below_nba_edge_min");
+
+  if (canonicalVerdict === "PASS") reasons.push("pass_verdict");
+  if (canonicalVerdict === "RISKY") reasons.push("risky_verdict");
+
+  if (p.edge <= 0) reasons.push("negative_model_edge");
+  if (p.ev_pct <= 0) reasons.push("negative_ev");
+
+  if (unusableMarket) reasons.push("market_quality_unusable");
+  else if (marketDataQuality === "low") reasons.push("market_quality_low");
+  if (marketDepth === "thin") reasons.push("market_depth_thin");
+  if (bookCount !== null && bookCount < 3) {
+    if (!reasons.includes("market_depth_thin")) reasons.push("market_depth_thin");
+  }
+
+  let heavyJuiceAction: NbaHeavyJuiceAction = "penalty";
+  if (p.odds <= NBA_EXTREME_JUICE_ODDS) {
+    const extremeJuiceJustified =
+      canonicalVerdict === "STRONG" &&
+      confidence01 >= NBA_EXTREME_JUICE_EXEMPT_CONF_MIN &&
+      p.ev_pct >= NBA_EXTREME_JUICE_EXEMPT_EV_MIN &&
+      p.edge >= NBA_EXTREME_JUICE_EXEMPT_EDGE_MIN &&
+      (bookCount ?? 0) >= 5 &&
+      !lowMarketQuality;
+    if (extremeJuiceJustified) {
+      heavyJuiceAction = "downgrade";
+      reasons.push("heavy_juice");
+    } else {
+      heavyJuiceAction = "hard_block";
+      reasons.push("heavy_juice");
+      reasons.push("extreme_juice");
+    }
+  } else if (p.odds <= NBA_HEAVY_JUICE_ODDS) {
+    const heavyJuiceAllowed =
+      (canonicalVerdict === "STRONG" || canonicalVerdict === "LEAN") &&
+      confidence01 >= 0.70 &&
+      p.ev_pct > 0 &&
+      p.edge > 0 &&
+      (bookCount ?? 0) >= 3 &&
+      !lowMarketQuality;
+    if (!heavyJuiceAllowed) {
+      heavyJuiceAction = "downgrade";
+      reasons.push("heavy_juice");
+    }
+  }
+
+  if (!p.team || !p.opponent || opponentStatus !== "resolved") {
+    reasons.push("opponent_unresolved");
+  }
+
+  const playoffMode = md.playoffMode === true || md.playoffMode === "true";
+  if (playoffMode) {
+    const seriesSampleSize =
+      typeof md.seriesSampleSize === "number"
+        ? md.seriesSampleSize
+        : typeof md.seriesSampleSize === "string"
+          ? parseInt(md.seriesSampleSize, 10)
+          : 0;
+    const seriesMatchFailureReason =
+      md.seriesMatchFailureReason != null ? String(md.seriesMatchFailureReason) : null;
+    const playoffWeightsApplied = md.playoffWeightsApplied === true;
+
+    if (seriesSampleSize < 2) reasons.push("playoff_series_missing");
+    if (seriesMatchFailureReason) reasons.push("playoff_series_missing");
+    if (!playoffWeightsApplied) {
+      const strongEnough = confidence01 >= 0.80 && p.edge > 0 && !lowMarketQuality;
+      if (!strongEnough) reasons.push("playoff_series_missing");
+    }
+  }
+
+  if (isLowLine) {
+    const alreadyCaught = reasons.some(r =>
+      ["negative_ev", "negative_model_edge", "market_quality_low", "market_quality_unusable", "opponent_unresolved"].includes(r)
+    );
+    if (!alreadyCaught && (p.ev_pct <= 0 || lowMarketQuality || !p.team || !p.opponent)) {
+      reasons.push("low_line_extra_risk");
+    }
+  }
+
+  if (isHighVariance) {
+    const cleanForHighVariance =
+      confidence01 >= 0.78 &&
+      (marketDataQuality === "medium" || marketDataQuality === "high") &&
+      p.edge > 0 &&
+      !reasons.includes("opponent_unresolved");
+    if (!cleanForHighVariance) {
+      if (
+        !reasons.includes("confidence_below_nba_edge_min") &&
+        !reasons.includes("market_quality_low") &&
+        !reasons.includes("market_quality_unusable") &&
+        !reasons.includes("negative_ev") &&
+        !reasons.includes("negative_model_edge") &&
+        !reasons.includes("opponent_unresolved")
+      ) {
+        reasons.push("high_variance_prop");
+      }
+    }
+  }
+
+  const ok = reasons.length === 0;
+  const hardSafetyFail =
+    reasons.includes("pass_verdict") ||
+    reasons.includes("risky_verdict") ||
+    reasons.includes("market_quality_unusable") ||
+    reasons.includes("extreme_juice") ||
+    (reasons.includes("negative_ev") && reasons.includes("market_quality_low")) ||
+    (reasons.includes("negative_model_edge") && reasons.includes("market_quality_low")) ||
+    (reasons.includes("opponent_unresolved") && confidence01 < 0.70) ||
+    (reasons.includes("playoff_series_missing") && playoffMode);
+
+  return {
+    ok,
+    reasons: Array.from(new Set(reasons)),
+    hardSafetyFail,
+    edge_gate_result: ok ? "passed" : "failed",
+    edge_gate_decision: {
+      ok,
+      reasons: Array.from(new Set(reasons)),
+      hardSafetyFail,
+      heavy_juice_action: heavyJuiceAction,
+    },
+    inputs,
+    heavyJuiceThreshold: NBA_HEAVY_JUICE_ODDS,
+    heavyJuiceAction,
+  };
+}
+
+export interface NbaEdgePoolDiagnostics {
+  rank: number | null;
+  selected: boolean;
+  selectionReason: string;
+}
+
+export function nbaEdgePoolKey(p: ScoredPlay): string {
+  return `${p.sport}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`;
+}
+
+export function selectNbaEdgePool(
+  sortedByQuality: ScoredPlay[],
+  edgeCap: number,
+): {
+  edgeKeySet: Set<string>;
+  gateCache: Map<string, NbaEdgeGateResult>;
+  poolDiagnostics: Map<string, NbaEdgePoolDiagnostics>;
+} {
+  const edgeKeySet = new Set<string>();
+  const gateCache = new Map<string, NbaEdgeGateResult>();
+  const poolDiagnostics = new Map<string, NbaEdgePoolDiagnostics>();
+  let edgeCount = 0;
+  let gatePassRank = 0;
+
+  for (const p of sortedByQuality) {
+    const key = nbaEdgePoolKey(p);
+    const gate = evaluateNbaEdgeGate(p);
+    gateCache.set(key, gate);
+
+    if (!gate.ok) {
+      poolDiagnostics.set(key, {
+        rank: null,
+        selected: false,
+        selectionReason: gate.hardSafetyFail ? "hard_safety_later" : "failed_edge_gate",
+      });
+      continue;
+    }
+
+    gatePassRank++;
+    if (edgeCount < edgeCap) {
+      edgeKeySet.add(key);
+      edgeCount++;
+      poolDiagnostics.set(key, {
+        rank: gatePassRank,
+        selected: true,
+        selectionReason: "selected",
+      });
+    } else {
+      poolDiagnostics.set(key, {
+        rank: gatePassRank,
+        selected: false,
+        selectionReason: edgeCap <= 0 ? "edge_slots_full" : "lower_rank_than_selected_picks",
+      });
+    }
+  }
+
+  return { edgeKeySet, gateCache, poolDiagnostics };
+}
 
 export function getMarketReliability(
   betType: string,

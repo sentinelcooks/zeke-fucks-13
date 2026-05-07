@@ -34,6 +34,14 @@ export const MID_LONGSHOT_RELIABILITY_MIN = 0.65;
 export const VOLATILE_UNDER_CONF_MIN = 0.70;
 export const VOLATILE_UNDER_EDGE_MIN = 0.06;
 
+// NBA Today's Edge juice gates. Normal favorite juice is diagnostic only when
+// canonical signal quality is strong enough; extreme juice remains a hard safety.
+export const NBA_HEAVY_JUICE_ODDS = -180;
+export const NBA_EXTREME_JUICE_ODDS = -250;
+export const NBA_EXTREME_JUICE_EXEMPT_CONF_MIN = 0.85;
+export const NBA_EXTREME_JUICE_EXEMPT_EV_MIN = 12;
+export const NBA_EXTREME_JUICE_EXEMPT_EDGE_MIN = 0.08;
+
 // Narrative tiers (displayed text). These map from the same probability
 // thresholds so NHL / MLB / NBA / UFC narrators never disagree.
 export function tierLabel(calibratedProb: number): "Strong" | "Lean" | "Marginal" | "Pass" {
