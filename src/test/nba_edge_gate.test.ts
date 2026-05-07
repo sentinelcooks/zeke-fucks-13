@@ -128,6 +128,55 @@ describe("NBA edge gate heavy-juice handling", () => {
     expect(gate.reasons).toContain("negative_ev");
   });
 
+  it("keeps 72 STRONG low-line under prop with positive EV gate eligible", () => {
+    const gate = evaluateNbaEdgeGate(makePlay({
+      confidence: 0.72,
+      projected_prob: 0.72,
+      edge: 0.0661,
+      ev_pct: 10.09,
+      odds: -190,
+      line: 1.5,
+      direction: "under",
+      prop_type: "three_pointers_made",
+      verdict: "Strong",
+      model_diagnostics: {
+        canonical_confidence: 72,
+        canonical_verdict: "STRONG",
+        bookCount: 9,
+        marketDataQuality: "medium",
+        marketDepth: "deep",
+        opponentResolutionStatus: "resolved",
+      },
+    }));
+
+    expect(gate.ok).toBe(true);
+    expect(gate.reasons).not.toContain("confidence_below_nba_edge_min");
+    expect(gate.reasons).not.toContain("high_variance_prop");
+    expect(gate.heavyJuiceAction).toBe("penalty");
+  });
+
+  it("keeps 72 STRONG high-variance prop with clean signal gate eligible", () => {
+    const gate = evaluateNbaEdgeGate(makePlay({
+      confidence: 0.72,
+      projected_prob: 0.72,
+      edge: 0.05,
+      ev_pct: 8,
+      odds: -150,
+      line: 1.5,
+      prop_type: "steals",
+      verdict: "Strong",
+      model_diagnostics: {
+        canonical_confidence: 72,
+        canonical_verdict: "STRONG",
+        bookCount: 5,
+        marketDataQuality: "medium",
+        marketDepth: "normal",
+        opponentResolutionStatus: "resolved",
+      },
+    }));
+    expect(gate.ok).toBe(true);
+  });
+
   it("hard-blocks true extreme juice", () => {
     const gate = evaluateNbaEdgeGate(makePlay({
       odds: -250,

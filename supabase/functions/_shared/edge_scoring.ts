@@ -195,8 +195,6 @@ export function evaluateNbaEdgeGate(p: ScoredPlay): NbaEdgeGateResult {
     ? normalizeCanonicalVerdict(md.stored_verdict, storedConfidence)
     : canonicalVerdict;
 
-  const propKey = normalizeNbaPropType(p.prop_type).replace(/\s+/g, "_");
-  const isHighVariance = NBA_HIGH_VARIANCE_KEYS.has(propKey);
   const isLowLine = typeof p.line === "number" && p.line <= NBA_LOW_LINE_MAX;
   const confidence01 = canonicalConfidence / 100;
 
@@ -225,9 +223,8 @@ export function evaluateNbaEdgeGate(p: ScoredPlay): NbaEdgeGateResult {
     hasOpponent: !!p.opponent,
   };
 
-  const confMin = canonicalVerdict === "STRONG"
-    ? isHighVariance ? 0.78 : isLowLine ? 0.76 : 0.72
-    : canonicalVerdict === "LEAN" ? 0.70 : 1;
+  const confMin =
+    canonicalVerdict === "STRONG" || canonicalVerdict === "LEAN" ? 0.70 : 1;
   if (confidence01 < confMin) reasons.push("confidence_below_nba_edge_min");
 
   if (canonicalVerdict === "PASS") reasons.push("pass_verdict");
@@ -304,26 +301,6 @@ export function evaluateNbaEdgeGate(p: ScoredPlay): NbaEdgeGateResult {
     );
     if (!alreadyCaught && (p.ev_pct <= 0 || lowMarketQuality || !p.team || !p.opponent)) {
       reasons.push("low_line_extra_risk");
-    }
-  }
-
-  if (isHighVariance) {
-    const cleanForHighVariance =
-      confidence01 >= 0.78 &&
-      (marketDataQuality === "medium" || marketDataQuality === "high") &&
-      p.edge > 0 &&
-      !reasons.includes("opponent_unresolved");
-    if (!cleanForHighVariance) {
-      if (
-        !reasons.includes("confidence_below_nba_edge_min") &&
-        !reasons.includes("market_quality_low") &&
-        !reasons.includes("market_quality_unusable") &&
-        !reasons.includes("negative_ev") &&
-        !reasons.includes("negative_model_edge") &&
-        !reasons.includes("opponent_unresolved")
-      ) {
-        reasons.push("high_variance_prop");
-      }
     }
   }
 
