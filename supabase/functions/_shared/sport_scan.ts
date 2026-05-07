@@ -8,12 +8,16 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import {
   americanToImpliedProb,
   calcEv,
+  candidateDiagnostic,
   evaluateNbaEdgeGate,
+  resolveNbaAnalyzerCap,
   scorePrecomputed,
+  selectNbaAnalyzerPool,
   type ScoredPlay,
 } from "./edge_scoring.ts";
 import { stripPropCodes } from "./format_labels.ts";
 import { summarizeMarket } from "./odds_intelligence.ts";
+import { normalizeDirection, normalizeNbaPropType } from "./prop_normalization.ts";
 import {
   canonicalToScoredVerdict,
   normalizeCanonicalVerdict,
@@ -91,6 +95,9 @@ const ANALYZER_LIMIT: Record<string, number> = {
   ufc: 1,
 };
 
+const ANALYZER_TIMEOUT_MS = 12_000;
+const DIAGNOSTIC_SAMPLE_LIMIT = 25;
+
 // Per-sport edge cap (top-N by quality_score get tier='edge' inside this scan).
 const EDGE_CAP_PER_SPORT: Record<string, number> = {
   nba: 5,
@@ -106,6 +113,9 @@ interface AnalyzerDiagnostics {
   rateLimited: number;
   retries: number;
   errors: number;
+  callsAttempted: number;
+  callsSucceeded: number;
+  callsFailed: number;
 }
 
 function newAnalyzerDiagnostics(sport: string): AnalyzerDiagnostics {
@@ -116,7 +126,168 @@ function newAnalyzerDiagnostics(sport: string): AnalyzerDiagnostics {
     rateLimited: 0,
     retries: 0,
     errors: 0,
+    callsAttempted: 0,
+    callsSucceeded: 0,
+    callsFailed: 0,
   };
+}
+
+interface TraceTarget {
+  player_name: string;
+  prop_type: string;
+  direction: string;
+  line: number;
+}
+
+interface TraceResult {
+  requested: TraceTarget;
+  odds_api_returned_prop: boolean;
+  normalized_prop_type: string;
+  normalized_direction: string;
+  became_scanner_candidate: boolean;
+  scanner_confidence: number | null;
+  scanner_edge: number | null;
+  lowConfidenceReason: Record<string, unknown> | null;
+  missingDataFields: string[];
+  hardSafetyReason: string[] | null;
+  canonical_analyzer_called: boolean;
+  analyzer_payload: Record<string, unknown> | null;
+  analyzer_confidence: number | null;
+  analyzer_verdict: string | null;
+  analyzer_error: Record<string, unknown> | null;
+  final_tier: string | null;
+  final_rejection_reason: string | null;
+}
+
+interface ScanSportOptions {
+  diagnosticsOnly?: boolean;
+  traceTargets?: TraceTarget[];
+}
+
+interface AnalyzerErrorCandidate {
+  player_name: string;
+  prop_type: string;
+  direction: string;
+  line: number;
+  payload: Record<string, unknown>;
+  status: number;
+  error: unknown;
+}
+
+function getEnv(name: string): string | undefined {
+  try {
+    return typeof Deno !== "undefined" ? Deno.env.get(name) ?? undefined : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function analyzerTimeoutMs(): number {
+  const raw = Number(getEnv("ANALYZER_CALL_TIMEOUT_MS"));
+  if (!Number.isFinite(raw) || raw <= 0) return ANALYZER_TIMEOUT_MS;
+  return Math.max(3_000, Math.min(20_000, Math.round(raw)));
+}
+
+function normalizeTraceTargets(targets: TraceTarget[] | undefined): TraceResult[] {
+  return (targets ?? []).map((t) => ({
+    requested: {
+      player_name: String(t.player_name ?? ""),
+      prop_type: String(t.prop_type ?? ""),
+      direction: String(t.direction ?? ""),
+      line: Number(t.line),
+    },
+    odds_api_returned_prop: false,
+    normalized_prop_type: normalizeNbaPropType(t.prop_type),
+    normalized_direction: normalizeDirection(t.direction),
+    became_scanner_candidate: false,
+    scanner_confidence: null,
+    scanner_edge: null,
+    lowConfidenceReason: null,
+    missingDataFields: [],
+    hardSafetyReason: null,
+    canonical_analyzer_called: false,
+    analyzer_payload: null,
+    analyzer_confidence: null,
+    analyzer_verdict: null,
+    analyzer_error: null,
+    final_tier: null,
+    final_rejection_reason: null,
+  }));
+}
+
+function normName(value: string | null | undefined): string {
+  return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function sameLine(a: number, b: number): boolean {
+  return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < 0.001;
+}
+
+function matchingTrace(traceResults: TraceResult[], playLike: {
+  player_name?: string | null;
+  prop_type?: string | null;
+  direction?: string | null;
+  line?: number | null;
+}): TraceResult[] {
+  const player = normName(playLike.player_name);
+  const prop = normalizeNbaPropType(playLike.prop_type);
+  const direction = normalizeDirection(playLike.direction);
+  const line = Number(playLike.line);
+
+  return traceResults.filter((tr) =>
+    normName(tr.requested.player_name) === player &&
+    tr.normalized_prop_type === prop &&
+    tr.normalized_direction === direction &&
+    sameLine(tr.requested.line, line)
+  );
+}
+
+function missingFieldsForPlay(p: ScoredPlay): string[] {
+  const missing: string[] = [];
+  if (!p.player_name) missing.push("player_name");
+  if (!p.prop_type) missing.push("prop_type");
+  if (!p.direction) missing.push("direction");
+  if (!Number.isFinite(p.line)) missing.push("line");
+  if (!Number.isFinite(p.odds)) missing.push("odds");
+  if (!p.game_date && !p.commence_time) missing.push("game_date");
+  return missing;
+}
+
+function lowConfidenceDiagnostic(p: ScoredPlay, threshold: number): Record<string, unknown> {
+  const md = (p.model_diagnostics ?? {}) as Record<string, unknown>;
+  return {
+    threshold,
+    confidence: Math.round(p.confidence * 1000) / 1000,
+    edge: Math.round(p.edge * 10000) / 10000,
+    ev_pct: Math.round(p.ev_pct * 100) / 100,
+    quality_score: Math.round(p.quality_score * 10000) / 10000,
+    bookCount: md.bookCount ?? null,
+    marketDataQuality: md.marketDataQuality ?? null,
+    marketDepth: md.marketDepth ?? null,
+    opponentResolutionStatus: md.opponentResolutionStatus ?? null,
+  };
+}
+
+function canKeepLowConfidenceForNbaAnalyzer(p: ScoredPlay): boolean {
+  if (p.sport !== "nba" || p.bet_type !== "prop") return false;
+  const md = (p.model_diagnostics ?? {}) as Record<string, unknown>;
+  const marketDataQuality = String(md.marketDataQuality ?? "").toLowerCase();
+  const bookCount = Number(md.bookCount ?? NaN);
+  const hasEnoughMarket =
+    (Number.isFinite(bookCount) && bookCount >= 3) ||
+    ["medium", "high"].includes(marketDataQuality);
+
+  return (
+    !!p.player_name &&
+    !!p.prop_type &&
+    !!p.direction &&
+    Number.isFinite(p.line) &&
+    Number.isFinite(p.odds) &&
+    p.edge > 0 &&
+    hasEnoughMarket &&
+    marketDataQuality !== "unusable" &&
+    marketDataQuality !== "very_low"
+  );
 }
 
 async function mapLimit<T, R>(
@@ -245,7 +416,7 @@ const NHL_MAP: Record<string, string> = {
 function mapMarketToProp(sport: string, rawMarketKey: string): string | null {
   const key = rawMarketKey.replace(/_alternate$/, "");
 
-  if (sport === "nba") return NBA_MAP[key] ?? null;
+  if (sport === "nba") return NBA_MAP[key] ? normalizeNbaPropType(NBA_MAP[key]) : null;
   if (sport === "mlb") return MLB_MAP[key] ?? null;
   if (sport === "nhl") return NHL_MAP[key] ?? null;
 
@@ -365,7 +536,7 @@ async function fnFetch(path: string): Promise<FetchResult> {
   }
 }
 
-async function fnPost(path: string, body: any): Promise<FetchResult> {
+async function fnPost(path: string, body: any, timeoutMs = analyzerTimeoutMs()): Promise<FetchResult> {
   const headers = getInternalHeaders();
 
   if (!headers) {
@@ -379,12 +550,15 @@ async function fnPost(path: string, body: any): Promise<FetchResult> {
 
   const url = buildFnUrl(path);
   console.log(`fnPost calling: ${safeLogUrl(url)}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const r = await fetch(url, {
       method: "POST",
       headers,
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
 
     const text = await r.text();
@@ -408,9 +582,14 @@ async function fnPost(path: string, body: any): Promise<FetchResult> {
     return {
       ok: false,
       status: 0,
-      data: null,
+      data: {
+        error: e instanceof DOMException && e.name === "AbortError" ? "analyzer_timeout" : "fetch_failed",
+        message: e instanceof Error ? e.message : String(e),
+      },
       size: 0,
     };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -855,7 +1034,11 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
 }
 
 // ── Player-prop evaluation ────────────
-async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPlay[]> {
+async function evaluatePlayerProps(
+  sport: string,
+  stats: any,
+  traceResults: TraceResult[] = [],
+): Promise<ScoredPlay[]> {
   const sportKey = SPORT_KEYS[sport];
 
   if (!sportKey && sport !== "ufc") return [];
@@ -1001,6 +1184,16 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
             ? "under"
             : "over";
           const line = Number(o.point ?? 0);
+          for (const tr of matchingTrace(traceResults, {
+            player_name: playerName,
+            prop_type: marketKey,
+            direction: side,
+            line,
+          })) {
+            tr.odds_api_returned_prop = true;
+            tr.normalized_prop_type = marketKey;
+            tr.normalized_direction = side;
+          }
           const k = `${side}|${line}`;
           const cur = grouped.get(k);
 
@@ -1097,6 +1290,11 @@ async function evaluatePlayerProps(sport: string, stats: any): Promise<ScoredPla
               commence_time: ev.commence_time ?? null,
               game_date: toETDate(ev.commence_time ?? null),
             });
+            for (const tr of matchingTrace(traceResults, scored)) {
+              tr.became_scanner_candidate = true;
+              tr.scanner_confidence = Math.round(scored.confidence * 1000) / 1000;
+              tr.scanner_edge = Math.round(scored.edge * 10000) / 10000;
+            }
             // Phase-1 diagnostics: market-side summary from outcomes already
             // fetched (no new API calls). Analyzer may merge ESPN-side
             // diagnostics on top of this in validateWithAnalyzer.
@@ -1157,6 +1355,8 @@ async function validateWithAnalyzer(
   play: ScoredPlay,
   cache: Map<string, any>,
   diagnostics: AnalyzerDiagnostics,
+  traceResults: TraceResult[] = [],
+  analyzerErrorCandidates: AnalyzerErrorCandidate[] = [],
 ): Promise<ScoredPlay | null> {
   if (play.bet_type !== "prop") return play;
 
@@ -1197,9 +1397,9 @@ async function validateWithAnalyzer(
 
     const body = {
       player: play.player_name,
-      prop_type: play.prop_type,
+      prop_type: play.sport === "nba" ? normalizeNbaPropType(play.prop_type) : play.prop_type,
       line: play.line,
-      over_under: play.direction,
+      over_under: normalizeDirection(play.direction),
       opponent,
       team: play.team || null,
       home_team: play.home_team || null,
@@ -1209,37 +1409,80 @@ async function validateWithAnalyzer(
     };
 
     diagnostics.calls++;
+    diagnostics.callsAttempted++;
+    for (const tr of matchingTrace(traceResults, play)) {
+      tr.canonical_analyzer_called = true;
+      tr.analyzer_payload = body;
+    }
     const r = await fnPostWithRetry(endpoint, body, diagnostics);
 
     if (r.rateLimited) {
       // Keep deterministic candidate alive instead of dropping it.
+      diagnostics.callsFailed++;
+      for (const tr of matchingTrace(traceResults, play)) {
+        tr.analyzer_error = { status: r.status, error: r.data ?? "rate_limited" };
+      }
       return play;
     }
 
     if (!r.ok || !r.data) {
       diagnostics.errors++;
+      diagnostics.callsFailed++;
+      const errorInfo = {
+        player_name: play.player_name,
+        prop_type: body.prop_type,
+        direction: body.over_under,
+        line: play.line,
+        payload: body,
+        status: r.status,
+        error: r.data ?? "empty_response",
+      };
+      if (analyzerErrorCandidates.length < DIAGNOSTIC_SAMPLE_LIMIT) {
+        analyzerErrorCandidates.push(errorInfo);
+      }
+      console.error(
+        `[${play.sport}] analyzer error candidate: ${play.player_name} ${body.over_under} ${play.line} ${body.prop_type} ` +
+        `status=${r.status} payload=${JSON.stringify(body)} error=${JSON.stringify(r.data).slice(0, 500)}`
+      );
+      for (const tr of matchingTrace(traceResults, play)) {
+        tr.analyzer_error = { status: r.status, error: r.data ?? "empty_response" };
+      }
       return play;
     }
 
+    diagnostics.callsSucceeded++;
     analyzed = r.data;
     cache.set(cacheKey, analyzed);
   }
 
-  if (analyzed.playerIsOut === true) return null;
+  if (analyzed.playerIsOut === true) {
+    for (const tr of matchingTrace(traceResults, play)) tr.final_rejection_reason = "player_out";
+    return null;
+  }
 
   const conf = normalizeConfidencePercent(
     analyzed.canonical_confidence ?? analyzed.confidence ?? analyzed.displayConfidence ?? 0,
   );
 
-  if (!conf || conf <= 0) return null;
+  if (!conf || conf <= 0) {
+    for (const tr of matchingTrace(traceResults, play)) tr.final_rejection_reason = "analyzer_missing_confidence";
+    return null;
+  }
 
   const canonicalVerdict = normalizeCanonicalVerdict(
     analyzed.canonical_verdict ?? analyzed.verdict ?? analyzed.decision?.verdict,
     conf,
   );
+  for (const tr of matchingTrace(traceResults, play)) {
+    tr.analyzer_confidence = Math.round(conf);
+    tr.analyzer_verdict = canonicalVerdict;
+  }
   const verdict = canonicalVerdict;
 
-  if (verdict === "PASS") return null;
+  if (verdict === "PASS") {
+    for (const tr of matchingTrace(traceResults, play)) tr.final_rejection_reason = "pass_verdict";
+    return null;
+  }
 
   const seasonAvg = Number(
     analyzed.seasonAvg ??
@@ -1250,17 +1493,26 @@ async function validateWithAnalyzer(
       NaN
   );
 
-  if (Number.isFinite(seasonAvg) && seasonAvg === 0) return null;
+  if (Number.isFinite(seasonAvg) && seasonAvg === 0) {
+    for (const tr of matchingTrace(traceResults, play)) tr.final_rejection_reason = "analyzer_zero_stat_average";
+    return null;
+  }
 
   const projected = Math.max(0, Math.min(1, conf / 100));
   const implied = play.implied_prob;
   const edge = projected - implied;
 
-  if (edge <= 0.025) return null;
+  if (edge <= 0.025) {
+    for (const tr of matchingTrace(traceResults, play)) tr.final_rejection_reason = "canonical_edge_below_min";
+    return null;
+  }
 
   const minConf = ANALYZER_MIN_CONF[play.sport] ?? 0.55;
 
-  if (projected < minConf) return null;
+  if (projected < minConf) {
+    for (const tr of matchingTrace(traceResults, play)) tr.final_rejection_reason = "canonical_confidence_below_min";
+    return null;
+  }
 
   const reasoningArr = Array.isArray(analyzed.reasoning) ? analyzed.reasoning : [];
 
@@ -1375,7 +1627,7 @@ function passNbaEdgeGate(p: ScoredPlay): NbaEdgeGateResult {
 
 
 // ── Main per-sport entry ──────────────
-export async function scanSport(sport: string): Promise<{
+export async function scanSport(sport: string, options: ScanSportOptions = {}): Promise<{
   sport: string;
   scanned: number;
   validated: number;
@@ -1384,8 +1636,26 @@ export async function scanSport(sport: string): Promise<{
   tiers?: { edge: number; daily: number; value: number; pass: number };
   analyzer?: AnalyzerDiagnostics;
   droppedNoGameDate?: number;
+  diagnostics_only?: boolean;
+  rejected?: Record<string, number>;
+  rejected_low_confidence_top_25?: Array<Record<string, unknown>>;
+  rejected_missing_data_top_25?: Array<Record<string, unknown>>;
+  analyzer_error_candidates?: AnalyzerErrorCandidate[];
+  target_trace_results?: TraceResult[];
+  candidate_pool_size_before_analyzer?: number;
+  candidate_pool_size_after_analyzer?: number;
+  canonical_finalized_count?: number;
+  edge_selected_count?: number;
+  analyzer_pool_cap?: number;
+  analyzer_pool_selected_count?: number;
+  analyzer_calls_attempted?: number;
+  analyzer_calls_succeeded?: number;
+  analyzer_calls_failed?: number;
+  analyzer_pool_truncated?: boolean;
+  analyzer_pool_excluded_candidates?: Array<Record<string, unknown>>;
   error?: string;
 }> {
+  const traceResults = normalizeTraceTargets(options.traceTargets);
   const stats: any = {
     games: 0,
     scheduled_games: 0,
@@ -1403,7 +1673,7 @@ export async function scanSport(sport: string): Promise<{
     lines = await evaluateGameLines(sport, stats);
     stats.lines = lines.length;
 
-    props = await evaluatePlayerProps(sport, stats);
+    props = await evaluatePlayerProps(sport, stats, traceResults);
   } catch (e) {
     console.error(`[${sport}] scan error:`, e);
 
@@ -1422,12 +1692,38 @@ export async function scanSport(sport: string): Promise<{
 
   const minConf = PREFILTER_MIN_CONF[sport] ?? 0.55;
   const drops = { conf: 0, oddsHigh: 0, oddsLow: 0, edge: 0 };
+  const rejectedLowConfidenceTop: Array<Record<string, unknown>> = [];
 
   const prefiltered = all.filter((p) => {
     if (p.odds >= 500) { drops.oddsHigh++; return false; }
     if (p.odds <= -350) { drops.oddsLow++; return false; }
-    if (p.confidence < minConf) { drops.conf++; return false; }
     if (p.edge <= 0) { drops.edge++; return false; }
+    if (p.confidence < minConf) {
+      const diag = lowConfidenceDiagnostic(p, minConf);
+      for (const tr of matchingTrace(traceResults, p)) {
+        tr.lowConfidenceReason = diag;
+      }
+      if (sport === "nba" && canKeepLowConfidenceForNbaAnalyzer(p)) {
+        if (p.model_diagnostics) {
+          (p.model_diagnostics as Record<string, unknown>).prefilterLowConfidenceOverride = true;
+          (p.model_diagnostics as Record<string, unknown>).prefilterLowConfidenceReason = diag;
+        }
+        return true;
+      }
+
+      drops.conf++;
+      if (rejectedLowConfidenceTop.length < DIAGNOSTIC_SAMPLE_LIMIT) {
+        rejectedLowConfidenceTop.push({
+          player_name: p.player_name,
+          prop_type: p.prop_type,
+          direction: p.direction,
+          line: p.line,
+          reason: "scanner_confidence_below_prefilter",
+          ...diag,
+        });
+      }
+      return false;
+    }
 
     return true;
   });
@@ -1440,10 +1736,32 @@ export async function scanSport(sport: string): Promise<{
     );
   }
 
-  const ANALYZER_CAP = sport === "nba" ? 25 : 45;
-  const top = prefiltered.sort((a, b) => b.edge - a.edge).slice(0, ANALYZER_CAP);
+  const analyzerPoolCap = sport === "nba"
+    ? resolveNbaAnalyzerCap(getEnv("NBA_ANALYZER_CAP"))
+    : 45;
+  const analyzerPool = sport === "nba"
+    ? selectNbaAnalyzerPool(prefiltered, analyzerPoolCap)
+    : (() => {
+      const sorted = [...prefiltered].sort((a, b) => b.edge - a.edge);
+      return {
+        selected: sorted.slice(0, analyzerPoolCap),
+        excluded: sorted
+          .slice(analyzerPoolCap)
+          .map((p) => candidateDiagnostic(p, "analyzer_pool_cap_exceeded")),
+        truncated: sorted.length > analyzerPoolCap,
+      };
+    })();
+  const top = analyzerPool.selected;
   const cache = new Map<string, any>();
   const analyzerDiagnostics = newAnalyzerDiagnostics(sport);
+  const analyzerErrorCandidates: AnalyzerErrorCandidate[] = [];
+  const analyzerPoolExcluded = analyzerPool.excluded;
+
+  for (const excluded of analyzerPoolExcluded) {
+    for (const tr of matchingTrace(traceResults, excluded)) {
+      tr.final_rejection_reason = excluded.exclusion_reason;
+    }
+  }
 
   if (analyzerDiagnostics.endpoint === null && top.length > 0) {
     console.warn(
@@ -1454,9 +1772,27 @@ export async function scanSport(sport: string): Promise<{
   const limit = ANALYZER_LIMIT[sport] ?? 1;
   const rawResults = await mapLimit(top, limit, async (p) => {
     try {
-      return await validateWithAnalyzer(p, cache, analyzerDiagnostics);
+      return await validateWithAnalyzer(p, cache, analyzerDiagnostics, traceResults, analyzerErrorCandidates);
     } catch (e) {
       analyzerDiagnostics.errors++;
+      analyzerDiagnostics.callsFailed++;
+      if (analyzerErrorCandidates.length < DIAGNOSTIC_SAMPLE_LIMIT) {
+        analyzerErrorCandidates.push({
+          player_name: p.player_name,
+          prop_type: p.prop_type,
+          direction: p.direction,
+          line: p.line,
+          payload: {
+            player: p.player_name,
+            prop_type: p.prop_type,
+            line: p.line,
+            over_under: p.direction,
+            sport: p.sport,
+          },
+          status: 0,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
       console.error(`[${sport}] analyzer threw, keeping deterministic candidate:`, e);
       return p; // soft failure
     }
@@ -1624,36 +1960,55 @@ export async function scanSport(sport: string): Promise<{
     return "value";
   };
 
-  const supabaseUrl = Deno.env.get("PROJECT_URL")?.trim();
-  const serviceRoleKey = Deno.env.get("SERVICE_ROLE_KEY")?.trim();
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("Missing PROJECT_URL or SERVICE_ROLE_KEY for daily_picks insert");
-  }
-
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
   const today = new Date().toISOString().slice(0, 10);
 
   let droppedNoGameDate = 0;
   let nbaHardSafetyDropped = 0;
+  const rejectedMissingDataTop: Array<Record<string, unknown>> = [];
   // Defense-in-depth: if anything PASS leaks into `eligible`, drop it.
   let passVerdictBlocked = 0;
   const rows = eligible
     .map((p) => {
       if (p.verdict === "Pass") {
         passVerdictBlocked++;
+        for (const tr of matchingTrace(traceResults, p)) {
+          tr.final_rejection_reason = "pass_verdict";
+        }
         return null;
       }
       const tier = assignTier(p);
       if (tier === null) {
         // NBA hard safety fail — drop from all public surfaces
         nbaHardSafetyDropped++;
+        const gate = sport === "nba" ? nbaGateCache.get(tierKey(p)) : null;
+        for (const tr of matchingTrace(traceResults, p)) {
+          tr.hardSafetyReason = gate?.reasons ?? ["hard_safety"];
+          tr.final_rejection_reason = "hard_safety";
+        }
         return null;
       }
       const gameDate = p.game_date ?? (p.commence_time ? toETDate(p.commence_time) : null);
       if (!gameDate) {
         droppedNoGameDate++;
+        const missingFields = missingFieldsForPlay(p);
+        if (rejectedMissingDataTop.length < DIAGNOSTIC_SAMPLE_LIMIT) {
+          rejectedMissingDataTop.push({
+            player_name: p.player_name,
+            prop_type: p.prop_type,
+            direction: p.direction,
+            line: p.line,
+            missing_fields: missingFields,
+          });
+        }
+        for (const tr of matchingTrace(traceResults, p)) {
+          tr.missingDataFields = missingFields;
+          tr.final_rejection_reason = "missing_data";
+        }
         return null;
+      }
+      for (const tr of matchingTrace(traceResults, p)) {
+        tr.final_tier = tier;
+        tr.final_rejection_reason = null;
       }
       const verdictTag = p.verdict === "Strong" || p.verdict === "Lean"
         ? `[VERDICT:${p.verdict}] `
@@ -1778,7 +2133,16 @@ export async function scanSport(sport: string): Promise<{
 
   let inserted = 0;
 
-  if (uniqueRows.length) {
+  if (uniqueRows.length && !options.diagnosticsOnly) {
+    const supabaseUrl = getEnv("PROJECT_URL")?.trim();
+    const serviceRoleKey = getEnv("SERVICE_ROLE_KEY")?.trim();
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error("Missing PROJECT_URL or SERVICE_ROLE_KEY for daily_picks insert");
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
     // Clear all rows for this sport/date first, not just _pending.
     // This prevents conflicts with previously promoted edge/daily rows too.
     const { error: deleteError } = await supabase
@@ -1812,13 +2176,15 @@ export async function scanSport(sport: string): Promise<{
   // PASS = analyzer-emitted Pass verdicts plus anything that cleared
   // prefilter but never returned from the analyzer. Both are excluded
   // from public pick surfaces.
-  const analyzerSilent = Math.max(0, prefiltered.length - validated.length);
+  const analyzerSilent = Math.max(0, top.length - validated.length);
   tierCounts.pass = passPicks.length + analyzerSilent;
 
   const rejected: Record<string, number> = {
     passVerdict: passPicks.length,
     lowConfidence: drops.conf,
-    missingData: droppedNoGameDate + analyzerSilent,
+    missingData: droppedNoGameDate,
+    notAnalyzedDueToCap: Math.max(0, prefiltered.length - top.length),
+    analyzerSilent,
     contradictoryVerdict: passVerdictBlocked,
   };
   if (sport === "nba") {
@@ -1829,12 +2195,18 @@ export async function scanSport(sport: string): Promise<{
     }).length;
   }
 
+  const canonicalFinalizedCount = validated.filter(
+    (p) => (p.model_diagnostics ?? {}).confidenceSource === "analyzer",
+  ).length;
+  const edgeSelectedCount = uniqueRows.filter((r) => r.tier === "edge").length;
+
   console.log(
     `[${sport}] games=${stats.games} scheduled=${stats.scheduled_games} ` +
     `events=${stats.events} players=${stats.players} ` +
     `propLines=${stats.propLines} lines=${stats.lines} ` +
     `candidates=${stats.candidates} scanned=${scanned} ` +
     `prefiltered=${prefiltered.length} validated=${validated.length} ` +
+    `analyzerPool=${top.length}/${prefiltered.length} cap=${analyzerPoolCap} ` +
     `inserted=${inserted} droppedNoGameDate=${droppedNoGameDate} ` +
     `tiers=${JSON.stringify(tierCounts)} ` +
     `rejected=${JSON.stringify(rejected)} ` +
@@ -1851,5 +2223,21 @@ export async function scanSport(sport: string): Promise<{
     rejected,
     analyzer: analyzerDiagnostics,
     droppedNoGameDate,
+    diagnostics_only: options.diagnosticsOnly === true,
+    rejected_low_confidence_top_25: rejectedLowConfidenceTop,
+    rejected_missing_data_top_25: rejectedMissingDataTop,
+    analyzer_error_candidates: analyzerErrorCandidates,
+    target_trace_results: traceResults,
+    candidate_pool_size_before_analyzer: prefiltered.length,
+    candidate_pool_size_after_analyzer: top.length,
+    canonical_finalized_count: canonicalFinalizedCount,
+    edge_selected_count: edgeSelectedCount,
+    analyzer_pool_cap: analyzerPoolCap,
+    analyzer_pool_selected_count: top.length,
+    analyzer_calls_attempted: analyzerDiagnostics.callsAttempted,
+    analyzer_calls_succeeded: analyzerDiagnostics.callsSucceeded,
+    analyzer_calls_failed: analyzerDiagnostics.callsFailed,
+    analyzer_pool_truncated: analyzerPool.truncated,
+    analyzer_pool_excluded_candidates: analyzerPoolExcluded,
   };
 }

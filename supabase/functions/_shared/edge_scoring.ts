@@ -49,6 +49,7 @@ import {
   scoredVerdictToCanonical,
   type CanonicalVerdict,
 } from "./canonical_verdict.ts";
+import { normalizeNbaPropType } from "./prop_normalization.ts";
 
 export interface ScoredPlay {
   sport: string;
@@ -103,7 +104,7 @@ const HIGH_RELIABILITY_PROPS = new Set([
   "passing_yards", "rushing_yards", "receiving_yards", // NFL core (future)
 ]);
 const MID_RELIABILITY_PROPS = new Set([
-  "threes", "three_pointers_made", "pra", "pts_reb_ast",
+  "3-pointers", "threes", "three_pointers_made", "pra", "pts_reb_ast",
   "rbi", "runs", "singles",
   "points_nhl", "saves",
 ]);
@@ -194,7 +195,7 @@ export function evaluateNbaEdgeGate(p: ScoredPlay): NbaEdgeGateResult {
     ? normalizeCanonicalVerdict(md.stored_verdict, storedConfidence)
     : canonicalVerdict;
 
-  const propKey = (p.prop_type || "").toLowerCase().replace(/\s+/g, "_");
+  const propKey = normalizeNbaPropType(p.prop_type).replace(/\s+/g, "_");
   const isHighVariance = NBA_HIGH_VARIANCE_KEYS.has(propKey);
   const isLowLine = typeof p.line === "number" && p.line <= NBA_LOW_LINE_MAX;
   const confidence01 = canonicalConfidence / 100;
@@ -413,6 +414,120 @@ export function selectNbaEdgePool(
   return { edgeKeySet, gateCache, poolDiagnostics };
 }
 
+export const NBA_ANALYZER_CAP_DEFAULT = 80;
+export const NBA_ANALYZER_CAP_HARD_MAX = 100;
+
+export function resolveNbaAnalyzerCap(raw: unknown): number {
+  const parsed = typeof raw === "number"
+    ? raw
+    : typeof raw === "string" && raw.trim()
+      ? Number.parseInt(raw.trim(), 10)
+      : NBA_ANALYZER_CAP_DEFAULT;
+
+  if (!Number.isFinite(parsed) || parsed <= 0) return NBA_ANALYZER_CAP_DEFAULT;
+  return Math.min(NBA_ANALYZER_CAP_HARD_MAX, Math.max(1, Math.floor(parsed)));
+}
+
+export interface AnalyzerPoolCandidate {
+  sport: string;
+  player_name: string;
+  prop_type: string;
+  direction: string;
+  line: number;
+  confidence: number;
+  edge: number;
+  quality_score: number;
+}
+
+export interface AnalyzerPoolExcludedCandidate {
+  player_name: string;
+  prop_type: string;
+  direction: string;
+  line: number;
+  confidence: number;
+  edge: number;
+  quality_score: number;
+  exclusion_reason: "analyzer_pool_cap_exceeded";
+}
+
+export function candidateDiagnostic<T extends AnalyzerPoolCandidate>(
+  p: T,
+  exclusionReason: "analyzer_pool_cap_exceeded",
+): AnalyzerPoolExcludedCandidate {
+  return {
+    player_name: p.player_name,
+    prop_type: p.prop_type,
+    direction: p.direction,
+    line: p.line,
+    confidence: Math.round(p.confidence * 1000) / 1000,
+    edge: Math.round(p.edge * 10000) / 10000,
+    quality_score: Math.round(p.quality_score * 10000) / 10000,
+    exclusion_reason: exclusionReason,
+  };
+}
+
+export function missingDataFieldsForCandidate(p: {
+  player_name?: string | null;
+  prop_type?: string | null;
+  direction?: string | null;
+  line?: number | null;
+  odds?: number | null;
+  game_date?: string | null;
+  commence_time?: string | null;
+}): string[] {
+  const missing: string[] = [];
+  if (!p.player_name) missing.push("player_name");
+  if (!p.prop_type) missing.push("prop_type");
+  if (!p.direction) missing.push("direction");
+  if (!Number.isFinite(Number(p.line))) missing.push("line");
+  if (!Number.isFinite(Number(p.odds))) missing.push("odds");
+  if (!p.game_date && !p.commence_time) missing.push("game_date");
+  return missing;
+}
+
+export function lowConfidenceRejectionDiagnostic<T extends AnalyzerPoolCandidate>(
+  p: T,
+  threshold: number,
+  features: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    threshold,
+    confidence: Math.round(p.confidence * 1000) / 1000,
+    edge: Math.round(p.edge * 10000) / 10000,
+    quality_score: Math.round(p.quality_score * 10000) / 10000,
+    ...features,
+  };
+}
+
+export function selectNbaAnalyzerPool<T extends AnalyzerPoolCandidate>(
+  candidates: T[],
+  cap: number,
+): {
+  selected: T[];
+  excluded: AnalyzerPoolExcludedCandidate[];
+  truncated: boolean;
+} {
+  const resolvedCap = resolveNbaAnalyzerCap(cap);
+  const sorted = [...candidates].sort((a, b) => {
+    const qualityDiff = b.quality_score - a.quality_score;
+    if (Math.abs(qualityDiff) > 0.000001) return qualityDiff;
+    const confDiff = b.confidence - a.confidence;
+    if (Math.abs(confDiff) > 0.000001) return confDiff;
+    return b.edge - a.edge;
+  });
+
+  const selected = sorted.slice(0, resolvedCap);
+  const excluded = sorted
+    .slice(resolvedCap)
+    .map((p) => candidateDiagnostic(p, "analyzer_pool_cap_exceeded"));
+
+  return {
+    selected,
+    excluded,
+    truncated: excluded.length > 0,
+  };
+}
+
 export function getMarketReliability(
   betType: string,
   propType: string,
@@ -429,15 +544,16 @@ export function getMarketReliability(
   if (betType === "total") return 0.78;
 
   // Player props — normalize key
-  const key = (propType || "").toLowerCase().replace(/\s+/g, "_");
+  const normalizedProp = normalizeNbaPropType(propType);
+  const key = normalizedProp.replace(/\s+/g, "_");
 
   // Special: under on volatile counting stats is the worst signal
   const isUnder = (direction || "").toLowerCase() === "under";
   if (LOW_RELIABILITY_PROPS.has(key)) {
     return isUnder ? 0.4 : 0.55;
   }
-  if (MID_RELIABILITY_PROPS.has(key)) return 0.75;
-  if (HIGH_RELIABILITY_PROPS.has(key)) return 0.95;
+  if (MID_RELIABILITY_PROPS.has(normalizedProp) || MID_RELIABILITY_PROPS.has(key)) return 0.75;
+  if (HIGH_RELIABILITY_PROPS.has(normalizedProp) || HIGH_RELIABILITY_PROPS.has(key)) return 0.95;
 
   // Unknown prop — treat as mid-low
   return 0.65;
@@ -462,7 +578,7 @@ export function tierVerdict(
   direction: string,
   odds: number,
 ): "Strong" | "Lean" | "Pass" {
-  const key = (propType || "").toLowerCase().replace(/\s+/g, "_");
+  const key = normalizeNbaPropType(propType).replace(/\s+/g, "_");
   const isUnder = (direction || "").toLowerCase() === "under";
 
   // Absolute longshot cap — never surface +LONGSHOT_ODDS_MAX or longer.

@@ -8,7 +8,19 @@ const corsHeaders = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
-    const result = await scanSport("nba");
+    let body: any = {};
+    if (req.method === "POST") {
+      try {
+        body = await req.json();
+      } catch {
+        body = {};
+      }
+    }
+
+    const result = await scanSport("nba", {
+      diagnosticsOnly: body?.diagnostics_only === true,
+      traceTargets: Array.isArray(body?.trace_targets) ? body.trace_targets : [],
+    });
     return new Response(JSON.stringify(result), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

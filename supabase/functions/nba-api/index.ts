@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { callAI, AIProviderError, ANTI_GENERIC_INSTRUCTION } from "../_shared/ai-provider.ts";
 import { normalizeNbaTeam } from "../_shared/nba_teams.ts";
 import { normalizeCanonicalVerdict, normalizeConfidencePercent } from "../_shared/canonical_verdict.ts";
+import { normalizeDirection, normalizeNbaPropType } from "../_shared/prop_normalization.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -324,7 +325,7 @@ function detectNbaPropCategory(propType: string | null | undefined): NbaPropProf
   if (p.includes("steal") || p.includes("block") || p === "stl_blk" || p === "stocks") return "steals_blocks";
   if (p === "rebounds" || p.includes("rebound")) return "rebounds";
   if (p === "assists" || p.includes("assist")) return "assists";
-  if (p.includes("three") || p === "3pm" || p === "3pa" || p === "threes") return "threes";
+  if (p.includes("three") || p.includes("3_pointer") || p === "3-pointers" || p === "3pm" || p === "3pa" || p === "3pt" || p === "threes") return "threes";
   if (p === "ftm" || p.includes("free_throws_made")) return "ftm";
   if (p === "fta" || p.includes("free_throw_attempt")) return "fta";
   if (p === "pra" || p === "pr" || p === "pa" || p === "ra" || p === "pts_reb_ast" || p.includes("+")) return "combo";
@@ -3477,6 +3478,8 @@ async function analyzeProp(
   eventAwayTeam?: string | null,
 ) {
   const cfg = getEspnConfig(sport || "nba");
+  propType = cfg.searchLeague === "nba" ? normalizeNbaPropType(propType) : String(propType || "");
+  overUnder = normalizeDirection(overUnder);
   const matches = await searchPlayers(playerName, cfg);
   if (!matches.length) return { error: `Player '${playerName}' not found.` };
 
