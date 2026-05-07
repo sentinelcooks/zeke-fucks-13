@@ -435,6 +435,8 @@ const FreePicksPage = () => {
                         navigate('/dashboard/analyze', {
                           state: {
                             autoAnalyze: true,
+                            entrySource: 'picks' as const,
+                            daily_picks_id: pick.id,
                             sport: pick.sport,
                             player: pick.player_name,
                             prop_type: pick.prop_type,
@@ -444,12 +446,19 @@ const FreePicksPage = () => {
                             pick_snapshot: {
                               confidence: scoreOf(pick),
                               verdict: normalizeVerdict(pick.verdict, scoreOf(pick)),
+                              hit_rate: pick.hit_rate ?? null,
                               confidenceSource: pick.sport === "nba" ? "analyzer" : "scanner",
                               sourceContractVersion: "canonical.v1",
                               reasoning: pick.reasoning ?? null,
                               avg_value: pick.avg_value ?? null,
                               odds: pick.odds ?? null,
                               tier: pick.tier ?? null,
+                              team: (pick as any).team ?? null,
+                              opponent: pick.opponent ?? null,
+                              prop_type: pick.prop_type,
+                              line: pick.line,
+                              direction: pick.direction,
+                              model_diagnostics: (pick as any).model_diagnostics ?? null,
                             },
                           },
                         });

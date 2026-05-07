@@ -29,6 +29,7 @@ import { StrengthWeakness } from "@/components/mobile/StrengthWeakness";
 import { InjuryStatusBadge } from "@/components/mobile/InjuryStatusBadge";
 import { formatPropType } from "@/lib/formatPickLabel";
 import { normalizeConfidencePercent, normalizeVerdict } from "@/lib/matchupGrade";
+import { isSavedPickPayload, mapSavedPickToView, type SavedDailyPickRow } from "@/lib/savedPick";
 
 import { Bar } from "react-chartjs-2";
 import {
@@ -446,6 +447,7 @@ const NbaPropsPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [results, setResults] = useState<any>(null);
+  const [savedPickMode, setSavedPickMode] = useState<"none" | "loading" | "ready">("none");
   const [snapshotAvgValue, setSnapshotAvgValue] = useState<number | null>(null);
   const [corrProps, setCorrProps] = useState<Array<{ correlated_player: string; correlated_prop: string; correlated_line?: number; correlated_team: string | null; hit_rate: number; sample_size: number; is_opponent?: boolean; reasoning?: string }>>([]);
   const [corrLoading, setCorrLoading] = useState(false);
@@ -530,7 +532,7 @@ const NbaPropsPage = () => {
 
     if (!autoAnalyzePrefillRef.current) {
       setPlayer(""); setResults(null); setError(""); setOpponent(""); setLine(""); setSnapshotAvgValue(null);
-      setFighter1(""); setFighter2("");
+      setFighter1(""); setFighter2(""); setSavedPickMode("none");
     }
 
     if (!autoAnalyzePrefillRef.current) {
@@ -543,6 +545,8 @@ const NbaPropsPage = () => {
   useEffect(() => {
     const navState = location.state as {
       autoAnalyze?: boolean;
+      entrySource?: "todays_edge" | "picks" | "direct";
+      daily_picks_id?: string | null;
       player?: string;
       prop_type?: string;
       line?: number;
@@ -552,12 +556,18 @@ const NbaPropsPage = () => {
       pick_snapshot?: {
         confidence?: number;      // phase-c.v1: always percent-scale after ModernHomeLayout normalization
         verdict?: string;
-        confidenceSource?: 'scanner' | 'analyzer';
+        hit_rate?: number | null;
+        confidenceSource?: 'scanner' | 'analyzer' | 'saved_daily_pick';
         sourceContractVersion?: string;
         reasoning?: string | null;
         avg_value?: number | null;
         odds?: string | null;
         tier?: string | null;
+        team?: string | null;
+        opponent?: string | null;
+        prop_type?: string | null;
+        line?: number | string | null;
+        direction?: string | null;
         model_diagnostics?: Record<string, unknown> | null;
       };
     } | null;
@@ -597,6 +607,10 @@ const NbaPropsPage = () => {
 
       window.history.replaceState({}, "");
 
+      const isSavedPick = isSavedPickPayload(navState as any);
+      if (isSavedPick) setSavedPickMode("loading");
+      else setSavedPickMode("none");
+
       setTimeout(async () => {
         setLoading(true); setError(""); setResults(null); setCorrProps([]); setSnapshotAvgValue(null);
         try {
@@ -610,30 +624,97 @@ const NbaPropsPage = () => {
             navState.pick_snapshot?.sourceContractVersion?.startsWith("canonical.") ||
             navState.pick_snapshot?.confidenceSource === "analyzer";
 
-          if (s !== "nba" && savedConf != null && savedVerdict) {
+          // ── SAVED-PICK MODE: canonical daily_picks row is the source of truth.
+          // Never call analyzeProp() here — for any sport. This preserves the
+          // already-fixed NBA saved-pick behavior and extends it to MLB/NHL/UFC.
+          if (isSavedPick) {
+            let row: SavedDailyPickRow | null = null;
+            if (navState.daily_picks_id) {
+              try {
+                const { data: rowData } = await supabase
+                  .from("daily_picks")
+                  .select("*")
+                  .eq("id", navState.daily_picks_id)
+                  .maybeSingle();
+                if (rowData) row = rowData as unknown as SavedDailyPickRow;
+              } catch {
+                // fall back to snapshot
+              }
+            }
+
+            const view = mapSavedPickToView({
+              row,
+              snapshot: navState.pick_snapshot ?? null,
+              navState: navState as any,
+            });
+
+            console.info("[detail-entry]", {
+              source: "saved_daily_pick",
+              entry_path: navState.entrySource ?? "direct",
+              sport: s,
+              tier: navState.pick_snapshot?.tier ?? row?.tier ?? null,
+              daily_picks_id: navState.daily_picks_id ?? null,
+              stored_confidence: navState.pick_snapshot?.confidence ?? null,
+              stored_hit_rate: navState.pick_snapshot?.hit_rate ?? null,
+              stored_verdict: navState.pick_snapshot?.verdict ?? null,
+              final_confidence: view?.confidence ?? null,
+              final_verdict: view?.verdict ?? null,
+              saved_pick_mapper_used: !!view,
+              fresh_analyzer_skipped: true,
+            });
+
+            if (!view) {
+              setError("This saved pick is incomplete. Please refresh.");
+              setSavedPickMode("none");
+              return;
+            }
+
+            const meta = (row?.metadata ?? {}) as Record<string, any>;
             setResults({
               sport: s,
-              player: { full_name: navState.player },
-              player_name: navState.player,
+              player: { full_name: view.player_name, image_url: view.player_image_url ?? undefined },
+              player_name: view.player_name,
               prop_type: nextPropType,
               prop_display: formatPropType(nextPropType),
-              line: navState.line || 0,
-              over_under: navState.over_under || "over",
-              opponent: resolvedOpponent || undefined,
-              confidence: savedConf,
-              verdict: savedVerdict,
-              reasoning: savedReasoning,
+              line: view.line || navState.line || 0,
+              over_under: view.direction,
+              opponent: resolvedOpponent || view.opponent || undefined,
+              team: view.team ?? undefined,
+              confidence: view.confidence,
+              verdict: view.verdict,
+              odds: view.odds ?? undefined,
+              edge: view.edge ?? undefined,
+              season_hit_rate: meta.season_hit_rate ?? null,
+              last_5_hit_rate: meta.last_5_hit_rate ?? null,
+              last_10_hit_rate: meta.last_10_hit_rate ?? null,
+              reasoning: savedReasoning.length > 0
+                ? savedReasoning
+                : (view.reasoning ? splitSavedReasoning(view.reasoning) : null),
               _savedSnapshot: {
-                confidence: savedConf,
-                verdict: savedVerdict,
-                confidenceSource: navState.pick_snapshot?.confidenceSource ?? "scanner",
-                sourceContractVersion: navState.pick_snapshot?.sourceContractVersion ?? "canonical.v1",
+                confidence: view.confidence,
+                verdict: view.verdict,
+                confidenceSource: "saved_daily_pick" as const,
+                sourceContractVersion: "canonical.v1" as const,
               },
               _savedCanonicalOnly: true,
             });
             if (navState.pick_snapshot?.avg_value != null) setSnapshotAvgValue(navState.pick_snapshot.avg_value);
+            setSavedPickMode("ready");
             return;
           }
+
+          console.info("[detail-entry]", {
+            source: "fresh_manual_analysis",
+            entry_path: navState.entrySource ?? "direct",
+            sport: s,
+            tier: null,
+            daily_picks_id: null,
+            stored_confidence: null,
+            stored_hit_rate: null,
+            stored_verdict: null,
+            saved_pick_mapper_used: false,
+            fresh_analyzer_skipped: false,
+          });
 
           const data = await analyzeProp({
             player: navState.player!,
@@ -2023,13 +2104,23 @@ const NbaPropsPage = () => {
                 </motion.button>
               )}
 
-              <div className="grid grid-cols-4 gap-2">
-                <StatPill label="Season" value={results.season_hit_rate?.avg ?? "--"} delay={0.2} />
-                <StatPill label="L10" value={results.last_10?.avg ?? "--"} delay={0.25} />
-                <StatPill label="L5" value={results.last_5?.avg ?? "--"} delay={0.3} />
-                
-                <StatPill label={`vs ${h2h.opponent || results.next_game?.opponent_name || "OPP"}`} value={h2h.avg ?? "--"} delay={0.35} />
-              </div>
+              {(() => {
+                const savedOnly = results._savedCanonicalOnly === true;
+                const hasAnyRate =
+                  results.season_hit_rate?.rate != null ||
+                  results.last_10?.rate != null ||
+                  results.last_5?.rate != null ||
+                  h2h.rate != null;
+                if (savedOnly && !hasAnyRate) return null;
+                return (
+                  <div className="grid grid-cols-4 gap-2">
+                    <StatPill label="Season" value={results.season_hit_rate?.avg ?? "--"} delay={0.2} />
+                    <StatPill label="L10" value={results.last_10?.avg ?? "--"} delay={0.25} />
+                    <StatPill label="L5" value={results.last_5?.avg ?? "--"} delay={0.3} />
+                    <StatPill label={`vs ${h2h.opponent || results.next_game?.opponent_name || "OPP"}`} value={h2h.avg ?? "--"} delay={0.35} />
+                  </div>
+                );
+              })()}
 
               {/* Season averages detail row */}
               {results.season_averages && (
@@ -2064,14 +2155,25 @@ const NbaPropsPage = () => {
                 </motion.div>
               )}
 
-              <Section title="Hit Rates" icon={<Target className="w-3.5 h-3.5" />}>
-                <div className="flex justify-between gap-1 px-0 py-2">
-                  <HitRateRing rate={results.season_hit_rate?.rate || 0} hits={results.season_hit_rate?.hits || 0} total={results.season_hit_rate?.total || 0} label="Season" delay={0} />
-                  <HitRateRing rate={results.last_10?.rate || 0} hits={results.last_10?.hits || 0} total={results.last_10?.total || 0} label="L10" delay={0.1} />
-                  <HitRateRing rate={results.last_5?.rate || 0} hits={results.last_5?.hits || 0} total={results.last_5?.total || 0} label="L5" delay={0.2} />
-                  <HitRateRing rate={h2h.rate || 0} hits={h2h.hits || 0} total={h2h.total || 0} label={`vs ${h2h.opponent || results.next_game?.opponent_name || "OPP"}`} delay={0.3} />
-                </div>
-              </Section>
+              {(() => {
+                const savedOnly = results._savedCanonicalOnly === true;
+                const hasAnyRate =
+                  results.season_hit_rate?.rate != null ||
+                  results.last_10?.rate != null ||
+                  results.last_5?.rate != null ||
+                  h2h.rate != null;
+                if (savedOnly && !hasAnyRate) return null;
+                return (
+                  <Section title="Hit Rates" icon={<Target className="w-3.5 h-3.5" />}>
+                    <div className="flex justify-between gap-1 px-0 py-2">
+                      <HitRateRing rate={results.season_hit_rate?.rate || 0} hits={results.season_hit_rate?.hits || 0} total={results.season_hit_rate?.total || 0} label="Season" delay={0} />
+                      <HitRateRing rate={results.last_10?.rate || 0} hits={results.last_10?.hits || 0} total={results.last_10?.total || 0} label="L10" delay={0.1} />
+                      <HitRateRing rate={results.last_5?.rate || 0} hits={results.last_5?.hits || 0} total={results.last_5?.total || 0} label="L5" delay={0.2} />
+                      <HitRateRing rate={h2h.rate || 0} hits={h2h.hits || 0} total={h2h.total || 0} label={`vs ${h2h.opponent || results.next_game?.opponent_name || "OPP"}`} delay={0.3} />
+                    </div>
+                  </Section>
+                );
+              })()}
 
               <Section title="Odds & EV Analysis" icon={<Zap className="w-3.5 h-3.5" />}>
                 <OddsProjection

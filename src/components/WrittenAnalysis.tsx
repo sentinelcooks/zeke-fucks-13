@@ -652,14 +652,11 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
                   )}
                 </motion.div>
 
-                {/* Confidence footer */}
+                {/* Footer */}
                 <div className="pt-3 border-t border-border/10 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className={`w-2 h-2 rounded-full ${confPct >= 72 ? "bg-nba-green" : confPct >= 58 ? "bg-nba-blue" : confPct >= 42 ? "bg-nba-yellow" : "bg-nba-red"} animate-pulse`} />
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/65">
-                        Canonical Confidence: {confPct}% — {resolvedProps.verdict}
-                      </span>
                     </div>
                     <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground/50">
                       Powered by Sentinel AI

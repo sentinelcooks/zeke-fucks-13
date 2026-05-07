@@ -86,6 +86,12 @@ export interface AnalyzeRequest {
   sport?: string;
 }
 
+/**
+ * Fresh manual analysis. MLB/NHL/UFC are intentionally unsupported here —
+ * those sports rely on canonical saved daily_picks rows. Saved-pick callers
+ * MUST branch into the saved-pick path (see NbaPropsPage saved-pick mode)
+ * and never reach this function.
+ */
 export async function analyzeProp(data: AnalyzeRequest) {
   if (data.sport && data.sport !== "nba") {
     return {

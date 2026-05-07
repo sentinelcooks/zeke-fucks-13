@@ -862,6 +862,8 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                             navigate('/dashboard/analyze', {
                               state: {
                                 autoAnalyze: true,
+                                entrySource: 'todays_edge' as const,
+                                daily_picks_id: pick.id,
                                 sport: pick.sport,
                                 player: pick.player_name,
                                 prop_type: pick.prop_type,
@@ -870,14 +872,20 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                                 opponent: pick.opponent || '',
                                 pick_snapshot: {
                                   // phase-c.v1: always percent-scale so every reader agrees
-                                  confidence: confPercent || undefined,
+                                  confidence: confPercent,
                                   verdict: canonicalVerdict,
-                                  confidenceSource: savedCanonical && pick.sport === 'nba' ? 'analyzer' as const : 'scanner' as const,
-                                  sourceContractVersion: savedCanonical ? 'canonical.v1' as const : 'legacy.scanner' as const,
+                                  hit_rate: pick.hit_rate ?? null,
+                                  confidenceSource: pick.sport === 'nba' ? 'analyzer' as const : 'scanner' as const,
+                                  sourceContractVersion: 'canonical.v1' as const,
                                   reasoning: pick.reasoning ?? null,
-                                  avg_value: pick.avg_value ?? null,
+                                  avg_value: (pick as any).avg_value ?? null,
                                   odds: pick.odds ?? null,
                                   tier: pick.tier ?? null,
+                                  team: pick.team ?? null,
+                                  opponent: pick.opponent ?? null,
+                                  prop_type: pick.prop_type,
+                                  line: pick.line,
+                                  direction: pick.direction,
                                   model_diagnostics: pick.model_diagnostics ?? null,
                                 },
                               },
