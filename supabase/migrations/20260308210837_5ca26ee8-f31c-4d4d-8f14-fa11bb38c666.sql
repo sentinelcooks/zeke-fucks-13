@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS public.fingerprint_log (
 );
 
 ALTER TABLE public.fingerprint_log ENABLE ROW LEVEL SECURITY;
-
+DROP POLICY IF EXISTS "Service role full access" ON public.fingerprint_log;
 CREATE POLICY "Service role full access" ON public.fingerprint_log
   AS RESTRICTIVE FOR ALL TO service_role
   USING (true) WITH CHECK (true);

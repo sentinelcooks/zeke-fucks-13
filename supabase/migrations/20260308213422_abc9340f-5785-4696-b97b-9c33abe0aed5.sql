@@ -1,5 +1,5 @@
 
-CREATE TABLE public.pick_history (
+CREATE TABLE IF NOT EXISTS public.pick_history (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   license_key text NOT NULL,
   pick_id uuid REFERENCES public.daily_picks(id) ON DELETE SET NULL,

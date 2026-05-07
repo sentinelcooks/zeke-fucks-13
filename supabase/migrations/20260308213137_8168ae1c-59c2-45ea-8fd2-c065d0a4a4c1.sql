@@ -1,5 +1,5 @@
 
-CREATE TABLE public.daily_picks (
+CREATE TABLE IF NOT EXISTS public.daily_picks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   pick_date date NOT NULL DEFAULT CURRENT_DATE,
   sport text NOT NULL DEFAULT 'nba',
@@ -19,16 +19,16 @@ CREATE TABLE public.daily_picks (
 );
 
 ALTER TABLE public.daily_picks ENABLE ROW LEVEL SECURITY;
-
+DROP POLICY IF EXISTS "Anyone can read daily picks" ON public.daily_picks;
 CREATE POLICY "Anyone can read daily picks"
   ON public.daily_picks FOR SELECT
   TO anon, authenticated
   USING (true);
-
+DROP POLICY IF EXISTS "Service role full access on daily_picks" ON public.daily_picks;
 CREATE POLICY "Service role full access on daily_picks"
   ON public.daily_picks FOR ALL
   TO service_role
   USING (true)
   WITH CHECK (true);
 
-CREATE INDEX idx_daily_picks_date ON public.daily_picks(pick_date DESC);
+CREATE INDEX IF NOT EXISTS idx_daily_picks_date ON public.daily_picks(pick_date DESC);
