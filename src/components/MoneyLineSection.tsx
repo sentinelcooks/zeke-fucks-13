@@ -1727,111 +1727,12 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
             )}
           </div>
 
-          {/* Odds & Value Card */}
-          {results.odds && !results.odds.unavailable && results.odds.bestBook ? (
-            <div className="vision-card p-4 relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(158,64%,52%,0.2), transparent)' }} />
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{
-                  background: results.odds.ev >= 0
-                    ? 'linear-gradient(135deg, hsl(158 64% 52%), hsl(158 64% 40%))'
-                    : 'linear-gradient(135deg, hsl(0 72% 51%), hsl(0 72% 40%))',
-                  boxShadow: results.odds.ev >= 0
-                    ? '0 4px 12px -2px hsla(158,64%,52%,0.25)'
-                    : '0 4px 12px -2px hsla(0,72%,51%,0.25)',
-                }}>
-                  <DollarSign className="w-3.5 h-3.5 text-white" />
-                </div>
-                <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">Odds & Value</span>
-                <div className={`ml-auto px-2.5 py-1 rounded-full text-[10px] font-extrabold ${
-                  results.odds.ev >= 5 ? "text-nba-green" : results.odds.ev >= 0 ? "text-nba-yellow" : "text-nba-red"
-                }`} style={{
-                  background: results.odds.ev >= 5
-                    ? 'hsla(158, 64%, 52%, 0.1)'
-                    : results.odds.ev >= 0
-                    ? 'hsla(43, 96%, 56%, 0.1)'
-                    : 'hsla(0, 72%, 51%, 0.1)',
-                  border: `1px solid ${
-                    results.odds.ev >= 5
-                      ? 'hsla(158, 64%, 52%, 0.2)'
-                      : results.odds.ev >= 0
-                      ? 'hsla(43, 96%, 56%, 0.2)'
-                      : 'hsla(0, 72%, 51%, 0.2)'
-                  }`,
-                }}>
-                  {results.odds.ev >= 0 ? "+" : ""}{results.odds.ev.toFixed(1)}% EV
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                <div className="text-center p-3 rounded-xl" style={{ background: 'hsla(228, 20%, 10%, 0.4)', border: '1px solid hsla(228, 30%, 18%, 0.2)' }}>
-                  <span className="block text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 mb-1">Model Prob</span>
-                  <span className="block text-lg font-extrabold text-accent">{results.odds.impliedProb}%</span>
-                </div>
-                <div className="text-center p-3 rounded-xl" style={{ background: 'hsla(228, 20%, 10%, 0.4)', border: '1px solid hsla(228, 30%, 18%, 0.2)' }}>
-                  <span className="block text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 mb-1">Best Odds</span>
-                  <span className="block text-lg font-extrabold text-foreground">
-                    {formatOdds(results.odds.bestBook.odds, oddsFormat)}
-                  </span>
-                </div>
-                <div className="text-center p-3 rounded-xl" style={{ background: 'hsla(228, 20%, 10%, 0.4)', border: '1px solid hsla(228, 30%, 18%, 0.2)' }}>
-                  <span className="block text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 mb-1">Best Book</span>
-                  <span className="block text-sm font-extrabold text-foreground truncate">{results.odds.bestBook.book}</span>
-                </div>
-              </div>
-
-              {/* Disambiguation: surface when best odds, best line, and best EV differ */}
-              {results.odds.agree === false && results.odds.bestOddsObj && results.odds.bestLineObj && (
-                <div className="mb-3 p-2.5 rounded-xl space-y-1.5" style={{ background: 'hsla(43,96%,56%,0.05)', border: '1px solid hsla(43,96%,56%,0.15)' }}>
-                  <span className="text-[8px] font-bold uppercase tracking-wider text-nba-yellow/70">Books differ — breakdown</span>
-                  <div className="grid grid-cols-3 gap-1.5 text-center">
-                    <div>
-                      <span className="block text-[7px] text-muted-foreground/50 uppercase tracking-wider mb-0.5">Best Line</span>
-                      <span className="block text-[10px] font-bold text-foreground/80 truncate">{results.odds.bestLineObj.book}</span>
-                      {results.odds.bestLineObj.point != null && (
-                        <span className="block text-[9px] text-muted-foreground/60">{results.odds.bestLineObj.point > 0 ? "+" : ""}{results.odds.bestLineObj.point}</span>
-                      )}
-                    </div>
-                    <div>
-                      <span className="block text-[7px] text-muted-foreground/50 uppercase tracking-wider mb-0.5">Best Odds</span>
-                      <span className="block text-[10px] font-bold text-foreground/80 truncate">{results.odds.bestOddsObj.book}</span>
-                      <span className="block text-[9px] text-muted-foreground/60">{formatOdds(results.odds.bestOddsObj.odds, oddsFormat)}</span>
-                    </div>
-                    <div>
-                      <span className="block text-[7px] text-muted-foreground/50 uppercase tracking-wider mb-0.5">Recommended</span>
-                      <span className="block text-[10px] font-bold text-nba-green truncate">{results.odds.bestBook.book}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {results.odds.allBooks && results.odds.allBooks.length > 1 && (
-                <div className="space-y-1.5">
-                  <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45">All Books</span>
-                  {results.odds.allBooks.map((b: any, i: number) => (
-                    <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded-lg" style={{ background: 'hsla(228,20%,10%,0.3)' }}>
-                      <span className="text-[11px] font-semibold text-foreground/80">{b.book}</span>
-                      <span className={`text-[12px] font-extrabold tabular-nums ${
-                        i === 0 ? "text-nba-green" : "text-foreground/70"
-                      }`}>
-                        {formatOdds(b.odds, oddsFormat)}
-                        {b.point != null && <span className="text-muted-foreground/50 ml-1">({b.point > 0 ? "+" : ""}{b.point})</span>}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <p className="text-[8px] text-muted-foreground/40 text-center mt-3 pt-2" style={{ borderTop: '1px solid hsla(228, 18%, 18%, 0.2)' }}>
-                EV = (Model Prob × Decimal Odds − 1) × 100 · Positive EV = edge over the market
-              </p>
-            </div>
-          ) : (
+          {(!results.odds || results.odds.unavailable || !results.odds.bestBook) && (
             <div className="vision-card p-4">
               <div className="flex items-start gap-2 text-muted-foreground/70">
                 <AlertTriangle className="w-4 h-4 text-nba-yellow shrink-0 mt-0.5" />
                 <p className="text-[11px]">
-                  Live odds for {results.team1?.shortName || results.team1?.name} vs {results.team2?.shortName || results.team2?.name} aren't posted yet. Analysis still uses our model — odds will appear once books publish them.
+                  Live odds for {results.team1?.shortName || results.team1?.name} vs {results.team2?.shortName || results.team2?.name} aren't posted yet. Analysis still uses our model - odds will appear once books publish them.
                 </p>
               </div>
             </div>
