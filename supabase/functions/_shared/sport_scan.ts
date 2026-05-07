@@ -7,9 +7,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import {
   americanToImpliedProb,
+  applyNbaAnalyzerBudget,
   calcEv,
   candidateDiagnostic,
   evaluateNbaEdgeGate,
+  resolveNbaAnalyzerBudget,
   resolveNbaAnalyzerCap,
   scorePrecomputed,
   selectNbaAnalyzerPool,
@@ -128,6 +130,11 @@ interface AnalyzerDiagnostics {
   callsSucceeded: number;
   callsFailed: number;
   failureTypes: Record<AnalyzerFailureType, number>;
+  budgetPerRun: number | null;
+  budgetUsed: number;
+  budgetDeferred: number;
+  rateLimitStop: boolean;
+  lastRetryAfterMs: number | null;
 }
 
 function newAnalyzerDiagnostics(sport: string): AnalyzerDiagnostics {
@@ -141,6 +148,11 @@ function newAnalyzerDiagnostics(sport: string): AnalyzerDiagnostics {
     callsAttempted: 0,
     callsSucceeded: 0,
     callsFailed: 0,
+    budgetPerRun: null,
+    budgetUsed: 0,
+    budgetDeferred: 0,
+    rateLimitStop: false,
+    lastRetryAfterMs: null,
     failureTypes: {
       timeout: 0,
       rate_limited: 0,
@@ -1898,10 +1910,85 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
     );
   }
 
+  // ── Per-run analyzer call budget (NBA) ──
+  // Pool stays at NBA_ANALYZER_CAP (default 80) to preserve diversity, but
+  // only the top NBA_ANALYZER_BUDGET_PER_RUN of that pool actually call the
+  // analyzer. Deferred candidates remain alive as deterministic picks but
+  // are explicitly marked so they cannot be promoted to tier=edge.
+  let runTargets: typeof top = top;
+  let budgetDeferred: typeof top = [];
+  if (sport === "nba") {
+    const budget = resolveNbaAnalyzerBudget(getEnv("NBA_ANALYZER_BUDGET_PER_RUN"));
+    analyzerDiagnostics.budgetPerRun = budget;
+    const enriched = top.map((p) => ({
+      ...p,
+      ev_pct: typeof p.ev_pct === "number" ? p.ev_pct : 0,
+      is_trace_target: matchingTrace(traceResults, p).length > 0,
+    }));
+    const split = applyNbaAnalyzerBudget(enriched, budget);
+    const selectedKeys = new Set(
+      split.selected.map((p) => `${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`),
+    );
+    runTargets = top.filter((p) =>
+      selectedKeys.has(`${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`),
+    );
+    budgetDeferred = top.filter(
+      (p) => !selectedKeys.has(`${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`),
+    );
+    analyzerDiagnostics.budgetUsed = runTargets.length;
+    analyzerDiagnostics.budgetDeferred = budgetDeferred.length;
+
+    for (const p of budgetDeferred) {
+      const md = (p.model_diagnostics ?? {}) as Record<string, unknown>;
+      md.analyzer_skipped_reason = "analyzer_call_budget_exceeded";
+      p.model_diagnostics = md;
+      analyzerPoolExcluded.push(candidateDiagnostic(p, "analyzer_call_budget_exceeded"));
+      for (const tr of matchingTrace(traceResults, p)) {
+        tr.final_rejection_reason = "analyzer_call_budget_exceeded";
+      }
+    }
+    if (budgetDeferred.length > 0) {
+      console.log(
+        `[${sport}] analyzer budget=${budget}; running ${runTargets.length}, deferring ${budgetDeferred.length}`,
+      );
+    }
+  }
+
   const limit = ANALYZER_LIMIT[sport] ?? 1;
-  const rawResults = await mapLimit(top, limit, async (p) => {
+  let rateLimitTripped = false;
+  const rawResults = await mapLimit(runTargets, limit, async (p) => {
+    if (rateLimitTripped) {
+      const md = (p.model_diagnostics ?? {}) as Record<string, unknown>;
+      md.analyzer_skipped_reason = "analyzer_rate_limit_budget_exhausted";
+      p.model_diagnostics = md;
+      analyzerPoolExcluded.push(
+        candidateDiagnostic(p, "analyzer_rate_limit_budget_exhausted"),
+      );
+      for (const tr of matchingTrace(traceResults, p)) {
+        tr.final_rejection_reason = "analyzer_rate_limit_budget_exhausted";
+      }
+      return p; // deterministic candidate stays alive; not edge-eligible
+    }
+    const beforeRateLimited = analyzerDiagnostics.failureTypes.rate_limited;
     try {
-      return await validateWithAnalyzer(p, cache, analyzerDiagnostics, traceResults, analyzerErrorCandidates);
+      const out = await validateWithAnalyzer(
+        p, cache, analyzerDiagnostics, traceResults, analyzerErrorCandidates,
+      );
+      if (
+        sport === "nba" &&
+        analyzerDiagnostics.failureTypes.rate_limited > beforeRateLimited &&
+        !rateLimitTripped
+      ) {
+        rateLimitTripped = true;
+        analyzerDiagnostics.rateLimitStop = true;
+        const lastErr = analyzerErrorCandidates[analyzerErrorCandidates.length - 1];
+        const retryMs = lastErr ? parseRetryAfterMs(null, lastErr.error) : null;
+        analyzerDiagnostics.lastRetryAfterMs = retryMs;
+        console.warn(
+          `[${sport}] analyzer rate-limited; stopping further calls this run (retry_after_ms=${retryMs ?? "?"})`,
+        );
+      }
+      return out;
     } catch (e) {
       analyzerDiagnostics.errors++;
       analyzerDiagnostics.callsFailed++;
@@ -1940,6 +2027,12 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
       return p; // soft failure
     }
   });
+
+  // Budget-deferred candidates were never analyzed but remain valid
+  // deterministic plays. Append them so they can flow into daily/value tiers.
+  for (const p of budgetDeferred) {
+    rawResults.push(p);
+  }
 
   const validated: ScoredPlay[] = [];
   for (const r of rawResults) {
@@ -2019,6 +2112,16 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
     let gatePassRank = 0;
     for (const p of sortedByQuality) {
       const key = tierKey(p);
+      const skipped = (p.model_diagnostics as Record<string, unknown> | null | undefined)
+        ?.analyzer_skipped_reason;
+      if (skipped === "analyzer_call_budget_exceeded" || skipped === "analyzer_rate_limit_budget_exhausted") {
+        edgePoolDiagnostics.set(key, {
+          rank: null,
+          selected: false,
+          selectionReason: String(skipped),
+        });
+        continue;
+      }
       const gate = nbaGateCache.get(key);
       if (!gate?.ok) {
         edgePoolDiagnostics.set(key, {

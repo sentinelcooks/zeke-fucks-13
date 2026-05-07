@@ -439,6 +439,24 @@ export interface AnalyzerPoolCandidate {
   quality_score: number;
 }
 
+export const NBA_ANALYZER_BUDGET_DEFAULT = 25;
+export const NBA_ANALYZER_BUDGET_HARD_MAX = 40;
+
+export function resolveNbaAnalyzerBudget(raw: unknown): number {
+  const parsed = typeof raw === "number"
+    ? raw
+    : typeof raw === "string" && raw.trim()
+      ? Number.parseInt(raw.trim(), 10)
+      : NBA_ANALYZER_BUDGET_DEFAULT;
+  if (!Number.isFinite(parsed) || parsed <= 0) return NBA_ANALYZER_BUDGET_DEFAULT;
+  return Math.min(NBA_ANALYZER_BUDGET_HARD_MAX, Math.max(1, Math.floor(parsed)));
+}
+
+export type AnalyzerExclusionReason =
+  | "analyzer_pool_cap_exceeded"
+  | "analyzer_call_budget_exceeded"
+  | "analyzer_rate_limit_budget_exhausted";
+
 export interface AnalyzerPoolExcludedCandidate {
   player_name: string;
   prop_type: string;
@@ -447,12 +465,12 @@ export interface AnalyzerPoolExcludedCandidate {
   confidence: number;
   edge: number;
   quality_score: number;
-  exclusion_reason: "analyzer_pool_cap_exceeded";
+  exclusion_reason: AnalyzerExclusionReason;
 }
 
 export function candidateDiagnostic<T extends AnalyzerPoolCandidate>(
   p: T,
-  exclusionReason: "analyzer_pool_cap_exceeded",
+  exclusionReason: AnalyzerExclusionReason,
 ): AnalyzerPoolExcludedCandidate {
   return {
     player_name: p.player_name,
@@ -647,6 +665,49 @@ export function selectNbaAnalyzerPoolDiversified<T extends AnalyzerPoolCandidate
     excluded,
     truncated: excluded.length > 0,
     ranks,
+  };
+}
+
+export interface BudgetPriorityCandidate extends AnalyzerPoolCandidate {
+  ev_pct?: number;
+  is_trace_target?: boolean;
+}
+
+export function applyNbaAnalyzerBudget<T extends BudgetPriorityCandidate>(
+  pool: T[],
+  budget: number,
+  threesPropType: string = "3-pointers",
+): { selected: T[]; deferred: T[]; resolvedBudget: number } {
+  const resolvedBudget = resolveNbaAnalyzerBudget(budget);
+  const isThrees = (p: T) =>
+    String(p.prop_type ?? "").toLowerCase() === threesPropType.toLowerCase();
+  const isUnder = (p: T) =>
+    String(p.direction ?? "").toLowerCase() === "under";
+  const score = (p: T): number[] => {
+    const ev = Number.isFinite(p.ev_pct as number) ? (p.ev_pct as number) : 0;
+    return [
+      p.is_trace_target ? 1 : 0,
+      p.quality_score ?? 0,
+      p.confidence ?? 0,
+      p.edge ?? 0,
+      ev > 0 ? 1 : 0,
+      ev,
+      isThrees(p) ? 1 : 0,
+      isUnder(p) ? 1 : 0,
+    ];
+  };
+  const sorted = [...pool].sort((a, b) => {
+    const sa = score(a);
+    const sb = score(b);
+    for (let i = 0; i < sa.length; i++) {
+      if (sa[i] !== sb[i]) return sb[i] - sa[i];
+    }
+    return 0;
+  });
+  return {
+    selected: sorted.slice(0, resolvedBudget),
+    deferred: sorted.slice(resolvedBudget),
+    resolvedBudget,
   };
 }
 
