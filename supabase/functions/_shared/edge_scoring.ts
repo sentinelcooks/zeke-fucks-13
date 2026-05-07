@@ -528,6 +528,128 @@ export function selectNbaAnalyzerPool<T extends AnalyzerPoolCandidate>(
   };
 }
 
+export interface AnalyzerPoolRankInfo {
+  bucket: "quality" | "confidence" | "edge" | "threes" | "under" | "positive_edge";
+  rank: number; // 0-based within bucket of first selection
+}
+
+// Diversified pool selection: reserve slots per orthogonal signal so that
+// moderate-confidence but high-edge / 3-pointer / under candidates are not
+// evicted by a long tail of higher-confidence point-totals.
+// Reserves at cap=80: quality=48, confidence=8, edge=8, threes=5, under=5,
+// positive_edge=6 (sums to 80). For other caps, reserves scale ~ cap/80.
+export function selectNbaAnalyzerPoolDiversified<T extends AnalyzerPoolCandidate>(
+  candidates: T[],
+  cap: number,
+  threesPropType: string = "3-pointers",
+): {
+  selected: T[];
+  excluded: AnalyzerPoolExcludedCandidate[];
+  truncated: boolean;
+  ranks: Map<string, AnalyzerPoolRankInfo>;
+} {
+  const resolvedCap = resolveNbaAnalyzerCap(cap);
+
+  const byQuality = [...candidates].sort((a, b) => {
+    const d = b.quality_score - a.quality_score;
+    if (Math.abs(d) > 1e-6) return d;
+    const c = b.confidence - a.confidence;
+    if (Math.abs(c) > 1e-6) return c;
+    return b.edge - a.edge;
+  });
+  const byConfidence = [...candidates].sort((a, b) => {
+    const d = b.confidence - a.confidence;
+    if (Math.abs(d) > 1e-6) return d;
+    return b.quality_score - a.quality_score;
+  });
+  const byEdge = [...candidates].sort((a, b) => {
+    const d = b.edge - a.edge;
+    if (Math.abs(d) > 1e-6) return d;
+    return b.quality_score - a.quality_score;
+  });
+  const byThrees = [...candidates]
+    .filter((p) => String(p.prop_type ?? "").toLowerCase() === threesPropType.toLowerCase())
+    .sort((a, b) => b.quality_score - a.quality_score);
+  const byUnder = [...candidates]
+    .filter((p) => String(p.direction ?? "").toLowerCase() === "under")
+    .sort((a, b) => {
+      const d = b.quality_score - a.quality_score;
+      if (Math.abs(d) > 1e-6) return d;
+      return b.edge - a.edge;
+    });
+  const byPositiveEdge = [...candidates]
+    .filter((p) => p.edge > 0)
+    .sort((a, b) => {
+      const d = b.edge - a.edge;
+      if (Math.abs(d) > 1e-6) return d;
+      return b.quality_score - a.quality_score;
+    });
+
+  const scale = resolvedCap / 80;
+  const reserves: Array<{ bucket: AnalyzerPoolRankInfo["bucket"]; list: T[]; reserve: number }> = [
+    { bucket: "quality", list: byQuality, reserve: Math.max(1, Math.round(48 * scale)) },
+    { bucket: "confidence", list: byConfidence, reserve: Math.max(1, Math.round(8 * scale)) },
+    { bucket: "edge", list: byEdge, reserve: Math.max(1, Math.round(8 * scale)) },
+    { bucket: "threes", list: byThrees, reserve: Math.max(1, Math.round(5 * scale)) },
+    { bucket: "under", list: byUnder, reserve: Math.max(1, Math.round(5 * scale)) },
+    { bucket: "positive_edge", list: byPositiveEdge, reserve: Math.max(1, Math.round(6 * scale)) },
+  ];
+
+  const keyOf = (p: AnalyzerPoolCandidate) =>
+    `${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`;
+
+  const selectedKeys = new Set<string>();
+  const ranks = new Map<string, AnalyzerPoolRankInfo>();
+  const selected: T[] = [];
+
+  // Greedy: fill each bucket's reserve before topping up.
+  for (const r of reserves) {
+    if (selected.length >= resolvedCap) break;
+    let taken = 0;
+    let bucketRank = 0;
+    for (const p of r.list) {
+      if (taken >= r.reserve) break;
+      if (selected.length >= resolvedCap) break;
+      const k = keyOf(p);
+      if (selectedKeys.has(k)) {
+        bucketRank++;
+        continue;
+      }
+      selectedKeys.add(k);
+      selected.push(p);
+      ranks.set(k, { bucket: r.bucket, rank: bucketRank });
+      taken++;
+      bucketRank++;
+    }
+  }
+
+  // Top up any remaining cap slots from byQuality order.
+  if (selected.length < resolvedCap) {
+    let qRank = 0;
+    for (const p of byQuality) {
+      if (selected.length >= resolvedCap) break;
+      const k = keyOf(p);
+      if (!selectedKeys.has(k)) {
+        selectedKeys.add(k);
+        selected.push(p);
+        ranks.set(k, { bucket: "quality", rank: qRank });
+      }
+      qRank++;
+    }
+  }
+
+  const excluded = candidates
+    .filter((p) => !selectedKeys.has(keyOf(p)))
+    .map((p) => candidateDiagnostic(p, "analyzer_pool_cap_exceeded"));
+
+  return {
+    selected,
+    excluded,
+    truncated: excluded.length > 0,
+    ranks,
+  };
+}
+
 export function getMarketReliability(
   betType: string,
   propType: string,

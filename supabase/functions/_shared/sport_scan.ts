@@ -13,6 +13,8 @@ import {
   resolveNbaAnalyzerCap,
   scorePrecomputed,
   selectNbaAnalyzerPool,
+  selectNbaAnalyzerPoolDiversified,
+  type AnalyzerPoolRankInfo,
   type ScoredPlay,
 } from "./edge_scoring.ts";
 import { stripPropCodes } from "./format_labels.ts";
@@ -106,6 +108,15 @@ const EDGE_CAP_PER_SPORT: Record<string, number> = {
   ufc: 2,
 };
 
+type AnalyzerFailureType =
+  | "timeout"
+  | "rate_limited"
+  | "http_4xx"
+  | "http_5xx"
+  | "empty_response"
+  | "network"
+  | "unknown";
+
 interface AnalyzerDiagnostics {
   endpoint: string | null;
   calls: number;
@@ -116,6 +127,7 @@ interface AnalyzerDiagnostics {
   callsAttempted: number;
   callsSucceeded: number;
   callsFailed: number;
+  failureTypes: Record<AnalyzerFailureType, number>;
 }
 
 function newAnalyzerDiagnostics(sport: string): AnalyzerDiagnostics {
@@ -129,7 +141,41 @@ function newAnalyzerDiagnostics(sport: string): AnalyzerDiagnostics {
     callsAttempted: 0,
     callsSucceeded: 0,
     callsFailed: 0,
+    failureTypes: {
+      timeout: 0,
+      rate_limited: 0,
+      http_4xx: 0,
+      http_5xx: 0,
+      empty_response: 0,
+      network: 0,
+      unknown: 0,
+    },
   };
+}
+
+function classifyAnalyzerFailure(
+  status: number,
+  data: unknown,
+  rateLimited: boolean,
+): AnalyzerFailureType {
+  if (rateLimited) return "rate_limited";
+  if (status === 0) {
+    const errStr = (() => {
+      if (data && typeof data === "object" && "error" in (data as Record<string, unknown>)) {
+        return String((data as Record<string, unknown>).error ?? "");
+      }
+      return typeof data === "string" ? data : "";
+    })();
+    if (errStr === "analyzer_timeout") return "timeout";
+    if (errStr === "fetch_failed") return "network";
+    return "network";
+  }
+  if (status >= 500 && status < 600) return "http_5xx";
+  if (status >= 400 && status < 500) return "http_4xx";
+  if (data == null || (typeof data === "string" && data.trim() === "")) {
+    return "empty_response";
+  }
+  return "unknown";
 }
 
 interface TraceTarget {
@@ -151,10 +197,20 @@ interface TraceResult {
   missingDataFields: string[];
   hardSafetyReason: string[] | null;
   canonical_analyzer_called: boolean;
+  analyzer_called: boolean;
   analyzer_payload: Record<string, unknown> | null;
+  analyzer_http_status: number | null;
   analyzer_confidence: number | null;
   analyzer_verdict: string | null;
   analyzer_error: Record<string, unknown> | null;
+  canonical_confidence: number | null;
+  canonical_verdict: string | null;
+  edge_gate_result: "passed" | "failed" | "not_evaluated" | null;
+  edge_rejection_reasons: string[];
+  edge_pool_rank: number | null;
+  edge_pool_selected: boolean | null;
+  analyzer_pool_bucket: string | null;
+  analyzer_pool_rank: number | null;
   final_tier: string | null;
   final_rejection_reason: string | null;
 }
@@ -172,6 +228,8 @@ interface AnalyzerErrorCandidate {
   payload: Record<string, unknown>;
   status: number;
   error: unknown;
+  errorType: AnalyzerFailureType;
+  canonical_missing: boolean;
 }
 
 function getEnv(name: string): string | undefined {
@@ -206,10 +264,20 @@ function normalizeTraceTargets(targets: TraceTarget[] | undefined): TraceResult[
     missingDataFields: [],
     hardSafetyReason: null,
     canonical_analyzer_called: false,
+    analyzer_called: false,
     analyzer_payload: null,
+    analyzer_http_status: null,
     analyzer_confidence: null,
     analyzer_verdict: null,
     analyzer_error: null,
+    canonical_confidence: null,
+    canonical_verdict: null,
+    edge_gate_result: null,
+    edge_rejection_reasons: [],
+    edge_pool_rank: null,
+    edge_pool_selected: null,
+    analyzer_pool_bucket: null,
+    analyzer_pool_rank: null,
     final_tier: null,
     final_rejection_reason: null,
   }));
@@ -1412,15 +1480,41 @@ async function validateWithAnalyzer(
     diagnostics.callsAttempted++;
     for (const tr of matchingTrace(traceResults, play)) {
       tr.canonical_analyzer_called = true;
+      tr.analyzer_called = true;
       tr.analyzer_payload = body;
     }
     const r = await fnPostWithRetry(endpoint, body, diagnostics);
 
+    for (const tr of matchingTrace(traceResults, play)) {
+      tr.analyzer_http_status = r.status;
+    }
+
     if (r.rateLimited) {
       // Keep deterministic candidate alive instead of dropping it.
       diagnostics.callsFailed++;
+      const ftype: AnalyzerFailureType = "rate_limited";
+      diagnostics.failureTypes[ftype]++;
+      const errorInfo: AnalyzerErrorCandidate = {
+        player_name: play.player_name,
+        prop_type: body.prop_type,
+        direction: body.over_under,
+        line: play.line,
+        payload: body,
+        status: r.status,
+        error: r.data ?? "rate_limited",
+        errorType: ftype,
+        canonical_missing: true,
+      };
+      if (analyzerErrorCandidates.length < DIAGNOSTIC_SAMPLE_LIMIT) {
+        analyzerErrorCandidates.push(errorInfo);
+      }
       for (const tr of matchingTrace(traceResults, play)) {
-        tr.analyzer_error = { status: r.status, error: r.data ?? "rate_limited" };
+        tr.analyzer_error = {
+          status: r.status,
+          error: r.data ?? "rate_limited",
+          errorType: ftype,
+          canonical_missing: true,
+        };
       }
       return play;
     }
@@ -1428,7 +1522,13 @@ async function validateWithAnalyzer(
     if (!r.ok || !r.data) {
       diagnostics.errors++;
       diagnostics.callsFailed++;
-      const errorInfo = {
+      const ftype = classifyAnalyzerFailure(r.status, r.data, false);
+      diagnostics.failureTypes[ftype]++;
+      const errorSnippet = (() => {
+        try { return JSON.stringify(r.data).slice(0, 500); }
+        catch { return String(r.data).slice(0, 500); }
+      })();
+      const errorInfo: AnalyzerErrorCandidate = {
         player_name: play.player_name,
         prop_type: body.prop_type,
         direction: body.over_under,
@@ -1436,16 +1536,23 @@ async function validateWithAnalyzer(
         payload: body,
         status: r.status,
         error: r.data ?? "empty_response",
+        errorType: ftype,
+        canonical_missing: true,
       };
       if (analyzerErrorCandidates.length < DIAGNOSTIC_SAMPLE_LIMIT) {
         analyzerErrorCandidates.push(errorInfo);
       }
       console.error(
         `[${play.sport}] analyzer error candidate: ${play.player_name} ${body.over_under} ${play.line} ${body.prop_type} ` +
-        `status=${r.status} payload=${JSON.stringify(body)} error=${JSON.stringify(r.data).slice(0, 500)}`
+        `status=${r.status} type=${ftype} payload=${JSON.stringify(body)} error=${errorSnippet}`
       );
       for (const tr of matchingTrace(traceResults, play)) {
-        tr.analyzer_error = { status: r.status, error: r.data ?? "empty_response" };
+        tr.analyzer_error = {
+          status: r.status,
+          error: r.data ?? "empty_response",
+          errorType: ftype,
+          canonical_missing: true,
+        };
       }
       return play;
     }
@@ -1465,7 +1572,11 @@ async function validateWithAnalyzer(
   );
 
   if (!conf || conf <= 0) {
-    for (const tr of matchingTrace(traceResults, play)) tr.final_rejection_reason = "analyzer_missing_confidence";
+    for (const tr of matchingTrace(traceResults, play)) {
+      tr.canonical_confidence = null;
+      tr.canonical_verdict = null;
+      tr.final_rejection_reason = "analyzer_missing_confidence";
+    }
     return null;
   }
 
@@ -1476,6 +1587,8 @@ async function validateWithAnalyzer(
   for (const tr of matchingTrace(traceResults, play)) {
     tr.analyzer_confidence = Math.round(conf);
     tr.analyzer_verdict = canonicalVerdict;
+    tr.canonical_confidence = Math.round(conf);
+    tr.canonical_verdict = canonicalVerdict;
   }
   const verdict = canonicalVerdict;
 
@@ -1740,7 +1853,7 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
     ? resolveNbaAnalyzerCap(getEnv("NBA_ANALYZER_CAP"))
     : 45;
   const analyzerPool = sport === "nba"
-    ? selectNbaAnalyzerPool(prefiltered, analyzerPoolCap)
+    ? selectNbaAnalyzerPoolDiversified(prefiltered, analyzerPoolCap)
     : (() => {
       const sorted = [...prefiltered].sort((a, b) => b.edge - a.edge);
       return {
@@ -1749,6 +1862,7 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
           .slice(analyzerPoolCap)
           .map((p) => candidateDiagnostic(p, "analyzer_pool_cap_exceeded")),
         truncated: sorted.length > analyzerPoolCap,
+        ranks: undefined as Map<string, AnalyzerPoolRankInfo> | undefined,
       };
     })();
   const top = analyzerPool.selected;
@@ -1756,6 +1870,21 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
   const analyzerDiagnostics = newAnalyzerDiagnostics(sport);
   const analyzerErrorCandidates: AnalyzerErrorCandidate[] = [];
   const analyzerPoolExcluded = analyzerPool.excluded;
+  const analyzerPoolRanks: Map<string, AnalyzerPoolRankInfo> | undefined =
+    "ranks" in analyzerPool ? analyzerPool.ranks : undefined;
+
+  // Surface analyzer-pool rank into trace for selected candidates.
+  if (analyzerPoolRanks) {
+    for (const p of top) {
+      const k = `${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`;
+      const info = analyzerPoolRanks.get(k);
+      if (!info) continue;
+      for (const tr of matchingTrace(traceResults, p)) {
+        tr.analyzer_pool_bucket = info.bucket;
+        tr.analyzer_pool_rank = info.rank;
+      }
+    }
+  }
 
   for (const excluded of analyzerPoolExcluded) {
     for (const tr of matchingTrace(traceResults, excluded)) {
@@ -1776,6 +1905,9 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
     } catch (e) {
       analyzerDiagnostics.errors++;
       analyzerDiagnostics.callsFailed++;
+      const ftype: AnalyzerFailureType =
+        e instanceof DOMException && e.name === "AbortError" ? "timeout" : "network";
+      analyzerDiagnostics.failureTypes[ftype]++;
       if (analyzerErrorCandidates.length < DIAGNOSTIC_SAMPLE_LIMIT) {
         analyzerErrorCandidates.push({
           player_name: p.player_name,
@@ -1791,9 +1923,20 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
           },
           status: 0,
           error: e instanceof Error ? e.message : String(e),
+          errorType: ftype,
+          canonical_missing: true,
         });
       }
-      console.error(`[${sport}] analyzer threw, keeping deterministic candidate:`, e);
+      for (const tr of matchingTrace(traceResults, p)) {
+        tr.analyzer_called = true;
+        tr.analyzer_error = {
+          status: 0,
+          error: e instanceof Error ? e.message : String(e),
+          errorType: ftype,
+          canonical_missing: true,
+        };
+      }
+      console.error(`[${sport}] analyzer threw (${ftype}), keeping deterministic candidate:`, e);
       return p; // soft failure
     }
   });
@@ -1848,7 +1991,12 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
   const nbaGateCache = new Map<string, NbaEdgeGateResult>();
   if (sport === "nba") {
     for (const p of eligible) {
-      nbaGateCache.set(tierKey(p), passNbaEdgeGate(p));
+      const gate = passNbaEdgeGate(p);
+      nbaGateCache.set(tierKey(p), gate);
+      for (const tr of matchingTrace(traceResults, p)) {
+        tr.edge_gate_result = gate.ok ? "passed" : "failed";
+        tr.edge_rejection_reasons = gate.reasons ?? [];
+      }
     }
   }
 
@@ -2006,9 +2154,14 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
         }
         return null;
       }
+      const poolDiag = sport === "nba" ? edgePoolDiagnostics.get(tierKey(p)) : undefined;
       for (const tr of matchingTrace(traceResults, p)) {
         tr.final_tier = tier;
         tr.final_rejection_reason = null;
+        if (poolDiag) {
+          tr.edge_pool_rank = poolDiag.rank;
+          tr.edge_pool_selected = poolDiag.selected;
+        }
       }
       const verdictTag = p.verdict === "Strong" || p.verdict === "Lean"
         ? `[VERDICT:${p.verdict}] `
