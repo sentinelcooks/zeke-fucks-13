@@ -119,7 +119,7 @@ type AnalyzerFailureType =
   | "network"
   | "unknown";
 
-interface AnalyzerDiagnostics {
+export interface AnalyzerDiagnostics {
   endpoint: string | null;
   calls: number;
   skipped: number;
@@ -137,7 +137,7 @@ interface AnalyzerDiagnostics {
   lastRetryAfterMs: number | null;
 }
 
-function newAnalyzerDiagnostics(sport: string): AnalyzerDiagnostics {
+export function newAnalyzerDiagnostics(sport: string): AnalyzerDiagnostics {
   return {
     endpoint: ANALYZER_ENDPOINT[sport] ?? null,
     calls: 0,
@@ -232,7 +232,7 @@ interface ScanSportOptions {
   traceTargets?: TraceTarget[];
 }
 
-interface AnalyzerErrorCandidate {
+export interface AnalyzerErrorCandidate {
   player_name: string;
   prop_type: string;
   direction: string;
@@ -391,7 +391,7 @@ async function mapLimit<T, R>(
   return results;
 }
 
-function parseRetryAfterMs(headerVal: string | null, dataAny: any): number | null {
+export function parseRetryAfterMs(headerVal: string | null, dataAny: any): number | null {
   if (headerVal) {
     const n = Number(headerVal);
     if (Number.isFinite(n) && n > 0) return Math.round(n * 1000);
@@ -1431,7 +1431,7 @@ async function evaluatePlayerProps(
 // - Rate-limited after retries → return play unchanged.
 // - Hard verdict PASS/FADE or playerIsOut → return null.
 // - Other errors → return play unchanged (do not crash the scan).
-async function validateWithAnalyzer(
+export async function validateWithAnalyzer(
   play: ScoredPlay,
   cache: Map<string, any>,
   diagnostics: AnalyzerDiagnostics,
@@ -1735,7 +1735,7 @@ async function validateWithAnalyzer(
 // downstream code can route to daily/value or drop entirely.
 const NBA_EDGE_GATE_VERSION = "2026-05-06.v2";
 
-interface NbaEdgeGateResult {
+export interface NbaEdgeGateResult {
   ok: boolean;
   reasons: string[];
   hardSafetyFail: boolean;
@@ -1746,8 +1746,109 @@ interface NbaEdgeGateResult {
   heavyJuiceAction: "penalty" | "downgrade" | "hard_block";
 }
 
-function passNbaEdgeGate(p: ScoredPlay): NbaEdgeGateResult {
+export function passNbaEdgeGate(p: ScoredPlay): NbaEdgeGateResult {
   return evaluateNbaEdgeGate(p);
+}
+
+export const NBA_EDGE_CAP = EDGE_CAP_PER_SPORT.nba ?? 5;
+export { NBA_EDGE_GATE_VERSION };
+
+// ── NBA analyzer resume queue ──
+// Builds the canonical dedupe_key used by the nba_analyzer_queue partial
+// unique constraint. Format mirrors the migration's documentation:
+// '<pick_date>|<event_id_or_empty>|<player_name>|<prop_type>|<direction>|<line>'
+export function buildNbaQueueDedupeKey(args: {
+  pickDate: string;
+  eventId: string | null | undefined;
+  playerName: string;
+  propType: string;
+  direction: string;
+  line: number;
+}): string {
+  return [
+    args.pickDate,
+    args.eventId ?? "",
+    args.playerName,
+    args.propType,
+    args.direction,
+    String(args.line),
+  ]
+    .map((s) => String(s).toLowerCase().trim())
+    .join("|");
+}
+
+// Cap on how many rows a single scanner run may push into the queue.
+// Prevents an unexpected odds shift from flooding the queue table.
+const NBA_QUEUE_MAX_ENQUEUE_PER_RUN_DEFAULT = 60;
+
+export async function enqueueNbaAnalyzerCandidates(
+  supabase: ReturnType<typeof createClient>,
+  pickDate: string,
+  candidates: ScoredPlay[],
+): Promise<{ enqueued: number; skipped: number }> {
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    return { enqueued: 0, skipped: 0 };
+  }
+
+  const cap = (() => {
+    const raw = Number(getEnv("NBA_QUEUE_MAX_ENQUEUE_PER_RUN"));
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return NBA_QUEUE_MAX_ENQUEUE_PER_RUN_DEFAULT;
+    }
+    return Math.max(1, Math.min(200, Math.round(raw)));
+  })();
+
+  const limited = candidates.slice(0, cap);
+  const skipped = candidates.length - limited.length;
+
+  const rows = limited.map((p) => {
+    const md = (p.model_diagnostics ?? {}) as Record<string, unknown>;
+    const skippedReason =
+      typeof md.analyzer_skipped_reason === "string"
+        ? (md.analyzer_skipped_reason as string)
+        : "analyzer_call_budget_exceeded";
+    const dedupeKey = buildNbaQueueDedupeKey({
+      pickDate,
+      eventId: p.event_id ?? null,
+      playerName: p.player_name,
+      propType: p.prop_type,
+      direction: p.direction,
+      line: p.line,
+    });
+    return {
+      pick_date: pickDate,
+      event_id: p.event_id ?? null,
+      player_name: p.player_name,
+      prop_type: p.prop_type,
+      direction: p.direction,
+      line: p.line,
+      odds_snapshot: String(p.odds),
+      dedupe_key: dedupeKey,
+      status: "pending",
+      attempts: 0,
+      max_attempts: 3,
+      next_run_after: new Date().toISOString(),
+      retry_after_ms: null,
+      skipped_reason: skippedReason,
+      payload: p as unknown as Record<string, unknown>,
+      diagnostics: null,
+      game_date: p.game_date ?? null,
+    };
+  });
+
+  // Defer to the SQL RPC so collisions with in-flight ('processing') rows
+  // are handled in a real transaction (no clobbering of attempts /
+  // next_run_after on a row a worker is actively analyzing).
+  const { error } = await supabase.rpc("enqueue_nba_analyzer_candidates", {
+    p_rows: rows,
+  });
+
+  if (error) {
+    console.error("[nba] enqueue_nba_analyzer_candidates RPC error:", error);
+    return { enqueued: 0, skipped };
+  }
+
+  return { enqueued: rows.length, skipped };
 }
 
 
@@ -1956,6 +2057,7 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
 
   const limit = ANALYZER_LIMIT[sport] ?? 1;
   let rateLimitTripped = false;
+  const rateLimitDeferred: typeof top = [];
   const rawResults = await mapLimit(runTargets, limit, async (p) => {
     if (rateLimitTripped) {
       const md = (p.model_diagnostics ?? {}) as Record<string, unknown>;
@@ -1967,6 +2069,7 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
       for (const tr of matchingTrace(traceResults, p)) {
         tr.final_rejection_reason = "analyzer_rate_limit_budget_exhausted";
       }
+      if (sport === "nba") rateLimitDeferred.push(p);
       return p; // deterministic candidate stays alive; not edge-eligible
     }
     const beforeRateLimited = analyzerDiagnostics.failureTypes.rate_limited;
@@ -2419,6 +2522,24 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
       console.error(`[${sport}] insert error:`, error);
     } else {
       inserted = count ?? uniqueRows.length;
+    }
+
+    // NBA-only: persist analyzer-deferred candidates to the resume queue so
+    // process-nba-analyzer-queue can finalize them in later batches and
+    // promote qualifying picks to tier='edge'. Enqueue happens AFTER the
+    // daily_picks insert succeeds so live picks always exist before the
+    // queue references them.
+    if (sport === "nba") {
+      try {
+        const queueEntries: ScoredPlay[] = [];
+        for (const p of budgetDeferred) queueEntries.push(p);
+        for (const p of rateLimitDeferred) queueEntries.push(p);
+        if (queueEntries.length > 0) {
+          await enqueueNbaAnalyzerCandidates(supabase, today, queueEntries);
+        }
+      } catch (qErr) {
+        console.error(`[${sport}] nba_analyzer_queue enqueue failed:`, qErr);
+      }
     }
   }
 
