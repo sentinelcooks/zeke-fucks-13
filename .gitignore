@@ -30,3 +30,14 @@ supabase/.temp/
 .env
 .env.*
 !.env.example
+
+.claude/
+.mcp.json
+.playwright-mcp/
+claude-fix-saved-picks.md
+claude-plan-corrections.md
+install-codebase-memory.ps1
+nba_budget_trace.json
+nba_trace.json
+src/graphify-out/
+supabase/graphify-out/

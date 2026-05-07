@@ -19,6 +19,12 @@ interface OddsProjectionProps {
   // When provided, the EV badge reflects the scanner's calibrated EV rather
   // than a live recompute (which can drift negative after price movement).
   backendEvPct?: number | null;
+  // Saved-pick mode: do not call live odds API. Render the scanner's stored
+  // odds instead, or a controlled "Saved odds unavailable" state.
+  savedMode?: boolean;
+  savedOdds?: string | null;
+  savedBook?: string | null;
+  savedImpliedProbability?: number | null;
 }
 
 // formatOdds removed — using useOddsFormat hook instead
@@ -255,11 +261,22 @@ export function OddsProjection({
   playerName, propType, line, overUnder, sport = "nba",
   modelHitRate, seasonHitRate, last10HitRate, last5HitRate, h2hHitRate,
   backendEvPct,
+  savedMode = false,
+  savedOdds = null,
+  savedBook = null,
+  savedImpliedProbability = null,
 }: OddsProjectionProps) {
   const { fmt: formatOdds } = useOddsFormat();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [data, setData] = useState<any>(null);
+  type OddsBook = { book: string; odds: number; line: number };
+  type OddsResult = {
+    found: boolean;
+    books?: OddsBook[];
+    event?: { home: string; away: string };
+    message?: string;
+  };
+  const [data, setData] = useState<OddsResult | null>(null);
 
   const fetchOdds = async () => {
     setLoading(true);
@@ -268,8 +285,8 @@ export function OddsProjection({
       const result = await fetchPlayerOdds(playerName, propType, overUnder, sport);
       if (result.found && result.books?.length > 0) {
         // Filter: exact line first, then alt lines below (never above)
-        const exactMatches = result.books.filter((b: any) => b.line === line);
-        const belowMatches = result.books.filter((b: any) => b.line < line);
+        const exactMatches = result.books.filter((b: { line: number }) => b.line === line);
+        const belowMatches = result.books.filter((b: { line: number }) => b.line < line);
         const filtered = exactMatches.length > 0 ? exactMatches : belowMatches;
         if (filtered.length > 0) {
           setData({ ...result, books: filtered });
@@ -281,7 +298,7 @@ export function OddsProjection({
       } else {
         setError(result.message || "No odds available for this player");
       }
-    } catch (e: any) {
+    } catch {
       setError("Failed to fetch live odds");
     } finally {
       setLoading(false);
@@ -289,8 +306,65 @@ export function OddsProjection({
   };
 
   useEffect(() => {
+    if (savedMode) {
+      setLoading(false);
+      setError("");
+      setData(null);
+      return;
+    }
     if (playerName) fetchOdds();
-  }, [playerName, propType, overUnder]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerName, propType, overUnder, savedMode]);
+
+  if (savedMode) {
+    const americanOdds = (() => {
+      if (!savedOdds) return null;
+      const s = String(savedOdds).trim();
+      const n = parseInt(s.replace(/[^-+0-9]/g, ""), 10);
+      return Number.isFinite(n) ? n : null;
+    })();
+    const impliedPct = savedImpliedProbability != null
+      ? Math.round(savedImpliedProbability * (savedImpliedProbability <= 1 ? 100 : 1))
+      : (americanOdds != null ? Math.round(impliedProb(americanOdds)) : null);
+    const evDisplay = backendEvPct != null && Number.isFinite(backendEvPct) && backendEvPct !== 0
+      ? `${backendEvPct > 0 ? "+" : ""}${backendEvPct.toFixed(1)}%`
+      : null;
+    return (
+      <div className="vision-card p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65">Saved odds</span>
+          <span className="text-[9px] text-muted-foreground/50">scanner snapshot</span>
+        </div>
+        {savedOdds ? (
+          <div className="grid grid-cols-3 gap-2">
+            <div className="text-center py-2 rounded-lg" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+              <span className="block text-base font-extrabold tabular-nums text-foreground/90">
+                {americanOdds != null ? formatOdds(americanOdds) : savedOdds}
+              </span>
+              <span className="block text-[8px] text-muted-foreground/55 font-bold uppercase">Best price</span>
+            </div>
+            <div className="text-center py-2 rounded-lg" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+              <span className="block text-base font-extrabold tabular-nums text-foreground/90">
+                {impliedPct != null ? `${impliedPct}%` : "—"}
+              </span>
+              <span className="block text-[8px] text-muted-foreground/55 font-bold uppercase">Implied</span>
+            </div>
+            <div className="text-center py-2 rounded-lg" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+              <span className={`block text-base font-extrabold tabular-nums ${evDisplay ? getEVColor(backendEvPct ?? 0) : "text-foreground/60"}`}>
+                {evDisplay ?? "—"}
+              </span>
+              <span className="block text-[8px] text-muted-foreground/55 font-bold uppercase">EV</span>
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground/65 text-center py-2">Saved odds unavailable</p>
+        )}
+        {savedBook && (
+          <p className="text-[10px] text-muted-foreground/55 text-center">Best book at scan time: <span className="text-foreground/75 font-bold uppercase">{savedBook}</span></p>
+        )}
+      </div>
+    );
+  }
 
   // Calculate composite model hit rate
   const compositeModelRate = modelHitRate || calculateModelHitRate({
@@ -332,7 +406,7 @@ export function OddsProjection({
     );
   }
 
-  const books: Array<{ book: string; odds: number; line: number }> = data.books;
+  const books: OddsBook[] = data.books ?? [];
   const bestBook = books[0]; // sorted best-first from API
   const avgImplied = books.reduce((sum, b) => sum + impliedProb(b.odds), 0) / books.length;
   const bestImplied = impliedProb(bestBook.odds);

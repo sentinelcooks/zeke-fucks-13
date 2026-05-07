@@ -20,6 +20,7 @@ export interface SavedDailyPickRow {
   model_diagnostics?: Record<string, unknown> | null;
   player_image_url?: string | null;
   metadata?: Record<string, unknown> | null;
+  avg_value?: number | string | null;
 }
 
 export interface SavedPickSnapshot {
@@ -52,6 +53,25 @@ export interface SavedPickNavState {
   pick_snapshot?: SavedPickSnapshot | null;
 }
 
+export interface SavedPickMarket {
+  bestBook: string | null;
+  bookCount: number | null;
+  consensusLine: number | null;
+  oddsAmerican: number | null;
+  impliedProbability: number | null;
+  marketDepth: string | null;
+  marketDataQuality: string | null;
+  juicePenalty: number | null;
+  eventHomeTeam: string | null;
+  eventAwayTeam: string | null;
+  scannerConfidencePercent: number | null;
+  analyzerConfidencePercent: number | null;
+  analyzerAgreement: string | null;
+  evPct: number | null;
+  modelEdge: number | null;
+  edgeDowngradeReason: string | null;
+}
+
 export interface CanonicalSavedPick {
   ready: true;
   source: "saved_daily_pick";
@@ -72,6 +92,8 @@ export interface CanonicalSavedPick {
   reasoning: string | null;
   model_diagnostics: Record<string, unknown> | null;
   player_image_url: string | null;
+  market: SavedPickMarket;
+  avg_value: number | null;
 }
 
 const SUPPORTED_SPORTS: ReadonlyArray<SavedPickSport> = ["nba", "mlb", "nhl", "ufc", "nfl"];
@@ -90,6 +112,36 @@ function toNumberOrNull(input: unknown): number | null {
   if (input == null || input === "") return null;
   const n = typeof input === "number" ? input : parseFloat(String(input));
   return Number.isFinite(n) ? n : null;
+}
+
+function toStringOrNull(input: unknown): string | null {
+  if (input == null) return null;
+  const s = String(input).trim();
+  return s ? s : null;
+}
+
+function pickMarketDiagnostics(
+  diag: Record<string, unknown> | null | undefined,
+): SavedPickMarket {
+  const d = diag ?? {};
+  return {
+    bestBook: toStringOrNull(d.bestBook),
+    bookCount: toNumberOrNull(d.bookCount),
+    consensusLine: toNumberOrNull(d.consensusLine),
+    oddsAmerican: toNumberOrNull(d.oddsAmerican),
+    impliedProbability: toNumberOrNull(d.impliedProbability),
+    marketDepth: toStringOrNull(d.marketDepth),
+    marketDataQuality: toStringOrNull(d.marketDataQuality),
+    juicePenalty: toNumberOrNull(d.juicePenalty),
+    eventHomeTeam: toStringOrNull(d.eventHomeTeam),
+    eventAwayTeam: toStringOrNull(d.eventAwayTeam),
+    scannerConfidencePercent: toNumberOrNull(d.scanner_confidence_percent ?? d.scannerConfidence),
+    analyzerConfidencePercent: toNumberOrNull(d.analyzer_confidence_percent ?? d.analyzerConfidence),
+    analyzerAgreement: toStringOrNull(d.analyzerAgreement),
+    evPct: toNumberOrNull(d.evPct),
+    modelEdge: toNumberOrNull(d.modelEdge),
+    edgeDowngradeReason: toStringOrNull(d.edgeDowngradeReason),
+  };
 }
 
 /**
@@ -134,8 +186,12 @@ export function mapSavedPickToView(input: {
   const line = toNumberOrNull(row?.line ?? snap?.line ?? nav?.line) ?? 0;
 
   const hit_rate = toNumberOrNull(row?.hit_rate ?? snap?.hit_rate);
-  const edgeRaw = (row?.model_diagnostics as any)?.edge ?? (snap?.model_diagnostics as any)?.edge;
+  const diagnostics: Record<string, unknown> | null =
+    (row?.model_diagnostics ?? snap?.model_diagnostics ?? null) as Record<string, unknown> | null;
+  const edgeRaw = diagnostics ? (diagnostics as Record<string, unknown>)["edge"] : null;
   const edge = toNumberOrNull(edgeRaw);
+  const market = pickMarketDiagnostics(diagnostics);
+  const avg_value = toNumberOrNull(row?.avg_value ?? null);
 
   return {
     ready: true,
@@ -155,7 +211,9 @@ export function mapSavedPickToView(input: {
     team: row?.team ?? snap?.team ?? null,
     opponent: row?.opponent ?? snap?.opponent ?? nav?.opponent ?? null,
     reasoning: row?.reasoning ?? snap?.reasoning ?? null,
-    model_diagnostics: (row?.model_diagnostics ?? snap?.model_diagnostics ?? null) as Record<string, unknown> | null,
+    model_diagnostics: diagnostics,
     player_image_url: row?.player_image_url ?? null,
+    market,
+    avg_value,
   };
 }

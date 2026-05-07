@@ -35,7 +35,7 @@ async function getSessionHeaders(): Promise<Record<string, string>> {
 async function callEdgeFunction(
   functionName: string,
   action: string,
-  params?: Record<string, any>,
+  params?: Record<string, unknown>,
   method: "GET" | "POST" = "GET"
 ) {
   const secHeaders = await getSessionHeaders();
@@ -86,22 +86,11 @@ export interface AnalyzeRequest {
   sport?: string;
 }
 
-/**
- * Fresh manual analysis. MLB/NHL/UFC are intentionally unsupported here —
- * those sports rely on canonical saved daily_picks rows. Saved-pick callers
- * MUST branch into the saved-pick path (see NbaPropsPage saved-pick mode)
- * and never reach this function.
- */
+// Multi-sport manual analyzer. nba-api/analyze dispatches sport-aware ESPN
+// configs (NBA/MLB/NHL) and for MLB additionally invokes mlb-model. Saved-pick
+// callers branch upstream and never reach this function.
 export async function analyzeProp(data: AnalyzeRequest) {
-  if (data.sport && data.sport !== "nba") {
-    return {
-      error: `${data.sport.toUpperCase()} player prop manual analysis is not supported by the NBA analyzer. Open saved picks from Today's Edge to view their stored canonical scanner result.`,
-      sport: data.sport,
-    };
-  }
-
-  const result = await callEdgeFunction("nba-api", "analyze", data as any, "POST");
-  return result;
+  return await callEdgeFunction("nba-api", "analyze", data as Record<string, unknown>, "POST");
 }
 
 // UFC

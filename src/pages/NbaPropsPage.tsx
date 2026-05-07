@@ -25,6 +25,7 @@ import { StatPill } from "@/components/mobile/StatPill";
 import { HitRateRing } from "@/components/mobile/HitRateRing";
 import { ShotChart } from "@/components/mobile/ShotChart";
 import { OddsProjection } from "@/components/mobile/OddsProjection";
+import { SavedPickStatPanel } from "@/components/mobile/SavedPickStatPanel";
 import { StrengthWeakness } from "@/components/mobile/StrengthWeakness";
 import { InjuryStatusBadge } from "@/components/mobile/InjuryStatusBadge";
 import { formatPropType } from "@/lib/formatPickLabel";
@@ -488,7 +489,9 @@ const NbaPropsPage = () => {
             .maybeSingle();
           if (data?.betting_style) setBettingLevel(data.betting_style);
         }
-      } catch {}
+      } catch {
+        // betting style is best-effort; ignore failures
+      }
     })();
   }, []);
 
@@ -607,7 +610,7 @@ const NbaPropsPage = () => {
 
       window.history.replaceState({}, "");
 
-      const isSavedPick = isSavedPickPayload(navState as any);
+      const isSavedPick = isSavedPickPayload(navState as unknown as import("@/lib/savedPick").SavedPickNavState);
       if (isSavedPick) setSavedPickMode("loading");
       else setSavedPickMode("none");
 
@@ -645,7 +648,7 @@ const NbaPropsPage = () => {
             const view = mapSavedPickToView({
               row,
               snapshot: navState.pick_snapshot ?? null,
-              navState: navState as any,
+              navState: navState as unknown as import("@/lib/savedPick").SavedPickNavState,
             });
 
             console.info("[detail-entry]", {
@@ -669,7 +672,7 @@ const NbaPropsPage = () => {
               return;
             }
 
-            const meta = (row?.metadata ?? {}) as Record<string, any>;
+            const meta = (row?.metadata ?? {}) as Record<string, unknown>;
             setResults({
               sport: s,
               player: { full_name: view.player_name, image_url: view.player_image_url ?? undefined },
@@ -695,8 +698,11 @@ const NbaPropsPage = () => {
                 verdict: view.verdict,
                 confidenceSource: "saved_daily_pick" as const,
                 sourceContractVersion: "canonical.v1" as const,
+                tier: view.tier,
               },
               _savedCanonicalOnly: true,
+              _savedMarket: view.market,
+              _savedAvgValue: view.avg_value,
             });
             if (navState.pick_snapshot?.avg_value != null) setSnapshotAvgValue(navState.pick_snapshot.avg_value);
             setSavedPickMode("ready");
@@ -2104,23 +2110,24 @@ const NbaPropsPage = () => {
                 </motion.button>
               )}
 
-              {(() => {
-                const savedOnly = results._savedCanonicalOnly === true;
-                const hasAnyRate =
-                  results.season_hit_rate?.rate != null ||
-                  results.last_10?.rate != null ||
-                  results.last_5?.rate != null ||
-                  h2h.rate != null;
-                if (savedOnly && !hasAnyRate) return null;
-                return (
-                  <div className="grid grid-cols-4 gap-2">
-                    <StatPill label="Season" value={results.season_hit_rate?.avg ?? "--"} delay={0.2} />
-                    <StatPill label="L10" value={results.last_10?.avg ?? "--"} delay={0.25} />
-                    <StatPill label="L5" value={results.last_5?.avg ?? "--"} delay={0.3} />
-                    <StatPill label={`vs ${h2h.opponent || results.next_game?.opponent_name || "OPP"}`} value={h2h.avg ?? "--"} delay={0.35} />
-                  </div>
-                );
-              })()}
+              {results._savedCanonicalOnly === true && (
+                <SavedPickStatPanel
+                  sport={sport}
+                  market={results._savedMarket ?? null}
+                  tier={results._savedSnapshot?.tier ?? null}
+                  team={results.team ?? null}
+                  opponent={results.opponent || opponent || null}
+                  evPct={results._savedAvgValue ?? null}
+                />
+              )}
+              {results._savedCanonicalOnly !== true && (
+                <div className="grid grid-cols-4 gap-2">
+                  <StatPill label="Season" value={results.season_hit_rate?.avg ?? "--"} delay={0.2} />
+                  <StatPill label="L10" value={results.last_10?.avg ?? "--"} delay={0.25} />
+                  <StatPill label="L5" value={results.last_5?.avg ?? "--"} delay={0.3} />
+                  <StatPill label={`vs ${h2h.opponent || results.next_game?.opponent_name || "OPP"}`} value={h2h.avg ?? "--"} delay={0.35} />
+                </div>
+              )}
 
               {/* Season averages detail row */}
               {results.season_averages && (
@@ -2155,25 +2162,16 @@ const NbaPropsPage = () => {
                 </motion.div>
               )}
 
-              {(() => {
-                const savedOnly = results._savedCanonicalOnly === true;
-                const hasAnyRate =
-                  results.season_hit_rate?.rate != null ||
-                  results.last_10?.rate != null ||
-                  results.last_5?.rate != null ||
-                  h2h.rate != null;
-                if (savedOnly && !hasAnyRate) return null;
-                return (
-                  <Section title="Hit Rates" icon={<Target className="w-3.5 h-3.5" />}>
-                    <div className="flex justify-between gap-1 px-0 py-2">
-                      <HitRateRing rate={results.season_hit_rate?.rate || 0} hits={results.season_hit_rate?.hits || 0} total={results.season_hit_rate?.total || 0} label="Season" delay={0} />
-                      <HitRateRing rate={results.last_10?.rate || 0} hits={results.last_10?.hits || 0} total={results.last_10?.total || 0} label="L10" delay={0.1} />
-                      <HitRateRing rate={results.last_5?.rate || 0} hits={results.last_5?.hits || 0} total={results.last_5?.total || 0} label="L5" delay={0.2} />
-                      <HitRateRing rate={h2h.rate || 0} hits={h2h.hits || 0} total={h2h.total || 0} label={`vs ${h2h.opponent || results.next_game?.opponent_name || "OPP"}`} delay={0.3} />
-                    </div>
-                  </Section>
-                );
-              })()}
+              {results._savedCanonicalOnly !== true && (
+                <Section title="Hit Rates" icon={<Target className="w-3.5 h-3.5" />}>
+                  <div className="flex justify-between gap-1 px-0 py-2">
+                    <HitRateRing rate={results.season_hit_rate?.rate || 0} hits={results.season_hit_rate?.hits || 0} total={results.season_hit_rate?.total || 0} label="Season" delay={0} />
+                    <HitRateRing rate={results.last_10?.rate || 0} hits={results.last_10?.hits || 0} total={results.last_10?.total || 0} label="L10" delay={0.1} />
+                    <HitRateRing rate={results.last_5?.rate || 0} hits={results.last_5?.hits || 0} total={results.last_5?.total || 0} label="L5" delay={0.2} />
+                    <HitRateRing rate={h2h.rate || 0} hits={h2h.hits || 0} total={h2h.total || 0} label={`vs ${h2h.opponent || results.next_game?.opponent_name || "OPP"}`} delay={0.3} />
+                  </div>
+                </Section>
+              )}
 
               <Section title="Odds & EV Analysis" icon={<Zap className="w-3.5 h-3.5" />}>
                 <OddsProjection
@@ -2187,7 +2185,11 @@ const NbaPropsPage = () => {
                   last10HitRate={results.last_10?.rate}
                   last5HitRate={results.last_5?.rate}
                   h2hHitRate={h2h.rate}
-                  backendEvPct={snapshotAvgValue}
+                  backendEvPct={results._savedCanonicalOnly === true ? (results._savedAvgValue ?? snapshotAvgValue) : snapshotAvgValue}
+                  savedMode={results._savedCanonicalOnly === true}
+                  savedOdds={results._savedCanonicalOnly === true ? (results.odds ?? null) : null}
+                  savedBook={results._savedCanonicalOnly === true ? (results._savedMarket?.bestBook ?? null) : null}
+                  savedImpliedProbability={results._savedCanonicalOnly === true ? (results._savedMarket?.impliedProbability ?? null) : null}
                 />
               </Section>
 
