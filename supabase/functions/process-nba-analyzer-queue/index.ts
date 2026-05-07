@@ -25,11 +25,11 @@ import { canonicalToScoredVerdict } from "../_shared/canonical_verdict.ts";
 import {
   newAnalyzerDiagnostics,
   parseRetryAfterMs,
-  passNbaEdgeGate,
   validateWithAnalyzer,
   NBA_EDGE_CAP,
   type AnalyzerErrorCandidate,
 } from "../_shared/sport_scan.ts";
+import { buildNbaQueueFinalization } from "../_shared/nba_queue_finalization.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -198,37 +198,6 @@ async function currentEdgeCount(supabase: Supa, pickDate: string): Promise<numbe
   return count ?? 0;
 }
 
-function buildFinalDiagnostics(
-  base: Record<string, unknown> | null | undefined,
-  finalTier: "edge" | "daily" | "value",
-  gateResult: ReturnType<typeof passNbaEdgeGate> | null,
-  ev_pct: number,
-  edge: number,
-): Record<string, unknown> {
-  const md: Record<string, unknown> = { ...(base ?? {}) };
-  // Drop the analyzer_skipped_reason now that we have an analyzer result.
-  delete md.analyzer_skipped_reason;
-  if (gateResult) {
-    md.edgeEligible = gateResult.ok;
-    md.edge_gate_result = gateResult.edge_gate_result;
-    md.edge_gate_inputs = gateResult.inputs;
-    md.edge_gate_decision = gateResult.edge_gate_decision;
-    md.edgeRejectionReasons = gateResult.reasons ?? [];
-    md.edgeDowngradeReason =
-      !gateResult.ok && gateResult.reasons.length > 0
-        ? gateResult.reasons[0]
-        : null;
-    md.heavy_juice_threshold = gateResult.heavyJuiceThreshold;
-    md.heavy_juice_action = gateResult.heavyJuiceAction;
-  }
-  md.postGateTier = finalTier;
-  md.final_edge_eligible = finalTier === "edge";
-  md.evPct = Math.round(ev_pct * 100) / 100;
-  md.modelEdge = Math.round(edge * 10000) / 10000;
-  md.queue_processed_at = new Date().toISOString();
-  return md;
-}
-
 async function processOne(
   supabase: Supa,
   row: QueueRow,
@@ -335,29 +304,16 @@ async function processOne(
   // 5. Analyzer returned. Re-score, re-evaluate the NBA edge gate.
   const finalized = analyzed ?? play;
   const rescored = rescore(finalized);
-  const canonical = (rescored.model_diagnostics ?? {})?.canonical_verdict as
-    | string
-    | undefined;
-  const isStrongOrLean = canonical === "STRONG" || canonical === "LEAN";
-  const gate = passNbaEdgeGate(rescored);
 
   // Edge cap reconciliation: only promote if there is room.
   const live = await currentEdgeCount(supabase, row.pick_date);
-  const canPromote = isStrongOrLean && gate.ok && live < NBA_EDGE_CAP;
-
-  const finalTier: "edge" | "daily" | "value" = canPromote
-    ? "edge"
-    : rescored.confidence >= 0.70
-      ? "daily"
-      : "value";
-
-  const finalDiag = buildFinalDiagnostics(
-    rescored.model_diagnostics ?? null,
-    finalTier,
-    gate,
-    rescored.ev_pct,
-    rescored.edge,
-  );
+  const finalization = buildNbaQueueFinalization({
+    baseDiagnostics: rescored.model_diagnostics ?? null,
+    currentEdgeCount: live,
+    edgeCap: NBA_EDGE_CAP,
+    finalized: rescored,
+  });
+  const { canPromote, diagnostics: finalDiag, gate } = finalization;
 
   const match = {
     pick_date: row.pick_date,
@@ -369,9 +325,11 @@ async function processOne(
   };
 
   const verdictTag =
-    rescored.verdict === "Strong" || rescored.verdict === "Lean"
-      ? `[VERDICT:${rescored.verdict}] `
-      : "";
+    finalization.canonicalVerdict === "STRONG"
+      ? "[VERDICT:Strong] "
+      : finalization.canonicalVerdict === "LEAN"
+        ? "[VERDICT:Lean] "
+        : "";
   const reasoning = `${verdictTag}${rescored.reasoning ?? ""}`.trim();
 
   if (canPromote) {
@@ -379,10 +337,9 @@ async function processOne(
       p_queue_id: row.id,
       p_final_pick_payload: {
         tier: "edge",
-        verdict:
-          (rescored.model_diagnostics ?? {}).canonical_verdict ??
-          rescored.verdict,
-        confidence: Math.round(rescored.confidence * 1000) / 1000,
+        verdict: finalization.canonicalVerdict,
+        confidence: finalization.confidence,
+        hit_rate: finalization.hitRate,
         reasoning,
         model_diagnostics: finalDiag,
         match,
@@ -409,10 +366,8 @@ async function processOne(
     {
       p_match: match,
       p_diagnostics: finalDiag,
-      p_verdict:
-        (rescored.model_diagnostics ?? {}).canonical_verdict ??
-        rescored.verdict,
-      p_confidence: Math.round(rescored.confidence * 1000) / 1000,
+      p_verdict: finalization.canonicalVerdict,
+      p_confidence: finalization.confidence,
       p_reasoning: reasoning,
     },
   );
@@ -426,15 +381,12 @@ async function processOne(
     p_queue_id: row.id,
     p_status: "done",
     p_diagnostics: {
-      analyzer_canonical_verdict: canonical ?? null,
+      analyzer_canonical_verdict: finalization.canonicalVerdict,
+      analyzer_confidence_percent: finalization.hitRate,
       gate_ok: gate.ok,
       gate_reasons: gate.reasons ?? [],
       promoted: false,
-      promotion_blocker: !isStrongOrLean
-        ? "verdict_not_strong_or_lean"
-        : !gate.ok
-          ? "edge_gate_failed"
-          : "edge_cap_full",
+      promotion_blocker: finalization.promotionBlocker,
     },
   });
   return { outcome: "refreshed" };
