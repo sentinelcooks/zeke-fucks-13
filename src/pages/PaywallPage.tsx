@@ -6,7 +6,7 @@ import { purchasePlan, restorePurchases } from "@/lib/revenuecat";
 
 type PlanInterval = "weekly" | "monthly" | "yearly";
 
-const TRIAL_DAYS = 7;
+const TRIAL_DAYS = 3;
 const TRIAL_LABEL = `${TRIAL_DAYS}-Day Free Trial`;
 const CTA_LABEL = `Start Your ${TRIAL_DAYS}-Day Free Trial`;
 
