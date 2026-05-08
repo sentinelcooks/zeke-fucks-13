@@ -33,35 +33,104 @@ const ESPN_SPORTS: Record<string, { sport: string; league: string }> = {
   nhl: { sport: "hockey", league: "nhl" },
 };
 
-// ── Fetch real market odds for a pick via nba-odds/player-odds ──
-// Send raw prop type (e.g. "strikeouts", "points") — nba-odds handles normalization
-async function fetchRealOdds(
-  playerName: string, propType: string, overUnder: string, sport: string,
-  supabaseUrl: string, serviceKey: string
-): Promise<string | null> {
-  try {
-    const resp = await fetch(`${supabaseUrl}/functions/v1/nba-odds/player-odds`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${serviceKey}`,
-        apikey: serviceKey,
-      },
-      body: JSON.stringify({ playerName, propType, overUnder, sport }),
-    });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    if (data?.found && data.books?.length > 0) {
-      const prices = data.books.map((b: any) => b.odds ?? b.price).filter((p: number) => typeof p === "number");
-      if (prices.length > 0) {
-        const best = Math.max(...prices);
-        return best > 0 ? `+${best}` : `${best}`;
-      }
-    }
-    return null;
-  } catch {
-    return null;
+// ── Fetch real sportsbook line + odds (both directions) via nba-odds/player-odds ──
+// Send raw prop type (e.g. "strikeouts", "points") — nba-odds handles normalization.
+// Returns the canonical (mode) line across books on the requested side, plus the
+// best opposite-side price at that same line so Phase C can de-vig with
+// fairImpliedFromPair.
+type RealMarket = {
+  line: number;
+  oddsAmerican: string;
+  oddsOpp: string | null;
+  book: string;
+  bookCount: number;
+};
+
+type BookOdds = { book: string; odds: number; line: number };
+
+function pickCanonical(books: BookOdds[]):
+  | { line: number; bestOdds: number; bestBook: string; count: number }
+  | null {
+  if (!books?.length) return null;
+  const byLine = new Map<number, Array<{ book: string; odds: number }>>();
+  for (const b of books) {
+    if (typeof b.line !== "number" || !Number.isFinite(b.line)) continue;
+    if (typeof b.odds !== "number" || !Number.isFinite(b.odds)) continue;
+    const arr = byLine.get(b.line) ?? [];
+    arr.push({ book: b.book, odds: b.odds });
+    byLine.set(b.line, arr);
   }
+  if (byLine.size === 0) return null;
+  let best: { line: number; bestOdds: number; bestBook: string; count: number } | null = null;
+  for (const [line, arr] of byLine) {
+    const top = arr.reduce((a, b) => (b.odds > a.odds ? b : a));
+    const cand = { line, bestOdds: top.odds, bestBook: top.book, count: arr.length };
+    if (
+      !best ||
+      cand.count > best.count ||
+      (cand.count === best.count && cand.bestOdds > best.bestOdds)
+    ) {
+      best = cand;
+    }
+  }
+  return best;
+}
+
+async function fetchRealMarket(
+  playerName: string,
+  propType: string,
+  direction: "over" | "under",
+  sport: string,
+  supabaseUrl: string,
+  serviceKey: string,
+  cache: Map<string, BookOdds[]>,
+): Promise<RealMarket | null> {
+  async function getBooks(dir: "over" | "under"): Promise<BookOdds[]> {
+    const k = `${playerName}|${propType}|${dir}`;
+    if (cache.has(k)) return cache.get(k)!;
+    try {
+      const resp = await fetch(`${supabaseUrl}/functions/v1/nba-odds/player-odds`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${serviceKey}`,
+          apikey: serviceKey,
+        },
+        body: JSON.stringify({ playerName, propType, overUnder: dir, sport }),
+      });
+      if (!resp.ok) {
+        cache.set(k, []);
+        return [];
+      }
+      const data = await resp.json();
+      const books: BookOdds[] = data?.found && Array.isArray(data.books) ? data.books : [];
+      cache.set(k, books);
+      return books;
+    } catch {
+      cache.set(k, []);
+      return [];
+    }
+  }
+
+  const primary = await getBooks(direction);
+  const canon = pickCanonical(primary);
+  if (!canon) return null;
+
+  const oppDir: "over" | "under" = direction === "over" ? "under" : "over";
+  const oppBooks = await getBooks(oppDir);
+  const oppAtLine = oppBooks.filter((b) => b.line === canon.line && Number.isFinite(b.odds));
+  const oppBest = oppAtLine.length
+    ? oppAtLine.reduce((a, b) => (b.odds > a.odds ? b : a))
+    : null;
+
+  const fmt = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+  return {
+    line: canon.line,
+    oddsAmerican: fmt(canon.bestOdds),
+    oddsOpp: oppBest ? fmt(oppBest.odds) : null,
+    book: canon.bestBook,
+    bookCount: canon.count,
+  };
 }
 
 // ── Fetch moneyline/spread/total odds from events endpoint ──
@@ -628,6 +697,10 @@ Deno.serve(async (req) => {
     // ── Phase B: Grade all active players, both directions ──
     console.log("Phase B: scanning lineups for player props");
     let nbaCanonicalFinalizeCalls = 0;
+    // Per-request cache of nba-odds/player-odds responses keyed by `${player}|${propType}|${direction}`.
+    // Lets the second direction iteration (under after over) reuse what the first iteration already
+    // pulled as its opposite-side fetch, cutting nba-odds POSTs roughly in half.
+    const realMarketCache = new Map<string, BookOdds[]>();
     const lineupResults = await Promise.allSettled(
       allGames.map(game => getGameLineup(game.gameId, game.sport).then(lineup => ({ game, lineup })))
     );
@@ -653,13 +726,44 @@ Deno.serve(async (req) => {
             if (isTimedOut()) break;
             if (nbaCanonicalFinalizeCalls >= NBA_CANONICAL_FINALIZE_CAP) break;
             try {
-              nbaCanonicalFinalizeCalls++;
-              const result = await analyzePlayerProp(
-                player.name, propType, 0, direction, player.opponent, game.sport, supabaseUrl, serviceKey
+              // 1) Real sportsbook line + odds FIRST. Skip if the requested side is not bookable —
+              //    Today's Edge must reference a graded line; analyzing with line=0 produces a
+              //    confidence divorced from the price we'd grade against.
+              const market = await fetchRealMarket(
+                player.name, propType, direction, game.sport,
+                supabaseUrl, serviceKey, realMarketCache,
               );
-              if (!result || !result.line || result.line <= 0) continue;
-              const realOdds = await fetchRealOdds(player.name, propType, result.direction, game.sport, supabaseUrl, serviceKey);
-              if (!realOdds) continue;
+              if (!market) { await delay(120); continue; }
+
+              // 2) Analyze using the REAL line and the REQUESTED direction.
+              //    We grade against the direction we paired odds to; ignore result.direction.
+              nbaCanonicalFinalizeCalls++;
+              const analyzePayload = {
+                player: player.name,
+                prop_type: propType,
+                line: market.line,
+                over_under: direction,
+                sport: game.sport,
+                opponent: player.opponent,
+              };
+              const result = await analyzePlayerProp(
+                player.name, propType, market.line, direction,
+                player.opponent, game.sport, supabaseUrl, serviceKey,
+              );
+              if (!result) { await delay(120); continue; }
+
+              // 3) One-line comparison log so manual analyzer ↔ daily-picks divergences are
+              //    immediately greppable. analyzerConfidence === storedHitRate === displayPct
+              //    by construction; if they ever diverge a transform was reintroduced.
+              console.log(
+                `[daily-picks][propB] ${player.name} | ${propType} | dir=${direction} | ` +
+                `line=${market.line} | odds=${market.oddsAmerican} | odds_opp=${market.oddsOpp ?? "null"} | ` +
+                `book=${market.book} (${market.bookCount} books at line) | ` +
+                `analyzePayload=${JSON.stringify(analyzePayload)} | ` +
+                `analyzerConfidence=${result.confidence} | storedHitRate=${result.confidence} | ` +
+                `displayPct=${result.confidence}`
+              );
+
               rawPicks.push({
                 bet_type: "prop",
                 player_name: player.name,
@@ -668,13 +772,14 @@ Deno.serve(async (req) => {
                 home_team: null,
                 away_team: null,
                 prop_type: propType,
-                line: result.line,
-                direction: result.direction,
+                line: market.line,
+                direction,
                 hit_rate: result.confidence,
                 canonical_verdict: result.verdict,
                 avg_value: result.avg_value,
                 reasoning: result.reasoning,
-                odds: realOdds,
+                odds: market.oddsAmerican,
+                odds_opp: market.oddsOpp,
                 spread_line: null,
                 total_line: null,
                 sport: game.sport,
