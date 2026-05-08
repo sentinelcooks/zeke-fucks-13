@@ -38,6 +38,7 @@ import { SplashScreen } from "@/components/SplashScreen";
 
 const AuthPage = lazy(() => import("./pages/AuthPage"));
 const AuthCallbackPage = lazy(() => import("./pages/AuthCallbackPage"));
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
 const PaywallPage = lazy(() => import("./pages/PaywallPage"));
@@ -160,6 +161,15 @@ function AppRoutes() {
           element={
             <Suspense fallback={<LoadingSpinner />}>
               <AuthCallbackPage />
+            </Suspense>
+          }
+        />
+
+        <Route
+          path="/auth/reset-password"
+          element={
+            <Suspense fallback={<LoadingSpinner />}>
+              <ResetPasswordPage />
             </Suspense>
           }
         />

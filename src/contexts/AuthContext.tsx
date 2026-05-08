@@ -102,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // established by OAuth or email confirmation and must not be destroyed.
       const isAuthCallback =
         window.location.pathname === "/auth/callback" ||
+        window.location.pathname === "/auth/reset-password" ||
         window.location.hash.includes("access_token") ||
         window.location.search.includes("code=");
 

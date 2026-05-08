@@ -17,10 +17,17 @@ export function DeepLinkHandler() {
 
     import("@capacitor/app").then(({ App }) => {
       App.addListener("appUrlOpen", async ({ url }: { url: string }) => {
-        if (!url.startsWith("sentinel://auth/callback")) return;
+        const isCallback = url.startsWith("sentinel://auth/callback");
+        const isPasswordReset = url.startsWith("sentinel://auth/reset-password");
+        if (!isCallback && !isPasswordReset) return;
         if (import.meta.env.DEV) console.log("[DeepLink] appUrlOpen:", url);
 
-        // PKCE code flow — used by OAuth and newer Supabase email confirmation
+        const successPath = isPasswordReset ? "/auth/reset-password" : "/dashboard";
+        const errorPath = isPasswordReset
+          ? "/auth/reset-password?error=expired"
+          : "/auth?error=oauth_failed";
+
+        // PKCE code flow — used by OAuth and newer Supabase email links
         const qIdx = url.indexOf("?");
         const params = new URLSearchParams(
           qIdx !== -1 ? url.slice(qIdx + 1).split("#")[0] : ""
@@ -32,14 +39,14 @@ export function DeepLinkHandler() {
           if (error) {
             if (import.meta.env.DEV)
               console.error("[DeepLink] exchangeCodeForSession error:", error.message);
-            navigate("/auth?error=oauth_failed", { replace: true });
+            navigate(errorPath, { replace: true });
           } else {
-            navigate("/dashboard", { replace: true });
+            navigate(successPath, { replace: true });
           }
           return;
         }
 
-        // Hash token fallback — older Supabase email confirmation returns #access_token=...
+        // Hash token fallback — older Supabase email links return #access_token=...
         const hashStr = url.split("#")[1];
         if (hashStr) {
           const hash = new URLSearchParams(hashStr);
@@ -51,13 +58,13 @@ export function DeepLinkHandler() {
               refresh_token: refreshToken,
             });
             if (!error) {
-              navigate("/dashboard", { replace: true });
+              navigate(successPath, { replace: true });
               return;
             }
           }
         }
 
-        navigate("/auth?error=oauth_failed", { replace: true });
+        navigate(errorPath, { replace: true });
       }).then((handle) => {
         removeListener = () => handle.remove();
       });

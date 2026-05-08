@@ -6,3 +6,10 @@ export function getAuthRedirectUrl(): string {
   }
   return `${window.location.origin}/auth/callback`;
 }
+
+export function getPasswordResetRedirectUrl(): string {
+  if (Capacitor.isNativePlatform()) {
+    return "sentinel://auth/reset-password";
+  }
+  return `${window.location.origin}/auth/reset-password`;
+}

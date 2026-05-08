@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Eye, EyeOff, ArrowRight, ArrowLeft, Mail, CheckCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { getAuthRedirectUrl } from "@/lib/authRedirect";
+import { getAuthRedirectUrl, getPasswordResetRedirectUrl } from "@/lib/authRedirect";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -67,6 +67,9 @@ const AuthPage = () => {
   const [savingOnboarding, setSavingOnboarding] = useState(false);
   const [confirmationPending, setConfirmationPending] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
   const savedForUser = useState(() => new Set<string>())[0];
 
   const saveOnboardingToDb = useCallback(async (userId: string) => {
@@ -201,6 +204,27 @@ const AuthPage = () => {
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!email) { setError("Enter your email to reset"); return; }
+    setForgotLoading(true);
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: getPasswordResetRedirectUrl(),
+      });
+      if (resetError) {
+        setError(resetError.message || "Could not send reset email");
+      } else {
+        setForgotSent(true);
+      }
+    } catch {
+      setError("Something went wrong. Try again.");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   const handleResend = async () => {
     if (!email || resendLoading) return;
     setResendLoading(true);
@@ -279,6 +303,123 @@ const AuthPage = () => {
           >
             ← Back to sign in
           </button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (forgotMode) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background relative overflow-hidden px-4 py-8 pt-safe-plus-4 pb-safe">
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[120px] pointer-events-none" style={{ background: 'hsl(270 70% 45% / 0.22)' }} />
+
+        <motion.div
+          initial={{ opacity: 0, y: 20, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+          className="w-full max-w-[440px] relative z-10 rounded-[28px] p-7 sm:p-8 border"
+          style={{
+            background: 'hsla(265, 25%, 9%, 0.72)',
+            borderColor: 'hsla(0, 0%, 100%, 0.06)',
+            backdropFilter: 'blur(28px)',
+            WebkitBackdropFilter: 'blur(28px)',
+            boxShadow: '0 20px 60px hsla(265, 50%, 4%, 0.65), inset 0 1px 0 hsla(0, 0%, 100%, 0.04)',
+          }}
+        >
+          <div className="flex items-center gap-2.5 mb-6">
+            <div
+              className="relative w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center"
+              style={{ boxShadow: `0 0 20px ${ACCENT}66, inset 0 0 0 1px ${ACCENT}55` }}
+            >
+              <img src={sentinelLogo} alt="Sentinel" className="w-full h-full object-cover" />
+            </div>
+            <span className="text-[13px] font-bold tracking-[0.22em]" style={{ color: ACCENT, textShadow: `0 0 12px ${ACCENT}66` }}>
+              SENTINEL
+            </span>
+          </div>
+
+          {forgotSent ? (
+            <div className="text-center py-2">
+              <div className="flex justify-center mb-5">
+                <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: `${ACCENT}22`, border: `1px solid ${ACCENT}44` }}>
+                  <Mail className="w-8 h-8" style={{ color: ACCENT }} />
+                </div>
+              </div>
+              <h2 className="text-[24px] font-bold text-white mb-2">Check your email</h2>
+              <p className="text-[13px] text-white/55 leading-relaxed mb-1">We sent a reset link to</p>
+              <p className="text-[14px] font-semibold mb-5" style={{ color: ACCENT }}>{email}</p>
+              <p className="text-[12px] text-white/45 leading-relaxed mb-6">
+                Open the link to choose a new password. The link is valid for one hour.
+              </p>
+              <button
+                type="button"
+                onClick={() => { setForgotMode(false); setForgotSent(false); setError(""); }}
+                className="text-[12px] text-white/45 hover:text-white/70 transition-colors"
+              >
+                ← Back to sign in
+              </button>
+            </div>
+          ) : (
+            <>
+              <h1 className="text-[28px] leading-[1.15] font-bold tracking-tight text-white mb-2">
+                Reset your<br />
+                <span style={{ color: ACCENT, textShadow: `0 0 24px ${ACCENT}55` }}>password</span>
+              </h1>
+              <p className="text-[13px] text-white/55 mb-6 leading-relaxed">
+                Enter your email and we'll send you a link to set a new password.
+              </p>
+
+              <form onSubmit={handleForgotPassword} className="space-y-4" autoComplete="on">
+                <div>
+                  <label className="block text-[10px] font-semibold tracking-[0.15em] text-white/50 mb-1.5 uppercase">Email Address</label>
+                  <input
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                    className="w-full rounded-xl py-3 px-4 text-[14px] text-white placeholder:text-white/30 focus:outline-none transition-all"
+                    style={{
+                      background: 'hsla(0,0%,100%,0.03)',
+                      border: '1px solid hsla(0,0%,100%,0.06)',
+                      boxShadow: 'inset 0 1px 2px hsla(0,0%,0%,0.25)',
+                    }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = `${ACCENT}66`; e.currentTarget.style.boxShadow = `inset 0 1px 2px hsla(0,0%,0%,0.25), 0 0 0 3px ${ACCENT}26`; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = 'hsla(0,0%,100%,0.06)'; e.currentTarget.style.boxShadow = 'inset 0 1px 2px hsla(0,0%,0%,0.25)'; }}
+                  />
+                </div>
+
+                {error && (
+                  <p className="text-center text-[12px] text-destructive font-medium">{error}</p>
+                )}
+
+                <motion.button
+                  type="submit"
+                  disabled={forgotLoading}
+                  whileTap={{ scale: 0.985 }}
+                  className="w-full py-3.5 rounded-full text-[14px] font-bold text-white flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  style={{
+                    background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_DEEP})`,
+                    boxShadow: `0 8px 32px ${ACCENT}66, inset 0 1px 0 hsla(0,0%,100%,0.25)`,
+                  }}
+                >
+                  {forgotLoading ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <>Send reset link<ArrowRight className="w-4 h-4" strokeWidth={2.5} /></>
+                  )}
+                </motion.button>
+
+                <button
+                  type="button"
+                  onClick={() => { setForgotMode(false); setError(""); }}
+                  className="w-full text-[12px] text-white/45 hover:text-white/70 transition-colors"
+                >
+                  ← Back to sign in
+                </button>
+              </form>
+            </>
+          )}
         </motion.div>
       </div>
     );
@@ -471,16 +612,28 @@ const AuthPage = () => {
             </motion.p>
           )}
 
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-              className="w-3.5 h-3.5 rounded"
-              style={{ accentColor: ACCENT }}
-            />
-            <span className="text-[12px] text-white/55">Remember me on this device</span>
-          </label>
+          <div className="flex items-center justify-between gap-2">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+                className="w-3.5 h-3.5 rounded"
+                style={{ accentColor: ACCENT }}
+              />
+              <span className="text-[12px] text-white/55">Remember me on this device</span>
+            </label>
+            {!isSignup && (
+              <button
+                type="button"
+                onClick={() => { setForgotMode(true); setError(""); setForgotSent(false); }}
+                className="text-[12px] font-medium hover:underline transition-colors"
+                style={{ color: ACCENT }}
+              >
+                Forgot password?
+              </button>
+            )}
+          </div>
 
           {/* CTA */}
           <motion.button
