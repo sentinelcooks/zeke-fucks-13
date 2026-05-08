@@ -673,7 +673,19 @@ const NbaPropsPage = () => {
             }
 
             const meta = (row?.metadata ?? {}) as Record<string, unknown>;
-            setResults({
+
+            // analyzer-finalize.v1: when the saved row carries a replayable
+            // analyzer_payload, See Why re-runs the analyzer with that exact
+            // payload so the user gets a fresh result. The pick stays on
+            // Today's Edge / Picks regardless of drift.
+            const rowDiag = (row?.model_diagnostics ?? {}) as Record<string, unknown>;
+            const snapDiag = (navState.pick_snapshot?.model_diagnostics ?? {}) as Record<string, unknown>;
+            const analyzerPayload =
+              (rowDiag.analyzer_payload as Record<string, unknown> | null | undefined) ??
+              (snapDiag.analyzer_payload as Record<string, unknown> | null | undefined) ??
+              null;
+
+            const baseResults = {
               sport: s,
               player: { full_name: view.player_name, image_url: view.player_image_url ?? undefined },
               player_name: view.player_name,
@@ -703,7 +715,70 @@ const NbaPropsPage = () => {
               _savedCanonicalOnly: true,
               _savedMarket: view.market,
               _savedAvgValue: view.avg_value,
-            });
+            };
+
+            if (!analyzerPayload) {
+              console.info("[see-why][snapshot]", {
+                pick_id: navState.daily_picks_id ?? null,
+                uses_saved_analysis: false,
+                saved_analyzer_payload: null,
+                saved_confidence: view.confidence,
+              });
+              setResults(baseResults);
+              if (navState.pick_snapshot?.avg_value != null) setSnapshotAvgValue(navState.pick_snapshot.avg_value);
+              setSavedPickMode("ready");
+              return;
+            }
+
+            // Replay the analyzer with the EXACT saved payload.
+            try {
+              const replayed = await analyzeProp({
+                player: String(analyzerPayload.player ?? view.player_name),
+                prop_type: String(analyzerPayload.prop_type ?? nextPropType),
+                line: Number(analyzerPayload.line ?? view.line ?? navState.line ?? 0),
+                over_under: (analyzerPayload.over_under as "over" | "under") ?? view.direction,
+                opponent: (analyzerPayload.opponent as string | undefined) ?? resolvedOpponent ?? undefined,
+                sport: (analyzerPayload.sport as string | undefined) ?? s,
+              });
+              const liveConf = replayed?.confidence != null
+                ? Math.round(normalizeConfidencePercent(replayed.confidence))
+                : null;
+              const liveVerdict = liveConf != null ? normalizeVerdict(replayed?.verdict, liveConf) : null;
+              const delta = liveConf != null ? Math.abs(liveConf - view.confidence) : null;
+
+              console.info("[see-why][snapshot]", {
+                pick_id: navState.daily_picks_id ?? null,
+                uses_saved_analysis: true,
+                saved_analyzer_payload: analyzerPayload,
+                saved_confidence: view.confidence,
+                fresh_confidence: liveConf,
+                delta,
+              });
+
+              if (replayed && !replayed.error) {
+                setResults({
+                  ...baseResults,
+                  ...replayed,
+                  prop_type: nextPropType,
+                  prop_display: formatPropType(nextPropType),
+                  line: view.line || replayed.line || navState.line || 0,
+                  over_under: view.direction,
+                  reasoning: Array.isArray(replayed.reasoning) && replayed.reasoning.length > 0
+                    ? replayed.reasoning
+                    : baseResults.reasoning,
+                  _savedSnapshot: baseResults._savedSnapshot,
+                  _savedCanonicalOnly: false,
+                  _savedMarket: view.market,
+                  _savedAvgValue: view.avg_value,
+                  _seeWhyDelta: delta,
+                });
+              } else {
+                setResults(baseResults);
+              }
+            } catch (e) {
+              console.warn("[see-why][snapshot] replay_failed", e);
+              setResults(baseResults);
+            }
             if (navState.pick_snapshot?.avg_value != null) setSnapshotAvgValue(navState.pick_snapshot.avg_value);
             setSavedPickMode("ready");
             return;

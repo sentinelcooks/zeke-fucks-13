@@ -167,22 +167,25 @@ Deno.serve(async (req) => {
     .eq("pick_date", today)
     .eq("tier", "_pending");
 
-  // Re-insert the survivors with their final tier
-  const survivors = (pendingRows || []).filter((r: any) =>
-    edgeKeys.has(`${r.sport}|${r.player_name}|${r.prop_type}|${r.direction}|${r.line}`) ||
-    dailyKeys.has(`${r.sport}|${r.player_name}|${r.prop_type}|${r.direction}|${r.line}`)
-  );
+  // Re-insert the survivors with their final tier.
+  // analyzer-finalize.v1: preserve the per-sport scanner's analyzer-canonical
+  // confidence/verdict/diagnostics VERBATIM. The only role of slate-scanner here
+  // is tier assignment; never re-derive verdict from re-rounded confidence.
+  const survivors = (pendingRows || []).filter((r: any) => {
+    const key = `${r.sport}|${r.player_name}|${r.prop_type}|${r.direction}|${r.line}`;
+    if (!edgeKeys.has(key) && !dailyKeys.has(key)) return false;
+    // Drop any prop pending row that somehow carried line<=0.
+    if (r.bet_type === "prop" && (!Number.isFinite(Number(r.line)) || Number(r.line) <= 0)) {
+      console.warn(`[slate-scanner] drop_zero_line ${r.sport}/${r.player_name}/${r.prop_type} line=${r.line}`);
+      return false;
+    }
+    return true;
+  });
   const finalRows = survivors.map((r: any) => {
     const key = `${r.sport}|${r.player_name}|${r.prop_type}|${r.direction}|${r.line}`;
     let tier = "value";
     if (edgeKeys.has(key)) tier = "edge";
     else if (Number(r.hit_rate ?? 0) >= 70) tier = "daily";
-    // Preserve calibrated confidence so the frontend can sort by it.
-    const confidence01 = r.confidence != null
-      ? Number(r.confidence)
-      : Number(r.hit_rate ?? 0) / 100;
-    const storedConfidence = Math.round(normalizeConfidencePercent(confidence01));
-    const storedVerdict = normalizeCanonicalVerdict(r.verdict, storedConfidence);
     return {
       pick_date: today,
       event_id: r.event_id ?? null,
@@ -201,8 +204,8 @@ Deno.serve(async (req) => {
       total_line: r.total_line,
       direction: r.direction,
       hit_rate: r.hit_rate,
-      confidence: Math.round(confidence01 * 1000) / 1000,
-      verdict: storedVerdict,
+      confidence: r.confidence,
+      verdict: r.verdict,
       last_n_games: r.last_n_games ?? 10,
       avg_value: r.avg_value,
       odds: r.odds,
@@ -210,8 +213,6 @@ Deno.serve(async (req) => {
       tier,
       model_diagnostics: {
         ...(r.model_diagnostics ?? {}),
-        stored_confidence: storedConfidence,
-        stored_verdict: storedVerdict,
         tier,
         sport: r.sport,
         source_function: "slate-scanner",

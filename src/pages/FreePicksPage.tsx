@@ -550,7 +550,7 @@ const FreePicksPage = () => {
                       )}
                     </div>
                     <div className="flex flex-col items-end gap-0.5 shrink-0">
-                      <span className={`text-[15px] font-bold tabular-nums ${conf.text}`}>{pick.hit_rate}%</span>
+                      <span className={`text-[15px] font-bold tabular-nums ${conf.text}`}>{Math.round(scoreOf(pick))}%</span>
                       <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">confidence</span>
                       {edge > 0 && <span className="text-[10px] font-semibold text-nba-green">{edge}% edge</span>}
                     </div>

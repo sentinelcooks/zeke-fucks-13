@@ -76,6 +76,12 @@ function pickCanonical(books: BookOdds[]):
   return best;
 }
 
+type RealMarketSkipReason = "no_books" | "no_canonical" | "http_error";
+interface RealMarketResult {
+  market: RealMarket | null;
+  skipReason?: RealMarketSkipReason;
+}
+
 async function fetchRealMarket(
   playerName: string,
   propType: string,
@@ -84,7 +90,8 @@ async function fetchRealMarket(
   supabaseUrl: string,
   serviceKey: string,
   cache: Map<string, BookOdds[]>,
-): Promise<RealMarket | null> {
+): Promise<RealMarketResult> {
+  let httpErrored = false;
   async function getBooks(dir: "over" | "under"): Promise<BookOdds[]> {
     const k = `${playerName}|${propType}|${dir}`;
     if (cache.has(k)) return cache.get(k)!;
@@ -99,6 +106,7 @@ async function fetchRealMarket(
         body: JSON.stringify({ playerName, propType, overUnder: dir, sport }),
       });
       if (!resp.ok) {
+        httpErrored = true;
         cache.set(k, []);
         return [];
       }
@@ -107,14 +115,18 @@ async function fetchRealMarket(
       cache.set(k, books);
       return books;
     } catch {
+      httpErrored = true;
       cache.set(k, []);
       return [];
     }
   }
 
   const primary = await getBooks(direction);
+  if (primary.length === 0) {
+    return { market: null, skipReason: httpErrored ? "http_error" : "no_books" };
+  }
   const canon = pickCanonical(primary);
-  if (!canon) return null;
+  if (!canon) return { market: null, skipReason: "no_canonical" };
 
   const oppDir: "over" | "under" = direction === "over" ? "under" : "over";
   const oppBooks = await getBooks(oppDir);
@@ -125,11 +137,13 @@ async function fetchRealMarket(
 
   const fmt = (n: number) => (n > 0 ? `+${n}` : `${n}`);
   return {
-    line: canon.line,
-    oddsAmerican: fmt(canon.bestOdds),
-    oddsOpp: oppBest ? fmt(oppBest.odds) : null,
-    book: canon.bestBook,
-    bookCount: canon.count,
+    market: {
+      line: canon.line,
+      oddsAmerican: fmt(canon.bestOdds),
+      oddsOpp: oppBest ? fmt(oppBest.odds) : null,
+      book: canon.bestBook,
+      bookCount: canon.count,
+    },
   };
 }
 
@@ -655,7 +669,10 @@ Deno.serve(async (req) => {
   try {
     const startTime = Date.now();
     const TIMEOUT_MS = 140_000;
+    const PHASE_B_BUDGET_MS = 90_000;
+    const phaseBDeadline = startTime + PHASE_B_BUDGET_MS;
     const isTimedOut = () => Date.now() - startTime > TIMEOUT_MS;
+    const isPhaseBTimedOut = () => Date.now() > phaseBDeadline;
 
     console.log("🎯 Daily picks generator — DETERMINISTIC FULL-SLATE SCAN");
 
@@ -678,25 +695,15 @@ Deno.serve(async (req) => {
 
     const rawPicks: any[] = [];
 
-    // ── Phase A: Grade all game-level markets for every game ──
-    console.log(`Phase A: scanning ${allGames.length} games`);
-    for (let gi = 0; gi < allGames.length; gi++) {
-      const game = allGames[gi];
-      if (isTimedOut()) { console.log("⏱️ Timeout — stopping Phase A"); break; }
-      try {
-        const picks = await retryWithBackoff(
-          () => analyzeGameBets(game, supabaseUrl, serviceKey, 0),
-          2, `game-${game.away}@${game.home}`
-        );
-        rawPicks.push(...picks);
-      } catch (e) { console.error(`Phase A error:`, e); }
-      if (gi < allGames.length - 1) await delay(700);
-    }
-    console.log(`Phase A done: ${rawPicks.length} game candidates (${Math.round((Date.now() - startTime) / 1000)}s)`);
-
     // ── Phase B: Grade all active players, both directions ──
+    // Runs FIRST with a reserved budget so slow Phase A grading cannot starve
+    // the NBA prop scan that feeds Today's Edge.
+    console.log(`Phase B start: budget=${PHASE_B_BUDGET_MS}ms (elapsed=${Date.now() - startTime}ms)`);
     console.log("Phase B: scanning lineups for player props");
     let nbaCanonicalFinalizeCalls = 0;
+    let lineupCandidateCount = 0;
+    let realMarketSuccess = 0;
+    const realMarketSkip: Record<string, number> = {};
     // Per-request cache of nba-odds/player-odds responses keyed by `${player}|${propType}|${direction}`.
     // Lets the second direction iteration (under after over) reuse what the first iteration already
     // pulled as its opposite-side fetch, cutting nba-odds POSTs roughly in half.
@@ -706,7 +713,7 @@ Deno.serve(async (req) => {
     );
 
     for (const r of lineupResults) {
-      if (isTimedOut()) { console.log("⏱️ Timeout — stopping Phase B"); break; }
+      if (isPhaseBTimedOut()) { console.log("⏱️ Phase B budget exhausted — stopping"); break; }
       if (r.status !== "fulfilled" || r.value.lineup.length === 0) continue;
       const { game, lineup } = r.value;
       if (game.sport !== "nba") continue;
@@ -717,23 +724,30 @@ Deno.serve(async (req) => {
       const players = lineup.slice(0, PLAYERS_PER_GAME_CAP);
 
       for (const player of players) {
-        if (isTimedOut()) break;
+        if (isPhaseBTimedOut()) break;
         if (nbaCanonicalFinalizeCalls >= NBA_CANONICAL_FINALIZE_CAP) break;
         for (const propType of propTypes) {
-          if (isTimedOut()) break;
+          if (isPhaseBTimedOut()) break;
           if (nbaCanonicalFinalizeCalls >= NBA_CANONICAL_FINALIZE_CAP) break;
           for (const direction of ["over", "under"] as const) {
-            if (isTimedOut()) break;
+            if (isPhaseBTimedOut()) break;
             if (nbaCanonicalFinalizeCalls >= NBA_CANONICAL_FINALIZE_CAP) break;
+            lineupCandidateCount++;
             try {
               // 1) Real sportsbook line + odds FIRST. Skip if the requested side is not bookable —
               //    Today's Edge must reference a graded line; analyzing with line=0 produces a
               //    confidence divorced from the price we'd grade against.
-              const market = await fetchRealMarket(
+              const { market, skipReason } = await fetchRealMarket(
                 player.name, propType, direction, game.sport,
                 supabaseUrl, serviceKey, realMarketCache,
               );
-              if (!market) { await delay(120); continue; }
+              if (!market) {
+                const reason = skipReason ?? "no_books";
+                realMarketSkip[reason] = (realMarketSkip[reason] ?? 0) + 1;
+                await delay(120);
+                continue;
+              }
+              realMarketSuccess++;
 
               // 2) Analyze using the REAL line and the REQUESTED direction.
               //    We grade against the direction we paired odds to; ignore result.direction.
@@ -764,6 +778,29 @@ Deno.serve(async (req) => {
                 `displayPct=${result.confidence}`
               );
 
+              // analyzer-finalize.v1: attach replayable side-car so the saved
+              // row carries the exact analyzer call + response. See Why and
+              // manual Analyze can replay this byte-for-byte.
+              const analyzerSidecar = {
+                analyzer_payload: analyzePayload,
+                analyzer_response_snapshot: {
+                  confidence: (result as any).canonical_confidence ?? result.confidence,
+                  verdict: result.verdict,
+                  reasoning: Array.isArray((result as any).reasoning_array)
+                    ? (result as any).reasoning_array.slice(0, 8)
+                    : result.reasoning ?? null,
+                  season_hit_rate: (result as any).season_hit_rate ?? null,
+                  last_5: (result as any).last_5 ?? null,
+                  last_10: (result as any).last_10 ?? null,
+                  head_to_head: (result as any).head_to_head ?? null,
+                  diagnostics: (result as any).model_diagnostics ?? null,
+                },
+                analyzer_confidence_raw: typeof (result as any).confidence === "number" ? (result as any).confidence : null,
+                analyzer_verdict_raw: result.verdict ?? null,
+                analyzer_called_at: new Date().toISOString(),
+                confidenceSource: "analyzer",
+                sourceContractVersion: "analyzer-finalize.v1",
+              };
               rawPicks.push({
                 bet_type: "prop",
                 player_name: player.name,
@@ -783,7 +820,7 @@ Deno.serve(async (req) => {
                 spread_line: null,
                 total_line: null,
                 sport: game.sport,
-                model_diagnostics: result.model_diagnostics ?? null,
+                model_diagnostics: { ...(result.model_diagnostics ?? {}), ...analyzerSidecar },
               });
             } catch (e) {
               console.error(`prop err ${player.name}/${propType}/${direction}:`, e);
@@ -794,6 +831,30 @@ Deno.serve(async (req) => {
       }
     }
     console.log(`Phase B done: ${rawPicks.length} total candidates; NBA canonical finalizations=${nbaCanonicalFinalizeCalls}/${NBA_CANONICAL_FINALIZE_CAP} (${Math.round((Date.now() - startTime) / 1000)}s)`);
+    console.log(
+      `[daily-picks][propB-summary] lineupCandidates=${lineupCandidateCount} ` +
+      `realMarketSuccess=${realMarketSuccess} realMarketSkip=${JSON.stringify(realMarketSkip)} ` +
+      `analyzerFinalizations=${nbaCanonicalFinalizeCalls}/${NBA_CANONICAL_FINALIZE_CAP} ` +
+      `elapsed=${Date.now() - startTime}ms`
+    );
+
+    // ── Phase A: Grade all game-level markets for every game ──
+    // Runs after Phase B with whatever budget remains under TIMEOUT_MS.
+    console.log(`Phase A: scanning ${allGames.length} games (elapsed=${Date.now() - startTime}ms)`);
+    const phaseAStartCount = rawPicks.length;
+    for (let gi = 0; gi < allGames.length; gi++) {
+      const game = allGames[gi];
+      if (isTimedOut()) { console.log("⏱️ Timeout — stopping Phase A"); break; }
+      try {
+        const picks = await retryWithBackoff(
+          () => analyzeGameBets(game, supabaseUrl, serviceKey, 0),
+          2, `game-${game.away}@${game.home}`
+        );
+        rawPicks.push(...picks);
+      } catch (e) { console.error(`Phase A error:`, e); }
+      if (gi < allGames.length - 1) await delay(700);
+    }
+    console.log(`Phase A done: ${rawPicks.length - phaseAStartCount} game candidates (${Math.round((Date.now() - startTime) / 1000)}s)`);
 
     // ── Phase C: Score, rank, gate strictly ──
     // Sanity filter: drop any candidate where the model<>market gap is mathematically impossible
@@ -917,6 +978,15 @@ Deno.serve(async (req) => {
     const rejectedCount = dedupedPicks.length - scoredPlays.filter(p => p.verdict !== "Pass").length;
     console.log(`✅ Gated: ${todaysEdge.length} edge, ${dailyRanked.length} daily, ${freePicks.length} free, ${rejectedCount} rejected`);
 
+    const rejectByReason: Record<string, number> = {};
+    for (const sp of scoredPlays) {
+      if (sp.verdict === "Pass") {
+        const r = (sp.model_diagnostics?.gate_reason as string) ?? "below_threshold";
+        rejectByReason[r] = (rejectByReason[r] ?? 0) + 1;
+      }
+    }
+    console.log(`[daily-picks][gate-summary] ${JSON.stringify(rejectByReason)}`);
+
     // ── Phase D: Persist ──
     const today = new Date().toISOString().slice(0, 10);
     const edgeKeySet = new Set(
@@ -954,6 +1024,8 @@ Deno.serve(async (req) => {
     // so the Home carousel can render a real empty-state instead of blank.
     if (todaysEdge.length === 0) {
       pickRows.push({
+        id: crypto.randomUUID(),
+        created_at: new Date().toISOString(),
         pick_date: today,
         sport: "meta",
         player_name: "No eligible picks today",
@@ -1023,30 +1095,27 @@ Deno.serve(async (req) => {
       });
 
     try {
-      const allPickRows = [...pickRows, ...valueRows];
-      const { error: rpcErr } = await supabase.rpc("replace_daily_picks", {
-        p_pick_date: today,
-        p_rows: allPickRows,
-        p_free_rows: freeRows,
-      });
-      if (rpcErr) {
-        console.error("replace_daily_picks RPC error:", rpcErr);
-        // Fallback to the old wipe+upsert path — prevents total outage
-        // if the migration hasn't been applied yet.
-        await supabase.from("daily_picks").delete().eq("pick_date", today);
-        await supabase.from("free_props").delete().eq("prop_date", today);
-        if (allPickRows.length > 0) {
-          const { error: insertErr } = await supabase
-            .from("daily_picks")
-            .upsert(allPickRows, {
-              onConflict: "pick_date,sport,tier,player_name,prop_type,direction,line",
-              ignoreDuplicates: true,
-            });
-          if (insertErr) console.error("daily_picks fallback upsert error:", insertErr);
-        }
-        if (freeRows.length > 0) {
-          await supabase.from("free_props").insert(freeRows);
-        }
+      // analyzer-finalize.v1: buildDailyPickRow returns null for prop rows with
+      // line<=0; filter before insert.
+      const allPickRows = [...pickRows, ...valueRows].filter(
+        (r): r is NonNullable<typeof r> => r !== null,
+      );
+
+      // Wipe + plain insert. Bypasses replace_daily_picks RPC (jsonb_populate_recordset
+      // emits NULL for missing keys → 23502 on id/created_at) and avoids the
+      // expression-index ON CONFLICT trap (42P10). PostgREST .insert() omits
+      // missing keys from the INSERT column list, so column DEFAULTs apply.
+      // The acquiredLock guard prevents concurrent wipes from racing.
+      await supabase.from("daily_picks").delete().eq("pick_date", today);
+      await supabase.from("free_props").delete().eq("prop_date", today);
+
+      if (allPickRows.length > 0) {
+        const { error: insErr } = await supabase.from("daily_picks").insert(allPickRows);
+        if (insErr) console.error("daily_picks insert error:", insErr);
+      }
+      if (freeRows.length > 0) {
+        const { error: freeErr } = await supabase.from("free_props").insert(freeRows);
+        if (freeErr) console.error("free_props insert error:", freeErr);
       }
     } catch (e) {
       console.error("persist error:", e);

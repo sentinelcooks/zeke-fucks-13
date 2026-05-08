@@ -1440,6 +1440,16 @@ export async function validateWithAnalyzer(
 ): Promise<ScoredPlay | null> {
   if (play.bet_type !== "prop") return play;
 
+  // analyzer-finalize.v1: belt-and-suspenders guard — never analyze a prop with
+  // line<=0. The scanner's market aggregation should already reject these but
+  // verifying here means the saved row can never carry a fake line.
+  if (play.bet_type === "prop" && (!Number.isFinite(play.line) || play.line <= 0)) {
+    for (const tr of matchingTrace(traceResults, play)) {
+      tr.final_rejection_reason = "prop_line_zero";
+    }
+    return null;
+  }
+
   // phase-c.v1: capture scanner confidence before any analyzer modification
   const scannerConfidence = play.confidence;
   const scannerConfidencePercent = normalizeConfidencePercent(scannerConfidence);
@@ -1447,13 +1457,19 @@ export async function validateWithAnalyzer(
   const endpoint = ANALYZER_ENDPOINT[play.sport] ?? null;
   if (!endpoint) {
     diagnostics.skipped++;
-    // phase-c.v1: no analyzer endpoint — record unavailable agreement
+    // analyzer-finalize.v1: no analyzer endpoint — uniform contract so downstream
+    // (See Why, savedPick) can read the same keys regardless of sport.
     const phaseCDiag: Record<string, unknown> = {
       scannerConfidence,
       scanner_confidence_raw: play.raw_confidence ?? scannerConfidence,
       scanner_confidence_percent: scannerConfidencePercent,
       analyzerConfidence: null,
       analyzer_confidence_percent: null,
+      analyzer_payload: null,
+      analyzer_response_snapshot: null,
+      analyzer_confidence_raw: null,
+      analyzer_verdict_raw: null,
+      analyzer_called_at: null,
       confidenceSource: "scanner",
       verdictSource: "scanner",
       canonical_confidence: scannerConfidencePercent,
@@ -1461,7 +1477,7 @@ export async function validateWithAnalyzer(
       analyzerAgreement: "unavailable",
       analyzerDisagreementReason: null,
       publishedSource: "scanner",
-      sourceContractVersion: "phase-c.v1",
+      sourceContractVersion: "analyzer-finalize.v1",
     };
     return {
       ...play,
@@ -1472,22 +1488,22 @@ export async function validateWithAnalyzer(
   const cacheKey = `${play.sport}|${play.player_name}|${play.prop_type}|${play.line}|${play.direction}`;
   let analyzed = cache.get(cacheKey);
 
+  // analyzer-finalize.v1: hoist body so cache-hit path can also persist the
+  // exact analyzer request that was used for this play.
+  const body = {
+    player: play.player_name,
+    prop_type: play.sport === "nba" ? normalizeNbaPropType(play.prop_type) : play.prop_type,
+    line: play.line,
+    over_under: normalizeDirection(play.direction),
+    opponent: play.opponent || "",
+    team: play.team || null,
+    home_team: play.home_team || null,
+    away_team: play.away_team || null,
+    sport: play.sport,
+    bet_type: "player_prop",
+  };
+
   if (!analyzed) {
-    const opponent = play.opponent || "";
-
-    const body = {
-      player: play.player_name,
-      prop_type: play.sport === "nba" ? normalizeNbaPropType(play.prop_type) : play.prop_type,
-      line: play.line,
-      over_under: normalizeDirection(play.direction),
-      opponent,
-      team: play.team || null,
-      home_team: play.home_team || null,
-      away_team: play.away_team || null,
-      sport: play.sport,
-      bet_type: "player_prop",
-    };
-
     diagnostics.calls++;
     diagnostics.callsAttempted++;
     for (const tr of matchingTrace(traceResults, play)) {
@@ -1689,13 +1705,42 @@ export async function validateWithAnalyzer(
     }
   }
 
-  // phase-c.v1: compute agreement between scanner and analyzer
+  // analyzer-finalize.v1: symmetric agreement (lower OR higher beyond 10pts is drift)
   const analyzerConfidence = adjustedProjected;
   const diff = Math.abs(scannerConfidence - analyzerConfidence);
-  const analyzerAgreement = diff <= 0.10 ? "agree" : analyzerConfidence < scannerConfidence ? "disagree" : "agree";
-  const analyzerDisagreementReason = analyzerAgreement === "disagree"
-    ? `analyzer_lower_by_${Math.round(diff * 100)}`
-    : null;
+  const analyzerAgreement = diff <= 0.10 ? "agree" : "disagree";
+  const analyzerDisagreementReason =
+    analyzerAgreement === "disagree"
+      ? `delta_${Math.round(diff * 100)}_${analyzerConfidence < scannerConfidence ? "lower" : "higher"}`
+      : null;
+
+  // analyzer-finalize.v1: build a minimal replayable response snapshot so See Why
+  // can render the saved analyzer view without re-querying. Keep it small — the
+  // full analyzed object can carry season-long stats arrays.
+  const analyzerResponseSnapshot = {
+    confidence: analyzed.canonical_confidence ?? analyzed.confidence ?? analyzed.displayConfidence ?? null,
+    verdict: analyzed.canonical_verdict ?? analyzed.verdict ?? analyzed.decision?.verdict ?? null,
+    reasoning: Array.isArray(analyzed.reasoning) ? analyzed.reasoning.slice(0, 8) : analyzed.reasoning ?? null,
+    season_hit_rate: analyzed.season_hit_rate ?? null,
+    last_5: analyzed.last_5 ?? null,
+    last_10: analyzed.last_10 ?? null,
+    head_to_head: analyzed.head_to_head ?? null,
+    home_away: analyzed.home_away ?? null,
+    diagnostics: analyzed.model_diagnostics ?? null,
+  };
+
+  const analyzerPayload = {
+    player: body.player,
+    prop_type: body.prop_type,
+    line: body.line,
+    over_under: body.over_under,
+    opponent: body.opponent,
+    sport: body.sport,
+    team: body.team,
+    home_team: body.home_team,
+    away_team: body.away_team,
+    bet_type: body.bet_type,
+  };
 
   const phaseCDiag: Record<string, unknown> = {
     scannerConfidence,
@@ -1703,6 +1748,11 @@ export async function validateWithAnalyzer(
     scanner_confidence_percent: scannerConfidencePercent,
     analyzerConfidence,
     analyzer_confidence_percent: Math.round(analyzerConfidence * 100),
+    analyzer_payload: analyzerPayload,
+    analyzer_response_snapshot: analyzerResponseSnapshot,
+    analyzer_confidence_raw: typeof analyzed.confidence === "number" ? analyzed.confidence : null,
+    analyzer_verdict_raw: analyzed.verdict ?? null,
+    analyzer_called_at: new Date().toISOString(),
     confidenceSource: "analyzer",
     verdictSource: "analyzer",
     canonical_confidence: Math.round(analyzerConfidence * 100),
@@ -1710,8 +1760,12 @@ export async function validateWithAnalyzer(
     analyzerAgreement,
     analyzerDisagreementReason,
     publishedSource: "analyzer",
-    sourceContractVersion: "phase-c.v1",
+    sourceContractVersion: "analyzer-finalize.v1",
   };
+
+  console.log(
+    `[scanner][analyzer-finalize] player=${play.player_name} prop_type=${body.prop_type} line=${play.line} dir=${body.over_under} odds=${play.odds} analyzer_confidence=${Math.round(analyzerConfidence * 100)} scanner_confidence=${Math.round(scannerConfidencePercent)} agreement=${analyzerAgreement} payload=${JSON.stringify(analyzerPayload)}`,
+  );
 
   return {
     ...play,
