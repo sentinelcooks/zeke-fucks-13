@@ -618,7 +618,7 @@ function parseOdds(odds: string | null | undefined): number {
 import { score, scorePrecomputed, rankAndDistribute, type ScoredPlay } from "../_shared/edge_scoring.ts";
 import { americanToImplied, fairImpliedFromPair, calcEvPct, clamp01 } from "../_shared/prob_math.ts";
 import { getCalibration } from "../_shared/calibration_cache.ts";
-import { buildDailyPickRow } from "../_shared/daily_pick_rows.ts";
+import { buildDailyPickRow, applyAnalyzerFinalizeInsertGuard } from "../_shared/daily_pick_rows.ts";
 import {
   canonicalToScoredVerdict,
   normalizeCanonicalVerdict,
@@ -1110,8 +1110,12 @@ Deno.serve(async (req) => {
       await supabase.from("free_props").delete().eq("prop_date", today);
 
       if (allPickRows.length > 0) {
-        const { error: insErr } = await supabase.from("daily_picks").insert(allPickRows);
-        if (insErr) console.error("daily_picks insert error:", insErr);
+        // analyzer-finalize.v1 hard insert-time guard — final defense.
+        const guarded = applyAnalyzerFinalizeInsertGuard(allPickRows, "daily-picks");
+        if (guarded.rows.length) {
+          const { error: insErr } = await supabase.from("daily_picks").insert(guarded.rows);
+          if (insErr) console.error("daily_picks insert error:", insErr);
+        }
       }
       if (freeRows.length > 0) {
         const { error: freeErr } = await supabase.from("free_props").insert(freeRows);

@@ -13,6 +13,7 @@ import {
   normalizeCanonicalVerdict,
   normalizeConfidencePercent,
 } from "../_shared/canonical_verdict.ts";
+import { applyAnalyzerFinalizeInsertGuard } from "../_shared/daily_pick_rows.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -221,8 +222,13 @@ Deno.serve(async (req) => {
   });
 
   if (finalRows.length) {
-    const { error } = await supabase.from("daily_picks").insert(finalRows);
-    if (error) console.error("Final daily_picks insert error:", error);
+    // analyzer-finalize.v1 hard insert-time guard — final defense before
+    // any daily_picks write. Drops scanner-only rows from edge/daily/value.
+    const guarded = applyAnalyzerFinalizeInsertGuard(finalRows, "slate-scanner:orchestrator");
+    if (guarded.rows.length) {
+      const { error } = await supabase.from("daily_picks").insert(guarded.rows);
+      if (error) console.error("Final daily_picks insert error:", error);
+    }
   }
 
   // 6. Insert top free_props

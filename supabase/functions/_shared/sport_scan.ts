@@ -28,7 +28,8 @@ import {
   normalizeConfidencePercent,
   scoredVerdictToCanonical,
 } from "./canonical_verdict.ts";
-import { buildDailyPickRow } from "./daily_pick_rows.ts";
+import { buildDailyPickRow, applyAnalyzerFinalizeInsertGuard } from "./daily_pick_rows.ts";
+import { enqueueGenericAnalyzerCandidates } from "./analyzer_queue.ts";
 
 // App slate timezone — matches the public-display assumption in src/lib/gameDate.ts.
 const APP_TZ = "America/New_York";
@@ -81,14 +82,16 @@ const PREFILTER_MIN_CONF: Record<string, number> = {
   ufc: 0.50,
 };
 
-// Sport → analyzer function path. null means skip analyzer (deterministic only).
-// MLB/NHL have no dedicated analyze endpoint; do NOT fall back to nba-api/analyze
-// because that piles all sports onto a single rate-limited function.
+// Sport → analyzer function path. nba-api/analyze is multi-sport: it dispatches
+// internally to mlb-model/analyze and nhl-model/analyze for 20-factor team
+// context. ANALYZER_LIMIT below caps per-sport concurrency so MLB/NHL traffic
+// does not starve NBA. A null entry means "no analyzer endpoint exists" and
+// such rows MUST NOT be inserted into Today's Edge / Picks (analyzer-required).
 const ANALYZER_ENDPOINT: Record<string, string | null> = {
   nba: "nba-api/analyze",
   ufc: "ufc-api/analyze",
-  mlb: null,
-  nhl: null,
+  mlb: "nba-api/analyze",
+  nhl: "nba-api/analyze",
 };
 
 // Per-sport analyzer concurrency. Bounded to keep AI Gateway pressure low.
@@ -508,6 +511,65 @@ interface FetchResult {
   status: number;
   data: any;
   size: number;
+}
+
+// Decode the JWT payload (no signature verification — we only need the role
+// claim to choose between platform-injected vs custom secret and to refuse
+// to attempt an insert that will deterministically violate RLS).
+type JwtAuthSource = "service_role" | "anon" | "user_jwt" | "missing";
+
+function decodeJwtRole(jwt: string): JwtAuthSource {
+  try {
+    const parts = jwt.split(".");
+    if (parts.length !== 3) return "missing";
+    const pad = parts[1].length % 4;
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/") + (pad ? "=".repeat(4 - pad) : "");
+    const payload = JSON.parse(atob(b64));
+    const role = typeof payload?.role === "string" ? payload.role : "";
+    if (role === "service_role") return "service_role";
+    if (role === "anon") return "anon";
+    if (role === "authenticated") return "user_jwt";
+    return "missing";
+  } catch {
+    return "missing";
+  }
+}
+
+// Resolve the service-role JWT for daily_picks inserts. The Supabase CLI
+// refuses `supabase secrets set SUPABASE_*` (reserved prefix), so we cannot
+// rely on a user-managed SUPABASE_SERVICE_ROLE_KEY. Read user-controlled
+// secrets first (SERVICE_ROLE_KEY, MASTER_SUPABASE_SERVICE_KEY) and pick the
+// first JWT that actually decodes to role=service_role. SUPABASE_SERVICE_ROLE_KEY
+// remains as a last-resort platform fallback for non-broken envs.
+const SERVICE_ROLE_CANDIDATE_NAMES = [
+  "SERVICE_ROLE_KEY",
+  "MASTER_SUPABASE_SERVICE_KEY",
+  "SUPABASE_SERVICE_ROLE_KEY",
+] as const;
+
+type ServiceRoleAuth = {
+  key: string | null;
+  sourceName: string;
+  decodedRole: JwtAuthSource;
+  presence: string[];
+};
+
+function resolveServiceRoleAuth(): ServiceRoleAuth {
+  const presence: string[] = [];
+  let firstSeenRole: JwtAuthSource = "missing";
+
+  for (const name of SERVICE_ROLE_CANDIDATE_NAMES) {
+    const value = Deno.env.get(name)?.trim();
+    if (!value) continue;
+    presence.push(name);
+    const role = decodeJwtRole(value);
+    if (firstSeenRole === "missing") firstSeenRole = role;
+    if (role === "service_role") {
+      return { key: value, sourceName: name, decodedRole: role, presence };
+    }
+  }
+
+  return { key: null, sourceName: "none", decodedRole: firstSeenRole, presence };
 }
 
 // Read credentials at call-time so the values are always freshly resolved
@@ -1185,7 +1247,10 @@ async function evaluatePlayerProps(
   let propLineCount = 0;
   const playerSet = new Set<string>();
 
-  const CHUNK = 5;
+  // Per-sport fanout chunk size. MLB events are noisy and the player-props
+  // endpoint has hit rate limits at chunk=5; 2 keeps us under the burst
+  // threshold while preserving NBA/NHL throughput.
+  const CHUNK = sport === "mlb" ? 2 : 5;
   const eventProps: Array<{ ev: any; data: any }> = [];
 
   for (let i = 0; i < upcoming.length; i += CHUNK) {
@@ -1201,6 +1266,22 @@ async function evaluatePlayerProps(
     );
 
     eventProps.push(...results);
+
+    // If any chunk fetch surfaced a rate-limit hint, sleep before the next
+    // chunk so we don't hammer the upstream provider into another 429.
+    let chunkRetryAfterMs = 0;
+    for (const r of results) {
+      const retryHint = (r.data as { retryAfterMs?: number; retry_after_ms?: number } | null)
+        ?.retryAfterMs ?? (r.data as { retry_after_ms?: number } | null)?.retry_after_ms ?? 0;
+      if (retryHint > chunkRetryAfterMs) chunkRetryAfterMs = retryHint;
+    }
+    if (chunkRetryAfterMs > 0 && i + CHUNK < upcoming.length) {
+      const sleepMs = Math.min(chunkRetryAfterMs, 5_000);
+      console.warn(
+        `[sport_scan] sport=${sport} player-props chunk rate-limited; sleeping ${sleepMs}ms before next chunk`,
+      );
+      await new Promise((r) => setTimeout(r, sleepMs));
+    }
   }
 
   for (const { ev, data } of eventProps) {
@@ -1431,12 +1512,25 @@ async function evaluatePlayerProps(
 // - Rate-limited after retries → return play unchanged.
 // - Hard verdict PASS/FADE or playerIsOut → return null.
 // - Other errors → return play unchanged (do not crash the scan).
+// transientDeferred (optional) — per-invocation array, NEVER module-scope.
+// When provided, validateWithAnalyzer pushes the play onto it on retryable
+// failures (rate_limited / analyzer_timeout / http_5xx / network) so the
+// caller can enqueue them onto the generic analyzer_queue. Each entry pairs
+// the play with the canonical analyzer body and the classification reason.
+export interface TransientDeferredEntry {
+  play: ScoredPlay;
+  analyzer_body: Record<string, unknown>;
+  reason: "rate_limited" | "analyzer_timeout" | "http_5xx" | "network";
+  retry_after_ms?: number;
+}
+
 export async function validateWithAnalyzer(
   play: ScoredPlay,
   cache: Map<string, any>,
   diagnostics: AnalyzerDiagnostics,
   traceResults: TraceResult[] = [],
   analyzerErrorCandidates: AnalyzerErrorCandidate[] = [],
+  transientDeferred?: TransientDeferredEntry[],
 ): Promise<ScoredPlay | null> {
   if (play.bet_type !== "prop") return play;
 
@@ -1536,6 +1630,12 @@ export async function validateWithAnalyzer(
       if (analyzerErrorCandidates.length < DIAGNOSTIC_SAMPLE_LIMIT) {
         analyzerErrorCandidates.push(errorInfo);
       }
+      // Generic queue: capture for non-NBA sports so process-analyzer-queue
+      // can retry once the rate-limit clears.
+      if (transientDeferred) {
+        const retryMs = parseRetryAfterMs(null, r.data) ?? 300_000;
+        transientDeferred.push({ play, analyzer_body: body, reason: "rate_limited", retry_after_ms: retryMs });
+      }
       for (const tr of matchingTrace(traceResults, play)) {
         tr.analyzer_error = {
           status: r.status,
@@ -1569,6 +1669,17 @@ export async function validateWithAnalyzer(
       };
       if (analyzerErrorCandidates.length < DIAGNOSTIC_SAMPLE_LIMIT) {
         analyzerErrorCandidates.push(errorInfo);
+      }
+      // Generic queue: capture retryable transient failures so the queue
+      // processor can retry them. http_4xx is intentionally NOT retryable.
+      if (
+        transientDeferred &&
+        (ftype === "timeout" || ftype === "http_5xx" || ftype === "network")
+      ) {
+        const reason: TransientDeferredEntry["reason"] =
+          ftype === "timeout" ? "analyzer_timeout" : ftype === "http_5xx" ? "http_5xx" : "network";
+        const retryMs = ftype === "timeout" ? 60_000 : 120_000;
+        transientDeferred.push({ play, analyzer_body: body, reason, retry_after_ms: retryMs });
       }
       console.error(
         `[${play.sport}] analyzer error candidate: ${play.player_name} ${body.over_under} ${play.line} ${body.prop_type} ` +
@@ -2036,6 +2147,10 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
   const cache = new Map<string, any>();
   const analyzerDiagnostics = newAnalyzerDiagnostics(sport);
   const analyzerErrorCandidates: AnalyzerErrorCandidate[] = [];
+  // Per-invocation collection of retryable analyzer failures (rate-limit /
+  // timeout / 5xx / network). Routed to enqueueGenericAnalyzerCandidates
+  // for non-NBA sports at the persist phase. NEVER module-scope.
+  const transientDeferred: TransientDeferredEntry[] = [];
   const analyzerPoolExcluded = analyzerPool.excluded;
   const analyzerPoolRanks: Map<string, AnalyzerPoolRankInfo> | undefined =
     "ranks" in analyzerPool ? analyzerPool.ranks : undefined;
@@ -2065,6 +2180,146 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
     );
   }
 
+  // ── Non-NBA queue-first persistence ──
+  // MLB/NHL workers were OOMing (WORKER_RESOURCE_LIMIT) running the analyzer
+  // mapLimit loop inline. For non-NBA sports we now persist the full ranked
+  // analyzer pool to public.analyzer_queue BEFORE doing any heavy analyzer
+  // work, then cap the inline analyzer budget so the worker can finish. The
+  // queue cron drains the rest in the background.
+  //
+  // This block runs even on cold cache and even when the analyzer endpoint
+  // is null — in the null case the queue rows record missing_analyzer_endpoint
+  // for visibility but never publish.
+  const INLINE_ANALYZER_BUDGET_NON_NBA: Record<string, number> = {
+    mlb: 0,
+    nhl: 0,
+    ufc: 1,
+  };
+  let queueFirstInlineBudget = top.length;
+  if (sport !== "nba") {
+    const envBudgetRaw = Number(getEnv(`INLINE_ANALYZER_BUDGET_${sport.toUpperCase()}`));
+    queueFirstInlineBudget = Number.isFinite(envBudgetRaw) && envBudgetRaw >= 0
+      ? Math.floor(envBudgetRaw)
+      : INLINE_ANALYZER_BUDGET_NON_NBA[sport] ?? 0;
+
+    const endpoint = ANALYZER_ENDPOINT[sport];
+    const queueFirstCandidates = top.slice(queueFirstInlineBudget);
+
+    console.log(
+      `[sport_scan] sport=${sport} queue_first=true ` +
+        `candidates_ranked=${top.length} ` +
+        `enqueue_attempted=${queueFirstCandidates.length} ` +
+        `inline_analyzer_budget=${queueFirstInlineBudget}`,
+    );
+
+    if (queueFirstCandidates.length > 0) {
+      try {
+        const { key: qKey } = resolveServiceRoleAuth();
+        const qUrl =
+          getEnv("PROJECT_URL") ?? getEnv("SUPABASE_URL") ?? null;
+        if (qKey && qUrl && endpoint) {
+          const qClient = createClient(qUrl, qKey, {
+            auth: { persistSession: false, autoRefreshToken: false },
+            global: {
+              headers: {
+                Authorization: `Bearer ${qKey}`,
+                apikey: qKey,
+              },
+            },
+          });
+          const today_str = new Date().toISOString().slice(0, 10);
+          const entries = queueFirstCandidates.map((p) => {
+            const intendedTier =
+              ((p.model_diagnostics ?? {}) as Record<string, unknown>).intended_tier as
+                | string
+                | undefined ?? null;
+            const preGateTier =
+              ((p.model_diagnostics ?? {}) as Record<string, unknown>).preGateTier as
+                | string
+                | undefined ?? null;
+            const candidate_payload: Record<string, unknown> = {
+              event_id: p.event_id ?? null,
+              home_team: p.home_team ?? null,
+              away_team: p.away_team ?? null,
+              commence_time: p.commence_time ?? null,
+              odds: p.odds,
+              player_name: p.player_name ?? null,
+              team: p.team ?? null,
+              opponent: p.opponent ?? null,
+              prop_type: p.prop_type,
+              line: p.line,
+              direction: p.direction,
+              bet_type: p.bet_type,
+              intended_tier: intendedTier,
+              pre_gate_tier: preGateTier,
+              pick_date: today_str,
+              sport,
+              model_diagnostics: p.model_diagnostics ?? null,
+              raw_confidence: p.raw_confidence ?? null,
+              ev_pct: p.ev_pct ?? null,
+              edge: p.edge ?? null,
+              spread_line: p.spread_line ?? null,
+              total_line: p.total_line ?? null,
+              reasoning: p.reasoning ?? null,
+            };
+            const analyzer_payload = {
+              player: p.player_name,
+              prop_type: p.prop_type,
+              line: p.line,
+              over_under: normalizeDirection(p.direction),
+              opponent: p.opponent || "",
+              team: p.team || null,
+              home_team: p.home_team || null,
+              away_team: p.away_team || null,
+              sport,
+              bet_type: "player_prop",
+            };
+            return {
+              play: p,
+              analyzerEndpoint: endpoint,
+              analyzerPayload: analyzer_payload,
+              candidatePayload: candidate_payload,
+              intendedTier,
+              preGateTier,
+              scannerTraceId: null,
+              classification: { reason: "budget_exceeded" as const, retry_after_ms: 60_000 },
+            };
+          });
+          const res = await enqueueGenericAnalyzerCandidates(
+            qClient,
+            today_str,
+            sport,
+            entries,
+          );
+          console.log(
+            `[analyzer-queue] sport=${sport} enqueue_attempted=${entries.length} ` +
+              `enqueued=${res.enqueued} skipped=${res.refused} reason=queue_first`,
+          );
+          // Mark these as queue-deferred in trace + diagnostics so they're
+          // excluded from the inline mapLimit loop below.
+          for (const p of queueFirstCandidates) {
+            const md = (p.model_diagnostics ?? {}) as Record<string, unknown>;
+            md.analyzer_skipped_reason = "queue_first";
+            p.model_diagnostics = md;
+            for (const tr of matchingTrace(traceResults, p)) {
+              tr.final_rejection_reason = "queue_first";
+            }
+          }
+        } else {
+          console.warn(
+            `[analyzer-queue] sport=${sport} queue_first SKIPPED ` +
+              `qKey=${qKey ? "ok" : "missing"} qUrl=${qUrl ? "ok" : "missing"} endpoint=${endpoint ?? "null"}`,
+          );
+        }
+      } catch (qErr) {
+        console.error(
+          `[analyzer-queue] sport=${sport} queue_first enqueue failed:`,
+          (qErr as Error)?.message ?? qErr,
+        );
+      }
+    }
+  }
+
   // ── Per-run analyzer call budget (NBA) ──
   // Pool stays at NBA_ANALYZER_CAP (default 80) to preserve diversity, but
   // only the top NBA_ANALYZER_BUDGET_PER_RUN of that pool actually call the
@@ -2072,7 +2327,16 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
   // are explicitly marked so they cannot be promoted to tier=edge.
   let runTargets: typeof top = top;
   let budgetDeferred: typeof top = [];
-  if (sport === "nba") {
+  if (sport !== "nba") {
+    // Non-NBA: we already enqueued the bulk to analyzer_queue above. Inline
+    // analyzer runs only the small queueFirstInlineBudget head of the pool
+    // (default 0 for MLB/NHL). This keeps the worker under WORKER_RESOURCE_LIMIT.
+    runTargets = top.slice(0, queueFirstInlineBudget);
+    budgetDeferred = []; // already enqueued via queue-first path
+    analyzerDiagnostics.budgetPerRun = queueFirstInlineBudget;
+    analyzerDiagnostics.budgetUsed = runTargets.length;
+    analyzerDiagnostics.budgetDeferred = top.length - runTargets.length;
+  } else if (sport === "nba") {
     const budget = resolveNbaAnalyzerBudget(getEnv("NBA_ANALYZER_BUDGET_PER_RUN"));
     analyzerDiagnostics.budgetPerRun = budget;
     const enriched = top.map((p) => ({
@@ -2130,6 +2394,7 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
     try {
       const out = await validateWithAnalyzer(
         p, cache, analyzerDiagnostics, traceResults, analyzerErrorCandidates,
+        sport === "nba" ? undefined : transientDeferred,
       );
       if (
         sport === "nba" &&
@@ -2372,6 +2637,10 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
 
   let droppedNoGameDate = 0;
   let nbaHardSafetyDropped = 0;
+  let nbaNonAnalyzerDropped = 0;
+  // analyzer-finalize.v1 cross-sport: count rows blocked from edge/daily/value
+  // because confidenceSource is not "analyzer" or analyzer side-car missing.
+  const nonAnalyzerDroppedBySport: Record<string, number> = {};
   const rejectedMissingDataTop: Array<Record<string, unknown>> = [];
   // Defense-in-depth: if anything PASS leaks into `eligible`, drop it.
   let passVerdictBlocked = 0;
@@ -2392,6 +2661,21 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
         for (const tr of matchingTrace(traceResults, p)) {
           tr.hardSafetyReason = gate?.reasons ?? ["hard_safety"];
           tr.final_rejection_reason = "hard_safety";
+        }
+        return null;
+      }
+      // analyzer-finalize.v1: rows surfaced to users (edge/daily/value) MUST
+      // carry analyzer-finalized confidence for ALL sports. Scanner-only
+      // confidence is routed to the analyzer queue for later finalization,
+      // never persisted as a live Pick. Applies to NBA, MLB, NHL, UFC, future.
+      if (
+        (tier === "edge" || tier === "daily" || tier === "value") &&
+        ((p.model_diagnostics ?? {}) as Record<string, unknown>).confidenceSource !== "analyzer"
+      ) {
+        if (sport === "nba") nbaNonAnalyzerDropped++;
+        nonAnalyzerDroppedBySport[sport] = (nonAnalyzerDroppedBySport[sport] ?? 0) + 1;
+        for (const tr of matchingTrace(traceResults, p)) {
+          tr.final_rejection_reason = "non_analyzer_source";
         }
         return null;
       }
@@ -2547,52 +2831,207 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
   let inserted = 0;
 
   if (uniqueRows.length && !options.diagnosticsOnly) {
-    const supabaseUrl = getEnv("PROJECT_URL")?.trim();
-    const serviceRoleKey = getEnv("SERVICE_ROLE_KEY")?.trim();
+    const supabaseUrl = getEnv("PROJECT_URL")?.trim() ?? getEnv("SUPABASE_URL")?.trim();
+    const {
+      key: serviceRoleKey,
+      sourceName: insertClientAuthSource,
+      decodedRole: insertClientDecodedRole,
+      presence: insertClientPresence,
+    } = resolveServiceRoleAuth();
 
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error("Missing PROJECT_URL or SERVICE_ROLE_KEY for daily_picks insert");
+    let analyzerSourceCount = 0;
+    let scannerSourceCount = 0;
+    for (const r of uniqueRows) {
+      const md = (r as { model_diagnostics?: Record<string, unknown> }).model_diagnostics ?? {};
+      if (md.confidenceSource === "analyzer") analyzerSourceCount++;
+      else scannerSourceCount++;
     }
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const presenceStr = insertClientPresence.length ? insertClientPresence.join(",") : "none";
 
-    // Clear all rows for this sport/date first, not just _pending.
-    // This prevents conflicts with previously promoted edge/daily rows too.
-    const { error: deleteError } = await supabase
-      .from("daily_picks")
-      .delete()
-      .eq("pick_date", today)
-      .eq("sport", sport);
+    console.log(
+      `[scanner][persist] sport=${sport} ` +
+        `presence=${presenceStr} ` +
+        `selected_source=${insertClientAuthSource} ` +
+        `decoded_role=${insertClientDecodedRole} ` +
+        `rows_to_insert=${uniqueRows.length} ` +
+        `rows_with_confidenceSource_analyzer=${analyzerSourceCount} ` +
+        `rows_with_confidenceSource_scanner=${scannerSourceCount}`,
+    );
 
-    if (deleteError) {
-      console.error(`[${sport}] pre-insert delete error:`, deleteError);
+    if (!supabaseUrl) {
+      throw new Error("Missing PROJECT_URL/SUPABASE_URL for daily_picks insert");
     }
-
-    const { error, count } = await supabase
-      .from("daily_picks")
-      .insert(uniqueRows, { count: "exact" });
-
-    if (error) {
-      console.error(`[${sport}] insert error:`, error);
+    if (!serviceRoleKey || insertClientDecodedRole !== "service_role") {
+      console.error(
+        `[scanner][persist] insert_error code=AUTH_NOT_SERVICE_ROLE ` +
+          `presence=${presenceStr} selected_source=${insertClientAuthSource} decoded_role=${insertClientDecodedRole} — ` +
+          `refusing to attempt RLS-doomed insert. Set SERVICE_ROLE_KEY (or MASTER_SUPABASE_SERVICE_KEY) ` +
+          `to a JWT whose payload.role === "service_role".`,
+      );
     } else {
-      inserted = count ?? uniqueRows.length;
-    }
+      const supabase = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: {
+          headers: {
+            Authorization: `Bearer ${serviceRoleKey}`,
+            apikey: serviceRoleKey,
+          },
+        },
+      });
 
-    // NBA-only: persist analyzer-deferred candidates to the resume queue so
-    // process-nba-analyzer-queue can finalize them in later batches and
-    // promote qualifying picks to tier='edge'. Enqueue happens AFTER the
-    // daily_picks insert succeeds so live picks always exist before the
-    // queue references them.
-    if (sport === "nba") {
-      try {
-        const queueEntries: ScoredPlay[] = [];
-        for (const p of budgetDeferred) queueEntries.push(p);
-        for (const p of rateLimitDeferred) queueEntries.push(p);
-        if (queueEntries.length > 0) {
-          await enqueueNbaAnalyzerCandidates(supabase, today, queueEntries);
+      // Clear all rows for this sport/date first, not just _pending.
+      // This prevents conflicts with previously promoted edge/daily rows too.
+      const { error: deleteError } = await supabase
+        .from("daily_picks")
+        .delete()
+        .eq("pick_date", today)
+        .eq("sport", sport);
+
+      if (deleteError) {
+        console.error(`[${sport}] pre-insert delete error:`, deleteError);
+      }
+
+      // analyzer-finalize.v1 hard insert-time guard — final defense.
+      // Drops any edge/daily/value row not analyzer-finalized. Applies to
+      // every sport, including NBA, MLB, NHL, UFC, and future sports.
+      const guardResult = applyAnalyzerFinalizeInsertGuard(
+        uniqueRows,
+        `sport_scan:${sport}`,
+      );
+      const guardedRows = guardResult.rows;
+
+      const { error, count } = await supabase
+        .from("daily_picks")
+        .insert(guardedRows, { count: "exact" });
+
+      if (error) {
+        console.error(
+          `[scanner][persist] insert_error code=${(error as { code?: string }).code ?? "unknown"} ` +
+            `message=${error.message} ` +
+            `details=${(error as { details?: string }).details ?? ""}`,
+        );
+      } else {
+        inserted = count ?? guardedRows.length;
+      }
+
+      // NBA-only: persist analyzer-deferred candidates to the resume queue so
+      // process-nba-analyzer-queue can finalize them in later batches and
+      // promote qualifying picks to tier='edge'. Enqueue happens AFTER the
+      // daily_picks insert succeeds so live picks always exist before the
+      // queue references them.
+      if (sport === "nba") {
+        try {
+          const queueEntries: ScoredPlay[] = [];
+          for (const p of budgetDeferred) queueEntries.push(p);
+          for (const p of rateLimitDeferred) queueEntries.push(p);
+          if (queueEntries.length > 0) {
+            await enqueueNbaAnalyzerCandidates(supabase, today, queueEntries);
+          }
+        } catch (qErr) {
+          console.error(`[${sport}] nba_analyzer_queue enqueue failed:`, qErr);
         }
-      } catch (qErr) {
-        console.error(`[${sport}] nba_analyzer_queue enqueue failed:`, qErr);
+      } else {
+        // Generic analyzer_queue for MLB / NHL / UFC / future sports.
+        // Routes deferred candidates (rate-limit, timeout, 5xx, network,
+        // budget cap) so process-analyzer-queue can finalize them later.
+        try {
+          const endpoint = ANALYZER_ENDPOINT[sport];
+          if (!endpoint) {
+            // Sport has no analyzer endpoint at all — record once and bail.
+            console.warn(
+              `[scanner][analyzer-required] sport=${sport} reason=missing_analyzer_endpoint queued=0`,
+            );
+          } else {
+            const buildEntry = (
+              p: ScoredPlay,
+              reason: "rate_limited" | "analyzer_timeout" | "budget_exceeded" | "http_5xx" | "network",
+              retry_after_ms: number | undefined,
+              analyzer_body: Record<string, unknown> | null,
+            ) => {
+              const intendedTier =
+                ((p.model_diagnostics ?? {}) as Record<string, unknown>).intended_tier as
+                  | string
+                  | undefined ?? null;
+              const preGateTier =
+                ((p.model_diagnostics ?? {}) as Record<string, unknown>).preGateTier as
+                  | string
+                  | undefined ?? null;
+              const candidate_payload: Record<string, unknown> = {
+                event_id: p.event_id ?? null,
+                home_team: p.home_team ?? null,
+                away_team: p.away_team ?? null,
+                commence_time: p.commence_time ?? null,
+                odds: p.odds,
+                player_name: p.player_name ?? null,
+                team: p.team ?? null,
+                opponent: p.opponent ?? null,
+                prop_type: p.prop_type,
+                line: p.line,
+                direction: p.direction,
+                bet_type: p.bet_type,
+                intended_tier: intendedTier,
+                pre_gate_tier: preGateTier,
+                pick_date: today,
+                sport,
+                model_diagnostics: p.model_diagnostics ?? null,
+                raw_confidence: p.raw_confidence ?? null,
+                ev_pct: p.ev_pct ?? null,
+                edge: p.edge ?? null,
+                spread_line: p.spread_line ?? null,
+                total_line: p.total_line ?? null,
+                reasoning: p.reasoning ?? null,
+              };
+              const analyzer_payload = analyzer_body ?? {
+                player: p.player_name,
+                prop_type: p.prop_type,
+                line: p.line,
+                over_under: normalizeDirection(p.direction),
+                opponent: p.opponent || "",
+                team: p.team || null,
+                home_team: p.home_team || null,
+                away_team: p.away_team || null,
+                sport,
+                bet_type: "player_prop",
+              };
+              return {
+                play: p,
+                analyzerEndpoint: endpoint,
+                analyzerPayload: analyzer_payload,
+                candidatePayload: candidate_payload,
+                intendedTier,
+                preGateTier,
+                scannerTraceId: null,
+                classification: { reason, retry_after_ms },
+              };
+            };
+
+            const entries: Array<ReturnType<typeof buildEntry>> = [];
+            for (const p of budgetDeferred) {
+              entries.push(buildEntry(p, "budget_exceeded", 600_000, null));
+            }
+            for (const td of transientDeferred) {
+              entries.push(
+                buildEntry(td.play, td.reason, td.retry_after_ms, td.analyzer_body),
+              );
+            }
+            if (entries.length > 0) {
+              const res = await enqueueGenericAnalyzerCandidates(
+                supabase,
+                today,
+                sport,
+                entries,
+              );
+              console.log(
+                `[analyzer-queue] enqueue sport=${sport} endpoint=${endpoint} ` +
+                  `enqueued=${res.enqueued} refused=${res.refused} ` +
+                  `budget=${budgetDeferred.length} transient=${transientDeferred.length}`,
+              );
+            }
+          }
+        } catch (qErr) {
+          console.error(`[${sport}] analyzer_queue enqueue failed:`, qErr);
+        }
       }
     }
   }
@@ -2620,10 +3059,23 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
   };
   if (sport === "nba") {
     rejected.nbaHardSafetyDropped = nbaHardSafetyDropped;
+    rejected.nbaNonAnalyzerDropped = nbaNonAnalyzerDropped;
     rejected.nbaEdgeGateBlocked = eligible.filter(p => {
       const g = nbaGateCache.get(tierKey(p));
       return g && !g.ok;
     }).length;
+  }
+  rejected.nonAnalyzerDroppedBySport = nonAnalyzerDroppedBySport;
+  // Per-sport analyzer-required visibility: surface how many user-facing rows
+  // were blocked because confidenceSource !== "analyzer". MLB/NHL today will
+  // show this >0 until the analyzer queue drains.
+  for (const [sportKey, n] of Object.entries(nonAnalyzerDroppedBySport)) {
+    if (n > 0) {
+      const endpoint = ANALYZER_ENDPOINT[sportKey] ?? "null";
+      console.warn(
+        `[scanner][analyzer-required] sport=${sportKey} reason=non_analyzer_source endpoint=${endpoint} skipped_user_facing=${n}`,
+      );
+    }
   }
 
   const canonicalFinalizedCount = validated.filter(

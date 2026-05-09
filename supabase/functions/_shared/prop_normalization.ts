@@ -85,6 +85,39 @@ export function normalizeNbaPropType(propType: string | null | undefined): strin
   return lower.replace(/\s+/g, "_");
 }
 
+// NHL canonical prop_type. Strips the "nhl_" prefix that the NHL_MAP in
+// sport_scan.ts historically emitted for points/assists. Goals/sog/saves
+// were already canonical. Frontend formatPropType() handles either form,
+// but we want stored prop_type, analyzer_payload, and queue rows to use the
+// canonical key so manual Analyze and See Why match without prefix-stripping.
+const NHL_PROP_ALIASES: Record<string, string> = {
+  points: "points",
+  player_points: "points",
+  nhl_points: "points",
+  assists: "assists",
+  player_assists: "assists",
+  nhl_assists: "assists",
+  goals: "goals",
+  player_goals: "goals",
+  sog: "sog",
+  shots: "sog",
+  shots_on_goal: "sog",
+  player_shots_on_goal: "sog",
+  saves: "saves",
+  player_total_saves: "saves",
+  total_saves: "saves",
+};
+
+export function normalizeNhlPropType(propType: string | null | undefined): string {
+  const raw = String(propType ?? "").trim();
+  if (!raw) return "";
+  const key = compactKey(raw);
+  if (NHL_PROP_ALIASES[key]) return NHL_PROP_ALIASES[key];
+  // Strip nhl_ prefix as a fallback.
+  const stripped = key.startsWith("nhl_") ? key.slice(4) : key;
+  return NHL_PROP_ALIASES[stripped] ?? stripped;
+}
+
 export function normalizeDirection(direction: string | null | undefined): string {
   const d = String(direction ?? "").trim().toLowerCase();
   if (d.startsWith("u")) return "under";

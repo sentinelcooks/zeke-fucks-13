@@ -200,11 +200,24 @@ async function markKeyExhausted(supabase: any, keyId: string, error: string) {
   }).eq("id", keyId);
 }
 
+// Parse a Retry-After header. Most providers send seconds; clamp to 10s
+// inside fetchWithRotation so a single 429 burst never blocks a scan run.
+function parseRetryAfterHeader(resp: Response): number | null {
+  const v = resp.headers.get("Retry-After") ?? resp.headers.get("retry-after");
+  if (!v) return null;
+  const n = Number(v);
+  if (Number.isFinite(n) && n > 0) return Math.round(n * 1000); // seconds → ms
+  const dateMs = Date.parse(v);
+  if (Number.isFinite(dateMs)) return Math.max(0, dateMs - Date.now());
+  return null;
+}
+
 async function fetchWithRotation(
   supabase: any,
   buildUrl: (apiKey: string) => string,
   maxRetries = 3
 ): Promise<{ resp: Response; keyId: string } | null> {
+  let lastRetryAfterMs = 0;
   for (let i = 0; i < maxRetries; i++) {
     const keyInfo = await getNextApiKey(supabase);
     if (!keyInfo) return null;
@@ -220,9 +233,15 @@ async function fetchWithRotation(
       continue;
     }
     if (resp.status === 429) {
-      console.warn(`Key ${keyInfo.id} rate-limited (429), backing off 2s...`);
-      await new Promise(r => setTimeout(r, 2000));
-      continue; // retry without marking exhausted
+      const headerMs = parseRetryAfterHeader(resp);
+      const sleepMs = Math.min(Math.max(headerMs ?? 2000, 1000), 10_000);
+      lastRetryAfterMs = headerMs ?? sleepMs;
+      console.warn(
+        `[nba-odds] sport=${(buildUrl as any).sport ?? "?"} rate_limited retry_after_ms=${lastRetryAfterMs} ` +
+          `key=${keyInfo.id} sleep=${sleepMs}ms attempt=${i + 1}/${maxRetries}`,
+      );
+      await new Promise((r) => setTimeout(r, sleepMs));
+      continue;
     }
     if (resp.status === 422) {
       const errBody = await resp.text();
@@ -231,6 +250,11 @@ async function fetchWithRotation(
     }
     await updateKeyUsage(supabase, keyInfo.id, resp);
     return { resp, keyId: keyInfo.id };
+  }
+  // All retries exhausted with 429 (or generic). Surface the rate-limit hint
+  // so callers (sport_scan player-props fanout) can pace the next chunk.
+  if (lastRetryAfterMs > 0) {
+    (fetchWithRotation as any).lastRetryAfterMs = lastRetryAfterMs;
   }
   return null;
 }
