@@ -64,7 +64,46 @@ function getEnv(name: string): string | undefined {
   }
 }
 
-const ANALYZER_TIMEOUT_MS = 12_000;
+// Queue-side analyzer timeout. nba-api/analyze with sport=mlb/nhl needs to
+// fan out to mlb-model/analyze + nhl-model/analyze (20-factor team context,
+// pitchers/parks, goalies/ice). 12s was too aggressive — every NHL row hit
+// AbortError. Override per-deploy with ANALYZER_QUEUE_TIMEOUT_MS.
+const ANALYZER_TIMEOUT_MS = (() => {
+  const raw = Number(getEnv("ANALYZER_QUEUE_TIMEOUT_MS"));
+  if (Number.isFinite(raw) && raw >= 5_000) return Math.min(60_000, Math.floor(raw));
+  return 30_000;
+})();
+
+// Per-invocation per-sport caps. process-analyzer-queue runs every 2 min;
+// if we slam every pending row through nba-api/analyze in one cron tick,
+// the analyzer either rate-limits or the queue worker times out cascading.
+// Drain a small slice each tick instead. Override per-sport via env.
+const PER_SPORT_PER_INVOCATION_CAP: Record<string, number> = {
+  nhl: 1,
+  mlb: 2,
+  ufc: 1,
+};
+const GLOBAL_PER_INVOCATION_CAP = (() => {
+  const raw = Number(getEnv("ANALYZER_QUEUE_GLOBAL_CAP"));
+  if (Number.isFinite(raw) && raw > 0) return Math.min(25, Math.floor(raw));
+  return 3;
+})();
+
+// Reschedule delay after analyzer_timeout. Spacing matters: 60s × 5 attempts
+// burns the row in ~5 minutes which is barely longer than one cron tick. We
+// want at least one *real* analyzer recovery window between attempts.
+const ANALYZER_TIMEOUT_RESCHEDULE_MS = (() => {
+  const raw = Number(getEnv("ANALYZER_QUEUE_TIMEOUT_RESCHEDULE_MS"));
+  if (Number.isFinite(raw) && raw >= 60_000) return Math.min(1_800_000, Math.floor(raw));
+  return 480_000; // 8 minutes
+})();
+
+function perSportCap(sport: string): number {
+  const envKey = `ANALYZER_QUEUE_CAP_${sport.toUpperCase()}`;
+  const raw = Number(getEnv(envKey));
+  if (Number.isFinite(raw) && raw >= 0) return Math.floor(raw);
+  return PER_SPORT_PER_INVOCATION_CAP[sport] ?? 1;
+}
 
 function resolveServiceRoleKey(): string | null {
   for (const name of [
@@ -210,9 +249,15 @@ async function callAnalyzer(
   serviceKey: string,
   endpoint: string,
   payload: Record<string, unknown>,
-): Promise<{ status: number; body: unknown; headers: Headers }> {
+  rowId: string,
+  sport: string,
+): Promise<{ status: number; body: unknown; headers: Headers; duration_ms: number }> {
   const ctrl = new AbortController();
+  const startedAt = Date.now();
   const timer = setTimeout(() => ctrl.abort(), ANALYZER_TIMEOUT_MS);
+  console.log(
+    `[analyzer-queue][analyze-start] sport=${sport} row=${rowId} endpoint=${endpoint} timeout_ms=${ANALYZER_TIMEOUT_MS}`,
+  );
   try {
     const resp = await fetch(`${supabaseUrl}/functions/v1/${endpoint}`, {
       method: "POST",
@@ -229,7 +274,11 @@ async function callAnalyzer(
     } catch {
       body = await resp.text().catch(() => null);
     }
-    return { status: resp.status, body, headers: resp.headers };
+    const duration_ms = Date.now() - startedAt;
+    console.log(
+      `[analyzer-queue][analyze-done] sport=${sport} row=${rowId} duration_ms=${duration_ms} status=${resp.status}`,
+    );
+    return { status: resp.status, body, headers: resp.headers, duration_ms };
   } finally {
     clearTimeout(timer);
   }
@@ -267,28 +316,47 @@ async function processOne(
   }
 
   // 2. Call analyzer.
-  let resp: { status: number; body: unknown; headers: Headers };
+  let resp: { status: number; body: unknown; headers: Headers; duration_ms: number };
+  const callStartedAt = Date.now();
   try {
     resp = await callAnalyzer(
       supabaseUrl,
       serviceKey,
       row.analyzer_endpoint,
       row.analyzer_payload,
+      row.id,
+      row.sport,
     );
   } catch (e) {
+    const duration_ms = Date.now() - callStartedAt;
     const isAbort =
       (e as { name?: string })?.name === "AbortError" ||
       String((e as Error)?.message ?? "").toLowerCase().includes("abort");
     const reason = isAbort ? "analyzer_timeout" : "network";
+    const retryAfterMs = isAbort
+      ? ANALYZER_TIMEOUT_RESCHEDULE_MS
+      : exponentialBackoffMs(row.attempts);
+    if (isAbort) {
+      console.warn(
+        `[analyzer-queue][analyze-timeout] sport=${row.sport} row=${row.id} ` +
+          `duration_ms=${duration_ms} retry_after_ms=${retryAfterMs} attempt=${row.attempts + 1}/${row.max_attempts}`,
+      );
+    } else {
+      console.warn(
+        `[analyzer-queue][analyze-network-error] sport=${row.sport} row=${row.id} ` +
+          `duration_ms=${duration_ms} retry_after_ms=${retryAfterMs} ` +
+          `attempt=${row.attempts + 1}/${row.max_attempts} err=${(e as Error)?.message ?? e}`,
+      );
+    }
     if (row.attempts + 1 >= row.max_attempts) {
-      await finalizeAnalyzerQueueRow(supabase, row.id, "failed", { reason });
+      await finalizeAnalyzerQueueRow(supabase, row.id, "failed", { reason, duration_ms });
       return "failed";
     }
     await rescheduleAnalyzerQueueRow(
       supabase,
       row.id,
-      isAbort ? 60_000 : exponentialBackoffMs(row.attempts),
-      { reason },
+      retryAfterMs,
+      { reason, duration_ms },
       true,
       reason,
     );
@@ -453,11 +521,14 @@ Deno.serve(async (req) => {
     },
   });
 
-  const batchSize = Math.max(1, Math.min(25, Number(getEnv("ANALYZER_QUEUE_BATCH_SIZE")) || 10));
+  // Cap how many rows we claim per cron tick. Default 3 globally; per-sport
+  // caps (default NHL=1, MLB=2, UFC=1) are enforced below as we iterate.
+  const batchSize = Math.max(1, Math.min(25, GLOBAL_PER_INVOCATION_CAP));
   const rows = await claimAnalyzerQueueBatch(supabase, batchSize);
   const todayISO = todayET();
   const nowMs = Date.now();
   const state: ProcessState = { rateLimitTripped: false, lastRetryAfterMs: null };
+  const sportRunCount: Record<string, number> = {};
 
   const summary = {
     depth: rows.length,
@@ -467,10 +538,10 @@ Deno.serve(async (req) => {
     failed: 0,
     expired: 0,
     no_pick: 0,
+    cap_skipped: 0,
   };
 
   for (const row of rows) {
-    summary.processed++;
     if (state.rateLimitTripped) {
       // Collateral rollback — don't burn an attempt for work we never performed.
       await rescheduleAnalyzerQueueRow(
@@ -484,6 +555,24 @@ Deno.serve(async (req) => {
       summary.rescheduled++;
       continue;
     }
+    // Per-sport per-invocation cap. If the sport already had its slice for
+    // this tick, release the row back to pending without burning an attempt.
+    const cap = perSportCap(row.sport);
+    const used = sportRunCount[row.sport] ?? 0;
+    if (used >= cap) {
+      await rescheduleAnalyzerQueueRow(
+        supabase,
+        row.id,
+        120_000,
+        { reason: "per_sport_cap" },
+        false,
+        "per_sport_cap",
+      );
+      summary.cap_skipped++;
+      continue;
+    }
+    sportRunCount[row.sport] = used + 1;
+    summary.processed++;
     try {
       const outcome = await processOne(
         supabase,
@@ -524,7 +613,8 @@ Deno.serve(async (req) => {
     `[analyzer-queue] depth=${summary.depth} processed=${summary.processed} ` +
       `inserted=${summary.inserted} failed=${summary.failed} ` +
       `rescheduled=${summary.rescheduled} expired=${summary.expired} ` +
-      `no_pick=${summary.no_pick}`,
+      `no_pick=${summary.no_pick} cap_skipped=${summary.cap_skipped} ` +
+      `timeout_ms=${ANALYZER_TIMEOUT_MS} global_cap=${GLOBAL_PER_INVOCATION_CAP}`,
   );
 
   return new Response(JSON.stringify({ ok: true, ...summary }), {
