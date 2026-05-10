@@ -132,7 +132,7 @@ serve(async (req) => {
       if (action === "list_edge_history") {
         q = q.eq("tier", "edge");
       } else {
-        q = q.neq("tier", "edge").not("tier", "in", "(pass,_pending)");
+        q = q.in("tier", ["daily", "value"]);
       }
 
       if (start_date) q = q.gte("pick_date", start_date);

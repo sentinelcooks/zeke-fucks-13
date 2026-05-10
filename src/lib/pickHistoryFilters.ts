@@ -15,12 +15,7 @@ export const isEdgeHistoryPick = (p: PickLike): boolean => {
 export const isPicksHistoryPick = (p: PickLike): boolean => {
   const tier = String(p.tier || "").toLowerCase();
   const status = String(p.status || "").toLowerCase();
-  return (
-    tier !== "edge" &&
-    tier !== "pass" &&
-    tier !== "_pending" &&
-    status !== "empty_slate"
-  );
+  return (tier === "daily" || tier === "value") && status !== "empty_slate";
 };
 
 // True for a pick whose actual game is today in America/New_York and whose
