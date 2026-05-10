@@ -105,16 +105,63 @@ function perSportCap(sport: string): number {
   return PER_SPORT_PER_INVOCATION_CAP[sport] ?? 1;
 }
 
-function resolveServiceRoleKey(): string | null {
+// Pick the service-role key from Supabase function env. We prefer custom
+// secrets (SERVICE_ROLE_KEY, MASTER_SUPABASE_SERVICE_KEY) over the platform-
+// injected SUPABASE_SERVICE_ROLE_KEY because the Supabase CLI does not let
+// us override SUPABASE_* secrets, and the injected slot has been observed to
+// decode as role=unknown in this project. Returns the chosen env name
+// alongside the key so we can log which slot was used.
+function resolveServiceRoleKey(): { name: string; key: string } | null {
   for (const name of [
     "SERVICE_ROLE_KEY",
     "MASTER_SUPABASE_SERVICE_KEY",
     "SUPABASE_SERVICE_ROLE_KEY",
   ]) {
     const v = getEnv(name);
-    if (v && v.trim()) return v.trim();
+    if (v && v.trim()) return { name, key: v.trim() };
   }
   return null;
+}
+
+// Legacy Supabase service-role keys are JWTs (three dot-separated base64url
+// segments). New-format secrets (sb_secret_…) are not JWTs and have no
+// decodable role claim — those should pass the role check by virtue of not
+// being a JWT at all.
+function looksLikeJwt(s: string): boolean {
+  return s.split(".").length === 3;
+}
+
+// Decode the middle segment of a JWT and return its `role` claim. We never log
+// the key itself — only the env-var name and the decoded role — so this is safe
+// to call before client construction. base64url decoding is done manually so we
+// don't pull in extra deps.
+function decodeJwtRole(jwt: string): string | null {
+  try {
+    const parts = jwt.split(".");
+    if (parts.length < 2) return null;
+    let b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4) b64 += "=";
+    const json = atob(b64);
+    const payload = JSON.parse(json) as { role?: unknown };
+    return typeof payload.role === "string" ? payload.role : null;
+  } catch {
+    return null;
+  }
+}
+
+// Canonical sport → analyzer endpoint. Mirrors ANALYZER_ENDPOINT in
+// _shared/sport_scan.ts. Duplicated here so the queue worker can override
+// any stale row.analyzer_endpoint without pulling sport_scan into this
+// function. mlb/nhl MUST route to nba-api/analyze for now — the separate
+// mlb-api/analyze endpoint is unfinished and must not be called.
+const CANONICAL_ANALYZER_ENDPOINT: Record<string, string> = {
+  nba: "nba-api/analyze",
+  mlb: "nba-api/analyze",
+  nhl: "nba-api/analyze",
+  ufc: "ufc-api/analyze",
+};
+function canonicalEndpointForSport(sport: string, fallback: string): string {
+  return CANONICAL_ANALYZER_ENDPOINT[sport] ?? fallback;
 }
 
 function classifyHttpFailure(status: number): "http_4xx" | "http_5xx" | "other" {
@@ -160,6 +207,15 @@ function rejectReasonsForAnalyzerResponse(ar: unknown): string[] {
   return reasons;
 }
 
+// Recompute EV% from analyzer-derived win probability and American odds.
+// Returns percent with one decimal of precision (e.g. 7.4 means +7.4% EV).
+function computeEvPct(prob: number, odds: number): number {
+  if (!Number.isFinite(prob) || !Number.isFinite(odds) || prob <= 0) return 0;
+  const payout = odds > 0 ? odds / 100 : 100 / Math.abs(odds);
+  const ev = prob * payout - (1 - prob);
+  return Math.round(ev * 1000) / 10;
+}
+
 // Build a ScoredPlay that buildDailyPickRow can consume. The candidate_payload
 // already carries every immutable field; we splice in analyzer-derived
 // confidence/verdict and the analyzer side-car for replay.
@@ -201,9 +257,16 @@ function buildScoredPlayFromQueueRow(
   const odds = Number(c.odds ?? -110);
   const impliedRaw = odds > 0 ? 100 / (odds + 100) : -odds / (-odds + 100);
   const edge = Math.max(0, conf01 - impliedRaw);
-  const reasoning =
-    (typeof c.reasoning === "string" ? c.reasoning : "") ||
-    (typeof ar.reasoning === "string" ? ar.reasoning : "");
+  // Prefer analyzer-authored writeup so See Why matches manual Analyze.
+  // Scanner candidate.reasoning is only used when the analyzer returned no text.
+  const analyzerReasoning =
+    (typeof ar.reasoning === "string" && ar.reasoning.trim()) ? ar.reasoning :
+    (typeof ar.analysis === "string" && ar.analysis.trim()) ? ar.analysis :
+    (typeof ar.model_writeup === "string" && ar.model_writeup.trim()) ? ar.model_writeup :
+    (typeof ar.writeup === "string" && ar.writeup.trim()) ? ar.writeup :
+    "";
+  const scannerReasoning = typeof c.reasoning === "string" ? c.reasoning : "";
+  const reasoning = analyzerReasoning || scannerReasoning;
 
   const play: ScoredPlay = {
     sport: row.sport,
@@ -223,7 +286,7 @@ function buildScoredPlayFromQueueRow(
     implied_prob: impliedRaw,
     raw_implied_prob: impliedRaw,
     edge,
-    ev_pct: Number(c.ev_pct ?? 0),
+    ev_pct: computeEvPct(conf01, odds),
     confidence: conf01,
     raw_confidence: (c.raw_confidence as number | null) ?? conf01,
     reliability: 0.75,
@@ -316,13 +379,25 @@ async function processOne(
   }
 
   // 2. Call analyzer.
+  // Defensive endpoint normalization: any pending row whose analyzer_endpoint
+  // column is stale (e.g. 'mlb-api/analyze' from before the routing change)
+  // is silently routed to the canonical endpoint for its sport. Logged so we
+  // can confirm cleanup.
+  const endpoint = canonicalEndpointForSport(row.sport, row.analyzer_endpoint);
+  if (endpoint !== row.analyzer_endpoint) {
+    console.log(
+      `[analyzer-queue][endpoint-normalized] queue_id=${row.id} sport=${row.sport} ` +
+        `from=${row.analyzer_endpoint} to=${endpoint}`,
+    );
+  }
+
   let resp: { status: number; body: unknown; headers: Headers; duration_ms: number };
   const callStartedAt = Date.now();
   try {
     resp = await callAnalyzer(
       supabaseUrl,
       serviceKey,
-      row.analyzer_endpoint,
+      endpoint,
       row.analyzer_payload,
       row.id,
       row.sport,
@@ -410,8 +485,27 @@ async function processOne(
 
   // 4. Reject weak / no-pick / unsupported analyzer output.
   const ar = resp.body as Record<string, unknown> | null;
+  const c0 = row.candidate_payload as Record<string, unknown>;
+  const md0 = (c0.model_diagnostics ?? {}) as Record<string, unknown>;
+  const arObj = (ar ?? {}) as Record<string, unknown>;
+  console.log(
+    `[analyzer-queue][analyze-result] queue_id=${row.id} sport=${row.sport} ` +
+      `player=${c0.player_name ?? "(team)"} prop_type=${c0.prop_type ?? ""} ` +
+      `line=${c0.line ?? ""} over_under=${c0.direction ?? ""} ` +
+      `endpoint=${endpoint} ` +
+      `analyzer_confidence=${arObj.canonical_confidence ?? arObj.confidence ?? arObj.displayConfidence ?? "null"} ` +
+      `analyzer_verdict=${arObj.canonical_verdict ?? arObj.verdict ?? "null"} ` +
+      `scanner_confidence=${md0.scanner_confidence_percent ?? c0.raw_confidence ?? "null"} ` +
+      `scanner_verdict=${md0.canonical_verdict ?? "null"} ` +
+      `has_analyzer_payload=${row.analyzer_payload ? 1 : 0} ` +
+      `has_analyzer_response_snapshot=${ar ? 1 : 0}`,
+  );
   const rejectReasons = rejectReasonsForAnalyzerResponse(ar);
   if (rejectReasons.length > 0) {
+    console.warn(
+      `[analyzer-queue][no-pick] queue_id=${row.id} sport=${row.sport} ` +
+        `reasons=${rejectReasons.join(",")}`,
+    );
     await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
       reason: "analyzer_unsupported_or_no_pick",
       details: rejectReasons,
@@ -429,7 +523,7 @@ async function processOne(
     tier,
     raw: null,
     sourceFunction: "process-analyzer-queue",
-    modelUsed: row.analyzer_endpoint,
+    modelUsed: endpoint,
     reasoning: scored.reasoning ?? null,
     avgValue: scored.ev_pct ?? null,
   });
@@ -439,13 +533,36 @@ async function processOne(
     });
     return "failed";
   }
+  const finalMd = (finalRow.model_diagnostics ?? {}) as Record<string, unknown>;
+  console.log(
+    `[analyzer-queue][pre-guard] queue_id=${row.id} sport=${row.sport} ` +
+      `tier=${tier} confidenceSource=${finalMd.confidenceSource} ` +
+      `sourceContractVersion=${finalMd.sourceContractVersion} ` +
+      `has_analyzer_payload=${finalMd.analyzer_payload ? 1 : 0} ` +
+      `has_analyzer_response_snapshot=${finalMd.analyzer_response_snapshot ? 1 : 0} ` +
+      `confidence=${finalRow.confidence} verdict=${finalRow.verdict}`,
+  );
   const guarded = applyAnalyzerFinalizeInsertGuard(
     [finalRow],
     `process-analyzer-queue:${row.sport}`,
   );
+  console.log(
+    `[analyzer-queue][guard] queue_id=${row.id} sport=${row.sport} ` +
+      `before=${guarded.rows_before_guard} after=${guarded.rows_after_guard} ` +
+      `dropped_non_analyzer=${guarded.rows_dropped_non_analyzer} ` +
+      `dropped_missing_payload=${guarded.rows_dropped_missing_payload} ` +
+      `dropped_missing_snapshot=${guarded.rows_dropped_missing_snapshot} ` +
+      `dropped_other=${guarded.rows_dropped_other}`,
+  );
   if (!guarded.rows.length) {
+    const guardReason =
+      guarded.rows_dropped_non_analyzer ? "non_analyzer_source" :
+      guarded.rows_dropped_missing_payload ? "missing_analyzer_payload" :
+      guarded.rows_dropped_missing_snapshot ? "missing_analyzer_response_snapshot" :
+      "guard_other";
     await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
       reason: "analyzer_finalize_guard_rejected",
+      details: guardReason,
     });
     return "failed";
   }
@@ -468,18 +585,30 @@ async function processOne(
 
   const { error } = await supabase.from("daily_picks").insert(guarded.rows);
   if (error) {
+    const pgCode = (error as { code?: string }).code ?? null;
+    const pgDetails = (error as { details?: string }).details ?? null;
+    const pgHint = (error as { hint?: string }).hint ?? null;
+    console.error(
+      `[analyzer-queue][insert-error] queue_id=${row.id} sport=${row.sport} ` +
+        `code=${pgCode ?? ""} message=${error.message} ` +
+        `details=${pgDetails ?? ""} hint=${pgHint ?? ""}`,
+    );
+    const insertDetails = {
+      reason: "insert_error",
+      message: error.message,
+      code: pgCode,
+      details: pgDetails,
+      hint: pgHint,
+    };
     if (row.attempts + 1 >= row.max_attempts) {
-      await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
-        reason: "insert_error",
-        details: error.message,
-      });
+      await finalizeAnalyzerQueueRow(supabase, row.id, "failed", insertDetails);
       return "failed";
     }
     await rescheduleAnalyzerQueueRow(
       supabase,
       row.id,
       60_000,
-      { reason: "insert_error", details: error.message },
+      insertDetails,
       true,
       "insert_error",
     );
@@ -492,7 +621,7 @@ async function processOne(
     verdict: finalRow.verdict,
   });
   console.log(
-    `[analyzer-queue][row] sport=${row.sport} endpoint=${row.analyzer_endpoint} ` +
+    `[analyzer-queue][row] sport=${row.sport} endpoint=${endpoint} ` +
       `outcome=inserted attempt=${row.attempts + 1} dedupe=${row.dedupe_key}`,
   );
   return "inserted";
@@ -502,14 +631,41 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabaseUrl = getEnv("SUPABASE_URL");
-  const serviceKey = resolveServiceRoleKey();
-  if (!supabaseUrl || !serviceKey) {
+  const resolved = resolveServiceRoleKey();
+  if (!supabaseUrl || !resolved) {
     console.error("[process-analyzer-queue] missing SUPABASE_URL or service-role key");
     return new Response(JSON.stringify({ ok: false, error: "missing_credentials" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+
+  // Validate the chosen key. RLS on daily_picks is enabled (force_rls=false),
+  // so a true service_role JWT bypasses it but an anon JWT does not — exactly
+  // the 42501 failure mode we have been chasing. For legacy JWT keys, decode
+  // the role claim and fail fast if it isn't service_role. For new-format
+  // secrets (sb_secret_…), there's no decodable role; we accept them.
+  const isJwt = looksLikeJwt(resolved.key);
+  const role = isJwt ? decodeJwtRole(resolved.key) : null;
+  const roleForLog = isJwt ? (role ?? "unknown") : "non_jwt_secret";
+  console.log(
+    `[process-analyzer-queue] service-role key selected env=${resolved.name} role=${roleForLog}`,
+  );
+  if (isJwt && role !== "service_role") {
+    console.error(
+      `[process-analyzer-queue] service_role_key_invalid env=${resolved.name} role=${role ?? "unknown"}`,
+    );
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: "service_role_key_invalid",
+        env: resolved.name,
+        role: role ?? "unknown",
+      }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+  const serviceKey = resolved.key;
 
   const supabase = createClient(supabaseUrl, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },

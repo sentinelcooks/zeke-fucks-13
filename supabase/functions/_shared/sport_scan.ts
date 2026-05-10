@@ -2195,12 +2195,19 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
     nhl: 0,
     ufc: 1,
   };
+  // MLB/NHL are queue-only for now. Ignore env override so production
+  // secrets cannot reintroduce inline analyzer calls.
+  const HARD_CLAMP_INLINE_ZERO = new Set(["mlb", "nhl"]);
   let queueFirstInlineBudget = top.length;
   if (sport !== "nba") {
-    const envBudgetRaw = Number(getEnv(`INLINE_ANALYZER_BUDGET_${sport.toUpperCase()}`));
-    queueFirstInlineBudget = Number.isFinite(envBudgetRaw) && envBudgetRaw >= 0
-      ? Math.floor(envBudgetRaw)
-      : INLINE_ANALYZER_BUDGET_NON_NBA[sport] ?? 0;
+    if (HARD_CLAMP_INLINE_ZERO.has(sport)) {
+      queueFirstInlineBudget = 0;
+    } else {
+      const envBudgetRaw = Number(getEnv(`INLINE_ANALYZER_BUDGET_${sport.toUpperCase()}`));
+      queueFirstInlineBudget = Number.isFinite(envBudgetRaw) && envBudgetRaw >= 0
+        ? Math.floor(envBudgetRaw)
+        : INLINE_ANALYZER_BUDGET_NON_NBA[sport] ?? 0;
+    }
 
     const endpoint = ANALYZER_ENDPOINT[sport];
     const queueFirstCandidates = top.slice(queueFirstInlineBudget);
