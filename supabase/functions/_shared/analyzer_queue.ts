@@ -13,7 +13,12 @@ export interface EnqueueClassification {
     | "analyzer_timeout"
     | "budget_exceeded"
     | "http_5xx"
-    | "network";
+    | "network"
+    // "discovery" is the new reason used by slate-scanner-{sport} when running
+    // in discovery-only mode (no inline analyzer at all). Rows enqueued with
+    // this reason were never attempted by the scanner — the worker drains them
+    // from a cold start.
+    | "discovery";
   retry_after_ms?: number;
 }
 
@@ -38,6 +43,14 @@ export interface QueueRow {
   created_at: string;
   updated_at: string;
   processed_at: string | null;
+  // Added by migration 20260512000000_analyzer_queue_run_metadata. Nullable
+  // because rows enqueued by the legacy scanner path (before discovery
+  // refactor) do not carry a run_id.
+  run_id?: string | null;
+  lock_owner?: string | null;
+  locked_at?: string | null;
+  error_message?: string | null;
+  analyzer_result?: Record<string, unknown> | null;
 }
 
 // Stable dedupe key. Mirrors the daily_picks identity used everywhere else
@@ -159,6 +172,10 @@ export interface EnqueueArgs {
 
 // Bulk enqueue helper. Each entry passes through `assertCandidatePayload`
 // before going to the RPC. Returns how many were enqueued vs. refused.
+// `runId` (optional) groups every entry in this call under a single
+// scan_run_metrics row so scan-run-status can aggregate progress per run.
+// Legacy callers that don't supply runId continue to work — the row's
+// run_id column stays NULL.
 export async function enqueueGenericAnalyzerCandidates(
   supabase: SupaClient,
   today: string,
@@ -173,11 +190,20 @@ export async function enqueueGenericAnalyzerCandidates(
     scannerTraceId: string | null;
     classification: EnqueueClassification;
   }>,
+  runId?: string | null,
 ): Promise<{ enqueued: number; skipped: number; refused: number }> {
   if (!entries.length) return { enqueued: 0, skipped: 0, refused: 0 };
 
-  const rows: Record<string, unknown>[] = [];
+  // Build the row map keyed by dedupe_key so within-batch duplicates
+  // collapse to a single row before we ever round-trip to the RPC. Scanner
+  // candidates can have the same (player|prop|direction|line|event) tuple
+  // from multiple books — the queue identity is the same, so we keep the
+  // last-seen analyzer_payload/candidate_payload but only one row in the
+  // batch. This makes the returned `enqueued` count match what actually
+  // lands in the table.
+  const rowByKey = new Map<string, Record<string, unknown>>();
   let refused = 0;
+  let dedupedWithinBatch = 0;
   for (const e of entries) {
     const missing = assertCandidatePayload(e.candidatePayload, e.scannerTraceId);
     if (missing) {
@@ -189,7 +215,8 @@ export async function enqueueGenericAnalyzerCandidates(
       continue;
     }
     const key = dedupeKey(sport, today, e.candidatePayload as never);
-    rows.push({
+    if (rowByKey.has(key)) dedupedWithinBatch++;
+    rowByKey.set(key, {
       sport,
       pick_date: today,
       analyzer_endpoint: e.analyzerEndpoint,
@@ -202,12 +229,20 @@ export async function enqueueGenericAnalyzerCandidates(
       status: "pending",
       retry_after_ms: e.classification.retry_after_ms ?? null,
       error_reason: e.classification.reason,
+      run_id: runId ?? null,
     });
+  }
+  const rows = Array.from(rowByKey.values());
+  if (dedupedWithinBatch > 0) {
+    console.log(
+      `[analyzer-queue] within-batch dedupe sport=${sport} sent=${entries.length} unique=${rows.length} ` +
+        `collapsed=${dedupedWithinBatch}`,
+    );
   }
 
   if (!rows.length) return { enqueued: 0, skipped: 0, refused };
 
-  const { error } = await supabase.rpc("enqueue_analyzer_candidates", {
+  const { data, error } = await supabase.rpc("enqueue_analyzer_candidates", {
     p_rows: rows,
   });
   if (error) {
@@ -218,7 +253,16 @@ export async function enqueueGenericAnalyzerCandidates(
     return { enqueued: 0, skipped: 0, refused };
   }
 
-  return { enqueued: rows.length, skipped: 0, refused };
+  // RPC returns its own inserted_count: rows that genuinely landed (either a
+  // fresh INSERT, or an ON CONFLICT UPDATE of a still-pending row that we
+  // successfully refreshed). The difference between rows-sent and
+  // inserted_count is rows we tried to enqueue but were already in a
+  // non-pending state (processing / done / failed) — those are "skipped",
+  // not failures. Use the RPC's actual count so scan_run_metrics.queued and
+  // scan-run-status reflect rows that truly exist in the queue.
+  const enqueued = typeof data === "number" ? data : rows.length;
+  const skipped = Math.max(0, rows.length - enqueued);
+  return { enqueued, skipped, refused };
 }
 
 // Wrappers around the queue RPCs (claim / reschedule / finalize).
@@ -232,6 +276,32 @@ export async function claimAnalyzerQueueBatch(
   });
   if (error) {
     console.error("[analyzer-queue] claim_analyzer_queue RPC error:", error.message ?? error);
+    return [];
+  }
+  return (data ?? []) as QueueRow[];
+}
+
+// Per-sport claim used by analyzer-worker-{nba,nhl,mlb}. Distinct from
+// claimAnalyzerQueueBatch (which is sport-agnostic and skips NBA) — this
+// path stamps lock_owner / locked_at via the claim_analyzer_queue_batch RPC.
+export async function claimAnalyzerQueueBatchPerSport(
+  supabase: SupaClient,
+  sport: string,
+  owner: string,
+  batchSize: number,
+  maxAttempts: number,
+): Promise<QueueRow[]> {
+  const { data, error } = await supabase.rpc("claim_analyzer_queue_batch", {
+    p_sport: sport,
+    p_owner: owner,
+    p_batch_size: batchSize,
+    p_max_attempts: maxAttempts,
+  });
+  if (error) {
+    console.error(
+      `[analyzer-worker] claim_analyzer_queue_batch RPC error sport=${sport}:`,
+      error.message ?? error,
+    );
     return [];
   }
   return (data ?? []) as QueueRow[];

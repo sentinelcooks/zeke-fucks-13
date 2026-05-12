@@ -8,7 +8,18 @@ const corsHeaders = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
-    const result = await scanSport("mlb");
+    let body: any = {};
+    if (req.method === "POST") {
+      try { body = await req.json(); } catch { body = {}; }
+    }
+    // Discovery-only by default. The analyzer-worker-mlb function drains
+    // the queue in small chunks via cron — this is the fix for the HTTP 546
+    // WORKER_RESOURCE_LIMIT that killed MLB's inline scan.
+    const inlineAnalyze = body?.inline_analyze === true;
+    const result = await scanSport("mlb", {
+      inlineAnalyze,
+      runId: typeof body?.run_id === "string" ? body.run_id : undefined,
+    });
     return new Response(JSON.stringify(result), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

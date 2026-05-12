@@ -233,6 +233,17 @@ interface TraceResult {
 interface ScanSportOptions {
   diagnosticsOnly?: boolean;
   traceTargets?: TraceTarget[];
+  // When true, run the legacy inline-analyzer flow (mapLimit through the
+  // analyzer endpoint, finalize and insert into daily_picks in-process).
+  // When false/undefined, scanSport returns after building the candidate
+  // pool, enqueues every survivor to public.analyzer_queue with a run_id,
+  // and writes the discovery row in scan_run_metrics. This is the new
+  // default for slate-scanner-{nba,nhl,mlb}. UFC keeps inline for now.
+  inlineAnalyze?: boolean;
+  // Caller-supplied run_id. Discovery generates one if absent. Used to
+  // tag every enqueued candidate so the analyzer worker can flush
+  // counters to scan_run_metrics atomically.
+  runId?: string;
 }
 
 export interface AnalyzerErrorCandidate {
@@ -2045,6 +2056,13 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
   analyzer_pool_truncated?: boolean;
   analyzer_pool_excluded_candidates?: Array<Record<string, unknown>>;
   error?: string;
+  // ── Discovery-only return fields (populated when options.inlineAnalyze !== true) ──
+  run_id?: string;
+  discovered?: number;
+  queued?: number;
+  refused?: number;
+  discovery_only?: boolean;
+  prefilter_drop_reasons?: Record<string, number>;
 }> {
   const traceResults = normalizeTraceTargets(options.traceTargets);
   const stats: any = {
@@ -2144,6 +2162,165 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
       };
     })();
   const top = analyzerPool.selected;
+
+  // ── Discovery-only short-circuit ──────────────────────────────────────
+  // When the caller (slate-scanner-{nba,nhl,mlb}) does NOT request inline
+  // analysis, we skip the heavy mapLimit/finalize/insert path entirely.
+  // Every survivor in `top` is enqueued to public.analyzer_queue tagged
+  // with a single run_id; the per-sport analyzer-worker drains it in
+  // small chunks via cron. This is the fix for MLB worker_resource_limit
+  // and NBA's unanalyzedDueToCap=379 — by removing the inline budget,
+  // every candidate gets a chance to reach the analyzer + edge gate.
+  if (options.inlineAnalyze !== true) {
+    const runId = options.runId ?? crypto.randomUUID();
+    const today_str = new Date().toISOString().slice(0, 10);
+    const endpoint = ANALYZER_ENDPOINT[sport] ?? "nba-api/analyze";
+
+    const entries = top.map((p) => {
+      const md = (p.model_diagnostics ?? {}) as Record<string, unknown>;
+      const intendedTier = (md.intended_tier as string | undefined) ?? null;
+      const preGateTier = (md.preGateTier as string | undefined) ?? null;
+      const candidate_payload: Record<string, unknown> = {
+        event_id: p.event_id ?? null,
+        home_team: p.home_team ?? null,
+        away_team: p.away_team ?? null,
+        commence_time: p.commence_time ?? null,
+        odds: p.odds,
+        player_name: p.player_name ?? null,
+        team: p.team ?? null,
+        opponent: p.opponent ?? null,
+        prop_type: p.prop_type,
+        line: p.line,
+        direction: p.direction,
+        bet_type: p.bet_type,
+        intended_tier: intendedTier,
+        pre_gate_tier: preGateTier,
+        pick_date: today_str,
+        sport,
+        model_diagnostics: p.model_diagnostics ?? null,
+        raw_confidence: p.raw_confidence ?? null,
+        ev_pct: p.ev_pct ?? null,
+        edge: p.edge ?? null,
+        spread_line: p.spread_line ?? null,
+        total_line: p.total_line ?? null,
+        reasoning: p.reasoning ?? null,
+      };
+      const analyzer_payload = {
+        player: p.player_name,
+        prop_type: p.prop_type,
+        line: p.line,
+        over_under: normalizeDirection(p.direction),
+        opponent: p.opponent || "",
+        team: p.team || null,
+        home_team: p.home_team || null,
+        away_team: p.away_team || null,
+        sport,
+        bet_type: "player_prop",
+      };
+      return {
+        play: p,
+        analyzerEndpoint: endpoint,
+        analyzerPayload: analyzer_payload,
+        candidatePayload: candidate_payload,
+        intendedTier,
+        preGateTier,
+        scannerTraceId: null,
+        classification: { reason: "discovery" as const, retry_after_ms: 60_000 },
+      };
+    });
+
+    let enqueued = 0;
+    let refused = 0;
+    try {
+      const { key: qKey } = resolveServiceRoleAuth();
+      const qUrl = getEnv("PROJECT_URL") ?? getEnv("SUPABASE_URL") ?? null;
+      if (qKey && qUrl) {
+        const qClient = createClient(qUrl, qKey, {
+          auth: { persistSession: false, autoRefreshToken: false },
+          global: {
+            headers: {
+              Authorization: `Bearer ${qKey}`,
+              apikey: qKey,
+            },
+          },
+        });
+        const res = await enqueueGenericAnalyzerCandidates(
+          qClient, today_str, sport, entries, runId,
+        );
+        enqueued = res.enqueued;
+        refused = res.refused;
+
+        const prefilter_drop_reasons: Record<string, number> = {};
+        if (drops.conf > 0) prefilter_drop_reasons.low_confidence = drops.conf;
+        if (drops.oddsHigh > 0) prefilter_drop_reasons.odds_high = drops.oddsHigh;
+        if (drops.oddsLow > 0) prefilter_drop_reasons.odds_low = drops.oddsLow;
+        if (drops.edge > 0) prefilter_drop_reasons.non_positive_edge = drops.edge;
+
+        const { error: metricsErr } = await qClient.rpc(
+          "upsert_scan_run_discovery",
+          {
+            p_run_id: runId,
+            p_sport: sport,
+            p_pick_date: today_str,
+            p_discovered: scanned,
+            p_queued: enqueued,
+            p_prefilter_drop_reasons: prefilter_drop_reasons,
+          },
+        );
+        if (metricsErr) {
+          console.warn(
+            `[sport_scan] upsert_scan_run_discovery RPC error sport=${sport}:`,
+            metricsErr.message ?? metricsErr,
+          );
+        }
+      } else {
+        console.warn(
+          `[sport_scan] discovery enqueue SKIPPED sport=${sport} ` +
+            `qKey=${qKey ? "ok" : "missing"} qUrl=${qUrl ? "ok" : "missing"}`,
+        );
+      }
+    } catch (qErr) {
+      console.error(
+        `[sport_scan] discovery enqueue failed sport=${sport}:`,
+        (qErr as Error)?.message ?? qErr,
+      );
+    }
+
+    const prefilter_drop_reasons: Record<string, number> = {
+      low_confidence: drops.conf,
+      odds_high: drops.oddsHigh,
+      odds_low: drops.oddsLow,
+      non_positive_edge: drops.edge,
+    };
+
+    console.log(
+      `[sport_scan] sport=${sport} discovery_only=true run_id=${runId} ` +
+        `scanned=${scanned} prefiltered=${prefiltered.length} ` +
+        `top=${top.length} enqueued=${enqueued} refused=${refused}`,
+    );
+
+    return {
+      sport,
+      scanned,
+      validated: 0,
+      inserted: 0,
+      stats,
+      tiers: { edge: 0, daily: 0, value: 0, pass: 0 },
+      droppedNoGameDate: 0,
+      diagnostics_only: false,
+      discovery_only: true,
+      run_id: runId,
+      discovered: top.length,
+      queued: enqueued,
+      refused,
+      prefilter_drop_reasons,
+      candidate_pool_size_before_analyzer: top.length,
+      candidate_pool_size_after_analyzer: 0,
+      analyzer_pool_cap: analyzerPoolCap,
+      analyzer_pool_selected_count: top.length,
+    };
+  }
+
   const cache = new Map<string, any>();
   const analyzerDiagnostics = newAnalyzerDiagnostics(sport);
   const analyzerErrorCandidates: AnalyzerErrorCandidate[] = [];

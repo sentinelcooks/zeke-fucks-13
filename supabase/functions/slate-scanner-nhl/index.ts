@@ -8,7 +8,16 @@ const corsHeaders = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
-    const result = await scanSport("nhl");
+    let body: any = {};
+    if (req.method === "POST") {
+      try { body = await req.json(); } catch { body = {}; }
+    }
+    // Discovery-only by default. analyzer-worker-nhl drains the queue.
+    const inlineAnalyze = body?.inline_analyze === true;
+    const result = await scanSport("nhl", {
+      inlineAnalyze,
+      runId: typeof body?.run_id === "string" ? body.run_id : undefined,
+    });
     return new Response(JSON.stringify(result), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
