@@ -132,11 +132,11 @@ const AuthPage = () => {
   }, [refreshProfile, savedForUser]);
 
   useEffect(() => {
-    if (redirecting && isAuthenticated && !savingOnboarding) {
+    if (isAuthenticated && !savingOnboarding && !confirmationPending && !forgotMode) {
       console.log("[auth] AuthPage redirect effect → /dashboard");
       navigate("/dashboard", { replace: true });
     }
-  }, [redirecting, isAuthenticated, navigate, savingOnboarding]);
+  }, [isAuthenticated, savingOnboarding, confirmationPending, forgotMode, navigate]);
 
   // After OAuth redirect lands us back on this page already authenticated,
   // capture the user and save onboarding. The useEffect above will then route to /dashboard.
@@ -248,8 +248,6 @@ const AuthPage = () => {
       setResendLoading(false);
     }
   };
-
-  if (isAuthenticated) return null;
 
   if (confirmationPending) {
     return (
@@ -434,11 +432,12 @@ const AuthPage = () => {
 
   const isSignup = mode === "signup";
 
-  // Show the same splash loader used on cold start while the sign-in
-  // transition is in flight. `redirecting` is set to true immediately on
-  // login success (before any awaits) so this renders and paints before the
-  // redirect useEffect can fire the navigate call.
-  if (redirecting && !confirmationPending && !forgotMode) {
+  const shouldShowAuthSplash =
+    !confirmationPending &&
+    !forgotMode &&
+    (loading || redirecting || savingOnboarding || isAuthenticated);
+
+  if (shouldShowAuthSplash) {
     return <SplashScreen persistent />;
   }
 
