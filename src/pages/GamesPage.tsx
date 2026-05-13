@@ -4,7 +4,7 @@ import logoMlb from "@/assets/logo-mlb.png";
 import logoNhl from "@/assets/logo-nhl.png";
 import logoNfl from "@/assets/logo-nfl.png";
 import logoUfc from "@/assets/logo-ufc.png";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Clock, Loader2, Calendar, Bell, BellOff, RefreshCw, Swords, Search, ChevronDown } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
@@ -127,10 +127,12 @@ const stagger = (i: number) => ({
 
 const GamesPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { profile } = useAuth();
   const { fmt } = useOddsFormat();
   const tz = profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const [sport, setSport] = useState<SportFilter>("nba");
+  const initialSport = ((location.state as { selectedSport?: SportFilter } | null)?.selectedSport) ?? "nba";
+  const [sport, setSport] = useState<SportFilter>(initialSport);
   const [games, setGames] = useState<Game[]>([]);
   const [ufcEvents, setUfcEvents] = useState<UfcEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -908,7 +910,7 @@ const GamesPage = () => {
         <p className="text-[9px] text-muted-foreground/55 mt-2 text-center">{fight.weightClass}</p>
       )}
       <button
-        onClick={() => navigate("/dashboard/ufc", { state: { fighter1: fight.fighter1, fighter2: fight.fighter2 } })}
+        onClick={() => navigate("/dashboard/ufc", { state: { fighter1: fight.fighter1, fighter2: fight.fighter2, source: "ufc-games-schedule", returnTo: "/dashboard/games", selectedSport: "ufc" } })}
         className="mt-3 w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold text-primary bg-primary/[0.08] border border-primary/15 hover:bg-primary/[0.14] transition-all"
       >
         <Search className="w-3.5 h-3.5" />

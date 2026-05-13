@@ -23,8 +23,18 @@ const UfcPage = () => {
   const timeout2 = useRef<ReturnType<typeof setTimeout>>();
   const autoAnalyzedRef = useRef(false);
 
-  const state = location.state as { fighter1?: string; fighter2?: string } | null;
+  const state = location.state as {
+    fighter1?: string;
+    fighter2?: string;
+    source?: string;
+    returnTo?: string;
+    selectedSport?: string;
+  } | null;
   const [isAutoAnalyze, setIsAutoAnalyze] = useState(!!(state?.fighter1 && state?.fighter2));
+  const cameFromSchedule =
+    state?.source === "ufc-games-schedule" ||
+    !!state?.returnTo ||
+    !!(state?.fighter1 && state?.fighter2);
   const showSearchPanel = !isAutoAnalyze || (results === null && !loading);
 
   useEffect(() => {
@@ -133,9 +143,18 @@ const UfcPage = () => {
         {isAutoAnalyze && !showSearchPanel && (
           <motion.button
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            onClick={() => setIsAutoAnalyze(false)}
+            onClick={() => {
+              if (cameFromSchedule) {
+                navigate(state?.returnTo ?? "/dashboard/games", {
+                  replace: true,
+                  state: { selectedSport: state?.selectedSport ?? "ufc" },
+                });
+              } else {
+                setIsAutoAnalyze(false);
+              }
+            }}
             className="flex items-center gap-1.5 text-xs text-muted-foreground/60 hover:text-foreground transition-colors mt-2">
-            <ArrowLeft className="w-3.5 h-3.5" /> New Matchup
+            <ArrowLeft className="w-3.5 h-3.5" /> {cameFromSchedule ? "Back to Schedule" : "New Matchup"}
           </motion.button>
         )}
 
