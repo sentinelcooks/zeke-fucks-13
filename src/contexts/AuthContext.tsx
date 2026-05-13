@@ -80,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
+        console.log("[auth] onAuthStateChange", event, "hasSession=", !!newSession);
         setSession(newSession);
         setUser(newSession?.user ?? null);
         if (newSession?.user) {
@@ -150,16 +151,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string): Promise<{ error?: string }> => {
+    console.log("[auth] signIn:enter");
+    // Re-raise isLoading so route guards render the SplashScreen during the
+    // transition between successful credentials and the onAuthStateChange
+    // listener committing the session to React state.
+    setIsLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { error: error.message };
+    if (error) {
+      console.log("[auth] signIn:error", error.message);
+      setIsLoading(false);
+      return { error: error.message };
+    }
+    console.log("[auth] signIn:success");
+    // Leave isLoading=true; onAuthStateChange will flip it to false once the
+    // session is in React state.
     return {};
   };
 
   const signOut = async () => {
+    console.log("[auth] signOut:enter");
+    setIsLoading(true);
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
     setProfile(null);
+    setIsLoading(false);
   };
 
   const updateProfile = async (updates: Partial<Pick<Profile, "display_name" | "timezone" | "notification_enabled" | "odds_format">>) => {

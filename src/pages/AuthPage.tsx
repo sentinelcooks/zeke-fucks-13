@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import sentinelLogo from "@/assets/sentinel-lock.jpg";
+import { SplashScreen } from "@/components/SplashScreen";
 
 // Sentinel purple brand
 const ACCENT = "#A855F7";       // primary purple
@@ -65,6 +66,7 @@ const AuthPage = () => {
   const navigate = useNavigate();
 
   const [savingOnboarding, setSavingOnboarding] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
   const [confirmationPending, setConfirmationPending] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
@@ -130,10 +132,11 @@ const AuthPage = () => {
   }, [refreshProfile, savedForUser]);
 
   useEffect(() => {
-    if (isAuthenticated && !savingOnboarding) {
+    if (redirecting && isAuthenticated && !savingOnboarding) {
+      console.log("[auth] AuthPage redirect effect → /dashboard");
       navigate("/dashboard", { replace: true });
     }
-  }, [isAuthenticated, navigate, savingOnboarding]);
+  }, [redirecting, isAuthenticated, navigate, savingOnboarding]);
 
   // After OAuth redirect lands us back on this page already authenticated,
   // capture the user and save onboarding. The useEffect above will then route to /dashboard.
@@ -171,10 +174,14 @@ const AuthPage = () => {
         persistRememberChoice(remember);
         setConfirmationPending(true);
       } else {
+        console.log("[auth] AuthPage submit success — showing splash before redirect");
         persistRememberChoice(remember);
+        // Set redirecting BEFORE any await so the state update schedules a
+        // re-render. React will commit the SplashScreen and paint it before
+        // firing the redirect useEffect below.
+        setRedirecting(true);
         const { data: { user: authUser } } = await supabase.auth.getUser();
         if (authUser) await saveOnboardingToDb(authUser.id);
-        navigate("/dashboard");
       }
     } catch {
       setError("Something went wrong. Try again.");
@@ -426,6 +433,14 @@ const AuthPage = () => {
   }
 
   const isSignup = mode === "signup";
+
+  // Show the same splash loader used on cold start while the sign-in
+  // transition is in flight. `redirecting` is set to true immediately on
+  // login success (before any awaits) so this renders and paints before the
+  // redirect useEffect can fire the navigate call.
+  if (redirecting && !confirmationPending && !forgotMode) {
+    return <SplashScreen persistent />;
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background relative overflow-hidden px-4 py-8 pt-safe-plus-4 pb-safe">
