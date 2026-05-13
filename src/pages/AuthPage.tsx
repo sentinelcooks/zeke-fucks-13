@@ -67,7 +67,6 @@ const AuthPage = () => {
 
   const [savingOnboarding, setSavingOnboarding] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
-  const [splashMinDone, setSplashMinDone] = useState(false);
   const [confirmationPending, setConfirmationPending] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
@@ -132,21 +131,12 @@ const AuthPage = () => {
     }
   }, [refreshProfile, savedForUser]);
 
-  // Start a minimum splash display timer as soon as redirecting flips true.
-  // This guarantees the enter animation (logo/rings, ~600ms) is visible before
-  // we navigate, regardless of how fast the auth state settles.
   useEffect(() => {
-    if (!redirecting) return;
-    const t = setTimeout(() => setSplashMinDone(true), 1200);
-    return () => clearTimeout(t);
-  }, [redirecting]);
-
-  useEffect(() => {
-    if (splashMinDone && isAuthenticated && !savingOnboarding) {
+    if (redirecting && isAuthenticated && !savingOnboarding) {
       console.log("[auth] AuthPage redirect effect → /dashboard");
       navigate("/dashboard", { replace: true });
     }
-  }, [splashMinDone, isAuthenticated, navigate, savingOnboarding]);
+  }, [redirecting, isAuthenticated, navigate, savingOnboarding]);
 
   // After OAuth redirect lands us back on this page already authenticated,
   // capture the user and save onboarding. The useEffect above will then route to /dashboard.

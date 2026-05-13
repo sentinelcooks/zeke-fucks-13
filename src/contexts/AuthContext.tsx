@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session } from "@supabase/supabase-js";
 import { getAuthRedirectUrl } from "@/lib/authRedirect";
@@ -33,6 +33,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Tracks whether a sign-in is in flight so the SIGNED_IN listener can
+  // delay clearing isLoading, keeping the splash visible through navigation.
+  const signingInRef = useRef(false);
+  const splashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     const { data } = await supabase
@@ -88,7 +92,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setProfile(null);
         }
-        setIsLoading(false);
+
+        if (event === "SIGNED_IN" && signingInRef.current) {
+          // Keep isLoading=true long enough for the SplashScreen enter
+          // animation (~600ms) to be visible. ProtectedRoute shows the splash
+          // while isLoading, so this persists through the navigate() call.
+          if (splashTimerRef.current) clearTimeout(splashTimerRef.current);
+          splashTimerRef.current = setTimeout(() => {
+            signingInRef.current = false;
+            splashTimerRef.current = null;
+            setIsLoading(false);
+          }, 1400);
+        } else {
+          setIsLoading(false);
+        }
       }
     );
 
@@ -152,24 +169,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string): Promise<{ error?: string }> => {
     console.log("[auth] signIn:enter");
-    // Re-raise isLoading so route guards render the SplashScreen during the
-    // transition between successful credentials and the onAuthStateChange
-    // listener committing the session to React state.
+    signingInRef.current = true;
     setIsLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       console.log("[auth] signIn:error", error.message);
+      signingInRef.current = false;
       setIsLoading(false);
       return { error: error.message };
     }
     console.log("[auth] signIn:success");
-    // Leave isLoading=true; onAuthStateChange will flip it to false once the
-    // session is in React state.
     return {};
   };
 
   const signOut = async () => {
     console.log("[auth] signOut:enter");
+    if (splashTimerRef.current) {
+      clearTimeout(splashTimerRef.current);
+      splashTimerRef.current = null;
+    }
+    signingInRef.current = false;
     setIsLoading(true);
     await supabase.auth.signOut();
     setUser(null);
