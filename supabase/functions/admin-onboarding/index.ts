@@ -125,9 +125,10 @@ serve(async (req) => {
       let q = supabaseAdmin
         .from("daily_picks")
         .select("*")
-        .or("status.is.null,status.eq.,status.neq.empty_slate")
+        .or("status.is.null,status.neq.empty_slate")
         .order("pick_date", { ascending: false })
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(10000);
 
       if (action === "list_edge_history") {
         q = q.eq("tier", "edge");
