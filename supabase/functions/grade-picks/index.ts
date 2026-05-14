@@ -96,10 +96,15 @@ function ymd(d: Date): string {
 }
 
 // Pick the date(s) ESPN's scoreboard should be queried for to grade a pick.
-// Prefer the actual game_date / commence_time captured at scan time. Fall
-// back to pick_date and pick_date+1 only for legacy rows missing those.
+// Return candidate ESPN scoreboard dates to query for a pick, ET-game-day
+// first. The scanner stores `game_date` as the UTC date of commence_time —
+// for an 8pm+ ET tipoff that's tomorrow's UTC date, NOT the actual game
+// day. ESPN's scoreboard is keyed by ET calendar date, so we must convert
+// commence_time to America/New_York first. We still include `game_date`
+// as a fallback so daytime games (where ET-date == UTC-date) work
+// identically, and dedup the list to keep the cron path fast.
 function gradingDatesForPick(pick: Pick): string[] {
-  if (pick.game_date) return [String(pick.game_date).slice(0, 10)];
+  const out: string[] = [];
   if (pick.commence_time) {
     const d = new Date(pick.commence_time);
     if (!Number.isNaN(d.getTime())) {
@@ -109,9 +114,14 @@ function gradingDatesForPick(pick: Pick): string[] {
         month: "2-digit",
         day: "2-digit",
       }).format(d);
-      return [ymdET];
+      out.push(ymdET);
     }
   }
+  if (pick.game_date) {
+    const gd = String(pick.game_date).slice(0, 10);
+    if (!out.includes(gd)) out.push(gd);
+  }
+  if (out.length > 0) return out;
   return [pick.pick_date, ymd(new Date(new Date(pick.pick_date).getTime() + 86400000))];
 }
 
@@ -133,6 +143,10 @@ interface ScoreboardGame {
   id: string;
   date: string;          // YYYY-MM-DD
   final: boolean;
+  // Raw ESPN status state for diagnostics ("pre", "in", "post", ...).
+  // Surfaced on skipped-pick logs so we can tell at a glance whether a
+  // pending pick is waiting on the game to actually finish.
+  state: string;
   home: string;
   away: string;
   homeScore: number;
@@ -166,6 +180,7 @@ async function fetchScoreboard(
       id: String(e.id || ""),
       date: dateStr,
       final: state === "post",
+      state: String(state ?? ""),
       home: home.team?.displayName || home.team?.name || "",
       away: away.team?.displayName || away.team?.name || "",
       homeScore,
@@ -244,6 +259,7 @@ async function gradeNbaProps(
   supabase: ReturnType<typeof createClient>,
   picks: Pick[],
   scoreDate: string,
+  ctx: GradeCtx,
 ): Promise<{ graded: number; skippedNoData: number }> {
   if (picks.length === 0) return { graded: 0, skippedNoData: 0 };
 
@@ -251,14 +267,55 @@ async function gradeNbaProps(
   const scoreboardResp = await fetch(
     `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${dateStr}`,
   );
-  if (!scoreboardResp.ok) return { graded: 0, skippedNoData: picks.length };
+  if (!scoreboardResp.ok) {
+    for (const p of picks) {
+      recordSkip(ctx, p, "no_data", { date_used: scoreDate });
+    }
+    return { graded: 0, skippedNoData: picks.length };
+  }
   const scoreboard = await scoreboardResp.json();
 
+  // Build a quick lookup of each pick's game state in the ESPN scoreboard
+  // so we can categorize skips precisely (not_final vs no_event vs no_data).
+  type EventInfo = { id: string; state: string; home: string; away: string };
+  const events: EventInfo[] = (scoreboard.events || []).map((e: any) => {
+    const comp = e.competitions?.[0]?.competitors ?? [];
+    const home = comp.find((c: any) => c.homeAway === "home")?.team?.displayName ?? "";
+    const away = comp.find((c: any) => c.homeAway === "away")?.team?.displayName ?? "";
+    return {
+      id: String(e.id),
+      state: String(e.status?.type?.state ?? ""),
+      home,
+      away,
+    };
+  });
+
   const completedGameIds: string[] = [];
-  for (const e of scoreboard.events || []) {
-    if (e.status?.type?.state === "post") completedGameIds.push(e.id);
+  for (const e of events) {
+    if (e.state === "post") {
+      completedGameIds.push(e.id);
+      ctx.finalGamesFound.add(`nba:${e.id}`);
+    }
   }
-  if (completedGameIds.length === 0) return { graded: 0, skippedNoData: picks.length };
+  if (completedGameIds.length === 0) {
+    // Categorize: did each pick's team appear in scoreboard but not final?
+    for (const p of picks) {
+      const ev = events.find(
+        (e) => teamMatch(p.home_team, e.home) && teamMatch(p.away_team, e.away),
+      );
+      if (ev) {
+        recordSkip(ctx, p, "not_final", {
+          date_used: scoreDate,
+          espn_state: ev.state,
+          found_in_scoreboard: true,
+          teams: `${ev.home}@${ev.away}`,
+        });
+      } else {
+        recordSkip(ctx, p, "no_event", { date_used: scoreDate });
+      }
+    }
+    return { graded: 0, skippedNoData: picks.length };
+  }
 
   const playerStats: Record<string, Record<string, number>> = {};
   await Promise.all(
@@ -303,14 +360,48 @@ async function gradeNbaProps(
   let graded = 0;
   let skippedNoData = 0;
   for (const pick of picks) {
+    // Categorize before checking player stats: if the pick's game wasn't in
+    // the completed list, the right reason is not_final/no_event, NOT
+    // player_not_found. Without this branch we'd mis-attribute every
+    // pending-game NBA pick as a missing-player issue.
+    const ev = events.find(
+      (e) => teamMatch(pick.home_team, e.home) && teamMatch(pick.away_team, e.away),
+    );
+    if (!ev) {
+      skippedNoData++;
+      recordSkip(ctx, pick, "no_event", { date_used: scoreDate });
+      continue;
+    }
+    if (ev.state !== "post") {
+      skippedNoData++;
+      recordSkip(ctx, pick, "not_final", {
+        date_used: scoreDate,
+        espn_state: ev.state,
+        found_in_scoreboard: true,
+        teams: `${ev.home}@${ev.away}`,
+      });
+      continue;
+    }
     const stats = playerStats[normalise(pick.player_name)];
     if (!stats) {
       skippedNoData++;
+      recordSkip(ctx, pick, "player_not_found", {
+        date_used: scoreDate,
+        espn_state: ev.state,
+        found_in_scoreboard: true,
+        teams: `${ev.home}@${ev.away}`,
+      });
       continue;
     }
     const statKeys = PROP_TO_STAT[(pick.prop_type || "").toLowerCase()] || [];
     if (statKeys.length === 0) {
       skippedNoData++;
+      recordSkip(ctx, pick, "unsupported_prop", {
+        date_used: scoreDate,
+        espn_state: ev.state,
+        found_in_scoreboard: true,
+        teams: `${ev.home}@${ev.away}`,
+      });
       continue;
     }
     let actualValue = 0;
@@ -321,10 +412,16 @@ async function gradeNbaProps(
         ? actualValue > pick.line ? "hit" : "miss"
         : actualValue < pick.line ? "hit" : "miss";
 
-    await supabase
+    const { error: updateErr } = await supabase
       .from("daily_picks")
       .update({ result, avg_value: actualValue })
       .eq("id", pick.id);
+    if (updateErr) {
+      ctx.updateFailedCount++;
+      recordSkip(ctx, pick, "update_failed", { date_used: scoreDate });
+      console.error(`[GradePicks] nba update failed pick=${pick.id}`, updateErr);
+      continue;
+    }
     graded++;
   }
   return { graded, skippedNoData };
@@ -606,49 +703,64 @@ async function gradePlayerPropsForSport(
     propType: string,
   ) => { found: boolean; actual: number | null; reason?: string },
   propMap: Record<string, string>,
+  ctx: GradeCtx,
 ): Promise<PropGradeCounters> {
   const counters = emptyCounters();
   if (picks.length === 0) return counters;
 
-  // Group by primary grading date so we cache scoreboard fetches per date.
-  const byDate: Record<string, Pick[]> = {};
-  for (const p of picks) {
-    const primary = gradingDatesForPick(p)[0];
-    (byDate[primary] ||= []).push(p);
-  }
-
   const summaryCache = new Map<string, any | null>();
   const scoreboardCache = new Map<string, ScoreboardGame[]>();
-
-  for (const [dateStr, datePicks] of Object.entries(byDate)) {
-    if (!scoreboardCache.has(dateStr)) {
-      scoreboardCache.set(dateStr, await fetchScoreboard(sport, dateStr));
+  const getScoreboard = async (d: string): Promise<ScoreboardGame[]> => {
+    if (!scoreboardCache.has(d)) {
+      scoreboardCache.set(d, await fetchScoreboard(sport, d));
     }
-    const scoreboard = scoreboardCache.get(dateStr) || [];
+    return scoreboardCache.get(d) || [];
+  };
 
-    for (const pick of datePicks) {
-      const propTypeLower = (pick.prop_type || "").toLowerCase();
-      if (!propMap[propTypeLower]) {
-        counters.skippedUnsupportedProp++;
-        continue;
-      }
+  for (const pick of picks) {
+    const propTypeLower = (pick.prop_type || "").toLowerCase();
+    if (!propMap[propTypeLower]) {
+      counters.skippedUnsupportedProp++;
+      recordSkip(ctx, pick, "unsupported_prop", { date_used: gradingDatesForPick(pick)[0] ?? null });
+      continue;
+    }
 
-      // Resolve event_id: prefer pick.event_id only if it matches a scoreboard
-      // entry for this sport/date (Odds-API event_id ≠ ESPN id, so we cannot
-      // call summary with it directly).
-      let game = findGameForPick(pick, scoreboard);
-      if (!game && pick.event_id) {
+    // Try every candidate date for this pick — ET-game-day first, then any
+    // alternate (game_date when stored as UTC date) — so we don't miss
+    // games where commence_time straddles midnight UTC.
+    const candidateDates = gradingDatesForPick(pick);
+    let game: ScoreboardGame | null = null;
+    let dateStr: string = candidateDates[0] ?? "";
+    for (const d of candidateDates) {
+      const scoreboard = await getScoreboard(d);
+      let found = findGameForPick(pick, scoreboard);
+      if (!found && pick.event_id) {
         const matched = scoreboard.find((g) => g.id === String(pick.event_id));
-        if (matched) game = matched;
+        if (matched) found = matched;
       }
+      if (found) {
+        game = found;
+        dateStr = d;
+        break;
+      }
+    }
+    {
       if (!game) {
         counters.skippedNoEvent++;
+        recordSkip(ctx, pick, "no_event", { date_used: dateStr });
         continue;
       }
       if (!game.final) {
         counters.skippedNotFinal++;
+        recordSkip(ctx, pick, "not_final", {
+          date_used: dateStr,
+          espn_state: game.state ?? null,
+          found_in_scoreboard: true,
+          teams: `${game.home}@${game.away}`,
+        });
         continue;
       }
+      ctx.finalGamesFound.add(`${sport}:${game.id}`);
 
       let summary = summaryCache.get(game.id);
       if (summary === undefined) {
@@ -657,6 +769,12 @@ async function gradePlayerPropsForSport(
       }
       if (!summary) {
         counters.skippedNoData++;
+        recordSkip(ctx, pick, "no_data", {
+          date_used: dateStr,
+          espn_state: game.state ?? null,
+          found_in_scoreboard: true,
+          teams: `${game.home}@${game.away}`,
+        });
         continue;
       }
 
@@ -670,12 +788,24 @@ async function gradePlayerPropsForSport(
         else if (reason === "unsupported_prop") counters.skippedUnsupportedProp++;
         else if (reason === "player_not_found") counters.skippedPlayerNotFound++;
         else counters.skippedNoData++;
+        const skipReason: PerPickDiag["reason"] =
+          reason === "ambiguous_player" ? "ambiguous_player"
+            : reason === "unsupported_prop" ? "unsupported_prop"
+            : reason === "player_not_found" ? "player_not_found"
+            : "no_data";
+        recordSkip(ctx, pick, skipReason, {
+          date_used: dateStr,
+          espn_state: game.state ?? null,
+          found_in_scoreboard: true,
+          teams: `${game.home}@${game.away}`,
+        });
         continue;
       }
 
       const line = Number(pick.line);
       if (!Number.isFinite(line)) {
         counters.skippedNoData++;
+        recordSkip(ctx, pick, "no_data", { date_used: dateStr });
         continue;
       }
       const result = gradeOverUnder(pick.direction || "", actual, line);
@@ -686,6 +816,8 @@ async function gradePlayerPropsForSport(
       if (error) {
         console.error(`[GradePicks] update failed pick=${pick.id}`, error);
         counters.skippedNoData++;
+        ctx.updateFailedCount++;
+        recordSkip(ctx, pick, "update_failed", { date_used: dateStr });
         continue;
       }
       counters.graded++;
@@ -693,6 +825,74 @@ async function gradePlayerPropsForSport(
   }
 
   return counters;
+}
+
+// Per-pick diagnostic record for every pick that did NOT transition to a
+// terminal result this run. Pushed to a single shared array (built at the
+// top of Deno.serve) and surfaced both in the HTTP response (metrics
+// rollup) and as one structured log line each. Keeps the cron path quiet
+// for picks that grade cleanly — only "stuck" picks generate entries.
+interface PerPickDiag {
+  pick_id: string;
+  sport: string;
+  player_name: string | null;
+  prop_type: string | null;
+  direction: string | null;
+  line: number | null;
+  date_used: string | null;
+  reason:
+    | "not_final"
+    | "no_event"
+    | "player_not_found"
+    | "ambiguous_player"
+    | "unsupported_prop"
+    | "no_data"
+    | "update_failed";
+  espn_state: string | null;
+  found_in_scoreboard: boolean;
+  teams: string | null;
+}
+
+// Shared accumulator passed into per-sport graders so they can record the
+// "why" alongside the existing skipped* counter increments.
+interface GradeCtx {
+  diagnostics: PerPickDiag[];
+  finalGamesFound: Set<string>;
+  updateFailedCount: number;
+}
+
+function recordSkip(
+  ctx: GradeCtx,
+  pick: Pick,
+  reason: PerPickDiag["reason"],
+  opts: {
+    date_used?: string | null;
+    espn_state?: string | null;
+    found_in_scoreboard?: boolean;
+    teams?: string | null;
+  } = {},
+): void {
+  const entry: PerPickDiag = {
+    pick_id: pick.id,
+    sport: (pick.sport || "").toLowerCase(),
+    player_name: pick.player_name ?? null,
+    prop_type: pick.prop_type ?? null,
+    direction: pick.direction ?? null,
+    line: typeof pick.line === "number" ? pick.line : null,
+    date_used: opts.date_used ?? null,
+    reason,
+    espn_state: opts.espn_state ?? null,
+    found_in_scoreboard: opts.found_in_scoreboard ?? false,
+    teams: opts.teams ?? null,
+  };
+  ctx.diagnostics.push(entry);
+  console.log(
+    `[GradePicks][skipped] pick_id=${entry.pick_id} sport=${entry.sport} ` +
+      `player=${entry.player_name ?? ""} prop_type=${entry.prop_type ?? ""} ` +
+      `dir=${entry.direction ?? ""} line=${entry.line ?? ""} ` +
+      `date_used=${entry.date_used ?? ""} reason=${entry.reason} ` +
+      `espn_state=${entry.espn_state ?? ""} teams=${entry.teams ?? ""}`,
+  );
 }
 
 function isPlayerProp(pick: Pick): boolean {
@@ -713,20 +913,74 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceKey);
 
   try {
-    // 3-day lookback, accept null result as pending
+    // Optional body: { force_regrade?: true, pick_ids?: string[], pick_date?: "YYYY-MM-DD" }
+    // force_regrade ONLY widens the candidate set (specific ids or a single
+    // pick_date) — it NEVER overrides the result-null-or-pending filter, so
+    // already-graded hit/miss/push rows can never be retroactively changed
+    // by a manual call. Default cron path (no body) is unchanged.
+    let body: {
+      force_regrade?: boolean;
+      pick_ids?: unknown;
+      pick_date?: unknown;
+    } = {};
+    if (req.method === "POST") {
+      try {
+        body = await req.json();
+      } catch {
+        body = {};
+      }
+    }
+    const forceRegrade = body?.force_regrade === true;
+    const forcePickIds = Array.isArray(body?.pick_ids)
+      ? (body!.pick_ids as unknown[]).filter((x): x is string => typeof x === "string")
+      : [];
+    const forcePickDate = typeof body?.pick_date === "string" ? body!.pick_date as string : null;
+
+    // 3-day lookback by default; force_regrade can swap in a tighter window.
     const cutoff = ymd(new Date(Date.now() - 3 * 86400000));
-    const { data: picks } = await supabase
+    let query = supabase
       .from("daily_picks")
       .select("*")
-      .gte("pick_date", cutoff)
-      .or("result.is.null,result.eq.pending");
+      .or("result.is.null,result.eq.pending"); // INVARIANT: never overwrite graded results
+    if (forceRegrade && forcePickIds.length > 0) {
+      query = query.in("id", forcePickIds);
+    } else if (forceRegrade && forcePickDate) {
+      query = query.eq("pick_date", forcePickDate);
+    } else {
+      query = query.gte("pick_date", cutoff);
+    }
+    const { data: picks } = await query;
 
     if (!picks || picks.length === 0) {
       return new Response(
-        JSON.stringify({ message: "No pending picks to grade", graded: 0 }),
+        JSON.stringify({
+          message: "No pending picks to grade",
+          graded: 0,
+          metrics: {
+            pending_picks_found: 0,
+            final_games_found: 0,
+            picks_graded: 0,
+            skipped_not_final: 0,
+            skipped_no_player_stats: 0,
+            skipped_unknown_prop_type: 0,
+            update_failed_count: 0,
+            skipped_no_event: 0,
+            skipped_ambiguous_player: 0,
+            by_sport: {},
+            provider_game_status: [],
+          },
+          force_regrade: forceRegrade,
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
+    // Shared accumulator threaded into every per-sport grader.
+    const ctx: GradeCtx = {
+      diagnostics: [],
+      finalGamesFound: new Set<string>(),
+      updateFailedCount: 0,
+    };
 
     const bySport: Record<string, Pick[]> = {};
     for (const p of picks as Pick[]) {
@@ -772,7 +1026,7 @@ Deno.serve(async (req) => {
       for (const [date, datePicks] of Object.entries(byDate)) {
         const stillPending = datePicks.filter((p) => remaining.has(p.id));
         if (stillPending.length === 0) continue;
-        const r1 = await gradeNbaProps(supabase, stillPending, date);
+        const r1 = await gradeNbaProps(supabase, stillPending, date, ctx);
         nbaGraded += r1.graded;
 
         // Legacy fallback (rows missing game_date): try next calendar day.
@@ -796,7 +1050,7 @@ Deno.serve(async (req) => {
             }
           }
           for (const [nd, ndPicks] of Object.entries(groupedNext)) {
-            const r2 = await gradeNbaProps(supabase, ndPicks, nd);
+            const r2 = await gradeNbaProps(supabase, ndPicks, nd, ctx);
             nbaGraded += r2.graded;
             nbaSkippedNoData += r2.skippedNoData;
           }
@@ -829,6 +1083,7 @@ Deno.serve(async (req) => {
           props,
           sport === "mlb" ? getMlbPlayerStat : getNhlPlayerStat,
           sport === "mlb" ? MLB_PROP_TO_STAT : NHL_PROP_TO_STAT,
+          ctx,
         );
       }
 
@@ -848,6 +1103,7 @@ Deno.serve(async (req) => {
         const betType = (pick.bet_type || "").toLowerCase();
         if (!["moneyline", "spread", "total"].includes(betType)) {
           gameUnsupported++;
+          recordSkip(ctx, pick, "unsupported_prop", { date_used: gradingDatesForPick(pick)[0] ?? null });
           continue;
         }
 
@@ -855,12 +1111,14 @@ Deno.serve(async (req) => {
 
         let graded: "hit" | "miss" | "push" | null = null;
         let foundFinal = false;
-        let foundGame = false;
+        let foundGame: ScoreboardGame | null = null;
+        let dateUsed: string | null = null;
         for (const d of candidateDates) {
           const gs = await dateOf(d);
           const g = findGameForPick(pick, gs);
           if (!g) continue;
-          foundGame = true;
+          foundGame = g;
+          dateUsed = d;
           const r = gradeGameBet(pick, g);
           if (r) {
             graded = r;
@@ -869,16 +1127,30 @@ Deno.serve(async (req) => {
           }
         }
 
-        if (graded) {
-          await supabase
+        if (graded && foundGame) {
+          ctx.finalGamesFound.add(`${sport}:${foundGame.id}`);
+          const { error } = await supabase
             .from("daily_picks")
             .update({ result: graded })
             .eq("id", pick.id);
+          if (error) {
+            console.error(`[GradePicks] game-bet update failed pick=${pick.id}`, error);
+            ctx.updateFailedCount++;
+            recordSkip(ctx, pick, "update_failed", { date_used: dateUsed });
+            continue;
+          }
           gameGraded++;
         } else if (foundGame && !foundFinal) {
           gameNotFinal++;
+          recordSkip(ctx, pick, "not_final", {
+            date_used: dateUsed,
+            espn_state: foundGame.state ?? null,
+            found_in_scoreboard: true,
+            teams: `${foundGame.home}@${foundGame.away}`,
+          });
         } else {
           gameNoData++;
+          recordSkip(ctx, pick, "no_event", { date_used: dateUsed });
         }
       }
 
@@ -922,6 +1194,26 @@ Deno.serve(async (req) => {
       skipped_ambiguous_player: skippedAmbiguousPlayer,
       skipped_no_event: skippedNoEvent,
       bySport: sportSummary,
+      force_regrade: forceRegrade,
+      // Structured metrics block requested by the grading pipeline owner.
+      // Mirrors existing counters in a stable shape and adds two new ones
+      // (final_games_found, update_failed_count) plus the per-pick rollup
+      // so a single response answers "why didn't this pick grade?".
+      metrics: {
+        pending_picks_found: picks.length,
+        final_games_found: ctx.finalGamesFound.size,
+        picks_graded: totalGraded,
+        skipped_not_final: skippedNotFinal,
+        // No-player-stats union: ESPN had the game but couldn't return the
+        // player's row, OR returned a row missing the stat key.
+        skipped_no_player_stats: skippedPlayerNotFound + skippedNoData,
+        skipped_unknown_prop_type: skippedUnsupportedProp,
+        update_failed_count: ctx.updateFailedCount,
+        skipped_no_event: skippedNoEvent,
+        skipped_ambiguous_player: skippedAmbiguousPlayer,
+        by_sport: sportSummary,
+        provider_game_status: ctx.diagnostics,
+      },
     };
 
     console.log(`[GradePicks] ${JSON.stringify(responseBody)}`);

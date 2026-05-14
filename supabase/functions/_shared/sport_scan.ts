@@ -1961,6 +1961,7 @@ export async function enqueueNbaAnalyzerCandidates(
   supabase: ReturnType<typeof createClient>,
   pickDate: string,
   candidates: ScoredPlay[],
+  runId?: string | null,
 ): Promise<{ enqueued: number; skipped: number }> {
   if (!Array.isArray(candidates) || candidates.length === 0) {
     return { enqueued: 0, skipped: 0 };
@@ -2009,13 +2010,14 @@ export async function enqueueNbaAnalyzerCandidates(
       payload: p as unknown as Record<string, unknown>,
       diagnostics: null,
       game_date: p.game_date ?? null,
+      run_id: runId ?? null,
     };
   });
 
   // Defer to the SQL RPC so collisions with in-flight ('processing') rows
   // are handled in a real transaction (no clobbering of attempts /
   // next_run_after on a row a worker is actively analyzing).
-  const { error } = await supabase.rpc("enqueue_nba_analyzer_candidates", {
+  const { data, error } = await supabase.rpc("enqueue_nba_analyzer_candidates", {
     p_rows: rows,
   });
 
@@ -2024,7 +2026,10 @@ export async function enqueueNbaAnalyzerCandidates(
     return { enqueued: 0, skipped };
   }
 
-  return { enqueued: rows.length, skipped };
+  // RPC returns the actual inserted/refreshed row count. Use it for
+  // queued_rows_inserted parity with the shared analyzer_queue path.
+  const enqueued = typeof data === "number" ? data : rows.length;
+  return { enqueued, skipped };
 }
 
 
@@ -2063,6 +2068,27 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
   refused?: number;
   discovery_only?: boolean;
   prefilter_drop_reasons?: Record<string, number>;
+  // Unified metrics block. Reflects the full lifecycle of this scanner run:
+  // synchronous insert counts (daily_picks_inserted_count) AND the count of
+  // rows actually landed in the analyzer_queue (queued_rows_inserted, sourced
+  // from the RPC's real insert count, NOT the pre-insert array length). The
+  // _count fields filled by ?wait=1 are 0 unless the poller wrapped this
+  // call.
+  metrics?: {
+    run_id: string;
+    candidates_selected: number;
+    queued_rows_inserted: number;
+    duplicate_skipped_count: number;
+    duplicate_update_count: number;
+    daily_picks_inserted_count: number;
+    analyzer_done_count: number;
+    analyzer_failed_count: number;
+    frontend_visible_count: number;
+    wait_mode: boolean;
+    wait_timed_out?: boolean;
+    wait_iterations?: number;
+    wait_queue_table?: "analyzer_queue" | "nba_analyzer_queue" | "both";
+  };
 }> {
   const traceResults = normalizeTraceTargets(options.traceTargets);
   const stats: any = {
@@ -2171,8 +2197,25 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
   // small chunks via cron. This is the fix for MLB worker_resource_limit
   // and NBA's unanalyzedDueToCap=379 — by removing the inline budget,
   // every candidate gets a chance to reach the analyzer + edge gate.
+  // Generated once per scanner invocation. Used by:
+  //   - discovery-only path: tags every analyzer_queue row + scan_run_metrics
+  //   - inline path: stamped onto each daily_picks row directly inserted, AND
+  //     onto deferred analyzer_queue rows, so the ?wait=1 poller and
+  //     scan-run-status can attribute completion back to this run.
+  const runId = options.runId ?? crypto.randomUUID();
+  // queued_rows_inserted: actual DB rows landed in (nba_)analyzer_queue. The
+  // RPCs return the real insert/refresh count; we surface that, not the
+  // pre-insert candidate array length. Initialized 0 — populated below by
+  // whichever enqueue path runs.
+  let queuedRowsInserted = 0;
+  let duplicateSkippedCount = 0;
+  // daily_picks upsert collisions resolved via ON CONFLICT DO UPDATE.
+  // Distinct from duplicateSkippedCount (which counts analyzer_queue
+  // dedupes). Surfaced in the response metrics so callers can spot a run
+  // that mostly refreshed existing rows vs inserted fresh.
+  let duplicateUpdateCount = 0;
+
   if (options.inlineAnalyze !== true) {
-    const runId = options.runId ?? crypto.randomUUID();
     const today_str = new Date().toISOString().slice(0, 10);
     const endpoint = ANALYZER_ENDPOINT[sport] ?? "nba-api/analyze";
 
@@ -2249,6 +2292,8 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
         );
         enqueued = res.enqueued;
         refused = res.refused;
+        queuedRowsInserted = res.enqueued;
+        duplicateSkippedCount = res.skipped;
 
         const prefilter_drop_reasons: Record<string, number> = {};
         if (drops.conf > 0) prefilter_drop_reasons.low_confidence = drops.conf;
@@ -2318,6 +2363,18 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
       candidate_pool_size_after_analyzer: 0,
       analyzer_pool_cap: analyzerPoolCap,
       analyzer_pool_selected_count: top.length,
+      metrics: {
+        run_id: runId,
+        candidates_selected: top.length,
+        queued_rows_inserted: queuedRowsInserted,
+        duplicate_skipped_count: duplicateSkippedCount,
+        duplicate_update_count: duplicateUpdateCount,
+        daily_picks_inserted_count: 0,
+        analyzer_done_count: 0,
+        analyzer_failed_count: 0,
+        frontend_visible_count: 0,
+        wait_mode: false,
+      },
     };
   }
 
@@ -3011,6 +3068,16 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
   }
 
   const uniqueRows = Array.from(uniqueRowsMap.values());
+  // Stamp run_id on every row going to the synchronous daily_picks insert so
+  // it can be traced back to this scanner run. Mirror inside model_diagnostics
+  // for redundancy. Done before the guard so guard-dropped rows are also
+  // attributable in logs.
+  for (const r of uniqueRows) {
+    r.run_id = runId;
+    const md = (r.model_diagnostics ?? {}) as Record<string, unknown>;
+    md.runId = runId;
+    r.model_diagnostics = md;
+  }
 
   let inserted = 0;
 
@@ -3085,18 +3152,40 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
       );
       const guardedRows = guardResult.rows;
 
-      const { error, count } = await supabase
-        .from("daily_picks")
-        .insert(guardedRows, { count: "exact" });
-
-      if (error) {
+      // Idempotent per-row upsert via SECURITY DEFINER RPC. Loop instead of
+      // batch-insert: the RPC returns inserted=true/false per row so we can
+      // split the metrics into fresh inserts vs duplicate-update refreshes.
+      // The new daily_picks_unique_per_day (v2) index distinguishes per
+      // event/team, so duplicate identities from a prior run refresh the
+      // existing row rather than raising 23505. The graded result column
+      // is preserved server-side by the RPC.
+      let insertedCount = 0;
+      let upsertDuplicateUpdateCount = 0;
+      let upsertErrorCount = 0;
+      for (const row of guardedRows) {
+        const { data, error: upErr } = await supabase.rpc("upsert_daily_pick", {
+          p_row: row as Record<string, unknown>,
+        });
+        if (upErr) {
+          upsertErrorCount++;
+          console.error(
+            `[scanner][persist] upsert_error sport=${sport} ` +
+              `code=${(upErr as { code?: string }).code ?? "unknown"} ` +
+              `message=${upErr.message} ` +
+              `details=${(upErr as { details?: string }).details ?? ""}`,
+          );
+          continue;
+        }
+        const first = Array.isArray(data) ? data[0] : null;
+        if ((first as { inserted?: boolean } | null)?.inserted === true) insertedCount++;
+        else upsertDuplicateUpdateCount++;
+      }
+      inserted = insertedCount;
+      duplicateUpdateCount += upsertDuplicateUpdateCount;
+      if (upsertErrorCount > 0) {
         console.error(
-          `[scanner][persist] insert_error code=${(error as { code?: string }).code ?? "unknown"} ` +
-            `message=${error.message} ` +
-            `details=${(error as { details?: string }).details ?? ""}`,
+          `[scanner][persist] upsert_errors sport=${sport} count=${upsertErrorCount}`,
         );
-      } else {
-        inserted = count ?? guardedRows.length;
       }
 
       // NBA-only: persist analyzer-deferred candidates to the resume queue so
@@ -3110,7 +3199,10 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
           for (const p of budgetDeferred) queueEntries.push(p);
           for (const p of rateLimitDeferred) queueEntries.push(p);
           if (queueEntries.length > 0) {
-            await enqueueNbaAnalyzerCandidates(supabase, today, queueEntries);
+            const nbaRes = await enqueueNbaAnalyzerCandidates(
+              supabase, today, queueEntries, runId,
+            );
+            queuedRowsInserted += nbaRes.enqueued;
           }
         } catch (qErr) {
           console.error(`[${sport}] nba_analyzer_queue enqueue failed:`, qErr);
@@ -3205,10 +3297,13 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
                 today,
                 sport,
                 entries,
+                runId,
               );
+              queuedRowsInserted += res.enqueued;
+              duplicateSkippedCount += res.skipped;
               console.log(
                 `[analyzer-queue] enqueue sport=${sport} endpoint=${endpoint} ` +
-                  `enqueued=${res.enqueued} refused=${res.refused} ` +
+                  `enqueued=${res.enqueued} refused=${res.refused} skipped=${res.skipped} ` +
                   `budget=${budgetDeferred.length} transient=${transientDeferred.length}`,
               );
             }
@@ -3306,5 +3401,21 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
     analyzer_calls_failed: analyzerDiagnostics.callsFailed,
     analyzer_pool_truncated: analyzerPool.truncated,
     analyzer_pool_excluded_candidates: analyzerPoolExcluded,
+    run_id: runId,
+    metrics: {
+      run_id: runId,
+      candidates_selected: top.length,
+      queued_rows_inserted: queuedRowsInserted,
+      duplicate_skipped_count: duplicateSkippedCount,
+      duplicate_update_count: duplicateUpdateCount,
+      daily_picks_inserted_count: inserted,
+      // analyzer_done/failed/frontend_visible are filled by the ?wait=1
+      // poller wrapping this function (see _shared/scan_wait.ts). At sync
+      // return time they are 0 because the async tail hasn't drained yet.
+      analyzer_done_count: 0,
+      analyzer_failed_count: 0,
+      frontend_visible_count: 0,
+      wait_mode: false,
+    },
   };
 }

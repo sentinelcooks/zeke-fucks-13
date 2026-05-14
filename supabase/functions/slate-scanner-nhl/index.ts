@@ -1,4 +1,5 @@
 import { scanSport } from "../_shared/sport_scan.ts";
+import { applyWaitToScanResult, buildWaitClient, parseWaitOptions } from "../_shared/scan_wait.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,6 +9,7 @@ const corsHeaders = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
+    const waitOpts = await parseWaitOptions(req);
     let body: any = {};
     if (req.method === "POST") {
       try { body = await req.json(); } catch { body = {}; }
@@ -18,6 +20,10 @@ Deno.serve(async (req) => {
       inlineAnalyze,
       runId: typeof body?.run_id === "string" ? body.run_id : undefined,
     });
+    if (waitOpts.wait) {
+      const client = buildWaitClient();
+      if (client) await applyWaitToScanResult(client, "nhl", result, waitOpts.timeoutMs);
+    }
     return new Response(JSON.stringify(result), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -25,7 +25,6 @@ import {
 } from "../_shared/daily_pick_rows.ts";
 import {
   claimAnalyzerQueueBatch,
-  dailyPickDeleteFilter,
   exponentialBackoffMs,
   finalizeAnalyzerQueueRow,
   rescheduleAnalyzerQueueRow,
@@ -355,7 +354,7 @@ async function processOne(
   state: ProcessState,
   todayISO: string,
   nowMs: number,
-): Promise<"inserted" | "rescheduled" | "failed" | "expired" | "no_pick"> {
+): Promise<"inserted" | "updated" | "rescheduled" | "failed" | "expired" | "no_pick"> {
   // 1. Date + commence_time gate. Schema has NO game_date column.
   if (row.pick_date < todayISO) {
     await finalizeAnalyzerQueueRow(supabase, row.id, "expired", {
@@ -526,6 +525,7 @@ async function processOne(
     modelUsed: endpoint,
     reasoning: scored.reasoning ?? null,
     avgValue: scored.ev_pct ?? null,
+    runId: row.run_id ?? null,
   });
   if (!finalRow) {
     await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
@@ -567,35 +567,28 @@ async function processOne(
     return "failed";
   }
 
-  // 6. Exact-identity delete (NEVER broad sport+pick_date wipe), then insert.
-  const f = dailyPickDeleteFilter(row.candidate_payload);
-  let q = supabase
-    .from("daily_picks")
-    .delete()
-    .eq("sport", row.sport)
-    .eq("pick_date", row.pick_date)
-    .eq("line", f.line)
-    .eq("direction", f.direction)
-    .eq("prop_type", f.prop_type);
-  if (f.player_name) q = q.eq("player_name", f.player_name);
-  if (f.event_id) q = q.eq("event_id", f.event_id);
-  else if (f.home_team && f.away_team)
-    q = q.eq("home_team", f.home_team).eq("away_team", f.away_team);
-  await q;
-
-  const { error } = await supabase.from("daily_picks").insert(guarded.rows);
-  if (error) {
-    const pgCode = (error as { code?: string }).code ?? null;
-    const pgDetails = (error as { details?: string }).details ?? null;
-    const pgHint = (error as { hint?: string }).hint ?? null;
+  // 6. Idempotent upsert via SECURITY DEFINER RPC. The RPC's ON CONFLICT key
+  // matches the new daily_picks_unique_per_day (v2) index exactly, so a
+  // duplicate identity from a prior run refreshes the existing row's
+  // analyzer fields + run_id instead of failing. The graded result column
+  // is preserved by the RPC (COALESCE) so a still-final game can't be
+  // wiped back to 'pending'.
+  const { data: upsertData, error: upsertErr } = await supabase.rpc(
+    "upsert_daily_pick",
+    { p_row: guarded.rows[0] as Record<string, unknown> },
+  );
+  if (upsertErr) {
+    const pgCode = (upsertErr as { code?: string }).code ?? null;
+    const pgDetails = (upsertErr as { details?: string }).details ?? null;
+    const pgHint = (upsertErr as { hint?: string }).hint ?? null;
     console.error(
-      `[analyzer-queue][insert-error] queue_id=${row.id} sport=${row.sport} ` +
-        `code=${pgCode ?? ""} message=${error.message} ` +
+      `[analyzer-queue][upsert-error] queue_id=${row.id} sport=${row.sport} ` +
+        `code=${pgCode ?? ""} message=${upsertErr.message} ` +
         `details=${pgDetails ?? ""} hint=${pgHint ?? ""}`,
     );
     const insertDetails = {
       reason: "insert_error",
-      message: error.message,
+      message: upsertErr.message,
       code: pgCode,
       details: pgDetails,
       hint: pgHint,
@@ -615,16 +608,23 @@ async function processOne(
     return "rescheduled";
   }
 
+  // RPC returns [{ id, inserted }]. inserted=true → fresh row; false → an
+  // existing row was refreshed (duplicate identity, counted separately).
+  const upsertRow = Array.isArray(upsertData) ? upsertData[0] : null;
+  const wasInsert = (upsertRow as { inserted?: boolean } | null)?.inserted === true;
+
   await finalizeAnalyzerQueueRow(supabase, row.id, "done", {
     tier,
     confidence: finalRow.confidence,
     verdict: finalRow.verdict,
+    upsert_outcome: wasInsert ? "inserted" : "updated",
   });
   console.log(
     `[analyzer-queue][row] sport=${row.sport} endpoint=${endpoint} ` +
-      `outcome=inserted attempt=${row.attempts + 1} dedupe=${row.dedupe_key}`,
+      `outcome=${wasInsert ? "inserted" : "updated"} attempt=${row.attempts + 1} ` +
+      `dedupe=${row.dedupe_key}`,
   );
-  return "inserted";
+  return wasInsert ? "inserted" : "updated";
 }
 
 Deno.serve(async (req) => {
@@ -690,6 +690,9 @@ Deno.serve(async (req) => {
     depth: rows.length,
     processed: 0,
     inserted: 0,
+    // Rows that hit the new daily_picks_unique_per_day index and were
+    // refreshed via ON CONFLICT DO UPDATE instead of failing as before.
+    updated: 0,
     rescheduled: 0,
     failed: 0,
     expired: 0,

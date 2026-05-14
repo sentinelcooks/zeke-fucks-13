@@ -21,6 +21,7 @@ export interface DailyPickRowInput {
   modelUsed?: string | null;
   reasoning?: string | null;
   avgValue?: number | null;
+  runId?: string | null;
 }
 
 function formatOdds(odds: unknown, fallback: number): string {
@@ -165,6 +166,7 @@ export function buildDailyPickRow({
   modelUsed = null,
   reasoning,
   avgValue,
+  runId = null,
 }: DailyPickRowInput): Record<string, unknown> | null {
   // analyzer-finalize.v1: reject prop rows with no real sportsbook line.
   // Moneyline/spread/total may legitimately store line=0; props must not.
@@ -221,6 +223,7 @@ export function buildDailyPickRow({
     sport: play.sport,
     source_function: sourceFunction,
     model_used: modelUsed,
+    runId: runId ?? (playDiag.runId as string | null | undefined) ?? null,
   };
 
   // For NBA props we must store the *normalized* prop_type so manual Analyze
@@ -293,5 +296,6 @@ export function buildDailyPickRow({
     status,
     model_used: modelUsed,
     model_diagnostics: modelDiagnostics,
+    run_id: runId ?? null,
   };
 }

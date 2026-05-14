@@ -6,7 +6,11 @@
 //                          and by each analyzer-worker invocation.
 //   2. analyzer_queue    - live status counts (pending/processing/done/...)
 //                          for the run, so the caller can tell how much
-//                          work remains right now.
+//                          work remains right now. (MLB/NHL/UFC)
+//   3. nba_analyzer_queue - same as (2) but for NBA. NBA is still on the
+//                          legacy queue; migrating it onto analyzer_queue is
+//                          a separate PR. Reading both keeps the contract
+//                          identical across all four sports.
 //
 // Lookup paths:
 //   GET ?run_id=<uuid>             - single run
@@ -138,7 +142,57 @@ Deno.serve(async (req) => {
     metrics = (data as MetricsRow | null) ?? null;
   }
 
+  // Helpers to read both queue tables for a given run_id. NBA lives on the
+  // legacy nba_analyzer_queue (no `sport` column there — the table is
+  // NBA-only). MLB/NHL/UFC use the shared analyzer_queue and need a sport
+  // filter to keep the result tight.
+  async function readSharedQueue(sport: string, runId: string) {
+    const { data, error } = await supabase
+      .from("analyzer_queue")
+      .select("status")
+      .eq("sport", sport)
+      .eq("run_id", runId);
+    if (error) return [] as Array<{ status: string }>;
+    return (data ?? []) as Array<{ status: string }>;
+  }
+  async function readNbaQueue(runId: string) {
+    const { data, error } = await supabase
+      .from("nba_analyzer_queue")
+      .select("status")
+      .eq("run_id", runId);
+    if (error) return [] as Array<{ status: string }>;
+    return (data ?? []) as Array<{ status: string }>;
+  }
+
   if (!metrics) {
+    // No scan_run_metrics row (e.g. NBA inline path doesn't write one yet).
+    // Still try to surface queue state if we have a run_id, so callers
+    // get a usable answer for NBA runs.
+    if (runIdParam) {
+      const nbaRows = await readNbaQueue(runIdParam);
+      const sharedRowsBySport: Record<string, Array<{ status: string }>> = {};
+      if (sportParam) {
+        sharedRowsBySport[sportParam] = await readSharedQueue(sportParam, runIdParam);
+      }
+      const all = [...nbaRows, ...Object.values(sharedRowsBySport).flat()];
+      if (all.length > 0) {
+        const queueByStatus: Record<string, number> = {};
+        for (const r of all) queueByStatus[r.status] = (queueByStatus[r.status] ?? 0) + 1;
+        return jsonResponse({
+          ok: true,
+          found: true,
+          metrics_row: false,
+          source: nbaRows.length > 0 ? "nba_analyzer_queue" : "analyzer_queue",
+          run_id: runIdParam,
+          sport: sportParam ?? (nbaRows.length > 0 ? "nba" : null),
+          queue_status_counts: queueByStatus,
+          analyzing: queueByStatus.processing ?? 0,
+          pending: queueByStatus.pending ?? 0,
+          unanalyzed_remaining: (queueByStatus.pending ?? 0) + (queueByStatus.processing ?? 0),
+          failed: (queueByStatus.failed ?? 0) + (queueByStatus.expired ?? 0),
+        });
+      }
+    }
     return jsonResponse(
       {
         ok: true,
@@ -151,16 +205,19 @@ Deno.serve(async (req) => {
     );
   }
 
-  // Live queue status counts for this run_id.
-  const { data: statusRows, error: statusErr } = await supabase
-    .from("analyzer_queue")
-    .select("status")
-    .eq("sport", metrics.sport)
-    .eq("run_id", metrics.run_id);
-
+  // Live queue status counts for this run_id. NBA candidates can live in
+  // EITHER queue depending on the scanner path: discovery-only enqueues to
+  // the shared analyzer_queue with a run_id, while the legacy inline path
+  // routes analyzer-deferred candidates into nba_analyzer_queue. Polling
+  // only one would under-count, so for NBA we merge both. Other sports use
+  // only the shared queue.
   const queueByStatus: Record<string, number> = {};
-  if (!statusErr && Array.isArray(statusRows)) {
-    for (const r of statusRows as Array<{ status: string }>) {
+  const sharedRows = await readSharedQueue(metrics.sport, metrics.run_id);
+  for (const r of sharedRows) {
+    queueByStatus[r.status] = (queueByStatus[r.status] ?? 0) + 1;
+  }
+  if (metrics.sport.toLowerCase() === "nba") {
+    for (const r of await readNbaQueue(metrics.run_id)) {
       queueByStatus[r.status] = (queueByStatus[r.status] ?? 0) + 1;
     }
   }

@@ -1,4 +1,5 @@
 import { scanSport } from "../_shared/sport_scan.ts";
+import { applyWaitToScanResult, buildWaitClient, parseWaitOptions } from "../_shared/scan_wait.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,6 +9,7 @@ const corsHeaders = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
+    const waitOpts = await parseWaitOptions(req);
     let body: any = {};
     if (req.method === "POST") {
       try {
@@ -30,6 +32,14 @@ Deno.serve(async (req) => {
       inlineAnalyze,
       runId: typeof body?.run_id === "string" ? body.run_id : undefined,
     });
+    // NBA is still on the legacy nba_analyzer_queue. The shared scan_wait
+    // helper routes by sport so ?wait=1 polls that table directly. Migrate
+    // NBA onto the shared analyzer_queue in a separate PR; the queue split
+    // is intentional here.
+    if (waitOpts.wait) {
+      const client = buildWaitClient();
+      if (client) await applyWaitToScanResult(client, "nba", result, waitOpts.timeoutMs);
+    }
     return new Response(JSON.stringify(result), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
