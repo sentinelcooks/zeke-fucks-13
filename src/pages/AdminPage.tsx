@@ -122,6 +122,7 @@ const AdminPage = () => {
   const [testResults, setTestResults] = useState<Array<{ key: string; valid: boolean; error?: string }> | null>(null);
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthResult, setHealthResult] = useState<any>(null);
+  const [apiKeyStatsLoading, setApiKeyStatsLoading] = useState(false);
 
   // Single canonical Odds API key (app_config)
   const [oddsKeyInput, setOddsKeyInput] = useState("");
@@ -163,11 +164,14 @@ const AdminPage = () => {
   };
 
   const loadApiKeyStats = async () => {
+    setApiKeyStatsLoading(true);
     try {
       const data = await adminCall("api_key_status");
       setApiKeyStats(data);
     } catch (e) {
       console.error("Failed to load API key stats:", e);
+    } finally {
+      setApiKeyStatsLoading(false);
     }
   };
 
@@ -525,8 +529,8 @@ const AdminPage = () => {
                 <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
                   <Database className="w-4 h-4" /> Odds API Keys
                 </h2>
-                <button onClick={loadApiKeyStats} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-                  <RefreshCw className="w-3 h-3" /> Refresh
+                <button onClick={loadApiKeyStats} disabled={apiKeyStatsLoading} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 disabled:opacity-50">
+                  <RefreshCw className={`w-3 h-3 ${apiKeyStatsLoading ? "animate-spin" : ""}`} /> Refresh
                 </button>
               </div>
               {apiKeyStats ? (
