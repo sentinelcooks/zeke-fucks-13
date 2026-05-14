@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
         const cleaned = apiKeys.map((k: string) => k.trim()).filter((k: string) => k.length > 10);
         if (cleaned.length === 0) return json({ error: "No valid keys found" }, 400);
 
-        const { data: existing } = await supabase.from("odds_api_keys").select("api_key");
+        const { data: existing } = await supabase.from("odds_api_keys").select("api_key").limit(10000);
         const existingSet = new Set((existing || []).map((r: any) => r.api_key));
         const newKeys = cleaned.filter((k: string) => !existingSet.has(k));
 
@@ -147,7 +147,7 @@ Deno.serve(async (req) => {
       case "reset_exhausted_keys": {
         const { error: resetErr } = await supabase
           .from("odds_api_keys")
-          .update({ exhausted_at: null, last_error: null })
+          .delete()
           .not("exhausted_at", "is", null);
         if (resetErr) return json({ error: resetErr.message }, 500);
         return json({ success: true });
@@ -242,17 +242,22 @@ Deno.serve(async (req) => {
       }
 
       case "api_key_status": {
-        const { data: allKeys, error: keysErr } = await supabase
-          .from("odds_api_keys")
-          .select("id, is_active, exhausted_at, requests_remaining, requests_used, last_used_at, last_error");
-        if (keysErr) return json({ error: keysErr.message }, 500);
-        const total = allKeys?.length || 0;
-        const active = allKeys?.filter((k: any) => k.is_active && !k.exhausted_at).length || 0;
-        const exhausted = allKeys?.filter((k: any) => k.exhausted_at).length || 0;
-        const inactive = allKeys?.filter((k: any) => !k.is_active).length || 0;
-        const totalRemaining = allKeys?.reduce((s: number, k: any) => s + (k.requests_remaining || 0), 0) || 0;
-        const totalUsed = allKeys?.reduce((s: number, k: any) => s + (k.requests_used || 0), 0) || 0;
-        return json({ total, active, exhausted, inactive, totalRemaining, totalUsed, keys: allKeys });
+        const [totalRes, activeRes, exhaustedRes, inactiveRes, sumRes] = await Promise.all([
+          supabase.from("odds_api_keys").select("*", { count: "exact", head: true }),
+          supabase.from("odds_api_keys").select("*", { count: "exact", head: true }).eq("is_active", true).is("exhausted_at", null),
+          supabase.from("odds_api_keys").select("*", { count: "exact", head: true }).not("exhausted_at", "is", null),
+          supabase.from("odds_api_keys").select("*", { count: "exact", head: true }).eq("is_active", false),
+          supabase.from("odds_api_keys").select("requests_remaining, requests_used").limit(10000),
+        ]);
+        if (totalRes.error) return json({ error: totalRes.error.message }, 500);
+        const total = totalRes.count ?? 0;
+        const active = activeRes.count ?? 0;
+        const exhausted = exhaustedRes.count ?? 0;
+        const inactive = inactiveRes.count ?? 0;
+        const rows = sumRes.data ?? [];
+        const totalRemaining = rows.reduce((s: number, k: any) => s + (k.requests_remaining || 0), 0);
+        const totalUsed = rows.reduce((s: number, k: any) => s + (k.requests_used || 0), 0);
+        return json({ total, active, exhausted, inactive, totalRemaining, totalUsed });
       }
 
       case "list_whitelist": {

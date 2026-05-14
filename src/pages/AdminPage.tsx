@@ -611,7 +611,7 @@ const AdminPage = () => {
                       try {
                         await adminCall("reset_exhausted_keys");
                         loadApiKeyStats();
-                        alert("All exhausted keys have been reset.");
+                        alert("All exhausted keys have been deleted.");
                       } catch (e: any) { alert(e.message); }
                     }}
                     className="text-sm text-muted-foreground hover:text-foreground bg-muted px-3 py-2 rounded-lg transition-colors"
