@@ -27,7 +27,6 @@ import {
 } from "./daily_pick_rows.ts";
 import {
   claimAnalyzerQueueBatchPerSport,
-  dailyPickDeleteFilter,
   exponentialBackoffMs,
   finalizeAnalyzerQueueRow,
   rescheduleAnalyzerQueueRow,
@@ -301,6 +300,12 @@ interface RunBucket {
   };
   edgeGateBlockedReasons: Record<string, number>;
   hardSafetyDrops: Record<string, number>;
+  // Per-row terminal/reschedule outcome histogram. Keys like
+  // 'inserted', 'updated', 'no_pick_analyzer_no_pick',
+  // 'guard_non_analyzer_source', 'expired_game_already_started',
+  // 'http_5xx_rescheduled', 'worker_soft_deadline_rescheduled'.
+  // Sum of values == every row touched by the worker in this run.
+  outcomeCounts: Record<string, number>;
   lastError: string | null;
 }
 
@@ -320,6 +325,7 @@ function emptyBucket(sport: string, pickDate: string): RunBucket {
     },
     edgeGateBlockedReasons: {},
     hardSafetyDrops: {},
+    outcomeCounts: {},
     lastError: null,
   };
 }
@@ -338,6 +344,7 @@ async function flushBucketToMetrics(
     Object.values(bucket.counters).some((n) => n > 0) ||
     Object.keys(bucket.edgeGateBlockedReasons).length > 0 ||
     Object.keys(bucket.hardSafetyDrops).length > 0 ||
+    Object.keys(bucket.outcomeCounts).length > 0 ||
     bucket.lastError !== null;
   if (!hasAny) return;
   const { error } = await supabase.rpc("increment_scan_run_metrics", {
@@ -348,6 +355,7 @@ async function flushBucketToMetrics(
     p_reason_increments: {
       edge_gate_blocked_reasons: bucket.edgeGateBlockedReasons,
       hard_safety_drops: bucket.hardSafetyDrops,
+      outcome_counts: bucket.outcomeCounts,
     },
     p_last_error: bucket.lastError,
   });
@@ -508,27 +516,36 @@ async function processRow(args: {
 
   // Date + commence_time gate.
   if (row.pick_date < todayISO) {
-    await finalizeAnalyzerQueueRow(supabase, row.id, "expired", {
-      reason: "pick_date_passed",
-    });
+    await finalizeAnalyzerQueueRow(
+      supabase, row.id, "expired",
+      { reason: "pick_date_passed" },
+      "pick_date_passed",
+    );
     bucket.counters.skipped_count++;
+    bumpReason(bucket.outcomeCounts, "expired_pick_date_passed");
     return { outcome: "expired" };
   }
   const commence = (row.candidate_payload as { commence_time?: string })?.commence_time ?? null;
   if (!commence) {
-    await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
-      reason: "missing_commence_time",
-    });
+    await finalizeAnalyzerQueueRow(
+      supabase, row.id, "failed",
+      { reason: "missing_commence_time" },
+      "missing_commence_time",
+    );
     bucket.counters.failed_count++;
     bucket.lastError = "missing_commence_time";
+    bumpReason(bucket.outcomeCounts, "invalid_payload_missing_commence_time");
     return { outcome: "failed" };
   }
   const commenceMs = Date.parse(commence);
   if (Number.isFinite(commenceMs) && commenceMs <= nowMs) {
-    await finalizeAnalyzerQueueRow(supabase, row.id, "expired", {
-      reason: "game_already_started",
-    });
+    await finalizeAnalyzerQueueRow(
+      supabase, row.id, "expired",
+      { reason: "game_already_started" },
+      "game_already_started",
+    );
     bucket.counters.skipped_count++;
+    bumpReason(bucket.outcomeCounts, "expired_game_already_started");
     return { outcome: "expired" };
   }
 
@@ -549,14 +566,18 @@ async function processRow(args: {
       : exponentialBackoffMs(row.attempts);
     bucket.lastError = reason;
     if (row.attempts >= row.max_attempts) {
-      await finalizeAnalyzerQueueRow(supabase, row.id, "failed", { reason });
+      await finalizeAnalyzerQueueRow(
+        supabase, row.id, "failed", { reason }, reason,
+      );
       bucket.counters.failed_count++;
+      bumpReason(bucket.outcomeCounts, `${reason}_failed`);
       return { outcome: "failed" };
     }
     await rescheduleAnalyzerQueueRow(
       supabase, row.id, retryAfterMs, { reason }, false, reason,
     );
     await setRowErrorMessage(supabase, row.id, reason);
+    bumpReason(bucket.outcomeCounts, `${reason}_rescheduled`);
     return { outcome: "rescheduled" };
   }
 
@@ -570,24 +591,31 @@ async function processRow(args: {
     );
     await setRowErrorMessage(supabase, row.id, "rate_limited");
     bucket.lastError = "rate_limited";
+    bumpReason(bucket.outcomeCounts, "rate_limited_rescheduled");
     return { outcome: "rescheduled" };
   }
   if (resp.status < 200 || resp.status >= 300) {
     const ftype = classifyHttpFailure(resp.status);
     if (ftype === "http_4xx") {
-      await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
-        reason: "http_4xx", status: resp.status,
-      });
+      await finalizeAnalyzerQueueRow(
+        supabase, row.id, "failed",
+        { reason: "http_4xx", status: resp.status },
+        "http_4xx",
+      );
       bucket.counters.failed_count++;
       bucket.lastError = `http_4xx_${resp.status}`;
+      bumpReason(bucket.outcomeCounts, "http_4xx_failed");
       return { outcome: "failed" };
     }
     if (row.attempts >= row.max_attempts) {
-      await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
-        reason: ftype, status: resp.status,
-      });
+      await finalizeAnalyzerQueueRow(
+        supabase, row.id, "failed",
+        { reason: ftype, status: resp.status },
+        ftype,
+      );
       bucket.counters.failed_count++;
       bucket.lastError = `${ftype}_${resp.status}`;
+      bumpReason(bucket.outcomeCounts, `${ftype}_failed`);
       return { outcome: "failed" };
     }
     await rescheduleAnalyzerQueueRow(
@@ -595,6 +623,7 @@ async function processRow(args: {
       { reason: ftype, status: resp.status }, false, ftype,
     );
     await setRowErrorMessage(supabase, row.id, `${ftype}_${resp.status}`);
+    bumpReason(bucket.outcomeCounts, `${ftype}_rescheduled`);
     return { outcome: "rescheduled" };
   }
 
@@ -602,11 +631,16 @@ async function processRow(args: {
   const ar = resp.body as Record<string, unknown> | null;
   const rejectReasons = rejectReasonsForAnalyzerResponse(ar);
   if (rejectReasons.length > 0) {
-    await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
-      reason: "analyzer_unsupported_or_no_pick", details: rejectReasons,
-    });
+    await finalizeAnalyzerQueueRow(
+      supabase, row.id, "failed",
+      { reason: "analyzer_unsupported_or_no_pick", details: rejectReasons },
+      "analyzer_unsupported_or_no_pick",
+    );
     bucket.counters.pass_count++;
-    for (const r of rejectReasons) bumpReason(bucket.edgeGateBlockedReasons, r);
+    for (const r of rejectReasons) {
+      bumpReason(bucket.edgeGateBlockedReasons, r);
+      bumpReason(bucket.outcomeCounts, `no_pick_${r}`);
+    }
     return { outcome: "no_pick" };
   }
 
@@ -651,13 +685,20 @@ async function processRow(args: {
     modelUsed: endpoint,
     reasoning: scored.reasoning ?? null,
     avgValue: scored.ev_pct ?? null,
+    // Stamp run_id on every daily_picks row this worker produces.
+    // Without this, scan_wait.frontend_visible_count and any user-side
+    // WHERE run_id=$X query reads zero even though the rows exist.
+    runId: row.run_id ?? null,
   });
   if (!finalRow) {
-    await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
-      reason: "build_daily_pick_row_returned_null",
-    });
+    await finalizeAnalyzerQueueRow(
+      supabase, row.id, "failed",
+      { reason: "build_daily_pick_row_returned_null" },
+      "build_daily_pick_row_returned_null",
+    );
     bucket.counters.failed_count++;
     bucket.lastError = "build_daily_pick_row_returned_null";
+    bumpReason(bucket.outcomeCounts, "build_daily_pick_row_returned_null");
     return { outcome: "failed" };
   }
 
@@ -670,55 +711,73 @@ async function processRow(args: {
       guarded.rows_dropped_missing_payload ? "missing_analyzer_payload" :
       guarded.rows_dropped_missing_snapshot ? "missing_analyzer_response_snapshot" :
       "guard_other";
-    await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
-      reason: "analyzer_finalize_guard_rejected", details: guardReason,
-    });
+    await finalizeAnalyzerQueueRow(
+      supabase, row.id, "failed",
+      { reason: "analyzer_finalize_guard_rejected", details: guardReason },
+      "analyzer_finalize_guard_rejected",
+    );
     bucket.counters.failed_count++;
     bucket.lastError = `guard_${guardReason}`;
+    bumpReason(bucket.outcomeCounts, `guard_${guardReason}`);
     return { outcome: "failed" };
   }
 
-  // Exact-identity delete (NEVER broad wipe), then insert.
-  const f = dailyPickDeleteFilter(row.candidate_payload);
-  let q = supabase
-    .from("daily_picks")
-    .delete()
-    .eq("sport", row.sport)
-    .eq("pick_date", row.pick_date)
-    .eq("line", f.line)
-    .eq("direction", f.direction)
-    .eq("prop_type", f.prop_type);
-  if (f.player_name) q = q.eq("player_name", f.player_name);
-  if (f.event_id) q = q.eq("event_id", f.event_id);
-  else if (f.home_team && f.away_team)
-    q = q.eq("home_team", f.home_team).eq("away_team", f.away_team);
-  await q;
-
-  const { error } = await supabase.from("daily_picks").insert(guarded.rows);
-  if (error) {
-    const pgCode = (error as { code?: string }).code ?? null;
+  // Idempotent upsert via SECURITY DEFINER RPC. Same RPC the legacy drainer
+  // uses, so both workers funnel through one ON CONFLICT path matched to the
+  // daily_picks_unique_per_day v2 index. A duplicate identity now refreshes
+  // the existing row's analyzer fields + run_id instead of raising 23505,
+  // which previously made the delete+insert pattern race under concurrent
+  // workers.
+  const { data: upsertData, error: upsertErr } = await supabase.rpc(
+    "upsert_daily_pick",
+    { p_row: guarded.rows[0] as Record<string, unknown> },
+  );
+  if (upsertErr) {
+    const pgCode = (upsertErr as { code?: string }).code ?? null;
+    const pgDetails = (upsertErr as { details?: string }).details ?? null;
+    const pgHint = (upsertErr as { hint?: string }).hint ?? null;
+    console.error(
+      `[analyzer-worker][upsert-error] queue_id=${row.id} sport=${row.sport} ` +
+        `code=${pgCode ?? ""} message=${upsertErr.message} ` +
+        `details=${pgDetails ?? ""} hint=${pgHint ?? ""}`,
+    );
+    const insertDetails = {
+      reason: "insert_error",
+      message: upsertErr.message,
+      code: pgCode,
+      details: pgDetails,
+      hint: pgHint,
+    };
     if (row.attempts >= row.max_attempts) {
-      await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
-        reason: "insert_error", message: error.message, code: pgCode,
-      });
+      await finalizeAnalyzerQueueRow(
+        supabase, row.id, "failed", insertDetails, "insert_error",
+      );
       bucket.counters.failed_count++;
       bucket.lastError = `insert_error_${pgCode ?? "unknown"}`;
+      bumpReason(bucket.outcomeCounts, "insert_error_failed");
       return { outcome: "failed" };
     }
     await rescheduleAnalyzerQueueRow(
-      supabase, row.id, 60_000,
-      { reason: "insert_error", message: error.message, code: pgCode },
-      false, "insert_error",
+      supabase, row.id, 60_000, insertDetails, false, "insert_error",
     );
-    await setRowErrorMessage(supabase, row.id, `insert_error: ${error.message ?? pgCode ?? "unknown"}`);
+    await setRowErrorMessage(
+      supabase, row.id, `insert_error: ${upsertErr.message ?? pgCode ?? "unknown"}`,
+    );
     bucket.lastError = `insert_error_${pgCode ?? "unknown"}`;
+    bumpReason(bucket.outcomeCounts, "insert_error_rescheduled");
     return { outcome: "rescheduled" };
   }
+
+  // RPC returns [{ id, inserted }]. inserted=true → fresh row;
+  // false → ON CONFLICT DO UPDATE refreshed an existing row.
+  const upsertRow = Array.isArray(upsertData) ? upsertData[0] : null;
+  const wasInsert = (upsertRow as { inserted?: boolean } | null)?.inserted === true;
 
   await finalizeAnalyzerQueueRow(supabase, row.id, "done", {
     tier,
     confidence: finalRow.confidence,
     verdict: finalRow.verdict,
+    upsert_outcome: wasInsert ? "inserted" : "updated",
     edge_gate: {
       ok: gate.ok,
       reasons: gate.reasons,
@@ -727,10 +786,12 @@ async function processRow(args: {
       promotion_blocker: finalization.promotionBlocker,
     },
   });
+  // status='done' → RPC clears error_reason; no errorReason arg needed.
 
   if (tier === "edge") bucket.counters.finalized_edge++;
   else if (tier === "daily") bucket.counters.finalized_daily++;
   else if (tier === "value") bucket.counters.finalized_value++;
+  bumpReason(bucket.outcomeCounts, wasInsert ? "inserted" : "updated");
 
   return { outcome: "inserted", tier };
 }
@@ -854,6 +915,11 @@ export async function runAnalyzerWorker(
           { reason: "worker_soft_deadline" }, false, "worker_soft_deadline",
         );
         await setRowErrorMessage(supabase, row.id, "worker_soft_deadline");
+        // Bucket reads run_id from the row even though we didn't process it,
+        // so per-run scan-run-status can see how many MLB rows were
+        // throughput-deferred vs. truly expired.
+        const sdBucket = bucketFor(row.run_id ?? null, row.sport, row.pick_date);
+        bumpReason(sdBucket.outcomeCounts, "worker_soft_deadline_rescheduled");
         skipped++;
         continue;
       }
@@ -882,10 +948,13 @@ export async function runAnalyzerWorker(
         lastError = msg;
         bucket.lastError = msg;
         if (row.attempts >= row.max_attempts) {
-          await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
-            reason: "unexpected_error", details: msg,
-          });
+          await finalizeAnalyzerQueueRow(
+            supabase, row.id, "failed",
+            { reason: "unexpected_error", details: msg },
+            "unexpected_error",
+          );
           bucket.counters.failed_count++;
+          bumpReason(bucket.outcomeCounts, "unexpected_error_failed");
           failed++;
         } else {
           await rescheduleAnalyzerQueueRow(
@@ -894,6 +963,7 @@ export async function runAnalyzerWorker(
             false, "unexpected_error",
           );
           await setRowErrorMessage(supabase, row.id, `unexpected_error: ${msg}`);
+          bumpReason(bucket.outcomeCounts, "unexpected_error_rescheduled");
         }
       }
     }

@@ -335,11 +335,13 @@ export async function finalizeAnalyzerQueueRow(
   queueId: string,
   status: "done" | "failed" | "expired" | "missing_analyzer_endpoint",
   diagnostics: Record<string, unknown> | null,
+  errorReason: string | null = null,
 ): Promise<void> {
   const { error } = await supabase.rpc("finalize_analyzer_queue_row", {
     p_queue_id: queueId,
     p_status: status,
     p_diagnostics: diagnostics,
+    p_error_reason: errorReason,
   });
   if (error) {
     console.error(

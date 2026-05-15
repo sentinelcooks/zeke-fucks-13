@@ -169,6 +169,14 @@ function classifyHttpFailure(status: number): "http_4xx" | "http_5xx" | "other" 
   return "other";
 }
 
+// Per-row outcome histogram increment. Mirrors bumpReason in
+// _shared/analyzer_worker.ts so scan-run-status gets the same key shape
+// regardless of which drainer processed the row.
+function bumpOutcome(map: Record<string, number>, key: string): void {
+  if (!key) return;
+  map[key] = (map[key] ?? 0) + 1;
+}
+
 // Identify weak / unsupported / no-pick analyzer responses. We never
 // convert these into a published pick.
 function rejectReasonsForAnalyzerResponse(ar: unknown): string[] {
@@ -354,26 +362,36 @@ async function processOne(
   state: ProcessState,
   todayISO: string,
   nowMs: number,
+  outcomeCounts: Record<string, number>,
 ): Promise<"inserted" | "updated" | "rescheduled" | "failed" | "expired" | "no_pick"> {
   // 1. Date + commence_time gate. Schema has NO game_date column.
   if (row.pick_date < todayISO) {
-    await finalizeAnalyzerQueueRow(supabase, row.id, "expired", {
-      reason: "pick_date_passed",
-    });
+    await finalizeAnalyzerQueueRow(
+      supabase, row.id, "expired",
+      { reason: "pick_date_passed" },
+      "pick_date_passed",
+    );
+    bumpOutcome(outcomeCounts, "expired_pick_date_passed");
     return "expired";
   }
   const commence = (row.candidate_payload as { commence_time?: string })?.commence_time ?? null;
   if (!commence) {
-    await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
-      reason: "missing_commence_time",
-    });
+    await finalizeAnalyzerQueueRow(
+      supabase, row.id, "failed",
+      { reason: "missing_commence_time" },
+      "missing_commence_time",
+    );
+    bumpOutcome(outcomeCounts, "invalid_payload_missing_commence_time");
     return "failed";
   }
   const commenceMs = Date.parse(commence);
   if (Number.isFinite(commenceMs) && commenceMs <= nowMs) {
-    await finalizeAnalyzerQueueRow(supabase, row.id, "expired", {
-      reason: "game_already_started",
-    });
+    await finalizeAnalyzerQueueRow(
+      supabase, row.id, "expired",
+      { reason: "game_already_started" },
+      "game_already_started",
+    );
+    bumpOutcome(outcomeCounts, "expired_game_already_started");
     return "expired";
   }
 
@@ -423,7 +441,12 @@ async function processOne(
       );
     }
     if (row.attempts + 1 >= row.max_attempts) {
-      await finalizeAnalyzerQueueRow(supabase, row.id, "failed", { reason, duration_ms });
+      await finalizeAnalyzerQueueRow(
+        supabase, row.id, "failed",
+        { reason, duration_ms },
+        reason,
+      );
+      bumpOutcome(outcomeCounts, `${reason}_failed`);
       return "failed";
     }
     await rescheduleAnalyzerQueueRow(
@@ -434,6 +457,7 @@ async function processOne(
       true,
       reason,
     );
+    bumpOutcome(outcomeCounts, `${reason}_rescheduled`);
     return "rescheduled";
   }
 
@@ -451,6 +475,7 @@ async function processOne(
       true,
       "rate_limited",
     );
+    bumpOutcome(outcomeCounts, "rate_limited_rescheduled");
     return "rescheduled";
   }
 
@@ -458,17 +483,21 @@ async function processOne(
     const ftype = classifyHttpFailure(resp.status);
     if (ftype === "http_4xx") {
       // Not retryable.
-      await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
-        reason: "http_4xx",
-        status: resp.status,
-      });
+      await finalizeAnalyzerQueueRow(
+        supabase, row.id, "failed",
+        { reason: "http_4xx", status: resp.status },
+        "http_4xx",
+      );
+      bumpOutcome(outcomeCounts, "http_4xx_failed");
       return "failed";
     }
     if (row.attempts + 1 >= row.max_attempts) {
-      await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
-        reason: ftype,
-        status: resp.status,
-      });
+      await finalizeAnalyzerQueueRow(
+        supabase, row.id, "failed",
+        { reason: ftype, status: resp.status },
+        ftype,
+      );
+      bumpOutcome(outcomeCounts, `${ftype}_failed`);
       return "failed";
     }
     await rescheduleAnalyzerQueueRow(
@@ -479,6 +508,7 @@ async function processOne(
       true,
       ftype,
     );
+    bumpOutcome(outcomeCounts, `${ftype}_rescheduled`);
     return "rescheduled";
   }
 
@@ -505,10 +535,12 @@ async function processOne(
       `[analyzer-queue][no-pick] queue_id=${row.id} sport=${row.sport} ` +
         `reasons=${rejectReasons.join(",")}`,
     );
-    await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
-      reason: "analyzer_unsupported_or_no_pick",
-      details: rejectReasons,
-    });
+    await finalizeAnalyzerQueueRow(
+      supabase, row.id, "failed",
+      { reason: "analyzer_unsupported_or_no_pick", details: rejectReasons },
+      "analyzer_unsupported_or_no_pick",
+    );
+    for (const r of rejectReasons) bumpOutcome(outcomeCounts, `no_pick_${r}`);
     return "no_pick";
   }
 
@@ -528,9 +560,12 @@ async function processOne(
     runId: row.run_id ?? null,
   });
   if (!finalRow) {
-    await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
-      reason: "build_daily_pick_row_returned_null",
-    });
+    await finalizeAnalyzerQueueRow(
+      supabase, row.id, "failed",
+      { reason: "build_daily_pick_row_returned_null" },
+      "build_daily_pick_row_returned_null",
+    );
+    bumpOutcome(outcomeCounts, "build_daily_pick_row_returned_null");
     return "failed";
   }
   const finalMd = (finalRow.model_diagnostics ?? {}) as Record<string, unknown>;
@@ -560,10 +595,12 @@ async function processOne(
       guarded.rows_dropped_missing_payload ? "missing_analyzer_payload" :
       guarded.rows_dropped_missing_snapshot ? "missing_analyzer_response_snapshot" :
       "guard_other";
-    await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
-      reason: "analyzer_finalize_guard_rejected",
-      details: guardReason,
-    });
+    await finalizeAnalyzerQueueRow(
+      supabase, row.id, "failed",
+      { reason: "analyzer_finalize_guard_rejected", details: guardReason },
+      "analyzer_finalize_guard_rejected",
+    );
+    bumpOutcome(outcomeCounts, `guard_${guardReason}`);
     return "failed";
   }
 
@@ -594,7 +631,10 @@ async function processOne(
       hint: pgHint,
     };
     if (row.attempts + 1 >= row.max_attempts) {
-      await finalizeAnalyzerQueueRow(supabase, row.id, "failed", insertDetails);
+      await finalizeAnalyzerQueueRow(
+        supabase, row.id, "failed", insertDetails, "insert_error",
+      );
+      bumpOutcome(outcomeCounts, "insert_error_failed");
       return "failed";
     }
     await rescheduleAnalyzerQueueRow(
@@ -605,6 +645,7 @@ async function processOne(
       true,
       "insert_error",
     );
+    bumpOutcome(outcomeCounts, "insert_error_rescheduled");
     return "rescheduled";
   }
 
@@ -613,12 +654,14 @@ async function processOne(
   const upsertRow = Array.isArray(upsertData) ? upsertData[0] : null;
   const wasInsert = (upsertRow as { inserted?: boolean } | null)?.inserted === true;
 
+  // status='done' → RPC clears error_reason (no errorReason arg).
   await finalizeAnalyzerQueueRow(supabase, row.id, "done", {
     tier,
     confidence: finalRow.confidence,
     verdict: finalRow.verdict,
     upsert_outcome: wasInsert ? "inserted" : "updated",
   });
+  bumpOutcome(outcomeCounts, wasInsert ? "inserted" : "updated");
   console.log(
     `[analyzer-queue][row] sport=${row.sport} endpoint=${endpoint} ` +
       `outcome=${wasInsert ? "inserted" : "updated"} attempt=${row.attempts + 1} ` +
@@ -700,6 +743,39 @@ Deno.serve(async (req) => {
     cap_skipped: 0,
   };
 
+  // Per-run outcome histogram + sport/pick_date for the scan_run_metrics
+  // flush at the end. Same key namespace as _shared/analyzer_worker.ts so
+  // scan-run-status reads one merged histogram regardless of which drainer
+  // touched the row. Rows without a run_id (legacy enqueues) accumulate into
+  // a sentinel bucket that we do NOT flush — scan_run_metrics is keyed by
+  // run_id and there is nothing useful to attribute legacy rows against.
+  interface RunOutcome {
+    sport: string;
+    pickDate: string;
+    counts: Record<string, number>;
+  }
+  const runOutcomes = new Map<string, RunOutcome>();
+  function getRunOutcome(row: QueueRow): Record<string, number> {
+    const runId = row.run_id ?? null;
+    const key = runId ?? `legacy:${row.sport}:${row.pick_date}`;
+    let entry = runOutcomes.get(key);
+    if (!entry) {
+      entry = { sport: row.sport, pickDate: row.pick_date, counts: {} };
+      runOutcomes.set(key, entry);
+    }
+    return entry.counts;
+  }
+  // Aggregate map used for the HTTP response summary; sums every run's
+  // contribution so manual invocations still see the full picture.
+  const aggregateOutcomeCounts: Record<string, number> = {};
+  function rollUpOutcomes(): void {
+    for (const entry of runOutcomes.values()) {
+      for (const [k, v] of Object.entries(entry.counts)) {
+        aggregateOutcomeCounts[k] = (aggregateOutcomeCounts[k] ?? 0) + v;
+      }
+    }
+  }
+
   for (const row of rows) {
     if (state.rateLimitTripped) {
       // Collateral rollback — don't burn an attempt for work we never performed.
@@ -711,6 +787,7 @@ Deno.serve(async (req) => {
         false,
         "collateral_rate_limit",
       );
+      bumpOutcome(getRunOutcome(row), "collateral_rate_limit_rescheduled");
       summary.rescheduled++;
       continue;
     }
@@ -727,6 +804,7 @@ Deno.serve(async (req) => {
         false,
         "per_sport_cap",
       );
+      bumpOutcome(getRunOutcome(row), "per_sport_cap_rescheduled");
       summary.cap_skipped++;
       continue;
     }
@@ -741,6 +819,7 @@ Deno.serve(async (req) => {
         state,
         todayISO,
         nowMs,
+        getRunOutcome(row),
       );
       summary[outcome]++;
     } catch (e) {
@@ -749,10 +828,12 @@ Deno.serve(async (req) => {
         (e as Error)?.message ?? e,
       );
       if (row.attempts + 1 >= row.max_attempts) {
-        await finalizeAnalyzerQueueRow(supabase, row.id, "failed", {
-          reason: "unexpected_error",
-          details: String((e as Error)?.message ?? e),
-        });
+        await finalizeAnalyzerQueueRow(
+          supabase, row.id, "failed",
+          { reason: "unexpected_error", details: String((e as Error)?.message ?? e) },
+          "unexpected_error",
+        );
+        bumpOutcome(getRunOutcome(row), "unexpected_error_failed");
         summary.failed++;
       } else {
         await rescheduleAnalyzerQueueRow(
@@ -763,21 +844,51 @@ Deno.serve(async (req) => {
           true,
           "unexpected_error",
         );
+        bumpOutcome(getRunOutcome(row), "unexpected_error_rescheduled");
         summary.rescheduled++;
       }
     }
   }
 
+  // Flush per-run outcomes to scan_run_metrics. One RPC per run_id; legacy
+  // (run_id NULL) buckets are skipped because there is no scan_run_metrics
+  // row to attribute them to. The RPC merges atomically with prior worker
+  // contributions for the same run via jsonb_merge_counts().
+  for (const [key, entry] of runOutcomes.entries()) {
+    if (key.startsWith("legacy:")) continue;
+    if (Object.keys(entry.counts).length === 0) continue;
+    const { error: metricsErr } = await supabase.rpc("increment_scan_run_metrics", {
+      p_run_id: key,
+      p_sport: entry.sport,
+      p_pick_date: entry.pickDate,
+      p_counters: {},
+      p_reason_increments: { outcome_counts: entry.counts },
+      p_last_error: null,
+    });
+    if (metricsErr) {
+      console.error(
+        `[analyzer-queue] increment_scan_run_metrics RPC error run_id=${key}:`,
+        metricsErr.message ?? metricsErr,
+      );
+    }
+  }
+  rollUpOutcomes();
+
   console.log(
     `[analyzer-queue] depth=${summary.depth} processed=${summary.processed} ` +
-      `inserted=${summary.inserted} failed=${summary.failed} ` +
-      `rescheduled=${summary.rescheduled} expired=${summary.expired} ` +
-      `no_pick=${summary.no_pick} cap_skipped=${summary.cap_skipped} ` +
-      `timeout_ms=${ANALYZER_TIMEOUT_MS} global_cap=${GLOBAL_PER_INVOCATION_CAP}`,
+      `inserted=${summary.inserted} updated=${summary.updated} ` +
+      `failed=${summary.failed} rescheduled=${summary.rescheduled} ` +
+      `expired=${summary.expired} no_pick=${summary.no_pick} ` +
+      `cap_skipped=${summary.cap_skipped} ` +
+      `timeout_ms=${ANALYZER_TIMEOUT_MS} global_cap=${GLOBAL_PER_INVOCATION_CAP} ` +
+      `outcome_counts=${JSON.stringify(aggregateOutcomeCounts)}`,
   );
 
-  return new Response(JSON.stringify({ ok: true, ...summary }), {
-    status: 200,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  return new Response(
+    JSON.stringify({ ok: true, ...summary, outcome_counts: aggregateOutcomeCounts }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 });

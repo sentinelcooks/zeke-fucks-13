@@ -76,6 +76,12 @@ interface MetricsRow {
   prefilter_drop_reasons: Record<string, number>;
   edge_gate_blocked_reasons: Record<string, number>;
   hard_safety_drops: Record<string, number>;
+  // Per-row terminal/reschedule outcome histogram populated by the analyzer
+  // workers. Keys like 'inserted', 'updated', 'no_pick_analyzer_no_pick',
+  // 'guard_non_analyzer_source', 'expired_game_already_started',
+  // 'per_sport_cap_rescheduled', 'worker_soft_deadline_rescheduled'. Sum of
+  // values across keys == every row the worker touched for this run.
+  outcome_counts: Record<string, number>;
   last_error: string | null;
   started_at: string;
   updated_at: string;
@@ -258,6 +264,10 @@ Deno.serve(async (req) => {
     prefilter_drop_reasons: metrics.prefilter_drop_reasons ?? {},
     edge_gate_blocked_reasons: metrics.edge_gate_blocked_reasons ?? {},
     hard_safety_drops: metrics.hard_safety_drops ?? {},
+    // Per-row terminal/reschedule outcome histogram from the analyzer workers.
+    // Sum across keys == rows touched by workers for this run. Use to
+    // diagnose "no Today's Edge" without re-running the scanner.
+    outcome_counts: metrics.outcome_counts ?? {},
     low_confidence_drops: metrics.low_confidence_drops,
     last_error: metrics.last_error,
     started_at: metrics.started_at,
