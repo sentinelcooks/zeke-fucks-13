@@ -3,6 +3,7 @@
 // representative odds Edge Functions. Never returns raw API keys.
 
 import { getMasterClient, masterDbConfigured } from "../_shared/masterClient.ts";
+import { loadKeyPoolStats } from "../_shared/oddsKeyPool.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -52,18 +53,39 @@ Deno.serve(async (req) => {
 
     const master = await getMasterClient();
 
-    const { data: keys, error: keysErr } = await master
-      .from("odds_api_keys")
-      .select("id, is_active, exhausted_at, last_used_at");
+    let stats: Awaited<ReturnType<typeof loadKeyPoolStats>> | null = null;
+    let keysQueryError: string | null = null;
+    try {
+      stats = await loadKeyPoolStats(master);
+    } catch (e) {
+      keysQueryError = e instanceof Error ? e.message : String(e);
+    }
 
-    const totalKeys = keys?.length || 0;
-    const activeKeys = (keys || []).filter((k: any) => k.is_active && !k.exhausted_at).length;
-    const exhaustedKeys = (keys || []).filter((k: any) => !!k.exhausted_at).length;
-    const lastRotationAt = (keys || [])
-      .map((k: any) => k.last_used_at)
-      .filter(Boolean)
-      .sort()
-      .pop() || null;
+    // In-process probe of the next usable key against /v4/sports/. Reveals
+    // env-level breakage (DNS, TLS, account suspended) that ping-style
+    // OPTIONS checks cannot. Probe consumes 1 request from the chosen key.
+    let probeResult: { ok: boolean; status?: number; source?: string } | null = null;
+    try {
+      const { data: probeRow } = await master
+        .from("odds_api_keys")
+        .select("api_key")
+        .eq("status", "available")
+        .order("last_used_at", { ascending: true, nullsFirst: true })
+        .limit(1)
+        .maybeSingle();
+      if (probeRow?.api_key) {
+        const r = await fetch(`https://api.the-odds-api.com/v4/sports/?apiKey=${encodeURIComponent(probeRow.api_key)}`);
+        probeResult = { ok: r.ok, status: r.status, source: "pool" };
+      } else if (Deno.env.get("ODDS_API_KEY")) {
+        const r = await fetch(`https://api.the-odds-api.com/v4/sports/?apiKey=${encodeURIComponent(Deno.env.get("ODDS_API_KEY")!)}`);
+        probeResult = { ok: r.ok, status: r.status, source: "env" };
+      } else {
+        probeResult = { ok: false, source: "none" };
+      }
+    } catch (e) {
+      probeResult = { ok: false, status: 0, source: "error" };
+      console.warn("odds-health-check probe failed:", e instanceof Error ? e.message : e);
+    }
 
     const [nbaOddsReachable, moneylineReachable] = await Promise.all([
       ping("nba-odds/events"),
@@ -71,15 +93,27 @@ Deno.serve(async (req) => {
     ]);
 
     return json({
-      ok: !keysErr && totalKeys > 0,
+      ok: !keysQueryError && (stats?.total ?? 0) > 0,
       masterDbConfigured: masterDbConfigured(),
-      totalKeys,
-      activeKeys,
-      exhaustedKeys,
-      lastRotationAt,
+      // Status-driven shape (canonical, shared with key-admin's api_key_status).
+      total: stats?.total ?? 0,
+      byStatus: stats?.byStatus ?? null,
+      usableNow: stats?.usableNow ?? 0,
+      staleExhaustedWithQuotaRemaining: stats?.staleExhaustedWithQuotaRemaining ?? 0,
+      usableRequestsRemaining: stats?.usableRequestsRemaining ?? 0,
+      totalRequestsRemainingAllKeys: stats?.totalRequestsRemainingAllKeys ?? 0,
+      oldestLastChecked: stats?.oldestLastChecked ?? null,
+      newestLastChecked: stats?.newestLastChecked ?? null,
+      // Back-compat fields for the current admin UI render (will be removed
+      // once AdminPage binds to byStatus directly):
+      totalKeys: stats?.total ?? 0,
+      activeKeys: stats?.usableNow ?? 0,
+      exhaustedKeys: (stats?.byStatus.exhausted_quota ?? 0) + (stats?.byStatus.invalid_auth ?? 0) + (stats?.byStatus.rate_limited ?? 0),
+      lastRotationAt: stats?.newestLastChecked ?? null,
+      probe: probeResult,
       nbaOddsReachable,
       moneylineReachable,
-      keysQueryError: keysErr?.message ?? null,
+      keysQueryError,
       envSeen: {
         MASTER_SUPABASE_URL: !!Deno.env.get("MASTER_SUPABASE_URL"),
         MASTER_SUPABASE_SERVICE_KEY: !!Deno.env.get("MASTER_SUPABASE_SERVICE_KEY"),

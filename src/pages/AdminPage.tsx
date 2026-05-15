@@ -113,8 +113,15 @@ const AdminPage = () => {
 
   // API Key stats
   const [apiKeyStats, setApiKeyStats] = useState<{
-    total: number; active: number; exhausted: number; inactive: number;
-    totalRemaining: number; totalUsed: number;
+    total: number;
+    byStatus?: { available: number; rate_limited: number; exhausted_quota: number; invalid_auth: number; disabled: number; unknown: number };
+    usableNow?: number;
+    staleExhaustedWithQuotaRemaining?: number;
+    usableRequestsRemaining?: number;
+    totalRequestsRemainingAllKeys?: number;
+    // Back-compat aliases the server still returns during the transition:
+    active?: number; exhausted?: number; inactive?: number;
+    totalRemaining?: number; totalUsed?: number;
   } | null>(null);
   const [bulkApiKeys, setBulkApiKeys] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -534,34 +541,57 @@ const AdminPage = () => {
                 </button>
               </div>
               {apiKeyStats ? (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="bg-card rounded-lg border border-border p-3 text-center">
-                    <div className="text-2xl font-bold text-foreground">{apiKeyStats.active}</div>
-                    <div className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
-                      <Zap className="w-3 h-3 text-green-500" /> Available
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-card rounded-lg border border-border p-3 text-center">
+                      <div className="text-2xl font-bold text-foreground">{apiKeyStats.byStatus?.available ?? apiKeyStats.active ?? 0}</div>
+                      <div className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
+                        <Zap className="w-3 h-3 text-green-500" /> Available
+                      </div>
+                    </div>
+                    <div className="bg-card rounded-lg border border-border p-3 text-center">
+                      <div className="text-2xl font-bold text-foreground">{apiKeyStats.byStatus?.rate_limited ?? 0}</div>
+                      <div className="text-xs text-muted-foreground mt-1">Rate-limited</div>
+                    </div>
+                    <div className="bg-card rounded-lg border border-border p-3 text-center">
+                      <div className="text-2xl font-bold text-foreground">{apiKeyStats.byStatus?.exhausted_quota ?? 0}</div>
+                      <div className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
+                        <AlertTriangle className="w-3 h-3 text-destructive" /> Exhausted quota
+                      </div>
+                    </div>
+                    <div className="bg-card rounded-lg border border-border p-3 text-center">
+                      <div className="text-2xl font-bold text-foreground">{apiKeyStats.byStatus?.invalid_auth ?? 0}</div>
+                      <div className="text-xs text-muted-foreground mt-1">Invalid auth</div>
                     </div>
                   </div>
-                  <div className="bg-card rounded-lg border border-border p-3 text-center">
-                    <div className="text-2xl font-bold text-foreground">{apiKeyStats.exhausted}</div>
-                    <div className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
-                      <AlertTriangle className="w-3 h-3 text-destructive" /> Exhausted
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-card rounded-lg border border-border p-3 text-center">
+                      <div className="text-2xl font-bold text-foreground">{apiKeyStats.byStatus?.disabled ?? 0}</div>
+                      <div className="text-xs text-muted-foreground mt-1">Disabled</div>
+                    </div>
+                    <div className="bg-card rounded-lg border border-border p-3 text-center">
+                      <div className="text-2xl font-bold text-foreground">{(apiKeyStats.byStatus?.unknown ?? 0) + (apiKeyStats.staleExhaustedWithQuotaRemaining ?? 0)}</div>
+                      <div className="text-xs text-muted-foreground mt-1">Stale / needs recheck</div>
+                    </div>
+                    <div className="bg-card rounded-lg border border-border p-3 text-center">
+                      <div className="text-2xl font-bold text-foreground">{apiKeyStats.total ?? 0}</div>
+                      <div className="text-xs text-muted-foreground mt-1">Total keys</div>
+                    </div>
+                    <div className="bg-card rounded-lg border border-border p-3 text-center">
+                      <div className="text-2xl font-bold text-foreground">{(apiKeyStats.usableRequestsRemaining ?? apiKeyStats.totalRemaining ?? 0).toLocaleString()}</div>
+                      <div className="text-xs text-muted-foreground mt-1">Spendable now</div>
+                      <div className="text-[10px] text-muted-foreground/70 mt-0.5">
+                        of {(apiKeyStats.totalRequestsRemainingAllKeys ?? 0).toLocaleString()} on file
+                      </div>
                     </div>
                   </div>
-                  <div className="bg-card rounded-lg border border-border p-3 text-center">
-                    <div className="text-2xl font-bold text-foreground">{apiKeyStats.total}</div>
-                    <div className="text-xs text-muted-foreground mt-1">Total Keys</div>
-                  </div>
-                  <div className="bg-card rounded-lg border border-border p-3 text-center">
-                    <div className="text-2xl font-bold text-foreground">{apiKeyStats.totalRemaining?.toLocaleString() || 0}</div>
-                    <div className="text-xs text-muted-foreground mt-1">Requests Left</div>
-                  </div>
-                </div>
+                </>
               ) : (
                 <p className="text-muted-foreground text-sm">Loading...</p>
               )}
-              {apiKeyStats && apiKeyStats.active === 0 && apiKeyStats.total > 0 && (
+              {apiKeyStats && (apiKeyStats.usableNow ?? apiKeyStats.active ?? 0) === 0 && (apiKeyStats.total ?? 0) > 0 && (
                 <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-sm text-destructive flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4" /> All API keys are exhausted! Odds features will not work.
+                  <AlertTriangle className="w-4 h-4" /> No usable API keys right now. Click "Recheck Exhausted/Stale" to probe quota recovery.
                 </div>
               )}
 
@@ -613,14 +643,38 @@ const AdminPage = () => {
                   <button
                     onClick={async () => {
                       try {
-                        await adminCall("reset_exhausted_keys");
+                        const data = await adminCall("recheck_keys", { batchSize: 100 });
                         loadApiKeyStats();
-                        alert("All exhausted keys have been deleted.");
+                        const bd = data.errorBreakdown ?? {};
+                        const samples = (data.sampleErrors ?? []).map((s: any) =>
+                          `${s.kind}${s.status ? " HTTP " + s.status : ""}: ${s.detail}`).join("\n");
+                        alert(
+                          `Rechecked ${data.scanned}: ${data.recovered} recovered, ${data.stillExhausted} still exhausted, ` +
+                          `${data.invalid} invalid, ${data.rateLimited ?? 0} rate-limited, ${data.errors} errors.\n\n` +
+                          `Error breakdown: network=${bd.network ?? 0} upstream_5xx=${bd.upstream_5xx ?? 0} ` +
+                          `transient_auth=${bd.transient_auth ?? 0} db_update_failed=${bd.db_update_failed ?? 0} unknown=${bd.unknown ?? 0}` +
+                          (samples ? `\n\nSample errors (no keys exposed):\n${samples}` : ""),
+                        );
                       } catch (e: any) { alert(e.message); }
                     }}
                     className="text-sm text-muted-foreground hover:text-foreground bg-muted px-3 py-2 rounded-lg transition-colors"
+                    title="Probe exhausted/rate-limited/unknown keys against the Odds API and update their status. Recovers stale flags."
                   >
-                    Reset Exhausted
+                    Recheck Exhausted/Stale
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!confirm("Permanently delete keys that have failed authentication ≥3 consecutive times? This cannot be undone.")) return;
+                      try {
+                        const data = await adminCall("delete_invalid_keys");
+                        loadApiKeyStats();
+                        alert(`Deleted ${data.deleted} permanently invalid keys.`);
+                      } catch (e: any) { alert(e.message); }
+                    }}
+                    className="text-sm text-destructive/80 hover:text-destructive bg-muted px-3 py-2 rounded-lg transition-colors"
+                    title="Server-side: only deletes rows where status='invalid_auth' AND consecutive_errors >= 3."
+                  >
+                    Delete Permanently Invalid
                   </button>
                   <button
                     onClick={async () => {
@@ -668,8 +722,37 @@ const AdminPage = () => {
                           {healthResult.ok ? "✓ Healthy" : "✗ Unhealthy"}
                         </div>
                         <div>Master DB: {healthResult.masterDbConfigured ? "✓ configured" : "✗ not configured"}</div>
-                        <div>Total keys: {healthResult.totalKeys} (active {healthResult.activeKeys} / exhausted {healthResult.exhaustedKeys})</div>
-                        <div>Last rotation: {healthResult.lastRotationAt || "never"}</div>
+                        <div>
+                          Total keys: {healthResult.total ?? healthResult.totalKeys ?? 0}
+                          {healthResult.byStatus && (
+                            <> (
+                              available {healthResult.byStatus.available} /
+                              rate-limited {healthResult.byStatus.rate_limited} /
+                              exhausted-quota {healthResult.byStatus.exhausted_quota} /
+                              invalid-auth {healthResult.byStatus.invalid_auth} /
+                              disabled {healthResult.byStatus.disabled} /
+                              unknown {healthResult.byStatus.unknown}
+                              )
+                            </>
+                          )}
+                        </div>
+                        <div>
+                          Spendable now: {(healthResult.usableRequestsRemaining ?? 0).toLocaleString()} requests
+                          {typeof healthResult.totalRequestsRemainingAllKeys === "number" && (
+                            <> (of {healthResult.totalRequestsRemainingAllKeys.toLocaleString()} on file across all rows)</>
+                          )}
+                        </div>
+                        {typeof healthResult.staleExhaustedWithQuotaRemaining === "number" && (
+                          <div>Stale exhausted w/ quota remaining: {healthResult.staleExhaustedWithQuotaRemaining}</div>
+                        )}
+                        <div>Last rotation: {healthResult.newestLastChecked ?? healthResult.lastRotationAt ?? "never"}</div>
+                        {healthResult.probe && (
+                          <div>
+                            Live probe (/v4/sports): {healthResult.probe.ok ? "✓" : "✗"}
+                            {healthResult.probe.status ? ` HTTP ${healthResult.probe.status}` : ""}
+                            {healthResult.probe.source ? ` via ${healthResult.probe.source}` : ""}
+                          </div>
+                        )}
                         <div>nba-odds reachable: {healthResult.nbaOddsReachable ? "✓" : "✗"}</div>
                         <div>moneyline-api reachable: {healthResult.moneylineReachable ? "✓" : "✗"}</div>
                         {healthResult.envSeen && (

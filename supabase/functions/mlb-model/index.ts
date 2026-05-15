@@ -1,47 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { callAI, AIProviderError, ANTI_GENERIC_INSTRUCTION } from "../_shared/ai-provider.ts";
 import { getMasterClient } from "../_shared/masterClient.ts";
-
-// Rotation-pool reads/writes always go to MASTER DB so admin uploads are visible.
-async function getNextApiKey(_supabase: any): Promise<{ id: string; key: string } | null> {
-  const master = await getMasterClient();
-  const { data, error } = await master
-    .from("odds_api_keys")
-    .select("id, api_key")
-    .eq("is_active", true)
-    .is("exhausted_at", null)
-    .order("last_used_at", { ascending: true, nullsFirst: true })
-    .limit(1)
-    .single();
-  if (!error && data) return { id: data.id, key: data.api_key };
-  const { data: cfg } = await master.from("app_config").select("value").eq("key", "odds_api_key").single();
-  if (cfg?.value) return { id: "app-config", key: cfg.value };
-  const envKey = Deno.env.get("ODDS_API_KEY");
-  if (envKey) return { id: "env-fallback", key: envKey };
-  return null;
-}
-
-async function updateKeyUsage(_supabase: any, keyId: string, resp: Response): Promise<void> {
-  if (keyId === "env-fallback" || keyId === "app-config") return;
-  const master = await getMasterClient();
-  const remaining = resp.headers.get("x-requests-remaining");
-  const used = resp.headers.get("x-requests-used");
-  const update: Record<string, any> = { last_used_at: new Date().toISOString() };
-  if (remaining !== null) update.requests_remaining = parseInt(remaining, 10);
-  if (used !== null) update.requests_used = parseInt(used, 10);
-  if (remaining !== null && parseInt(remaining, 10) <= 0) update.exhausted_at = new Date().toISOString();
-  await master.from("odds_api_keys").update(update).eq("id", keyId);
-}
-
-async function markKeyExhausted(_supabase: any, keyId: string, reason: string): Promise<void> {
-  if (keyId === "env-fallback" || keyId === "app-config") return;
-  const master = await getMasterClient();
-  await master.from("odds_api_keys").update({
-    exhausted_at: new Date().toISOString(),
-    last_error: reason,
-    last_used_at: new Date().toISOString(),
-  }).eq("id", keyId);
-}
+import { fetchWithRotation as poolFetchWithRotation } from "../_shared/oddsKeyPool.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -215,19 +175,18 @@ async function getStartingPitcherStats(event: any): Promise<{ home: any; away: a
 }
 
 // ── Odds API Integration ──
-async function getOddsForGame(supabase: any, gameTeams: { home: string; away: string }) {
+async function getOddsForGame(_supabase: any, gameTeams: { home: string; away: string }) {
   try {
-    const keyInfo = await getNextApiKey(supabase);
-    if (!keyInfo) return null;
-
-    const resp = await fetch(
-      `https://api.the-odds-api.com/v4/sports/baseball_mlb/odds/?apiKey=${keyInfo.key}&regions=us&markets=h2h,spreads,totals&oddsFormat=american`
+    const master = await getMasterClient();
+    const out = await poolFetchWithRotation(master, (apiKey) =>
+      `https://api.the-odds-api.com/v4/sports/baseball_mlb/odds/?apiKey=${apiKey}&regions=us&markets=h2h,spreads,totals&oddsFormat=american`,
     );
-    if (!resp.ok) {
-      if (resp.status === 401 || resp.status === 403) await markKeyExhausted(supabase, keyInfo.id, `HTTP ${resp.status}`);
+    if ("error" in out) {
+      console.warn(`[mlb-model] odds fetch failed kind=${out.error.kind}`);
       return null;
     }
-    await updateKeyUsage(supabase, keyInfo.id, resp);
+    const resp = out.resp;
+    if (!resp.ok) return null;
     const events = await resp.json();
     
     // Find matching game

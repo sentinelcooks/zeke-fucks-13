@@ -9,70 +9,24 @@ const corsHeaders = {
 
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 
-async function getNextApiKey(supabase: any): Promise<{ id: string; key: string } | null> {
-  const { data, error } = await supabase
-    .from("odds_api_keys")
-    .select("id, api_key")
-    .eq("is_active", true)
-    .is("exhausted_at", null)
-    .order("last_used_at", { ascending: true, nullsFirst: true })
-    .limit(1)
-    .single();
-  if (!error && data) return { id: data.id, key: data.api_key };
+// All rotation/recovery/status updates live in _shared/oddsKeyPool.ts.
+import { fetchWithRotation as poolFetchWithRotation } from "../_shared/oddsKeyPool.ts";
 
-  // Fallback: try admin-configured key in app_config
-  const { data: configData } = await supabase
-    .from("app_config")
-    .select("value")
-    .eq("key", "odds_api_key")
-    .single();
-  if (configData?.value) return { id: "app-config", key: configData.value };
-
-  // Last resort: env var
-  const envKey = Deno.env.get("ODDS_API_KEY");
-  if (envKey) return { id: "env-fallback", key: envKey };
-
-  return null;
-}
-
-async function updateKeyAfterCall(supabase: any, keyId: string, resp: Response) {
-  if (keyId === "app-config" || keyId === "env-fallback") return;
-  const remaining = resp.headers.get("x-requests-remaining");
-  const used = resp.headers.get("x-requests-used");
-  const update: Record<string, any> = { last_used_at: new Date().toISOString() };
-  if (remaining !== null) update.requests_remaining = parseInt(remaining, 10);
-  if (used !== null) update.requests_used = parseInt(used, 10);
-  if (remaining !== null && parseInt(remaining, 10) <= 0) {
-    update.exhausted_at = new Date().toISOString();
-  }
-  await supabase.from("odds_api_keys").update(update).eq("id", keyId);
-}
-
-async function markKeyExhausted(supabase: any, keyId: string, error: string) {
-  await supabase.from("odds_api_keys").update({
-    exhausted_at: new Date().toISOString(),
-    last_error: error,
-    last_used_at: new Date().toISOString(),
-  }).eq("id", keyId);
-}
-
-async function fetchWithRotation(supabase: any, buildUrl: (apiKey: string) => string, maxRetries = 3): Promise<Response | null> {
-  for (let i = 0; i < maxRetries; i++) {
-    const keyInfo = await getNextApiKey(supabase);
-    if (!keyInfo) return null;
-    const resp = await fetch(buildUrl(keyInfo.key));
-    if (resp.ok) {
-      await updateKeyAfterCall(supabase, keyInfo.id, resp);
-      return resp;
+async function fetchWithRotation(
+  supabase: any,
+  buildUrl: (apiKey: string) => string,
+  maxRetries = 3,
+): Promise<Response | null> {
+  const out = await poolFetchWithRotation(supabase, buildUrl, { maxRetries });
+  if ("error" in out) {
+    if (out.error.kind === "no_usable_keys") {
+      console.error("[trends-api] no_usable_keys");
+    } else {
+      console.warn(`[trends-api] fetchWithRotation failed kind=${out.error.kind} status=${out.error.status ?? "?"}`);
     }
-    if ([401, 429, 403].includes(resp.status)) {
-      await markKeyExhausted(supabase, keyInfo.id, `HTTP ${resp.status}`);
-      continue;
-    }
-    await updateKeyAfterCall(supabase, keyInfo.id, resp);
-    return resp;
+    return null;
   }
-  return null;
+  return out.resp;
 }
 
 async function fetchInjuredPlayers(): Promise<Set<string>> {

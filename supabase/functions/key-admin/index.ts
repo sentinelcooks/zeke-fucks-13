@@ -1,28 +1,15 @@
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getMasterClient } from "../_shared/masterClient.ts";
+import { loadKeyPoolStats, recheckKeys } from "../_shared/oddsKeyPool.ts";
 
-function getLocalClient(): SupabaseClient {
-  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-}
-
-// Master DB — tries MASTER_SUPABASE_URL first, validates it works, falls back to local
-async function getMasterClient(): Promise<SupabaseClient> {
-  const masterUrl = Deno.env.get("MASTER_SUPABASE_URL");
-  const masterKey = Deno.env.get("MASTER_SUPABASE_SERVICE_KEY");
-  if (masterUrl && masterKey) {
-    try {
-      const client = createClient(masterUrl, masterKey);
-      // Quick validation — check if the required table exists
-      const { error } = await client.from("license_keys").select("id").limit(1);
-      if (!error) {
-        console.log("Using master DB");
-        return client;
-      }
-      console.warn("Master DB failed validation, falling back to local:", error.message);
-    } catch (e) {
-      console.warn("Master DB connection failed, falling back to local:", e);
-    }
-  }
-  return getLocalClient();
+// Same trim-only normalization the migration used. Odds API keys are
+// case-sensitive — do NOT lowercase. sha256 via Web Crypto so we never read
+// the raw key back out of the DB in code paths that ship it.
+async function hashKey(raw: string): Promise<string> {
+  const buf = new TextEncoder().encode(raw.trim());
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 const corsHeaders = {
@@ -128,29 +115,122 @@ Deno.serve(async (req) => {
         if (!apiKeys || !Array.isArray(apiKeys) || apiKeys.length === 0) {
           return json({ error: "No keys provided" }, 400);
         }
-        const cleaned = apiKeys.map((k: string) => k.trim()).filter((k: string) => k.length > 10);
-        if (cleaned.length === 0) return json({ error: "No valid keys found" }, 400);
+        // Normalize = trim only. Keys are case-sensitive.
+        const cleanedRaw = apiKeys.map((k: string) => k.trim()).filter((k: string) => k.length > 10);
+        if (cleanedRaw.length === 0) return json({ error: "No valid keys found" }, 400);
 
-        const { data: existing } = await supabase.from("odds_api_keys").select("api_key").limit(10000);
-        const existingSet = new Set((existing || []).map((r: any) => r.api_key));
-        const newKeys = cleaned.filter((k: string) => !existingSet.has(k));
+        // Compute hashes and drop in-batch duplicates by hash.
+        const seenHash = new Set<string>();
+        const batch: Array<{ raw: string; hash: string }> = [];
+        for (const raw of cleanedRaw) {
+          const h = await hashKey(raw);
+          if (seenHash.has(h)) continue;
+          seenHash.add(h);
+          batch.push({ raw, hash: h });
+        }
 
-        if (newKeys.length === 0) return json({ error: "All keys already exist", duplicates: cleaned.length }, 400);
+        // Find pre-existing non-disabled hashes (partial unique index is
+        // WHERE status <> 'disabled' so duplicates of disabled rows are allowed).
+        const hashes = batch.map((b) => b.hash);
+        const { data: existing } = await supabase
+          .from("odds_api_keys")
+          .select("api_key_hash")
+          .neq("status", "disabled")
+          .in("api_key_hash", hashes);
+        const existingHashes = new Set((existing || []).map((r: any) => r.api_key_hash));
 
-        const rows = newKeys.map((k: string) => ({ api_key: k, is_active: true }));
-        const { error: insertErr } = await supabase.from("odds_api_keys").insert(rows);
-        if (insertErr) return json({ error: insertErr.message }, 500);
+        const toInsert = batch.filter((b) => !existingHashes.has(b.hash));
+        if (toInsert.length === 0) {
+          return json({ added: 0, duplicates: cleanedRaw.length, raceConflicts: 0 });
+        }
 
-        return json({ success: true, added: newKeys.length, duplicates: cleaned.length - newKeys.length });
+        // Insert one row at a time so we can attribute unique-violations
+        // (the partial index serves as a last-line race guard) to specific keys
+        // without aborting the whole batch.
+        let added = 0;
+        let raceConflicts = 0;
+        for (const b of toInsert) {
+          const { error: insertErr } = await supabase
+            .from("odds_api_keys")
+            .insert({ api_key: b.raw, api_key_hash: b.hash, status: "unknown", is_active: true });
+          if (insertErr) {
+            // 23505 = unique_violation
+            if ((insertErr as any).code === "23505" || /duplicate key|unique/i.test(insertErr.message)) {
+              raceConflicts += 1;
+              continue;
+            }
+            return json({ error: insertErr.message }, 500);
+          }
+          added += 1;
+        }
+
+        return json({
+          added,
+          duplicates: cleanedRaw.length - added - raceConflicts,
+          raceConflicts,
+        });
       }
 
-      case "reset_exhausted_keys": {
-        const { error: resetErr } = await supabase
+      case "recheck_keys": {
+        const batchSize = Number.isFinite(body?.batchSize) ? Math.max(1, Math.min(500, Number(body.batchSize))) : 100;
+        const result = await recheckKeys(supabase, batchSize);
+        return json({ success: true, ...result });
+      }
+
+      case "dedupe_keys": {
+        // Group by api_key_hash. Keep the oldest row in each group. Mark the
+        // rest status='disabled', last_error='duplicate'. Disabled rows are
+        // retained for audit — the partial unique index lets them coexist.
+        const { data: rows, error: fetchErr } = await supabase
           .from("odds_api_keys")
-          .delete()
-          .not("exhausted_at", "is", null);
-        if (resetErr) return json({ error: resetErr.message }, 500);
-        return json({ success: true });
+          .select("id, api_key_hash, created_at, status")
+          .neq("status", "disabled")
+          .order("created_at", { ascending: true });
+        if (fetchErr) return json({ error: fetchErr.message }, 500);
+
+        const groups = new Map<string, Array<{ id: string; created_at: string }>>();
+        for (const r of rows ?? []) {
+          if (!r.api_key_hash) continue;
+          const arr = groups.get(r.api_key_hash) ?? [];
+          arr.push({ id: r.id, created_at: r.created_at });
+          groups.set(r.api_key_hash, arr);
+        }
+
+        const toDisable: string[] = [];
+        let dupGroups = 0;
+        for (const arr of groups.values()) {
+          if (arr.length < 2) continue;
+          dupGroups += 1;
+          // arr is already in created_at ASC order; keep the first.
+          for (let i = 1; i < arr.length; i++) toDisable.push(arr[i].id);
+        }
+
+        let duplicatesDisabled = 0;
+        // Update in chunks to keep payloads small.
+        for (let i = 0; i < toDisable.length; i += 200) {
+          const chunk = toDisable.slice(i, i + 200);
+          const { error: upErr, count } = await supabase
+            .from("odds_api_keys")
+            .update({ status: "disabled", last_error: "duplicate" }, { count: "exact" })
+            .in("id", chunk);
+          if (upErr) return json({ error: upErr.message }, 500);
+          duplicatesDisabled += count ?? chunk.length;
+        }
+
+        return json({ success: true, groups: dupGroups, duplicatesDisabled });
+      }
+
+      case "delete_invalid_keys": {
+        // Only delete rows the system has independently confirmed are dead:
+        // status='invalid_auth' AND consecutive_errors >= 3. Server-side gate;
+        // the admin UI also asks for confirmation but that is advisory only.
+        const { error: delErr, count } = await supabase
+          .from("odds_api_keys")
+          .delete({ count: "exact" })
+          .eq("status", "invalid_auth")
+          .gte("consecutive_errors", 3);
+        if (delErr) return json({ error: delErr.message }, 500);
+        return json({ success: true, deleted: count ?? 0 });
       }
 
       case "generate_key": {
@@ -242,22 +322,18 @@ Deno.serve(async (req) => {
       }
 
       case "api_key_status": {
-        const [totalRes, activeRes, exhaustedRes, inactiveRes, sumRes] = await Promise.all([
-          supabase.from("odds_api_keys").select("*", { count: "exact", head: true }),
-          supabase.from("odds_api_keys").select("*", { count: "exact", head: true }).eq("is_active", true).is("exhausted_at", null),
-          supabase.from("odds_api_keys").select("*", { count: "exact", head: true }).not("exhausted_at", "is", null),
-          supabase.from("odds_api_keys").select("*", { count: "exact", head: true }).eq("is_active", false),
-          supabase.from("odds_api_keys").select("requests_remaining, requests_used").limit(10000),
-        ]);
-        if (totalRes.error) return json({ error: totalRes.error.message }, 500);
-        const total = totalRes.count ?? 0;
-        const active = activeRes.count ?? 0;
-        const exhausted = exhaustedRes.count ?? 0;
-        const inactive = inactiveRes.count ?? 0;
-        const rows = sumRes.data ?? [];
-        const totalRemaining = rows.reduce((s: number, k: any) => s + (k.requests_remaining || 0), 0);
-        const totalUsed = rows.reduce((s: number, k: any) => s + (k.requests_used || 0), 0);
-        return json({ total, active, exhausted, inactive, totalRemaining, totalUsed });
+        // Single source of truth shared with odds-health-check. Numbers MUST
+        // match because both endpoints query the same DB via _shared/masterClient.
+        const stats = await loadKeyPoolStats(supabase);
+        // Backward-compat aliases so the existing AdminPage render does not
+        // break before its own update lands.
+        return json({
+          ...stats,
+          active: stats.byStatus.available,
+          exhausted: stats.byStatus.exhausted_quota + stats.byStatus.invalid_auth + stats.byStatus.rate_limited,
+          inactive: stats.byStatus.disabled,
+          totalRemaining: stats.usableRequestsRemaining,
+        });
       }
 
       case "list_whitelist": {

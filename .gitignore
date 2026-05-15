@@ -41,3 +41,8 @@ nba_budget_trace.json
 nba_trace.json
 src/graphify-out/
 supabase/graphify-out/
+graphify-out/
+
+# Scratch / debugging dumps
+temp_*.txt
+temp_*.json

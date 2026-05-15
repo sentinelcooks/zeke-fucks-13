@@ -32,82 +32,27 @@ const MARKET_TO_PROP: Record<string, string> = {
   fighter_moneylines: "moneyline",
 };
 
-// Rotation-pool reads/writes always go to MASTER DB so admin uploads are visible.
-async function getNextApiKey(_supabase: any) {
+// All rotation/recovery/status updates live in _shared/oddsKeyPool.ts. This
+// wrapper preserves free-props' legacy "Response | null" return shape so
+// downstream callers below don't need to change.
+import { fetchWithRotation as poolFetchWithRotation } from "../_shared/oddsKeyPool.ts";
+
+async function fetchWithRotation(
+  _supabase: any,
+  buildUrl: (key: string) => string,
+  maxRetries = 3,
+): Promise<Response | null> {
   const master = await getMasterClient();
-  const { data } = await master
-    .from("odds_api_keys")
-    .select("id, api_key")
-    .eq("is_active", true)
-    .is("exhausted_at", null)
-    .order("last_used_at", { ascending: true, nullsFirst: true })
-    .limit(1)
-    .single();
-  if (data) return { id: data.id, key: data.api_key };
-
-  const { data: configData } = await master
-    .from("app_config")
-    .select("value")
-    .eq("key", "odds_api_key")
-    .single();
-  if (configData?.value) return { id: "app-config", key: configData.value };
-
-  const envKey = Deno.env.get("ODDS_API_KEY");
-  if (envKey) return { id: "__env__", key: envKey };
-  return null;
-}
-
-async function updateKeyUsage(_supabase: any, keyId: string, resp: Response) {
-  if (keyId === "__env__" || keyId === "app-config") return;
-  const master = await getMasterClient();
-  const remaining = resp.headers.get("x-requests-remaining");
-  const used = resp.headers.get("x-requests-used");
-  const updates: any = { last_used_at: new Date().toISOString() };
-  if (remaining) updates.requests_remaining = parseInt(remaining);
-  if (used) updates.requests_used = parseInt(used);
-  await master.from("odds_api_keys").update(updates).eq("id", keyId);
-}
-
-async function markKeyExhausted(_supabase: any, keyId: string, error: string) {
-  if (keyId === "__env__" || keyId === "app-config") return;
-  const master = await getMasterClient();
-  await master.from("odds_api_keys").update({
-    exhausted_at: new Date().toISOString(),
-    last_error: error,
-  }).eq("id", keyId);
-}
-
-async function fetchWithRotation(supabase: any, buildUrl: (key: string) => string, maxRetries = 3) {
-  for (let i = 0; i < maxRetries; i++) {
-    const apiKey = await getNextApiKey(supabase);
-    if (!apiKey) {
-      console.log("No API key available");
-      return null;
+  const out = await poolFetchWithRotation(master, buildUrl, { maxRetries });
+  if ("error" in out) {
+    if (out.error.kind === "no_usable_keys") {
+      console.error("[free-props] no_usable_keys");
+    } else {
+      console.warn(`[free-props] fetchWithRotation failed kind=${out.error.kind} status=${out.error.status ?? "?"}`);
     }
-    try {
-      const url = buildUrl(apiKey.key);
-      console.log(`Fetching: ${url.replace(apiKey.key, "***")}`);
-      const resp = await fetch(url);
-      console.log(`Response status: ${resp.status}`);
-      if (resp.ok) {
-        await updateKeyUsage(supabase, apiKey.id, resp);
-        return resp;
-      }
-      if ([401, 429, 403].includes(resp.status)) {
-        const body = await resp.text();
-        console.log(`Key exhausted: HTTP ${resp.status} - ${body.slice(0, 200)}`);
-        await markKeyExhausted(supabase, apiKey.id, `HTTP ${resp.status}`);
-        continue;
-      }
-      const body = await resp.text();
-      console.log(`Unexpected status ${resp.status}: ${body.slice(0, 200)}`);
-      return null;
-    } catch (e) {
-      console.error(`Fetch error: ${e}`);
-      await markKeyExhausted(supabase, apiKey.id, String(e));
-    }
+    return null;
   }
-  return null;
+  return out.resp;
 }
 
 // Proper edge: compare the best odds across all books for a player/prop.

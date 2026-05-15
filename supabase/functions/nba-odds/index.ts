@@ -1,26 +1,5 @@
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { normalizeBookKey } from "../_shared/normalizeBookName.ts";
-
-function getLocalClient(): SupabaseClient {
-  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-}
-
-// Master DB — tries MASTER_SUPABASE_URL first, validates, falls back to local
-async function getMasterClient(): Promise<SupabaseClient> {
-  const masterUrl = Deno.env.get("MASTER_SUPABASE_URL");
-  const masterKey = Deno.env.get("MASTER_SUPABASE_SERVICE_KEY");
-  if (masterUrl && masterKey) {
-    try {
-      const client = createClient(masterUrl, masterKey);
-      const { error } = await client.from("odds_api_keys").select("id").limit(1);
-      if (!error) return client;
-      console.warn("Master DB failed, falling back to local:", error.message);
-    } catch (e) {
-      console.warn("Master DB connection failed, falling back to local:", e);
-    }
-  }
-  return getLocalClient();
-}
+import { getMasterClient } from "../_shared/masterClient.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -125,138 +104,38 @@ function setCache(key: string, data: unknown) {
   cache.set(key, { data, ts: Date.now() });
 }
 
-// ── API Key Rotation ──
-async function getNextApiKey(supabase: any): Promise<{ id: string; key: string } | null> {
-  // 1. Primary: active key with quota still available
-  const { data, error } = await supabase
-    .from("odds_api_keys")
-    .select("id, api_key")
-    .eq("is_active", true)
-    .is("exhausted_at", null)
-    .order("last_used_at", { ascending: true, nullsFirst: true })
-    .limit(1)
-    .single();
-  if (!error && data) return { id: data.id, key: data.api_key };
-
-  // 2. Fallback: retry a key that was marked exhausted >24 h ago.
-  //    Most Odds API plans reset on a rolling or daily basis, so a key that
-  //    failed yesterday may have quota again today. We reset exhausted_at so
-  //    the normal rotation picks it up, and markKeyExhausted will re-set it
-  //    if it still fails on this attempt.
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { data: staleKey } = await supabase
-    .from("odds_api_keys")
-    .select("id, api_key")
-    .eq("is_active", true)
-    .not("exhausted_at", "is", null)
-    .lt("exhausted_at", oneDayAgo)
-    .order("exhausted_at", { ascending: true })
-    .limit(1)
-    .single();
-  if (staleKey) {
-    console.log(`[key-rotation] Retrying key id=${staleKey.id} — exhausted >24 h ago, quota may have reset`);
-    await supabase
-      .from("odds_api_keys")
-      .update({ exhausted_at: null, last_error: null })
-      .eq("id", staleKey.id);
-    return { id: staleKey.id, key: staleKey.api_key };
-  }
-
-  // 3. Admin-configured key in app_config table
-  const { data: configData } = await supabase
-    .from("app_config")
-    .select("value")
-    .eq("key", "odds_api_key")
-    .single();
-  if (configData?.value) return { id: "app-config", key: configData.value };
-
-  // 4. Last resort: env secret (for local dev / CI)
-  const envKey = Deno.env.get("ODDS_API_KEY");
-  if (envKey) return { id: "env-fallback", key: envKey };
-
-  console.error("[key-rotation] No usable Odds API keys — all active keys exhausted or inactive");
-  return null;
-}
-
-async function updateKeyUsage(supabase: any, keyId: string, resp: Response) {
-  if (keyId === "env-fallback" || keyId === "app-config") return;
-  const remaining = resp.headers.get("x-requests-remaining");
-  const used = resp.headers.get("x-requests-used");
-  const update: Record<string, any> = { last_used_at: new Date().toISOString() };
-  if (remaining !== null) update.requests_remaining = parseInt(remaining, 10);
-  if (used !== null) update.requests_used = parseInt(used, 10);
-  if (remaining !== null && parseInt(remaining, 10) <= 0) {
-    update.exhausted_at = new Date().toISOString();
-  }
-  await supabase.from("odds_api_keys").update(update).eq("id", keyId);
-}
-
-async function markKeyExhausted(supabase: any, keyId: string, error: string) {
-  if (keyId === "env-fallback" || keyId === "app-config") return;
-  await supabase.from("odds_api_keys").update({
-    exhausted_at: new Date().toISOString(),
-    last_error: error,
-    last_used_at: new Date().toISOString(),
-  }).eq("id", keyId);
-}
-
-// Parse a Retry-After header. Most providers send seconds; clamp to 10s
-// inside fetchWithRotation so a single 429 burst never blocks a scan run.
-function parseRetryAfterHeader(resp: Response): number | null {
-  const v = resp.headers.get("Retry-After") ?? resp.headers.get("retry-after");
-  if (!v) return null;
-  const n = Number(v);
-  if (Number.isFinite(n) && n > 0) return Math.round(n * 1000); // seconds → ms
-  const dateMs = Date.parse(v);
-  if (Number.isFinite(dateMs)) return Math.max(0, dateMs - Date.now());
-  return null;
-}
+// ── API Key Rotation (delegates to shared pool) ──
+// All rotation, status updates, recovery and structured-error handling live in
+// _shared/oddsKeyPool.ts. The adapter below preserves this function's legacy
+// return shape ({ resp, keyId } | null) plus the lastRetryAfterMs side-channel
+// that sport_scan reads after a 429.
+import {
+  fetchWithRotation as poolFetchWithRotation,
+  type RotationError,
+} from "../_shared/oddsKeyPool.ts";
 
 async function fetchWithRotation(
   supabase: any,
   buildUrl: (apiKey: string) => string,
-  maxRetries = 3
+  maxRetries = 3,
 ): Promise<{ resp: Response; keyId: string } | null> {
-  let lastRetryAfterMs = 0;
-  for (let i = 0; i < maxRetries; i++) {
-    const keyInfo = await getNextApiKey(supabase);
-    if (!keyInfo) return null;
-    const resp = await fetch(buildUrl(keyInfo.key));
-    if (resp.ok) {
-      await updateKeyUsage(supabase, keyInfo.id, resp);
-      return { resp, keyId: keyInfo.id };
+  (fetchWithRotation as any).lastRetryAfterMs = 0;
+  (fetchWithRotation as any).lastError = null;
+  const out = await poolFetchWithRotation(supabase, buildUrl, { maxRetries });
+  if ("error" in out) {
+    const err = out.error as RotationError;
+    (fetchWithRotation as any).lastError = err;
+    if (err.kind === "rate_limited" && err.retryAfterMs) {
+      (fetchWithRotation as any).lastRetryAfterMs = err.retryAfterMs;
     }
-    if (resp.status === 401 || resp.status === 403) {
-      const errText = await resp.text();
-      console.warn(`Key ${keyInfo.id} failed (${resp.status}), rotating...`);
-      await markKeyExhausted(supabase, keyInfo.id, `HTTP ${resp.status}: ${errText}`);
-      continue;
+    if (err.kind === "no_usable_keys") {
+      console.error("[nba-odds] no_usable_keys — pool empty and no fallback");
+    } else {
+      console.warn(`[nba-odds] fetchWithRotation failed kind=${err.kind} status=${err.status ?? "?"}`);
     }
-    if (resp.status === 429) {
-      const headerMs = parseRetryAfterHeader(resp);
-      const sleepMs = Math.min(Math.max(headerMs ?? 2000, 1000), 10_000);
-      lastRetryAfterMs = headerMs ?? sleepMs;
-      console.warn(
-        `[nba-odds] sport=${(buildUrl as any).sport ?? "?"} rate_limited retry_after_ms=${lastRetryAfterMs} ` +
-          `key=${keyInfo.id} sleep=${sleepMs}ms attempt=${i + 1}/${maxRetries}`,
-      );
-      await new Promise((r) => setTimeout(r, sleepMs));
-      continue;
-    }
-    if (resp.status === 422) {
-      const errBody = await resp.text();
-      console.warn(`Request returned 422 (invalid params): ${errBody.substring(0, 200)}`);
-      return null;
-    }
-    await updateKeyUsage(supabase, keyInfo.id, resp);
-    return { resp, keyId: keyInfo.id };
+    return null;
   }
-  // All retries exhausted with 429 (or generic). Surface the rate-limit hint
-  // so callers (sport_scan player-props fanout) can pace the next chunk.
-  if (lastRetryAfterMs > 0) {
-    (fetchWithRotation as any).lastRetryAfterMs = lastRetryAfterMs;
-  }
-  return null;
+  return out;
 }
 
 // ── Multi-region fetch: queries each region separately and merges bookmakers ──
