@@ -160,7 +160,6 @@ const FreePicksPage = () => {
   const [picks, setPicks] = useState<Pick[]>([]);
   const [trends, setTrends] = useState<TrendProp[]>([]);
   const [sgps, setSgps] = useState<SGP[]>([]);
-  const [club100, setClub100] = useState<TrendProp[]>([]);
   const [loading, setLoading] = useState(true);
   const [trendsLoading, setTrendsLoading] = useState(true);
   const [sportFilter, setSportFilter] = useState<SportFilter>("all");
@@ -257,7 +256,6 @@ const FreePicksPage = () => {
         if (error) throw error;
         setTrends(data.trends || []);
         setSgps(data.sgps || []);
-        setClub100(data.club100 || []);
       } catch (e) {
         console.error("Trends fetch error:", e);
       } finally {
@@ -270,6 +268,18 @@ const FreePicksPage = () => {
   // Normalize hit_rate (may be stored as decimal 0-1 or percent 0-100)
   const normHr = (hr: number) => Math.round(normalizeConfidencePercent(hr));
   const normalized = picks.map(p => ({ ...p, hit_rate: normHr(p.hit_rate) }));
+
+  // 100% Club = today's picks whose player hit this prop in all of their last 5 games.
+  // Source: analyzer's last_5 stored under model_diagnostics.analyzer_response_snapshot.
+  const club100Picks = normalized.filter(p => {
+    const md = (p as any).model_diagnostics;
+    const l5 = md?.analyzer_response_snapshot?.last_5 ?? md?.last_5;
+    if (!l5) return false;
+    const hits = Number(l5.hits);
+    const total = Number(l5.total);
+    if (!Number.isFinite(hits) || !Number.isFinite(total)) return false;
+    return total >= 5 && hits >= total;
+  });
   // Score: prefer confidence field (0-1), fall back to normalized hit_rate
   const scoreOf = (p: Pick) => normalizeConfidencePercent(p.confidence ?? p.hit_rate);
   // Apply sport/prop filters; tier gate already applied at query layer
@@ -283,7 +293,7 @@ const FreePicksPage = () => {
   const isStale = pickDate && pickDate !== todayInTZ();
   const formattedDate = pickDate ? new Date(pickDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
 
-  const totalCount = picks.length + trends.length + club100.length + sgps.length;
+  const totalCount = picks.length + trends.length + club100Picks.length + sgps.length;
 
   return (
     <div className="flex flex-col min-h-full relative">
@@ -300,7 +310,7 @@ const FreePicksPage = () => {
             const Icon = tab.icon;
             const active = activeTab === tab.key;
             const count = tab.key === "picks" ? picks.length
-              : tab.key === "100club" ? club100.length
+              : tab.key === "100club" ? club100Picks.length
               : tab.key === "sgp" ? sgps.length
               : trends.length;
             return (
@@ -564,50 +574,91 @@ const FreePicksPage = () => {
 
         {/* ── 100% CLUB TAB ── */}
         {activeTab === "100club" && (
-          trendsLoading ? <LoadingSpinner /> : club100.length === 0 ? (
-            <EmptyState message="No 100% club props right now" />
+          loading ? <LoadingSpinner /> : club100Picks.length === 0 ? (
+            <EmptyState message="No picks with a perfect last-5 streak today" />
           ) : (
             <div className="space-y-3">
-              <SectionHeader icon={Trophy} gradient="from-[hsl(43,96%,56%)] to-[hsl(30,90%,50%)]" title="100% Club" subtitle="Props hitting in 100% of recent games" />
-              {club100.map((prop, i) => {
-                const Icon = STREAK_ICONS[prop.streak_type] || Flame;
-                const gradient = STREAK_COLORS[prop.streak_type] || STREAK_COLORS.recent_form;
-                return (
-                  <motion.div key={`club-${i}`} {...stagger(i)} className="vision-card p-4 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-24 h-24 opacity-[0.04] pointer-events-none"
-                      style={{ background: "radial-gradient(circle, hsl(43 96% 56%), transparent 70%)" }} />
-                    <div className="flex items-start justify-between relative z-10">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span className="text-[13px] font-extrabold text-foreground">{prop.player}</span>
-                          <span className="text-[9px] px-1.5 py-0.5 rounded-md font-bold text-muted-foreground/50 uppercase"
-                            style={{ background: "hsla(228, 20%, 15%, 0.5)" }}>
-                            vs {prop.opponent.split(" ").pop()}
+              <SectionHeader icon={Trophy} gradient="from-[hsl(43,96%,56%)] to-[hsl(30,90%,50%)]" title="100% Club" subtitle="Today's picks hitting in all of the player's last 5 games" />
+              <div className="ios-card overflow-hidden divide-y divide-border">
+                {club100Picks.map((pick, i) => {
+                  const conf = getConfidenceColor(pick.hit_rate);
+                  const md = (pick as any).model_diagnostics;
+                  const l5 = md?.analyzer_response_snapshot?.last_5 ?? md?.last_5;
+                  const hits = Number(l5?.hits ?? 0);
+                  const total = Number(l5?.total ?? 0);
+                  return (
+                    <motion.button
+                      key={pick.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: i * 0.03 }}
+                      onClick={() => {
+                        navigate('/dashboard/analyze', {
+                          state: {
+                            autoAnalyze: true,
+                            entrySource: 'picks' as const,
+                            daily_picks_id: pick.id,
+                            sport: pick.sport,
+                            player: pick.player_name,
+                            prop_type: pick.prop_type,
+                            line: Number(pick.line),
+                            over_under: pick.direction,
+                            opponent: pick.opponent || '',
+                            pick_snapshot: {
+                              confidence: scoreOf(pick),
+                              verdict: normalizeVerdict(pick.verdict, scoreOf(pick)),
+                              hit_rate: pick.hit_rate ?? null,
+                              confidenceSource: pick.sport === "nba" ? "analyzer" : "scanner",
+                              sourceContractVersion: "canonical.v1",
+                              reasoning: pick.reasoning ?? null,
+                              avg_value: pick.avg_value ?? null,
+                              odds: pick.odds ?? null,
+                              tier: pick.tier ?? null,
+                              team: (pick as any).team ?? null,
+                              opponent: pick.opponent ?? null,
+                              prop_type: pick.prop_type,
+                              line: pick.line,
+                              direction: pick.direction,
+                              model_diagnostics: md ?? null,
+                            },
+                          },
+                        });
+                      }}
+                      className="w-full text-left ios-row active:bg-card-hover transition-colors"
+                    >
+                      <div className="flex-1 min-w-0 pr-2">
+                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${conf.dot}`} />
+                          <span className="text-[14px] font-semibold text-foreground truncate min-w-0 flex-1">{pick.player_name}</span>
+                          <span className="text-[10px] font-medium text-muted-foreground uppercase whitespace-nowrap shrink-0">{pick.sport}</span>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-nba-green/15 text-nba-green uppercase tracking-wide whitespace-nowrap shrink-0">
+                            {hits}/{total} L5
                           </span>
                         </div>
-                        <p className="text-[11px] text-muted-foreground/60">
-                          <span className={prop.direction === "over" ? "text-nba-green" : "text-nba-red"}>
-                            {prop.direction === "over" ? "Over" : "Under"}
-                          </span>{" "}{prop.line} {formatPropType(prop.prop_type)}
-                        </p>
+                        <div className="flex items-center gap-2 pl-3.5 flex-wrap">
+                          <span className={`text-[12px] font-bold whitespace-nowrap ${pick.direction === "over" ? "text-nba-green" : "text-nba-red"}`}>
+                            {pick.direction === "over" ? "↗ OVER" : "↘ UNDER"}
+                          </span>
+                          <span className="text-[13px] text-foreground/80 tabular-nums whitespace-nowrap">
+                            {pick.line} {formatPropType(pick.prop_type)}
+                          </span>
+                          {pick.odds && <span className="text-[11px] text-muted-foreground tabular-nums">{formatOdds(pick.odds)}</span>}
+                        </div>
+                        {pick.opponent && (
+                          <div className="pl-3.5 mt-1">
+                            <span className="text-[10px] text-muted-foreground">vs {pick.opponent}</span>
+                          </div>
+                        )}
                       </div>
-                      <div className="text-right">
-                        <span className="text-[13px] font-extrabold text-foreground tabular-nums">{formatOdds(prop.odds)}</span>
-                        <p className="text-[8px] text-muted-foreground/55 mt-0.5">{prop.book}</p>
+                      <div className="flex flex-col items-end gap-0.5 shrink-0">
+                        <span className="text-[15px] font-bold tabular-nums text-nba-green">100%</span>
+                        <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">last 5</span>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-3 pt-3" style={{ borderTop: "1px solid hsla(228, 20%, 18%, 0.3)" }}>
-                      <div className={`w-5 h-5 rounded-md bg-gradient-to-br ${gradient} flex items-center justify-center`}>
-                        <Icon className="w-3 h-3 text-white" />
-                      </div>
-                      <span className="text-[10px] text-muted-foreground/50">
-                        Hit in <span className="text-foreground font-bold">{prop.streak_games}</span> of last {prop.streak_total} games
-                      </span>
-                      <span className="ml-auto text-[11px] font-extrabold text-nba-green tabular-nums">100%</span>
-                    </div>
-                  </motion.div>
-                );
-              })}
+                      <ChevronRight className="w-4 h-4 text-muted-foreground/65 shrink-0" />
+                    </motion.button>
+                  );
+                })}
+              </div>
             </div>
           )
         )}
