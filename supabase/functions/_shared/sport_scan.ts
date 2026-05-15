@@ -1198,16 +1198,28 @@ async function evaluatePlayerProps(
 
   let events: any[] = [];
 
-  const r = await fnFetch(`nba-odds/events?sport=${sport}&markets=h2h`);
+  // NHL: discover events via the quota-free /v4/sports/{sport}/events listing
+  // instead of /odds?markets=h2h. The h2h path returns 0 events whenever
+  // bookmakers in our regions have not yet posted NHL h2h lines, which zeroes
+  // out the entire NHL scan even though event-level player props are available.
+  const discoveryPath = sport === "nhl"
+    ? `nba-odds/event-ids?sport=${sport}`
+    : `nba-odds/events?sport=${sport}&markets=h2h`;
+
+  const r = await fnFetch(discoveryPath);
 
   if (!r.ok) {
     console.error(
-      `[${sport}] nba-odds/events props error (HTTP ${r.status}):`,
+      `[${sport}] ${discoveryPath} props error (HTTP ${r.status}):`,
       JSON.stringify(r.data).slice(0, 300)
     );
   }
 
   const rawEvents = Array.isArray(r.data?.events) ? r.data.events : [];
+
+  if (sport === "nhl") {
+    stats.nhl_events_fetched = rawEvents.length;
+  }
   // Restrict prop events to today's actual game date (America/New_York).
   const targetGameDate = todayET();
   events = rawEvents.filter(
@@ -1264,6 +1276,12 @@ async function evaluatePlayerProps(
   const CHUNK = sport === "mlb" ? 2 : 5;
   const eventProps: Array<{ ev: any; data: any }> = [];
 
+  if (sport === "nhl") {
+    stats.nhl_event_odds_calls_attempted = upcoming.length;
+    stats.nhl_event_odds_calls_succeeded = 0;
+    stats.nhl_event_odds_calls_failed = 0;
+  }
+
   for (let i = 0; i < upcoming.length; i += CHUNK) {
     const slice = upcoming.slice(i, i + CHUNK);
 
@@ -1275,6 +1293,17 @@ async function evaluatePlayerProps(
         }))
       )
     );
+
+    if (sport === "nhl") {
+      for (const { data } of results) {
+        const playerCount = Object.keys(data?.players || {}).length;
+        if (playerCount > 0 && !data?.error) {
+          stats.nhl_event_odds_calls_succeeded += 1;
+        } else {
+          stats.nhl_event_odds_calls_failed += 1;
+        }
+      }
+    }
 
     eventProps.push(...results);
 

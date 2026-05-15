@@ -397,6 +397,53 @@ Deno.serve(async (req) => {
     const action = pathParts[pathParts.length - 1];
 
     // ────────────────────────────────────────────────────────────────
+    // GET /nba-odds/event-ids — lightweight event listing (no markets,
+    // no bookmaker filtering, region-independent). Used by the NHL
+    // scanner to discover today's slate without depending on h2h
+    // posting state. Maps to Odds API GET /v4/sports/{sport}/events.
+    // ────────────────────────────────────────────────────────────────
+    if (action === "event-ids") {
+      const sport = url.searchParams.get("sport") || "nba";
+      const sportKey = getSportKey(sport);
+      const cacheKey = `event-ids-${sport}`;
+      const cached = getCached(cacheKey);
+      if (cached) return json(cached);
+
+      const result = await fetchWithRotation(supabase, (apiKey) =>
+        `${ODDS_API_BASE}/sports/${sportKey}/events?apiKey=${apiKey}`,
+      );
+
+      if (!result) {
+        console.log(JSON.stringify({ fn: "nba-odds", action: "event-ids", sport, status: "error", reason: "all_keys_exhausted" }));
+        return json({ error: "All API keys exhausted" }, 503);
+      }
+      if (!result.resp.ok) {
+        const body = await result.resp.text().catch(() => "");
+        console.warn(`[nba-odds] event-ids sport=${sport} HTTP ${result.resp.status}: ${body.slice(0, 200)}`);
+        return json({ error: `Odds API HTTP ${result.resp.status}` }, result.resp.status);
+      }
+
+      const data = await result.resp.json();
+      const events = Array.isArray(data) ? data.map((ev: any) => ({
+        id: ev.id,
+        home_team: ev.home_team,
+        away_team: ev.away_team,
+        commence_time: ev.commence_time,
+        sport_key: ev.sport_key,
+      })) : [];
+
+      const quota = {
+        remaining: result.resp.headers.get("x-requests-remaining"),
+        used: result.resp.headers.get("x-requests-used"),
+      };
+
+      const responseData = { events, quota, sport };
+      console.log(JSON.stringify({ fn: "nba-odds", action: "event-ids", sport, eventsFound: events.length, quotaRemaining: quota.remaining, quotaUsed: quota.used }));
+      setCache(cacheKey, responseData);
+      return json(responseData);
+    }
+
+    // ────────────────────────────────────────────────────────────────
     // GET /nba-odds/events — game lines from ALL regions
     // ────────────────────────────────────────────────────────────────
     if (action === "events") {
@@ -782,7 +829,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    return json({ error: "Unknown action. Use: events, player-props, player-odds, sports, scrape-dfs, key-status" }, 404);
+    return json({ error: "Unknown action. Use: event-ids, events, player-props, player-odds, sports, scrape-dfs, key-status" }, 404);
   } catch (err) {
     console.error("nba-odds error:", err);
     return json({ error: err instanceof Error ? err.message : "Internal error" }, 500);
