@@ -121,53 +121,95 @@ serve(async (req) => {
     }
 
     if (action === "list_edge_history" || action === "list_picks_history") {
-      const { start_date, end_date, sport, model, league, result_filter } = body;
+      const { start_date, end_date, sport, model, league, result_filter, limit } = body;
+
+      // Explicit narrow column list — avoid SELECT * which was triggering statement timeouts.
+      const HISTORY_COLUMNS = [
+        "id","pick_date","sport","league","home_team","away_team","team","opponent",
+        "player_name","prop_type","bet_type","line","direction","odds","hit_rate",
+        "result","created_at","tier","status","model_used","model_version","confidence",
+        "edge_value","opening_odds","closing_odds","clv","stake_units","profit_units","graded_at",
+      ].join(",");
+
+      const defaultStart = (daysBack: number) => {
+        const d = new Date(); d.setDate(d.getDate() - daysBack);
+        return d.toISOString().slice(0, 10);
+      };
+      const appliedStart = start_date || defaultStart(30);
+      const appliedLimit = Math.min(Number(limit) || 500, 1000);
+
       let q = supabaseAdmin
         .from("daily_picks")
-        .select("*")
-        .or("status.is.null,status.neq.empty_slate")
+        .select(HISTORY_COLUMNS)
+        .gte("pick_date", appliedStart)
         .order("pick_date", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(10000);
+        .limit(appliedLimit);
 
+      if (end_date) q = q.lte("pick_date", end_date);
+
+      // Edge History adds a selective server-side filter on tier; Picks History does it in JS.
       if (action === "list_edge_history") {
         q = q.eq("tier", "edge");
-      } else {
-        q = q.in("tier", ["daily", "value"]);
-      }
-
-      if (start_date) q = q.gte("pick_date", start_date);
-      if (end_date) q = q.lte("pick_date", end_date);
-      if (sport && sport !== "all") q = q.eq("sport", sport);
-      if (model && model !== "all") q = q.eq("model_used", model);
-      if (league && league !== "all") q = q.eq("league", league);
-      if (result_filter && result_filter !== "all") {
-        if (result_filter === "pending") {
-          q = q.or("result.is.null,result.eq.pending");
-        } else if (result_filter === "win") {
-          q = q.in("result", ["hit", "win"]);
-        } else if (result_filter === "loss") {
-          q = q.in("result", ["miss", "loss"]);
-        } else {
-          q = q.eq("result", result_filter);
-        }
       }
 
       const { data, error } = await q;
       if (error) throw error;
-      const picks = data || [];
+      const rawRows: any[] = data || [];
+
+      // Action-specific JS-side filtering.
+      const rawForAction = action === "list_edge_history"
+        ? rawRows.filter((r) => String(r.status ?? "").toLowerCase().trim() !== "empty_slate")
+        : rawRows.filter((r) => {
+            const t = String(r.tier ?? "").toLowerCase().trim();
+            const s = String(r.status ?? "").toLowerCase().trim();
+            return t !== "edge" && t !== "_pending" && s !== "empty_slate";
+          });
+
+      // Optional UI-driven filters.
+      let picks = rawForAction;
+      if (sport && sport !== "all") picks = picks.filter((r) => (r.sport || "").toLowerCase() === String(sport).toLowerCase());
+      if (model && model !== "all") picks = picks.filter((r) => r.model_used === model);
+      if (league && league !== "all") picks = picks.filter((r) => r.league === league);
+      if (result_filter && result_filter !== "all") {
+        picks = picks.filter((r) => {
+          const res = (r.result || "pending").toLowerCase();
+          if (result_filter === "pending") return res === "pending" || !r.result;
+          if (result_filter === "win") return res === "hit" || res === "win";
+          if (result_filter === "loss") return res === "miss" || res === "loss";
+          return res === result_filter;
+        });
+      }
+
+      const tierCounts = rawRows.reduce((acc: Record<string, number>, r: any) => {
+        const k = String(r.tier ?? "null").toLowerCase(); acc[k] = (acc[k] || 0) + 1; return acc;
+      }, {});
+      const statusCounts = rawRows.reduce((acc: Record<string, number>, r: any) => {
+        const k = String(r.status ?? "null").toLowerCase(); acc[k] = (acc[k] || 0) + 1; return acc;
+      }, {});
+
+      const debug = {
+        raw_count: rawRows.length,
+        action_filtered_count: rawForAction.length,
+        returned_count: picks.length,
+        applied_start_date: appliedStart,
+        applied_end_date: end_date || null,
+        limit: appliedLimit,
+        tier_counts: tierCounts,
+        status_counts: statusCounts,
+      };
 
       const modelOptions = Array.from(
-        new Set(picks.map((p: any) => p.model_used).filter((m: any) => m && m.length > 0))
+        new Set(rawForAction.map((p: any) => p.model_used).filter((m: any) => m && m.length > 0))
       ).sort();
       const leagueOptions = Array.from(
-        new Set(picks.map((p: any) => p.league).filter((l: any) => l && l.length > 0))
+        new Set(rawForAction.map((p: any) => p.league).filter((l: any) => l && l.length > 0))
       ).sort();
 
       return new Response(JSON.stringify({
         picks,
         stats: computeStats(picks),
         filters: { models: modelOptions, leagues: leagueOptions },
+        debug,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

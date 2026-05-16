@@ -7,15 +7,18 @@ export type PickLike = {
 } & GameDateLike;
 
 export const isEdgeHistoryPick = (p: PickLike): boolean => {
-  const tier = String(p.tier || "").toLowerCase();
-  const status = String(p.status || "").toLowerCase();
+  const tier = String(p.tier ?? "").toLowerCase().trim();
+  const status = String(p.status ?? "").toLowerCase().trim();
   return tier === "edge" && status !== "empty_slate";
 };
 
 export const isPicksHistoryPick = (p: PickLike): boolean => {
-  const tier = String(p.tier || "").toLowerCase();
-  const status = String(p.status || "").toLowerCase();
-  return (tier === "daily" || tier === "value") && status !== "empty_slate";
+  const tier = String(p.tier ?? "").toLowerCase().trim();
+  const status = String(p.status ?? "").toLowerCase().trim();
+  if (tier === "edge") return false;
+  if (tier === "_pending") return false;
+  if (status === "empty_slate") return false;
+  return true;
 };
 
 // True for a pick whose actual game is today in America/New_York and whose

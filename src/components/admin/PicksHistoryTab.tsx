@@ -66,9 +66,21 @@ const SPORT_COLORS: Record<string, string> = {
 
 type Preset = "today" | "7d" | "30d" | "all" | "custom";
 
+const safeFormatDate = (raw: string | null | undefined, fmt = "MMM d"): string => {
+  if (!raw) return "—";
+  try {
+    const d = new Date(String(raw).includes("T") ? raw : `${raw}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return "—";
+    return format(d, fmt);
+  } catch {
+    return "—";
+  }
+};
+
 export const PicksHistoryTab: React.FC<{ password: string }> = ({ password }) => {
   const [loading, setLoading] = useState(false);
   const [picks, setPicks] = useState<PicksPick[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [preset, setPreset] = useState<Preset>("all");
   const [customStart, setCustomStart] = useState<Date | undefined>();
   const [customEnd, setCustomEnd] = useState<Date | undefined>();
@@ -76,24 +88,70 @@ export const PicksHistoryTab: React.FC<{ password: string }> = ({ password }) =>
   const [model, setModel] = useState<string>("all");
   const [resultFilter, setResultFilter] = useState<string>("all");
 
+  const presetToDates = (p: Preset) => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    if (p === "today") return { s: today, e: new Date() };
+    if (p === "7d")   { const s = new Date(today); s.setDate(s.getDate() - 7);  return { s, e: new Date() }; }
+    if (p === "30d")  { const s = new Date(today); s.setDate(s.getDate() - 30); return { s, e: new Date() }; }
+    if (p === "custom") return { s: customStart, e: customEnd };
+    return { s: undefined as Date | undefined, e: undefined as Date | undefined };
+  };
+  const toYmd = (d?: Date) => (d ? d.toISOString().slice(0, 10) : undefined);
+
   const load = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const { data, error } = await supabase.functions.invoke("admin-onboarding", {
-        body: { password, action: "list_picks_history" },
+      const { s, e } = presetToDates(preset);
+      const reqBody: Record<string, any> = { password, action: "list_picks_history", limit: 500 };
+      if (s) reqBody.start_date = toYmd(s);
+      if (e) reqBody.end_date   = toYmd(e);
+      const { data, error: fnErr } = await supabase.functions.invoke("admin-onboarding", {
+        body: reqBody,
       });
-      if (error) throw error;
+      if (fnErr) {
+        // FunctionsHttpError hides the real message in response body — extract it.
+        let msg = fnErr.message || String(fnErr);
+        try {
+          const body = await (fnErr as any).context?.json?.();
+          if (body?.error) msg = `${msg}: ${body.error}`;
+          else if (typeof body === "string") msg = `${msg}: ${body}`;
+        } catch {
+          try {
+            const text = await (fnErr as any).context?.text?.();
+            if (text) msg = `${msg}: ${text}`;
+          } catch {}
+        }
+        throw new Error(msg);
+      }
       if (data?.error) throw new Error(data.error);
-      const filtered = ((data.picks || []) as PicksPick[]).filter(isPicksHistoryPick);
-      console.log("[PicksHistory] rows after filter", filtered.length, filtered.slice(0, 3));
+
+      const raw = (data?.picks || []) as PicksPick[];
+      const filtered = raw.filter(isPicksHistoryPick);
+
+      const tierDist: Record<string, number> = {};
+      const statusDist: Record<string, number> = {};
+      for (const p of raw) {
+        const t = String(p.tier ?? "null").toLowerCase();
+        const s = String(p.status ?? "null").toLowerCase();
+        tierDist[t] = (tierDist[t] || 0) + 1;
+        statusDist[s] = (statusDist[s] || 0) + 1;
+      }
+      console.log("[PicksHistory] raw count:", raw.length, "filtered:", filtered.length);
+      console.log("[PicksHistory] tier dist:", tierDist, "status dist:", statusDist);
+      if (data?.debug) console.log("[PicksHistory] backend debug:", data.debug);
+
       setPicks(filtered);
-    } catch (e) {
+    } catch (e: any) {
+      const msg = e?.message || e?.error_description || (typeof e === "string" ? e : JSON.stringify(e));
       console.error("Failed to load picks history:", e);
+      setError(msg);
+      setPicks([]);
     }
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [preset, customStart, customEnd]);
 
   const { startDate, endDate } = useMemo(() => {
     const today = new Date();
@@ -131,14 +189,15 @@ export const PicksHistoryTab: React.FC<{ password: string }> = ({ password }) =>
       if (sport !== "all" && (p.sport || "").toLowerCase() !== sport) return false;
       if (model !== "all" && (p.model_used || "") !== model) return false;
       if (!matchResultFilter(p.result, resultFilter)) return false;
-      if (startDate) {
+      if (startDate || endDate) {
+        if (!p.pick_date) return true;
         const pd = new Date(p.pick_date + "T00:00:00");
-        if (pd < startDate) return false;
-      }
-      if (endDate) {
-        const pd = new Date(p.pick_date + "T00:00:00");
-        const e = new Date(endDate); e.setHours(23, 59, 59, 999);
-        if (pd > e) return false;
+        if (Number.isNaN(pd.getTime())) return true;
+        if (startDate && pd < startDate) return false;
+        if (endDate) {
+          const e = new Date(endDate); e.setHours(23, 59, 59, 999);
+          if (pd > e) return false;
+        }
       }
       return true;
     });
@@ -237,18 +296,36 @@ export const PicksHistoryTab: React.FC<{ password: string }> = ({ password }) =>
     if (p.bet_type === "moneyline" || p.bet_type === "spread" || p.bet_type === "total") {
       return `${p.away_team || "—"} @ ${p.home_team || "—"}`;
     }
-    return `${p.player_name}${p.team ? ` (${p.team}${p.opponent ? ` vs ${p.opponent}` : ""})` : ""}`;
+    const name = p.player_name || "—";
+    return `${name}${p.team ? ` (${p.team}${p.opponent ? ` vs ${p.opponent}` : ""})` : ""}`;
   };
 
   const renderPick = (p: PicksPick) => {
-    if (p.bet_type === "moneyline") return `${p.team || ""} ML`;
-    if (p.bet_type === "spread") return `${p.team || ""} ${p.line > 0 ? "+" : ""}${p.line}`;
-    if (p.bet_type === "total") return `${p.direction.toUpperCase()} ${p.line}`;
-    return `${formatPropType(p.prop_type)} ${p.direction.toUpperCase()} ${p.line}`;
+    const dir = (p.direction || "").toUpperCase() || "—";
+    const line = p.line ?? "—";
+    if (p.bet_type === "moneyline") return `${p.team || "—"} ML`;
+    if (p.bet_type === "spread") {
+      const num = typeof p.line === "number" ? `${p.line > 0 ? "+" : ""}${p.line}` : "—";
+      return `${p.team || "—"} ${num}`;
+    }
+    if (p.bet_type === "total") return `${dir} ${line}`;
+    return `${p.prop_type ? formatPropType(p.prop_type) : "—"} ${dir} ${line}`;
   };
 
   return (
     <>
+      {error && (
+        <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+          <div className="font-semibold mb-1">Failed to load Picks History</div>
+          <div className="font-mono text-xs whitespace-pre-wrap break-all">{error}</div>
+          <button
+            onClick={load}
+            className="mt-2 inline-flex items-center gap-1.5 text-xs underline text-red-100 hover:text-white"
+          >
+            <RefreshCw className="w-3 h-3" /> Retry
+          </button>
+        </div>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
         <div className="glass-card rounded-xl p-4 col-span-2 sm:col-span-1">
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Hit Rate</p>
@@ -446,15 +523,16 @@ export const PicksHistoryTab: React.FC<{ password: string }> = ({ password }) =>
               <tbody>
                 {filtered.map((p) => {
                   const sportKey = (p.sport || "").toLowerCase();
+                  try {
                   return (
                     <tr key={p.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
                       <td className="py-2.5 px-4 text-[11px] text-muted-foreground whitespace-nowrap">
-                        {format(new Date(p.pick_date + "T00:00:00"), "MMM d")}
+                        {safeFormatDate(p.pick_date)}
                       </td>
                       <td className="py-2.5 px-4">
                         <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase",
                           SPORT_COLORS[sportKey] || "bg-muted text-muted-foreground border-border")}>
-                          {p.sport}
+                          {p.sport || "—"}
                         </span>
                       </td>
                       <td className="py-2.5 px-4">{tierBadge(p.tier)}</td>
@@ -464,7 +542,9 @@ export const PicksHistoryTab: React.FC<{ password: string }> = ({ password }) =>
                         {p.model_used || "—"}
                         {p.model_version && <span className="text-muted-foreground/60"> v{p.model_version}</span>}
                       </td>
-                      <td className="py-2.5 px-4 text-xs tabular-nums text-foreground/80">{Math.round(p.hit_rate)}%</td>
+                      <td className="py-2.5 px-4 text-xs tabular-nums text-foreground/80">
+                        {typeof p.hit_rate === "number" && Number.isFinite(p.hit_rate) ? `${Math.round(p.hit_rate)}%` : "—"}
+                      </td>
                       <td className={cn(
                         "py-2.5 px-4 text-xs tabular-nums",
                         typeof p.edge_value === "number"
@@ -519,6 +599,16 @@ export const PicksHistoryTab: React.FC<{ password: string }> = ({ password }) =>
                       </td>
                     </tr>
                   );
+                  } catch (rowErr) {
+                    console.error("[PicksHistory] row render failed", p?.id, rowErr);
+                    return (
+                      <tr key={p.id || Math.random()} className="border-b border-border/50">
+                        <td colSpan={13} className="py-2 px-4 text-[11px] text-destructive">
+                          Failed to render row {p?.id ?? "(unknown)"}
+                        </td>
+                      </tr>
+                    );
+                  }
                 })}
               </tbody>
             </table>
