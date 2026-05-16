@@ -243,6 +243,76 @@ serve(async (req) => {
       });
     }
 
+    if (action === "run_grade_picks") {
+      // Server-to-server invoke of grade-picks. Password gate already passed.
+      const forwardBody: Record<string, unknown> = {};
+      if (Array.isArray(body.pick_ids)) forwardBody.pick_ids = body.pick_ids;
+      if (typeof body.sport === "string") forwardBody.sport = body.sport;
+      if (typeof body.tier === "string") forwardBody.tier = body.tier;
+      if (typeof body.start_date === "string") forwardBody.start_date = body.start_date;
+      if (typeof body.end_date === "string") forwardBody.end_date = body.end_date;
+      if (body.dry_run === true) forwardBody.dry_run = true;
+      if (body.force_regrade === true) forwardBody.force_regrade = true;
+
+      const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+      const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+      const gradeUrl = `${SUPABASE_URL}/functions/v1/grade-picks`;
+
+      console.log(
+        `[run_grade_picks] calling grade-picks` +
+        ` | has_url=${!!SUPABASE_URL} | has_key=${!!SERVICE_KEY}` +
+        ` | body=${JSON.stringify(forwardBody)}`,
+      );
+
+      if (!SUPABASE_URL || !SERVICE_KEY) {
+        return new Response(
+          JSON.stringify({ error: "grade-picks failed", reason: "missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      // grade-picks has verify_jwt = false (see supabase/config.toml). The
+      // Authorization header is still required — grade-picks' internal check
+      // compares it against SUPABASE_SERVICE_ROLE_KEY to gate access.
+      const res = await fetch(gradeUrl, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "authorization": `Bearer ${SERVICE_KEY}`,
+          "apikey": SERVICE_KEY,
+        },
+        body: JSON.stringify(forwardBody),
+      });
+
+      const text = await res.text();
+      let gradeJson: unknown;
+      try { gradeJson = JSON.parse(text); } catch { gradeJson = { raw: text }; }
+
+      console.log(
+        `[run_grade_picks] grade-picks responded` +
+        ` | status=${res.status}` +
+        ` | body=${text.slice(0, 500)}`,
+      );
+
+      if (!res.ok) {
+        // Always return 200 with structured error so the frontend can show details.
+        return new Response(
+          JSON.stringify({
+            error: "grade-picks failed",
+            status: res.status,
+            grade_picks_response: gradeJson,
+            url_used: gradeUrl,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      return new Response(JSON.stringify(gradeJson), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({ error: "Unknown action" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

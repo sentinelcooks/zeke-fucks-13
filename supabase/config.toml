@@ -1,1 +1,12 @@
 project_id = "rizijiwjfavvjcdqtguk"
+
+# grade-picks does its own auth (service-role bearer OR GRADE_PICKS_SECRET).
+# Disabling gateway JWT verification is required for two reasons:
+#   1. This project uses the new sb_secret_xxx key format, which is not a JWT,
+#      so the gateway rejects it with UNAUTHORIZED_INVALID_JWT_FORMAT before
+#      the function runs.
+#   2. The cron job calling grade-picks every 30 min sends the same key, so
+#      gateway validation would block that too.
+# The function itself still 401s on any unauthenticated request.
+[functions.grade-picks]
+verify_jwt = false

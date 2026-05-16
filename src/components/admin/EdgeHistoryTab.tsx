@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { CalendarIcon, RefreshCw, Check, X, Minus, RotateCcw, Flame, Snowflake, Download } from "lucide-react";
+import { CalendarIcon, RefreshCw, Check, X, Minus, RotateCcw, Flame, Snowflake, Download, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -87,6 +87,9 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
   const [sport, setSport] = useState<string>("all");
   const [model, setModel] = useState<string>("all");
   const [resultFilter, setResultFilter] = useState<string>("all");
+  const [grading, setGrading] = useState(false);
+  const [gradeMsg, setGradeMsg] = useState<string | null>(null);
+  const [gradeErr, setGradeErr] = useState<string | null>(null);
 
   const presetToDates = (p: Preset) => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -248,6 +251,60 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
 
   const handleExport = (format: "csv" | "json") =>
     exportPickHistory(filtered as ExportablePick[], format, "edge_history");
+
+  const handleAutoGrade = async () => {
+    setGrading(true);
+    setGradeMsg(null);
+    setGradeErr(null);
+    try {
+      const { s, e } = presetToDates(preset);
+      const reqBody: Record<string, any> = {
+        password,
+        action: "run_grade_picks",
+        tier: "edge",
+      };
+      if (sport !== "all") reqBody.sport = sport;
+      if (s) reqBody.start_date = toYmd(s);
+      if (e) reqBody.end_date = toYmd(e);
+      const { data, error: fnErr } = await supabase.functions.invoke("admin-onboarding", {
+        body: reqBody,
+      });
+      if (fnErr) {
+        let msg = fnErr.message || String(fnErr);
+        try {
+          const b = await (fnErr as any).context?.json?.();
+          if (b?.error) msg = `${b.error}`;
+          if (b?.reason) msg += ` — ${b.reason}`;
+          if (b?.grade_picks_response) msg += ` | grade-picks: ${JSON.stringify(b.grade_picks_response)}`;
+          if (b?.status) msg = `[${b.status}] ${msg}`;
+        } catch {
+          try {
+            const t = await (fnErr as any).context?.text?.();
+            if (t) msg = t.slice(0, 300);
+          } catch { /* noop */ }
+        }
+        throw new Error(msg);
+      }
+      if (data?.error) {
+        let msg = data.error as string;
+        if (data.reason) msg += ` — ${data.reason}`;
+        if (data.grade_picks_response) msg += ` | grade-picks: ${JSON.stringify(data.grade_picks_response)}`;
+        if (data.status) msg = `[${data.status}] ${msg}`;
+        throw new Error(msg);
+      }
+      const r = data ?? {};
+      setGradeMsg(
+        `Scanned ${r.scanned ?? 0}, graded ${r.graded ?? 0}: ${r.hits ?? 0} wins, ${r.misses ?? 0} losses, ${r.pushes ?? 0} pushes, ${r.skipped ?? 0} skipped`
+      );
+      await load();
+    } catch (err: any) {
+      const msg = err?.message || (typeof err === "string" ? err : JSON.stringify(err));
+      setGradeErr(`Auto grade failed: ${msg}`);
+      console.error("Auto grade failed:", err);
+    } finally {
+      setGrading(false);
+    }
+  };
 
   const updateResult = async (pick_id: string, result: string) => {
     // optimistic
@@ -465,6 +522,17 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
           <option value="pending">Pending</option>
         </select>
         <div className="ml-auto flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs gap-1.5"
+            onClick={handleAutoGrade}
+            disabled={grading}
+            title="Run grade-picks against the current filters"
+          >
+            <Zap className={cn("w-3.5 h-3.5", grading && "animate-pulse")} />
+            {grading ? "Grading..." : "Auto Grade"}
+          </Button>
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="text-xs gap-1.5" disabled={filtered.length === 0}>
@@ -487,6 +555,23 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
           </button>
         </div>
       </div>
+
+      {(gradeMsg || gradeErr) && (
+        <div className={cn(
+          "rounded-md border p-3 text-sm",
+          gradeErr
+            ? "border-red-500/40 bg-red-500/10 text-red-200"
+            : "border-green-500/40 bg-green-500/10 text-green-200"
+        )}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="font-mono text-xs whitespace-pre-wrap break-all">{gradeErr ?? gradeMsg}</div>
+            <button
+              onClick={() => { setGradeMsg(null); setGradeErr(null); }}
+              className="text-xs underline opacity-70 hover:opacity-100"
+            >Dismiss</button>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <div className="glass-card rounded-xl overflow-hidden">

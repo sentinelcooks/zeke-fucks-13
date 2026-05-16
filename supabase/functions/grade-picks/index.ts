@@ -3,7 +3,27 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-grade-picks-secret",
+};
+
+// Mirrors src/lib/odds.ts + admin-onboarding/index.ts profitUnits — kept in sync
+// so cron-graded rows compute profit identically to manually-graded ones.
+const parseAmericanOdds = (odds: unknown): number | null => {
+  if (odds === null || odds === undefined || odds === "") return null;
+  const n = Number(String(odds).trim().replace(/^\+/, ""));
+  return Number.isFinite(n) && n !== 0 ? n : null;
+};
+const americanToDecimal = (a: number) => (a > 0 ? 1 + a / 100 : 1 + 100 / Math.abs(a));
+const profitUnits = (odds: unknown, result: string | null, stake = 1): number | null => {
+  const r = (result || "").toLowerCase();
+  if (r === "push") return 0;
+  const win = r === "hit" || r === "win";
+  const loss = r === "miss" || r === "loss";
+  if (!win && !loss) return null;
+  if (loss) return -stake;
+  const a = parseAmericanOdds(odds);
+  if (a === null) return null;
+  return stake * (americanToDecimal(a) - 1);
 };
 
 const PROP_TO_STAT: Record<string, string[]> = {
@@ -407,19 +427,24 @@ async function gradeNbaProps(
     let actualValue = 0;
     for (const key of statKeys) actualValue += stats[key] || 0;
 
-    const result =
-      pick.direction === "over"
-        ? actualValue > pick.line ? "hit" : "miss"
-        : actualValue < pick.line ? "hit" : "miss";
+    const result = gradeOverUnder(pick.direction || "", actualValue, Number(pick.line));
 
-    const { error: updateErr } = await supabase
-      .from("daily_picks")
-      .update({ result, avg_value: actualValue })
-      .eq("id", pick.id);
-    if (updateErr) {
-      ctx.updateFailedCount++;
+    const ok = await writeGrade(
+      supabase,
+      {
+        pick,
+        result,
+        actualValue,
+        line: Number(pick.line),
+        direction: pick.direction ?? null,
+        source: "espn:nba",
+        sport: "nba",
+        betType: (pick.bet_type || "prop").toLowerCase(),
+      },
+      ctx,
+    );
+    if (!ok) {
       recordSkip(ctx, pick, "update_failed", { date_used: scoreDate });
-      console.error(`[GradePicks] nba update failed pick=${pick.id}`, updateErr);
       continue;
     }
     graded++;
@@ -809,14 +834,22 @@ async function gradePlayerPropsForSport(
         continue;
       }
       const result = gradeOverUnder(pick.direction || "", actual, line);
-      const { error } = await supabase
-        .from("daily_picks")
-        .update({ result, avg_value: actual })
-        .eq("id", pick.id);
-      if (error) {
-        console.error(`[GradePicks] update failed pick=${pick.id}`, error);
+      const ok = await writeGrade(
+        supabase,
+        {
+          pick,
+          result,
+          actualValue: actual,
+          line,
+          direction: pick.direction ?? null,
+          source: `espn:${sport}`,
+          sport,
+          betType: (pick.bet_type || "prop").toLowerCase(),
+        },
+        ctx,
+      );
+      if (!ok) {
         counters.skippedNoData++;
-        ctx.updateFailedCount++;
         recordSkip(ctx, pick, "update_failed", { date_used: dateStr });
         continue;
       }
@@ -855,10 +888,115 @@ interface PerPickDiag {
 
 // Shared accumulator passed into per-sport graders so they can record the
 // "why" alongside the existing skipped* counter increments.
+interface GradeSample {
+  pick_id: string;
+  sport: string;
+  bet_type: string;
+  result: "hit" | "miss" | "push";
+  profit_units: number | null;
+  actual_value: number | null;
+  line: number | null;
+  direction: string | null;
+}
+
 interface GradeCtx {
   diagnostics: PerPickDiag[];
   finalGamesFound: Set<string>;
   updateFailedCount: number;
+  hits: number;
+  misses: number;
+  pushes: number;
+  sampleGraded: GradeSample[];
+  dryRun: boolean;
+}
+
+interface GradeWritePayload {
+  pick: Pick;
+  result: "hit" | "miss" | "push";
+  actualValue?: number | null;
+  line?: number | null;
+  direction?: string | null;
+  source: string;
+  sport: string;
+  betType: string;
+  reason?: string | null;
+}
+
+async function writeGrade(
+  supabase: ReturnType<typeof createClient>,
+  payload: GradeWritePayload,
+  ctx: GradeCtx,
+): Promise<boolean> {
+  const { pick, result, actualValue, line, direction, source, sport, betType, reason } = payload;
+  const stake = Number(pick.stake_units);
+  const stakeUnits = Number.isFinite(stake) && stake > 0 ? stake : 1;
+  const profit = profitUnits(pick.odds, result, stakeUnits);
+  const gradedAt = new Date().toISOString();
+
+  const existingDiag =
+    pick.model_diagnostics && typeof pick.model_diagnostics === "object"
+      ? pick.model_diagnostics as Record<string, unknown>
+      : {};
+  const nextDiag = {
+    ...existingDiag,
+    auto_grade: {
+      graded_by: "grade-picks",
+      graded_at: gradedAt,
+      actual_value: actualValue ?? null,
+      line: line ?? (typeof pick.line === "number" ? pick.line : null),
+      direction: direction ?? (pick.direction ?? null),
+      source,
+      sport,
+      bet_type: betType,
+      reason: reason ?? null,
+    },
+  };
+
+  // Tally + sample regardless of dry-run.
+  if (result === "hit") ctx.hits++;
+  else if (result === "miss") ctx.misses++;
+  else ctx.pushes++;
+  if (ctx.sampleGraded.length < 10) {
+    ctx.sampleGraded.push({
+      pick_id: pick.id,
+      sport,
+      bet_type: betType,
+      result,
+      profit_units: profit,
+      actual_value: actualValue ?? null,
+      line: line ?? (typeof pick.line === "number" ? pick.line : null),
+      direction: direction ?? (pick.direction ?? null),
+    });
+  }
+
+  if (ctx.dryRun) return true;
+
+  // For game bets (no actualValue), don't clobber any prior avg_value.
+  const update: Record<string, unknown> = {
+    result,
+    profit_units: profit,
+    graded_at: gradedAt,
+    model_diagnostics: nextDiag,
+  };
+  if (actualValue !== undefined && actualValue !== null) {
+    update.avg_value = actualValue;
+  }
+
+  const { error } = await supabase
+    .from("daily_picks")
+    .update(update)
+    .eq("id", pick.id);
+  if (error) {
+    ctx.updateFailedCount++;
+    // Roll back counter we optimistically incremented.
+    if (result === "hit") ctx.hits--;
+    else if (result === "miss") ctx.misses--;
+    else ctx.pushes--;
+    ctx.sampleGraded.pop();
+    console.error(`[GradePicks] update failed pick=${pick.id}`, error);
+    return false;
+  }
+  return true;
 }
 
 function recordSkip(
@@ -912,16 +1050,55 @@ Deno.serve(async (req) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceKey);
 
+  console.log(`[grade-picks] request received | method=${req.method}`);
+
+  // Auth: service-role bearer (cron + admin-onboarding proxy) OR
+  // GRADE_PICKS_SECRET (manual invoke). Never publicly callable.
+  const authHeader = req.headers.get("authorization") ?? "";
+  const xSecret = req.headers.get("x-grade-picks-secret") ?? "";
+  const gradeSecret = Deno.env.get("GRADE_PICKS_SECRET") ?? "";
+  const viaServiceRole = !!serviceKey && authHeader === `Bearer ${serviceKey}`;
+  const viaGradeSecret = !!gradeSecret && (xSecret === gradeSecret || authHeader === `Bearer ${gradeSecret}`);
+  const authOk = viaServiceRole || viaGradeSecret;
+
+  console.log(
+    `[grade-picks] auth check` +
+    ` | has_service_key=${!!serviceKey}` +
+    ` | has_grade_secret=${!!gradeSecret}` +
+    ` | auth_header_present=${authHeader.length > 0}` +
+    ` | x_secret_present=${xSecret.length > 0}` +
+    ` | via_service_role=${viaServiceRole}` +
+    ` | via_grade_secret=${viaGradeSecret}` +
+    ` | ok=${authOk}`,
+  );
+
+  if (!authOk) {
+    return new Response(
+      JSON.stringify({
+        error: "unauthorized",
+        reason: "missing service role bearer or grade secret",
+        hint: "pass Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY> and apikey: <key>",
+      }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
   try {
-    // Optional body: { force_regrade?: true, pick_ids?: string[], pick_date?: "YYYY-MM-DD" }
-    // force_regrade ONLY widens the candidate set (specific ids or a single
-    // pick_date) — it NEVER overrides the result-null-or-pending filter, so
-    // already-graded hit/miss/push rows can never be retroactively changed
-    // by a manual call. Default cron path (no body) is unchanged.
+    // Optional body:
+    //   { force_regrade?, pick_ids?, pick_date?, start_date?, end_date?,
+    //     sport?, tier?, dry_run? }
+    // force_regrade ONLY widens the candidate set — it NEVER overrides the
+    // result-null-or-pending filter, so already-graded hit/miss/push rows can
+    // never be retroactively changed. Default cron path (no body) is unchanged.
     let body: {
       force_regrade?: boolean;
       pick_ids?: unknown;
       pick_date?: unknown;
+      start_date?: unknown;
+      end_date?: unknown;
+      sport?: unknown;
+      tier?: unknown;
+      dry_run?: unknown;
     } = {};
     if (req.method === "POST") {
       try {
@@ -931,44 +1108,105 @@ Deno.serve(async (req) => {
       }
     }
     const forceRegrade = body?.force_regrade === true;
+    const dryRun = body?.dry_run === true;
     const forcePickIds = Array.isArray(body?.pick_ids)
       ? (body!.pick_ids as unknown[]).filter((x): x is string => typeof x === "string")
       : [];
     const forcePickDate = typeof body?.pick_date === "string" ? body!.pick_date as string : null;
+    const startDate = typeof body?.start_date === "string" ? body!.start_date as string : null;
+    const endDate = typeof body?.end_date === "string" ? body!.end_date as string : null;
+    const sportFilter = typeof body?.sport === "string" ? body!.sport as string : null;
+    const tierFilter = typeof body?.tier === "string" ? body!.tier as string : null;
 
-    // 3-day lookback by default; force_regrade can swap in a tighter window.
-    const cutoff = ymd(new Date(Date.now() - 3 * 86400000));
+    // 3-day lookback by default; widen to start/end if provided, capped at 14d.
+    const defaultCutoff = ymd(new Date(Date.now() - 3 * 86400000));
+    // Only the result-pending filter stays at SQL level — it's the INVARIANT
+    // that protects already-graded rows from being overwritten. Status/tier
+    // exclusions are done in JS below: chained .or()s in supabase-js can
+    // mis-render in PostgREST, AND .neq() in SQL silently excludes NULL rows
+    // (NULL <> 'x' is NULL, not true), so they'd drop most of our pending set.
+    //
+    // Narrow column list + hard limit avoid statement timeouts caused by
+    // pulling the model_diagnostics jsonb for every pending row.
+    const GRADE_COLUMNS = [
+      "id", "sport", "pick_date", "commence_time", "game_date",
+      "home_team", "away_team", "team", "opponent",
+      "player_name", "prop_type", "line", "direction",
+      "bet_type", "spread_line", "total_line",
+      "event_id", "odds", "stake_units",
+      "result", "tier", "status", "avg_value", "model_diagnostics",
+    ].join(",");
+
+    const MAX_PICKS_PER_RUN = 500;
+
     let query = supabase
       .from("daily_picks")
-      .select("*")
-      .or("result.is.null,result.eq.pending"); // INVARIANT: never overwrite graded results
-    if (forceRegrade && forcePickIds.length > 0) {
+      .select(GRADE_COLUMNS)
+      .or("result.is.null,result.eq.pending")
+      .order("pick_date", { ascending: false })
+      .limit(MAX_PICKS_PER_RUN);
+
+    if (forcePickIds.length > 0) {
       query = query.in("id", forcePickIds);
     } else if (forceRegrade && forcePickDate) {
       query = query.eq("pick_date", forcePickDate);
+    } else if (startDate || endDate) {
+      // Cap window at 14 days to avoid all-time scans.
+      const start = startDate ?? ymd(new Date(Date.now() - 14 * 86400000));
+      const end = endDate ?? ymd(new Date());
+      const startMs = new Date(start + "T00:00:00Z").getTime();
+      const endMs = new Date(end + "T00:00:00Z").getTime();
+      const capped =
+        Number.isFinite(startMs) && Number.isFinite(endMs) && endMs - startMs > 14 * 86400000
+          ? ymd(new Date(endMs - 14 * 86400000))
+          : start;
+      query = query.gte("pick_date", capped).lte("pick_date", end);
     } else {
-      query = query.gte("pick_date", cutoff);
+      query = query.gte("pick_date", defaultCutoff);
     }
-    const { data: picks } = await query;
+
+    if (sportFilter) query = query.eq("sport", sportFilter.toLowerCase());
+    if (tierFilter) query = query.eq("tier", tierFilter.toLowerCase());
+
+    const { data: rawPicks, error: queryErr } = await query;
+    if (queryErr) {
+      console.error(`[grade-picks] query failed`, queryErr);
+      return new Response(
+        JSON.stringify({ error: "query failed", reason: queryErr.message }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // JS-side filter for status/tier — Postgres .neq() silently excludes NULL
+    // rows, and most picks have NULL status, so doing this at the SQL layer
+    // dropped 100% of the pending set.
+    const picks = (rawPicks ?? []).filter((p: any) => {
+      const status = String(p.status ?? "").toLowerCase().trim();
+      const tier = String(p.tier ?? "").toLowerCase().trim();
+      if (status === "empty_slate") return false;
+      if (tier === "_pending") return false;
+      return true;
+    });
+
+    console.log(
+      `[grade-picks] query returned ${rawPicks?.length ?? 0} rows, ${picks.length} after status/tier filter`,
+    );
 
     if (!picks || picks.length === 0) {
       return new Response(
         JSON.stringify({
           message: "No pending picks to grade",
+          scanned: 0,
           graded: 0,
-          metrics: {
-            pending_picks_found: 0,
-            final_games_found: 0,
-            picks_graded: 0,
-            skipped_not_final: 0,
-            skipped_no_player_stats: 0,
-            skipped_unknown_prop_type: 0,
-            update_failed_count: 0,
-            skipped_no_event: 0,
-            skipped_ambiguous_player: 0,
-            by_sport: {},
-            provider_game_status: [],
-          },
+          skipped: 0,
+          hits: 0,
+          misses: 0,
+          pushes: 0,
+          update_failed_count: 0,
+          by_sport: {},
+          sample_graded: [],
+          sample_skipped: [],
+          dry_run: dryRun,
           force_regrade: forceRegrade,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -980,6 +1218,11 @@ Deno.serve(async (req) => {
       diagnostics: [],
       finalGamesFound: new Set<string>(),
       updateFailedCount: 0,
+      hits: 0,
+      misses: 0,
+      pushes: 0,
+      sampleGraded: [],
+      dryRun,
     };
 
     const bySport: Record<string, Pick[]> = {};
@@ -1129,13 +1372,26 @@ Deno.serve(async (req) => {
 
         if (graded && foundGame) {
           ctx.finalGamesFound.add(`${sport}:${foundGame.id}`);
-          const { error } = await supabase
-            .from("daily_picks")
-            .update({ result: graded })
-            .eq("id", pick.id);
-          if (error) {
-            console.error(`[GradePicks] game-bet update failed pick=${pick.id}`, error);
-            ctx.updateFailedCount++;
+          const betType = (pick.bet_type || "").toLowerCase();
+          const storedBetType = betType === "total" ? "over_under" : betType;
+          const ok = await writeGrade(
+            supabase,
+            {
+              pick,
+              result: graded,
+              actualValue: null,
+              line:
+                betType === "spread" ? Number(pick.spread_line ?? pick.line)
+                  : betType === "total" ? Number(pick.total_line ?? pick.line)
+                  : null,
+              direction: pick.direction ?? null,
+              source: `espn:${sport}`,
+              sport,
+              betType: storedBetType,
+            },
+            ctx,
+          );
+          if (!ok) {
             recordSkip(ctx, pick, "update_failed", { date_used: dateUsed });
             continue;
           }
@@ -1183,29 +1439,42 @@ Deno.serve(async (req) => {
       sportSummary.ufc = { total: bySport.ufc.length, graded: 0, skipped_manual_only: bySport.ufc.length };
     }
 
+    const totalSkipped =
+      skippedNotFinal + skippedNoData + skippedUnsupportedProp +
+      skippedPlayerNotFound + skippedAmbiguousPlayer + skippedNoEvent;
+
+    const sampleSkipped = ctx.diagnostics.slice(0, 10).map((d) => ({
+      pick_id: d.pick_id,
+      sport: d.sport,
+      reason: d.reason,
+      player_name: d.player_name,
+      prop_type: d.prop_type,
+      date_used: d.date_used,
+      espn_state: d.espn_state,
+    }));
+
     const responseBody = {
       message: "Picks graded",
+      scanned: picks.length,
       graded: totalGraded,
-      total: picks.length,
-      skipped_not_final: skippedNotFinal,
-      skipped_no_data: skippedNoData,
-      skipped_unsupported_prop: skippedUnsupportedProp,
-      skipped_player_not_found: skippedPlayerNotFound,
-      skipped_ambiguous_player: skippedAmbiguousPlayer,
-      skipped_no_event: skippedNoEvent,
-      bySport: sportSummary,
+      skipped: totalSkipped,
+      hits: ctx.hits,
+      misses: ctx.misses,
+      pushes: ctx.pushes,
+      update_failed_count: ctx.updateFailedCount,
+      by_sport: sportSummary,
+      sample_graded: ctx.sampleGraded,
+      sample_skipped: sampleSkipped,
+      dry_run: dryRun,
       force_regrade: forceRegrade,
-      // Structured metrics block requested by the grading pipeline owner.
-      // Mirrors existing counters in a stable shape and adds two new ones
-      // (final_games_found, update_failed_count) plus the per-pick rollup
-      // so a single response answers "why didn't this pick grade?".
+      // Legacy fields kept for log-aggregation compatibility.
+      total: picks.length,
+      bySport: sportSummary,
       metrics: {
         pending_picks_found: picks.length,
         final_games_found: ctx.finalGamesFound.size,
         picks_graded: totalGraded,
         skipped_not_final: skippedNotFinal,
-        // No-player-stats union: ESPN had the game but couldn't return the
-        // player's row, OR returned a row missing the stat key.
         skipped_no_player_stats: skippedPlayerNotFound + skippedNoData,
         skipped_unknown_prop_type: skippedUnsupportedProp,
         update_failed_count: ctx.updateFailedCount,
@@ -1216,7 +1485,17 @@ Deno.serve(async (req) => {
       },
     };
 
-    console.log(`[GradePicks] ${JSON.stringify(responseBody)}`);
+    console.log(
+      `[grade-picks] done` +
+      ` | scanned=${responseBody.scanned}` +
+      ` | graded=${responseBody.graded}` +
+      ` | skipped=${responseBody.skipped}` +
+      ` | hits=${responseBody.hits}` +
+      ` | misses=${responseBody.misses}` +
+      ` | pushes=${responseBody.pushes}` +
+      ` | update_failed=${responseBody.update_failed_count}` +
+      ` | dry_run=${responseBody.dry_run}`,
+    );
 
     return new Response(
       JSON.stringify(responseBody),
