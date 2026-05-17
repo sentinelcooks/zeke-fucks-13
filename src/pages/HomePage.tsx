@@ -195,7 +195,7 @@ const HomePage = () => {
     { label: "Analyze", icon: BarChart3, path: "/dashboard/analyze", gradient: "from-[hsl(250,76%,62%)] to-[hsl(210,100%,60%)]", desc: "Props & Lines" },
     { label: "Picks", icon: Sparkles, path: "/dashboard/picks", gradient: "from-[hsl(30,100%,50%)] to-[hsl(15,100%,55%)]", desc: "Today's picks" },
     { label: "Tracker", icon: DollarSign, path: "/dashboard/tracker", gradient: "from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)]", desc: "Your bets" },
-    { label: "Lines", icon: Crosshair, path: "/dashboard/moneyline", gradient: "from-[hsl(190,90%,55%)] to-[hsl(210,100%,60%)]", desc: "Moneylines" },
+    { label: "Lines", icon: Crosshair, path: "/dashboard/analyze?mode=lines", gradient: "from-[hsl(190,90%,55%)] to-[hsl(210,100%,60%)]", desc: "Moneylines" },
   ];
 
   const statCards = [

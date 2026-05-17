@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Share2, Download, X, TrendingUp, TrendingDown, Flame, Trophy, Calendar, Zap } from "lucide-react";
 import { toPng } from "html-to-image";
 import sentinelLogo from "@/assets/sentinel-logo.jpg";
+import { useProfitDisplay } from "@/hooks/useProfitDisplay";
 
 interface Play {
   id: string;
@@ -20,6 +21,7 @@ interface ShareProfitCardProps {
 export function ShareProfitCard({ plays, onClose }: ShareProfitCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
+  const { format: fmtProfit } = useProfitDisplay();
 
   const stats = useMemo(() => {
     const today = new Date().toISOString().split("T")[0];
@@ -175,7 +177,7 @@ export function ShareProfitCard({ plays, onClose }: ShareProfitCardProps) {
               <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-white/20 mb-2">Today's P&L</p>
               <p className={`text-5xl font-black tabular-nums tracking-tight ${stats.todayProfit >= 0 ? "text-[hsl(158,64%,52%)]" : "text-[hsl(0,72%,51%)]"}`}
                 style={{ textShadow: stats.todayProfit >= 0 ? '0 0 30px hsla(158,64%,52%,0.3)' : '0 0 30px hsla(0,72%,51%,0.3)' }}>
-                {stats.todayProfit >= 0 ? "+" : "-"}${Math.abs(stats.todayProfit).toFixed(2)}
+                {fmtProfit(stats.todayProfit)}
               </p>
               <div className="flex items-center justify-center gap-3 mt-2.5">
                 <span className="text-[10px] font-bold text-[hsl(158,64%,52%)]">{stats.todayWins}W</span>
@@ -211,7 +213,7 @@ export function ShareProfitCard({ plays, onClose }: ShareProfitCardProps) {
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { icon: Trophy, label: "Hit Rate", value: `${stats.hitRate}%`, color: stats.hitRate >= 55 ? "hsl(158,64%,52%)" : "hsl(210,100%,60%)" },
-                  { icon: TrendingUp, label: "All-Time", value: `${stats.totalProfit >= 0 ? "+" : ""}$${Math.abs(stats.totalProfit).toFixed(0)}`, color: stats.totalProfit >= 0 ? "hsl(158,64%,52%)" : "hsl(0,72%,51%)" },
+                  { icon: TrendingUp, label: "All-Time", value: fmtProfit(stats.totalProfit), color: stats.totalProfit >= 0 ? "hsl(158,64%,52%)" : "hsl(0,72%,51%)" },
                   { icon: Zap, label: "Streak", value: `${Math.abs(stats.streak)}${stats.streak >= 0 ? "W" : "L"}`, color: stats.streak >= 0 ? "hsl(158,64%,52%)" : "hsl(0,72%,51%)" },
                 ].map((s, i) => (
                   <div key={s.label} className="text-center py-3 rounded-xl" style={{

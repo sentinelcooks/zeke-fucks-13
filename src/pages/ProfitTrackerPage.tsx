@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 import ProfitCharts from "@/components/ProfitCharts";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
+import { useProfitDisplay } from "@/hooks/useProfitDisplay";
 import { formatPropType } from "@/lib/formatPickLabel";
 import { PlayerAutocomplete, getLinePlaceholder } from "@/components/tracker/PlayerAutocomplete";
 import { BetTypeDropdown } from "@/components/tracker/BetTypeDropdown";
@@ -109,6 +110,7 @@ const ProfitTrackerPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { fmt, oddsFormat } = useOddsFormat();
+  const { format: fmtProfit } = useProfitDisplay();
   const licenseKey = user?.id || "default";
 
   const [tab, setTab] = useState<TrackerTab>("plays");
@@ -594,7 +596,7 @@ const ProfitTrackerPage = () => {
               <div className="grid grid-cols-2 gap-3">
                 {[
                   {
-                    icon: DollarSign, label: "Profit", value: `$${playStats.totalProfit.toFixed(2)}`,
+                    icon: DollarSign, label: "Profit", value: fmtProfit(playStats.totalProfit),
                     gradient: playStats.totalProfit >= 0 ? "from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)]" : "from-[hsl(0,72%,51%)] to-[hsl(340,65%,47%)]",
                     glow: playStats.totalProfit >= 0 ? "hsla(158,64%,52%,0.15)" : "hsla(0,72%,51%,0.15)",
                     sub: playStats.totalProfit >= 0 ? "in profit" : "down",
@@ -702,7 +704,7 @@ const ProfitTrackerPage = () => {
                           <p className="text-[10px] text-muted-foreground/65 font-semibold mt-0.5 uppercase tracking-wider">{b.label}</p>
                           {b.stat.hasProfit && (
                             <p className={`text-[11px] font-bold tabular-nums mt-1.5 ${b.stat.profit >= 0 ? "text-nba-green" : "text-nba-red"}`}>
-                              {b.stat.profit >= 0 ? "+" : ""}${b.stat.profit.toFixed(2)}
+                              {fmtProfit(b.stat.profit)}
                               <span className="text-muted-foreground/50 font-semibold ml-1.5">
                                 {b.stat.units >= 0 ? "+" : ""}{b.stat.units.toFixed(2)}u
                               </span>
@@ -991,7 +993,7 @@ const ProfitTrackerPage = () => {
                               p.result === "win" ? "text-nba-green" : p.result === "loss" ? "text-nba-red" : "text-muted-foreground/50"
                             }`}>{p.result}</span>
                             <span className={`block text-[14px] font-black tabular-nums ${(p.payout || 0) >= 0 ? "text-nba-green" : "text-nba-red"}`}>
-                              {(p.payout || 0) >= 0 ? "+" : ""}${Math.abs(p.payout || 0).toFixed(2)}
+                              {fmtProfit(p.payout || 0)}
                             </span>
                           </div>
                         )}

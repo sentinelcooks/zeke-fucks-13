@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useProfitDisplay } from "@/hooks/useProfitDisplay";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -38,6 +39,7 @@ const RED_DIM = "hsl(0, 55%, 42%)";
 
 const ProfitCharts = ({ plays }: ProfitChartsProps) => {
   const [view, setView] = useState<"cumulative" | "daily">("cumulative");
+  const { format: fmtProfit } = useProfitDisplay();
 
   const settled = useMemo(
     () =>
@@ -97,7 +99,7 @@ const ProfitCharts = ({ plays }: ProfitChartsProps) => {
         style={{ background: TOOLTIP_BG, border: `1px solid ${TOOLTIP_BORDER}` }}>
         <p className="text-muted-foreground/50 text-[9px] font-medium mb-1 tracking-wide">{label}</p>
         <p className="font-black text-[14px] tabular-nums" style={{ color: val >= 0 ? GREEN : RED }}>
-          {val >= 0 ? "+" : ""}${Math.abs(val).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          {fmtProfit(val)}
         </p>
       </div>
     );
@@ -118,7 +120,7 @@ const ProfitCharts = ({ plays }: ProfitChartsProps) => {
               <TrendingDown className="w-3.5 h-3.5 text-red-400" />
             )}
             <span className="text-[11px] font-bold tabular-nums" style={{ color: isPositive ? GREEN : RED }}>
-              {isPositive ? "+" : ""}${Math.abs(totalProfit).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {fmtProfit(totalProfit)}
             </span>
           </div>
         </div>

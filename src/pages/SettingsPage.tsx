@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Globe, Bell, BellOff, LogOut, User, Check, ChevronRight, Hash, MessageSquare, Send, Loader2, CheckCircle, CreditCard, Palette } from "lucide-react";
+import { Globe, Bell, BellOff, LogOut, User, Check, ChevronRight, Hash, MessageSquare, Send, Loader2, CheckCircle, CreditCard, Palette, Calculator, DollarSign } from "lucide-react";
+import { getActiveUnitSize, readUnitSettings } from "@/lib/profitFormat";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -140,6 +141,444 @@ const ContactUsSection = () => {
         </DialogContent>
       </Dialog>
     </>
+  );
+};
+
+const RISK_PRESETS = [
+  { value: "conservative", label: "Conservative", pct: 1 },
+  { value: "standard", label: "Standard", pct: 2 },
+  { value: "aggressive", label: "Aggressive", pct: 3 },
+  { value: "custom", label: "Custom", pct: null },
+] as const;
+
+type RiskPreset = "conservative" | "standard" | "aggressive" | "custom";
+
+type UnitSetupModeLocal = "calculated" | "manual";
+
+const UnitCalculatorSection = () => {
+  const [setupMode, setSetupMode] = useState<UnitSetupModeLocal>(
+    () => (localStorage.getItem("sentinel_unit_setup_mode") as UnitSetupModeLocal) ?? "calculated"
+  );
+  const [bankroll, setBankroll] = useState<string>(
+    () => localStorage.getItem("sentinel_unit_bankroll") ?? ""
+  );
+  const [riskPreset, setRiskPreset] = useState<RiskPreset>(
+    () => (localStorage.getItem("sentinel_unit_risk") as RiskPreset) ?? "standard"
+  );
+  const [customPct, setCustomPct] = useState<string>(
+    () => localStorage.getItem("sentinel_unit_custom_pct") ?? "2"
+  );
+  const [manualUnit, setManualUnit] = useState<string>(
+    () => localStorage.getItem("sentinel_unit_manual") ?? ""
+  );
+
+  const dispatchChanged = () =>
+    window.dispatchEvent(new Event("sentinel:settings-changed"));
+
+  useEffect(() => {
+    localStorage.setItem("sentinel_unit_setup_mode", setupMode);
+    dispatchChanged();
+  }, [setupMode]);
+
+  useEffect(() => {
+    localStorage.setItem("sentinel_unit_bankroll", bankroll);
+    dispatchChanged();
+  }, [bankroll]);
+
+  useEffect(() => {
+    localStorage.setItem("sentinel_unit_risk", riskPreset);
+    dispatchChanged();
+  }, [riskPreset]);
+
+  useEffect(() => {
+    localStorage.setItem("sentinel_unit_custom_pct", customPct);
+    dispatchChanged();
+  }, [customPct]);
+
+  useEffect(() => {
+    localStorage.setItem("sentinel_unit_manual", manualUnit);
+    dispatchChanged();
+  }, [manualUnit]);
+
+  const PRESET_PCTS = { conservative: 1, standard: 2, aggressive: 3 } as const;
+  const pct = riskPreset === "custom" ? parseFloat(customPct) : PRESET_PCTS[riskPreset];
+  const bankrollNum = parseFloat(bankroll);
+  const manualUnitNum = parseFloat(manualUnit);
+
+  // Derive active unit size via shared helper
+  const unitSize = getActiveUnitSize(readUnitSettings());
+
+  const fmt = (n: number) =>
+    n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+
+  const showCustomWarning = setupMode === "calculated" && riskPreset === "custom" && Number.isFinite(pct) && pct > 3 && pct <= 100;
+  const customInvalid = setupMode === "calculated" && riskPreset === "custom" && (!Number.isFinite(pct) || pct <= 0 || pct > 100);
+
+  let resultNode: React.ReactNode;
+
+  if (setupMode === "manual") {
+    if (manualUnit === "") {
+      resultNode = (
+        <p className="text-[11px] text-muted-foreground/55 text-center py-2">
+          Enter your 1U amount.
+        </p>
+      );
+    } else if (!Number.isFinite(manualUnitNum) || manualUnitNum <= 0) {
+      resultNode = (
+        <p className="text-[11px] text-destructive text-center py-2">
+          Enter a valid unit amount.
+        </p>
+      );
+    } else {
+      resultNode = (
+        <div className="space-y-3">
+          <div className="bg-secondary/40 rounded-xl p-4 space-y-3">
+            <div className="text-center">
+              <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-1">
+                Current 1U
+              </p>
+              <p className="text-2xl font-bold" style={{ color: "hsl(142 100% 50%)" }}>
+                {fmt(manualUnitNum)}
+              </p>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {([0.5, 1, 2, 3] as const).map((mult) => (
+                <div
+                  key={mult}
+                  className="flex flex-col items-center gap-0.5 bg-secondary/50 rounded-lg py-2"
+                >
+                  <span className="text-[9px] font-bold text-muted-foreground/55">{mult}U</span>
+                  <span className="text-[11px] font-bold text-foreground">{fmt(manualUnitNum * mult)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+  } else {
+    // calculated mode
+    if (bankroll === "") {
+      resultNode = (
+        <p className="text-[11px] text-muted-foreground/55 text-center py-2">
+          Enter your bankroll to see your unit size.
+        </p>
+      );
+    } else if (!Number.isFinite(bankrollNum) || bankrollNum <= 0 || customInvalid) {
+      resultNode = (
+        <p className="text-[11px] text-destructive text-center py-2">
+          Enter a valid bankroll amount.
+        </p>
+      );
+    } else {
+      const unit = unitSize ?? 0;
+      resultNode = (
+        <div className="space-y-3">
+          {showCustomWarning && (
+            <p className="text-[10px] text-amber-400/80 text-center">
+              Most users keep units between 1–3% for safer bankroll management.
+            </p>
+          )}
+          <div className="bg-secondary/40 rounded-xl p-4 space-y-3">
+            <div className="text-center">
+              <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-1">
+                Recommended Unit Size
+              </p>
+              <p className="text-2xl font-bold" style={{ color: "hsl(142 100% 50%)" }}>
+                {fmt(unit)}
+              </p>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {([0.5, 1, 2, 3] as const).map((mult) => (
+                <div
+                  key={mult}
+                  className="flex flex-col items-center gap-0.5 bg-secondary/50 rounded-lg py-2"
+                >
+                  <span className="text-[9px] font-bold text-muted-foreground/55">{mult}U</span>
+                  <span className="text-[11px] font-bold text-foreground">{fmt(unit * mult)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.275 }}
+      className="vision-card overflow-hidden relative z-10"
+    >
+      <div className="px-5 py-3 border-b border-border/20">
+        <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">
+          Unit Calculator
+        </span>
+      </div>
+      <div className="px-5 py-4 space-y-4">
+        {/* Header row */}
+        <div className="flex items-center gap-3">
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: "linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))" }}
+          >
+            <Calculator className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <p className="text-[13px] font-bold text-foreground">Unit Size Calculator</p>
+            <p className="text-[9px] text-muted-foreground/55">Calculate your bet size based on bankroll</p>
+          </div>
+        </div>
+
+        {/* Setup mode segmented control */}
+        <div className="space-y-1.5">
+          <Label className="text-[10px] text-muted-foreground/65">Setup Mode</Label>
+          <div
+            className="flex rounded-xl p-1 gap-1"
+            style={{
+              background: "hsla(228, 20%, 8%, 0.6)",
+              border: "1px solid hsla(228, 30%, 16%, 0.25)",
+            }}
+          >
+            {([
+              { value: "calculated", label: "Calculate from bankroll" },
+              { value: "manual", label: "Manual unit size" },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setSetupMode(opt.value)}
+                className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 rounded-lg text-center transition-all duration-300 ${
+                  setupMode === opt.value
+                    ? "text-[hsl(228_30%_8%)]"
+                    : "text-muted-foreground/65 hover:text-foreground/50"
+                }`}
+                style={
+                  setupMode === opt.value
+                    ? {
+                        background: "linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))",
+                        boxShadow: "0 4px 12px -2px hsla(142,100%,50%,0.3)",
+                      }
+                    : {}
+                }
+              >
+                <span className="text-[11px] font-bold tracking-wider">{opt.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {setupMode === "calculated" && (
+          <>
+            {/* Bankroll input */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] text-muted-foreground/65">Bankroll</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground/55 pointer-events-none">
+                  $
+                </span>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="any"
+                  placeholder="0.00"
+                  value={bankroll}
+                  onChange={(e) => setBankroll(e.target.value)}
+                  className="bg-secondary/50 border-border/40 rounded-xl h-10 text-sm pl-7 placeholder:text-muted-foreground/50"
+                />
+              </div>
+            </div>
+
+            {/* Risk preset segmented control */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] text-muted-foreground/65">Risk Level</Label>
+              <div
+                className="flex rounded-xl p-1 gap-1 flex-wrap"
+                style={{
+                  background: "hsla(228, 20%, 8%, 0.6)",
+                  border: "1px solid hsla(228, 30%, 16%, 0.25)",
+                }}
+              >
+                {RISK_PRESETS.map((preset) => (
+                  <button
+                    key={preset.value}
+                    onClick={() => setRiskPreset(preset.value)}
+                    className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 rounded-lg text-center transition-all duration-300 min-w-[60px] ${
+                      riskPreset === preset.value
+                        ? "text-[hsl(228_30%_8%)]"
+                        : "text-muted-foreground/65 hover:text-foreground/50"
+                    }`}
+                    style={
+                      riskPreset === preset.value
+                        ? {
+                            background: "linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))",
+                            boxShadow: "0 4px 12px -2px hsla(142,100%,50%,0.3)",
+                          }
+                        : {}
+                    }
+                  >
+                    <span className="text-[11px] font-bold tracking-wider">{preset.label}</span>
+                    {preset.pct !== null && (
+                      <span
+                        className={`text-[9px] font-semibold ${
+                          riskPreset === preset.value
+                            ? "text-[hsl(228_30%_8%)]/75"
+                            : "text-muted-foreground/50"
+                        }`}
+                      >
+                        {preset.pct}%
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom % input */}
+            {riskPreset === "custom" && (
+              <div className="space-y-1.5">
+                <Label className="text-[10px] text-muted-foreground/65">Custom % per unit</Label>
+                <div className="relative">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    min="0.1"
+                    max="100"
+                    step="0.1"
+                    placeholder="2.0"
+                    value={customPct}
+                    onChange={(e) => setCustomPct(e.target.value)}
+                    className="bg-secondary/50 border-border/40 rounded-xl h-10 text-sm placeholder:text-muted-foreground/50 pr-8"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground/55 pointer-events-none">
+                    %
+                  </span>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {setupMode === "manual" && (
+          <div className="space-y-1.5">
+            <Label className="text-[10px] text-muted-foreground/65">1U Amount ($)</Label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground/55 pointer-events-none">
+                $
+              </span>
+              <Input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="any"
+                placeholder="0.00"
+                value={manualUnit}
+                onChange={(e) => setManualUnit(e.target.value)}
+                className="bg-secondary/50 border-border/40 rounded-xl h-10 text-sm pl-7 placeholder:text-muted-foreground/50"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Results panel */}
+        {resultNode}
+
+        {/* Education footer */}
+        <div className="space-y-1">
+          <p className="text-[10px] text-muted-foreground/65">
+            A unit is a fixed bet size based on your bankroll. Using units helps you manage risk and avoid betting random amounts.
+          </p>
+          <p className="text-[10px] text-muted-foreground/65">
+            Most bettors use 1–3% of their bankroll as 1 unit. Never bet more than you can afford to lose.
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const PROFIT_DISPLAY_MODES = [
+  { value: "dollars", label: "Dollars ($)" },
+  { value: "units", label: "Units (U)" },
+] as const;
+
+const ProfitDisplayModeSection = () => {
+  const [mode, setMode] = useState<"dollars" | "units">(
+    () => (localStorage.getItem("sentinel_profit_display_mode") as "dollars" | "units") ?? "dollars"
+  );
+
+  const handleModeChange = (newMode: "dollars" | "units") => {
+    setMode(newMode);
+    localStorage.setItem("sentinel_profit_display_mode", newMode);
+    window.dispatchEvent(new Event("sentinel:settings-changed"));
+  };
+
+  const unitSize = getActiveUnitSize(readUnitSettings());
+  const showHint = mode === "units" && !unitSize;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.285 }}
+      className="vision-card overflow-hidden relative z-10"
+    >
+      <div className="px-5 py-3 border-b border-border/20">
+        <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">
+          Profit Display Mode
+        </span>
+      </div>
+      <div className="px-5 py-4 space-y-3">
+        <div className="flex items-center gap-3 mb-1">
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: "linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))" }}
+          >
+            <DollarSign className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <p className="text-[13px] font-bold text-foreground">Display Format</p>
+            <p className="text-[9px] text-muted-foreground/55">How profit/loss is shown across the app</p>
+          </div>
+        </div>
+        <div
+          className="flex rounded-xl p-1 gap-1"
+          style={{
+            background: "hsla(228, 20%, 8%, 0.6)",
+            border: "1px solid hsla(228, 30%, 16%, 0.25)",
+          }}
+        >
+          {PROFIT_DISPLAY_MODES.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => handleModeChange(opt.value)}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 rounded-lg text-center transition-all duration-300 ${
+                mode === opt.value
+                  ? "text-[hsl(228_30%_8%)]"
+                  : "text-muted-foreground/65 hover:text-foreground/50"
+              }`}
+              style={
+                mode === opt.value
+                  ? {
+                      background: "linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))",
+                      boxShadow: "0 4px 12px -2px hsla(142,100%,50%,0.3)",
+                    }
+                  : {}
+              }
+            >
+              <span className="text-[11px] font-bold tracking-wider">{opt.label}</span>
+            </button>
+          ))}
+        </div>
+        {showHint && (
+          <p className="text-[10px] text-muted-foreground/55 text-center">
+            Set your unit size above to view profit in units.
+          </p>
+        )}
+      </div>
+    </motion.div>
   );
 };
 
@@ -417,6 +856,12 @@ const SettingsPage = () => {
           </div>
         </div>
       </motion.div>
+
+      {/* Unit Calculator */}
+      <UnitCalculatorSection />
+
+      {/* Profit Display Mode */}
+      <ProfitDisplayModeSection />
 
       {/* Contact Us */}
       <ContactUsSection />

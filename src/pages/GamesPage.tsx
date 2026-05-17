@@ -50,6 +50,12 @@ interface UfcFight {
   cardType: string;
   time: string;
   isMainEvent: boolean;
+  status?: string;
+  state?: string;
+  period?: number;
+  displayClock?: string;
+  shortDetail?: string;
+  completed?: boolean;
 }
 
 interface UfcEvent {
@@ -413,6 +419,9 @@ const GamesPage = () => {
           const cardType = tsToCard[compTs] || "Main Card";
           const isMainEvent = comp?.notes?.some((n: any) => n?.headline?.toLowerCase().includes("main event")) || false;
 
+          const st = comp?.status || {};
+          const stType = st?.type || {};
+
           fights.push({
             id: comp.id || `${f1}-${f2}`,
             fighter1: f1,
@@ -423,6 +432,12 @@ const GamesPage = () => {
             cardType,
             time: comp?.date || event?.date || "",
             isMainEvent,
+            status: stType?.name || undefined,
+            state: stType?.state || undefined,
+            period: typeof st?.period === "number" ? st.period : undefined,
+            displayClock: st?.displayClock || undefined,
+            shortDetail: stType?.shortDetail || undefined,
+            completed: !!stType?.completed,
           });
         }
 
@@ -446,13 +461,20 @@ const GamesPage = () => {
 
   // Auto-refresh: 10s when live games exist, 60s otherwise — silent to avoid spinner flicker
   const hasLiveGames = games.some(g => g.status === "in" || g.status === "halftime");
+  const hasLiveUfc = ufcEvents.some(ev => ev.fights.some(f =>
+    f.state === "in" ||
+    f.status === "STATUS_IN_PROGRESS" ||
+    f.status === "STATUS_END_OF_ROUND" ||
+    f.status === "STATUS_HALFTIME"
+  ));
+  const hasLive = hasLiveGames || hasLiveUfc;
   useEffect(() => {
-    const ms = hasLiveGames ? 10000 : 60000;
+    const ms = hasLive ? 10000 : 60000;
     const interval = setInterval(() => {
       fetchGames(sport, true);
     }, ms);
     return () => clearInterval(interval);
-  }, [sport, hasLiveGames]);
+  }, [sport, hasLive]);
 
   const gamesByDate = useMemo(() => {
     const now = new Date();
@@ -845,6 +867,24 @@ const GamesPage = () => {
     return { f1ML: null, f2ML: null, f1EV: null, f2EV: null };
   };
 
+  const isFightLive = (f: UfcFight) =>
+    f.state === "in" ||
+    f.status === "STATUS_IN_PROGRESS" ||
+    f.status === "STATUS_END_OF_ROUND" ||
+    f.status === "STATUS_HALFTIME";
+
+  const isFightFinal = (f: UfcFight) =>
+    f.completed === true || f.state === "post" || f.status === "STATUS_FINAL";
+
+  const getUfcLiveDetail = (f: UfcFight): string => {
+    if (f.shortDetail) return f.shortDetail.toLowerCase().startsWith("live") ? f.shortDetail : `Live · ${f.shortDetail}`;
+    const round = f.period;
+    const clock = f.displayClock;
+    if (round && clock) return `Live · Round ${round} · ${clock} left`;
+    if (round) return `Live · Round ${round}`;
+    return "Live";
+  };
+
   const FightCard = ({ fight, index }: { fight: UfcFight; index: number }) => {
     const isNotified = notifiedGames.has(fight.id);
     const fightLabel = `${fight.fighter1} vs ${fight.fighter2}`;
@@ -852,9 +892,12 @@ const GamesPage = () => {
     const evColor = (ev: number | null) => !ev ? "transparent" : ev > 0 ? "hsla(142,71%,45%,0.15)" : "hsla(0,72%,51%,0.1)";
     const evTextColor = (ev: number | null) => !ev ? "#8b87b8" : ev > 0 ? "hsl(142,71%,45%)" : "hsl(0,72%,51%)";
     const mlColor = (ml: number | null) => !ml ? "#8b87b8" : ml < 0 ? "#f0eeff" : "#22c55e";
+    const isLive = isFightLive(fight);
+    const isFinal = !isLive && isFightFinal(fight);
+    const liveDetail = isLive ? getUfcLiveDetail(fight) : "";
 
     return (
-    <motion.div {...stagger(index)} className="vision-card p-4 relative overflow-hidden">
+    <motion.div {...stagger(index)} className={`vision-card p-4 relative overflow-hidden ${isFinal ? 'opacity-75' : ''}`}>
       <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
         {fight.isMainEvent && (
           <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{
@@ -864,17 +907,42 @@ const GamesPage = () => {
             <span className="text-[8px] font-bold text-accent uppercase tracking-wider">Main Event</span>
           </div>
         )}
-        <button
-          onClick={(e) => { e.stopPropagation(); toggleNotification(fight.id, fightLabel, fight.time, "mma_ufc", fight.fighter1, fight.fighter2); }}
-          className="p-1.5 rounded-full transition-all relative z-10 pointer-events-auto"
-          style={{
-            background: isNotified ? 'hsla(142, 100%, 50%, 0.15)' : 'transparent',
-            border: isNotified ? '1px solid hsla(142, 100%, 50%, 0.3)' : '1px solid transparent',
-          }}
-        >
-          {isNotified ? <Bell className="w-3.5 h-3.5 text-accent" /> : <BellOff className="w-3.5 h-3.5 text-muted-foreground/40" />}
-        </button>
+        {isLive ? (
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{
+            background: 'hsla(142, 71%, 45%, 0.12)',
+            border: '1px solid hsla(142, 71%, 45%, 0.25)',
+            animation: 'live-glow 2.5s ease-in-out infinite',
+          }}>
+            <div className="w-1.5 h-1.5 rounded-full bg-[hsl(142,71%,45%)]" style={{ animation: 'live-dot 2s ease-in-out infinite' }} />
+            <span className="text-[8px] font-bold uppercase tracking-wider" style={{ color: 'hsl(142 71% 45%)' }}>Live</span>
+          </div>
+        ) : isFinal ? (
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{
+            background: 'hsla(250, 20%, 40%, 0.12)',
+            border: '1px solid hsla(250, 20%, 40%, 0.25)',
+          }}>
+            <span className="text-[8px] font-bold uppercase tracking-wider" style={{ color: 'hsl(250 20% 55%)' }}>Final</span>
+          </div>
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); toggleNotification(fight.id, fightLabel, fight.time, "mma_ufc", fight.fighter1, fight.fighter2); }}
+            className="p-1.5 rounded-full transition-all relative z-10 pointer-events-auto"
+            style={{
+              background: isNotified ? 'hsla(142, 100%, 50%, 0.15)' : 'transparent',
+              border: isNotified ? '1px solid hsla(142, 100%, 50%, 0.3)' : '1px solid transparent',
+            }}
+          >
+            {isNotified ? <Bell className="w-3.5 h-3.5 text-accent" /> : <BellOff className="w-3.5 h-3.5 text-muted-foreground/40" />}
+          </button>
+        )}
       </div>
+      {isLive && (
+        <div className="mt-1 mb-1">
+          <span className="text-[10px] font-bold whitespace-nowrap" style={{ color: 'hsl(142 71% 45%)' }}>
+            {liveDetail}
+          </span>
+        </div>
+      )}
       <div className="grid grid-cols-[auto_1fr_auto_1fr_auto] items-center gap-1.5 mt-5 pr-1">
         <FighterAvatar id={fight.fighter1Id} name={fight.fighter1} />
         <div className="min-w-0">
@@ -882,7 +950,7 @@ const GamesPage = () => {
           {fightOdds.f1ML != null && (
             <div className="flex items-center gap-1 mt-0.5">
               <span className="text-[10px] font-bold" style={{ color: mlColor(fightOdds.f1ML) }}>{fmt(fightOdds.f1ML)}</span>
-              {fightOdds.f1EV != null && (
+              {fightOdds.f1EV != null && !isLive && !isFinal && (
                 <span className="text-[8px] font-bold px-1 py-0.5 rounded" style={{ background: evColor(fightOdds.f1EV), color: evTextColor(fightOdds.f1EV) }}>
                   {fightOdds.f1EV > 0 ? "+" : ""}{fightOdds.f1EV}%
                 </span>
@@ -895,7 +963,7 @@ const GamesPage = () => {
           <span className="text-[11px] font-bold text-foreground block leading-tight">{fight.fighter2}</span>
           {fightOdds.f2ML != null && (
             <div className="flex items-center justify-end gap-1 mt-0.5">
-              {fightOdds.f2EV != null && (
+              {fightOdds.f2EV != null && !isLive && !isFinal && (
                 <span className="text-[8px] font-bold px-1 py-0.5 rounded" style={{ background: evColor(fightOdds.f2EV), color: evTextColor(fightOdds.f2EV) }}>
                   {fightOdds.f2EV > 0 ? "+" : ""}{fightOdds.f2EV}%
                 </span>

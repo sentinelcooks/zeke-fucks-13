@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import MoneyLineSection from "@/components/MoneyLineSection";
 
 import sportNcaabLogo from "@/assets/sport-ncaab.png";
@@ -422,6 +422,7 @@ function formatDisplayPropType(propType: string | null | undefined): string {
 
 const NbaPropsPage = () => {
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const globalSlip = useParlaySlip();
   const autoAnalyzedRef = useRef(false);
 
@@ -431,10 +432,14 @@ const NbaPropsPage = () => {
     autoAnalyzePrefillRef.current = false;
     autoScrollToResultsRef.current = false;
   }, [location.key]);
+  useEffect(() => {
+    const m = searchParams.get("mode");
+    if (m === "lines" || m === "props") setMode(m);
+  }, [searchParams]);
   const autoAnalyzePrefillRef = useRef(false);
   const autoScrollToResultsRef = useRef(false);
   const resultsRef = useRef<HTMLDivElement>(null);
-  const [mode, setMode] = useState<"props" | "lines">("props");
+  const [mode, setMode] = useState<"props" | "lines">(searchParams.get("mode") === "lines" ? "lines" : "props");
   const [linesSport, setLinesSport] = useState<"nba" | "mlb" | "nhl" | "ncaab">("nba");
   const [sport, setSport] = useState<"nba" | "mlb" | "nhl" | "ufc">("nba");
   const [player, setPlayer] = useState("");
@@ -524,6 +529,18 @@ const NbaPropsPage = () => {
   const PROP_CATEGORIES = sport === "mlb" ? MLB_PROP_CATEGORIES : sport === "nhl" ? NHL_PROP_CATEGORIES : NBA_PROP_CATEGORIES;
   const PROP_TYPES = sport === "mlb" ? MLB_PROP_TYPES : sport === "nhl" ? NHL_PROP_TYPES : NBA_PROP_TYPES;
   const [activeCategory, setActiveCategory] = useState(PROP_CATEGORIES[0]?.category || "");
+
+  // Reconcile propType against activeCategory: if the current selection
+  // doesn't belong to the active tab, fall back to the first prop in that tab.
+  useEffect(() => {
+    if (autoAnalyzePrefillRef.current) return;
+    const cat = PROP_CATEGORIES.find((c) => c.category === activeCategory);
+    if (!cat) return;
+    if (!cat.props.some((p) => p.value === propType)) {
+      const first = cat.props[0];
+      if (first) setPropType(first.value);
+    }
+  }, [activeCategory, PROP_CATEGORIES]);
 
   useEffect(() => {
     if (sport !== "ufc") {
@@ -1518,7 +1535,6 @@ const NbaPropsPage = () => {
               }}
             >
               {PROP_CATEGORIES.map((cat) => {
-                const isCatActive = cat.props.some((p) => p.value === propType);
                 const isSelected = activeCategory === cat.category;
                 return (
                   <button
@@ -1531,8 +1547,6 @@ const NbaPropsPage = () => {
                     className={`shrink-0 px-3.5 py-2 rounded-xl text-[10px] font-bold uppercase tracking-[0.1em] transition-all duration-200 whitespace-nowrap ${
                       isSelected
                         ? "text-accent"
-                        : isCatActive
-                        ? "text-accent/50"
                         : "text-muted-foreground/55 hover:text-muted-foreground/50"
                     }`}
                     style={isSelected ? {
