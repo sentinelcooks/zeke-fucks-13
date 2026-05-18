@@ -425,6 +425,10 @@ const NbaPropsPage = () => {
   const [searchParams] = useSearchParams();
   const globalSlip = useParlaySlip();
   const autoAnalyzedRef = useRef(false);
+  // Discard stale analyze responses if the user retriggers before the previous resolves.
+  const analyzeRequestIdRef = useRef(0);
+  // In-session cache for repeat analyses of the exact same prop. Lives only for this mount.
+  const analysisCacheRef = useRef<Map<string, any>>(new Map());
 
   // Reset ALL auto-analyze refs on every new navigation so each pick click triggers analysis
   useEffect(() => {
@@ -991,13 +995,27 @@ const NbaPropsPage = () => {
   const handleAnalyze = async (overrides?: { player?: string; propType?: string; line?: string; overUnder?: "over" | "under" }) => {
     if (sport === "ufc") {
       if (!fighter1 || !fighter2) { setError("Enter both fighter names"); return; }
-      setLoading(true); setError(""); setResults(null); setSnapshotAvgValue(null);
+      const localId = ++analyzeRequestIdRef.current;
+      const ufcKey = `ufc|${fighter1}|${fighter2}`;
+      const ufcCached = analysisCacheRef.current.get(ufcKey);
+      if (ufcCached) { setError(""); setResults(ufcCached); setSnapshotAvgValue(null); return; }
+      setLoading(true); setError(""); setSnapshotAvgValue(null);
       try {
         const data = await analyzeUfcMatchup(fighter1, fighter2);
+        if (analyzeRequestIdRef.current !== localId) return;
         if (data.error) setError(data.error);
-        else setResults({ ...data, _isUfc: true });
-      } catch { setError("Failed to analyze matchup. Please try again."); }
-      finally { setLoading(false); }
+        else {
+          const next = { ...data, _isUfc: true };
+          setResults(next);
+          analysisCacheRef.current.set(ufcKey, next);
+        }
+      } catch {
+        if (analyzeRequestIdRef.current !== localId) return;
+        setError("Failed to analyze matchup. Please try again.");
+      }
+      finally {
+        if (analyzeRequestIdRef.current === localId) setLoading(false);
+      }
       return;
     }
     // Use override values directly to avoid stale React state on rapid taps (e.g., correlated prop tap)
@@ -1009,12 +1027,26 @@ const NbaPropsPage = () => {
     if (!effPlayer) { setError("Enter a player name"); return; }
     const lineNum = parseFloat(effLine);
     if (isNaN(lineNum) || lineNum <= 0) { setError("Enter a valid line value"); return; }
-    setLoading(true); setError(""); setResults(null); setCorrProps([]); setSnapshotAvgValue(null);
+
+    const cacheKey = `${sport}|${effPlayer}|${effPropType}|${lineNum}|${effOverUnder}|${opponent || ""}`;
+    const cached = analysisCacheRef.current.get(cacheKey);
+    if (cached) {
+      setError("");
+      setResults(cached);
+      setCorrProps([]);
+      setSnapshotAvgValue(null);
+      return;
+    }
+
+    const localId = ++analyzeRequestIdRef.current;
+    setLoading(true); setError(""); setCorrProps([]); setSnapshotAvgValue(null);
     try {
       const data = await analyzeProp({ player: effPlayer, prop_type: effPropType, line: lineNum, over_under: effOverUnder, opponent: opponent || undefined, sport });
+      if (analyzeRequestIdRef.current !== localId) return;
       if (data.error) setError(data.error);
       else {
         setResults(data);
+        analysisCacheRef.current.set(cacheKey, data);
         // Fetch correlated props for NBA
         if (sport === "nba") {
           setCorrLoading(true);
@@ -1022,14 +1054,23 @@ const NbaPropsPage = () => {
           supabase.functions.invoke("correlated-props", {
             body: { player: effPlayer, prop: effPropType, line: lineNum, team: playerTeam, over_under: effOverUnder },
           }).then(({ data: corrData, error: corrErr }) => {
+            if (analyzeRequestIdRef.current !== localId) return;
             if (!corrErr && Array.isArray(corrData)) setCorrProps(corrData);
             else setCorrProps([]);
             setCorrLoading(false);
-          }).catch(() => { setCorrProps([]); setCorrLoading(false); });
+          }).catch(() => {
+            if (analyzeRequestIdRef.current !== localId) return;
+            setCorrProps([]); setCorrLoading(false);
+          });
         }
       }
-    } catch { setError("Failed to analyze. Please try again."); }
-    finally { setLoading(false); }
+    } catch {
+      if (analyzeRequestIdRef.current !== localId) return;
+      setError("Failed to analyze. Please try again.");
+    }
+    finally {
+      if (analyzeRequestIdRef.current === localId) setLoading(false);
+    }
   };
 
   const h2h = results?.head_to_head || {};

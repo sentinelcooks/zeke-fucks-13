@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Globe, Bell, BellOff, LogOut, User, Check, ChevronRight, Hash, MessageSquare, Send, Loader2, CheckCircle, CreditCard, Palette, Calculator, DollarSign } from "lucide-react";
+import { Globe, Bell, BellOff, LogOut, User, Check, ChevronRight, ChevronDown, Hash, MessageSquare, Send, Loader2, CheckCircle, CreditCard, Palette, Calculator, DollarSign } from "lucide-react";
 import { getActiveUnitSize, readUnitSettings } from "@/lib/profitFormat";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { resolveDisplayName } from "@/lib/displayName";
+import { getSubscriptionManagementURL } from "@/lib/revenuecat";
 import {
   isPushSupported,
   requestAndRegisterPush,
@@ -171,6 +172,7 @@ const UnitCalculatorSection = () => {
   const [manualUnit, setManualUnit] = useState<string>(
     () => localStorage.getItem("sentinel_unit_manual") ?? ""
   );
+  const [isUnitCalculatorOpen, setIsUnitCalculatorOpen] = useState(false);
 
   const dispatchChanged = () =>
     window.dispatchEvent(new Event("sentinel:settings-changed"));
@@ -312,26 +314,30 @@ const UnitCalculatorSection = () => {
       transition={{ delay: 0.275 }}
       className="vision-card overflow-hidden relative z-10"
     >
-      <div className="px-5 py-3 border-b border-border/20">
-        <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">
-          Unit Calculator
-        </span>
-      </div>
-      <div className="px-5 py-4 space-y-4">
-        {/* Header row */}
-        <div className="flex items-center gap-3">
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: "linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))" }}
-          >
-            <Calculator className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <p className="text-[13px] font-bold text-foreground">Unit Size Calculator</p>
-            <p className="text-[9px] text-muted-foreground/55">Calculate your bet size based on bankroll</p>
-          </div>
+      <button
+        type="button"
+        onClick={() => setIsUnitCalculatorOpen((prev) => !prev)}
+        className="w-full flex items-center gap-3 px-5 py-4 text-left"
+      >
+        <div
+          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: "linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))" }}
+        >
+          <Calculator className="w-4 h-4 text-white" />
         </div>
+        <div className="flex-1">
+          <p className="text-[13px] font-bold text-foreground">Unit Size Calculator</p>
+          <p className="text-[9px] text-muted-foreground/55">Calculate your unit size based on bankroll</p>
+        </div>
+        <ChevronDown
+          className={`w-4 h-4 text-muted-foreground/55 transition-transform ${
+            isUnitCalculatorOpen ? "rotate-180" : ""
+          }`}
+        />
+      </button>
 
+      {isUnitCalculatorOpen && (
+      <div className="px-5 pb-5 pt-4 space-y-4 border-t border-border/20">
         {/* Setup mode segmented control */}
         <div className="space-y-1.5">
           <Label className="text-[10px] text-muted-foreground/65">Setup Mode</Label>
@@ -495,6 +501,7 @@ const UnitCalculatorSection = () => {
           </p>
         </div>
       </div>
+      )}
     </motion.div>
   );
 };
@@ -598,6 +605,23 @@ const SettingsPage = () => {
   const [homeTheme, setHomeTheme] = useState<"modern" | "classic">(() => {
     return (localStorage.getItem("sentinel_home_theme") as "modern" | "classic") || "modern";
   });
+  const [isManagingSubscription, setIsManagingSubscription] = useState(false);
+
+  const handleManageSubscription = async () => {
+    if (isManagingSubscription) return;
+    setIsManagingSubscription(true);
+    try {
+      const url = await getSubscriptionManagementURL();
+      window.open(url, "_blank");
+    } catch (error) {
+      console.error("Failed to open subscription management:", error);
+      toast.error(
+        "Unable to open subscription management. Please open the App Store > Account > Subscriptions."
+      );
+    } finally {
+      setIsManagingSubscription(false);
+    }
+  };
 
   const handleHomeThemeChange = (theme: "modern" | "classic") => {
     setHomeTheme(theme);
@@ -869,14 +893,17 @@ const SettingsPage = () => {
       {/* Manage Subscription */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="relative z-10">
         <button
-          onClick={() => navigate("/dashboard/paywall")}
-          className="w-full vision-card px-5 py-4 flex items-center gap-3 hover:bg-secondary/20 transition-colors"
+          onClick={handleManageSubscription}
+          disabled={isManagingSubscription}
+          className="w-full vision-card px-5 py-4 flex items-center gap-3 hover:bg-secondary/20 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))' }}>
             <CreditCard className="w-4 h-4 text-white" />
           </div>
           <div className="text-left flex-1">
-            <p className="text-[13px] font-bold text-foreground">Manage Subscription</p>
+            <p className="text-[13px] font-bold text-foreground">
+              {isManagingSubscription ? "Opening..." : "Manage Subscription"}
+            </p>
             <p className="text-[9px] text-muted-foreground/55">View or update your plan</p>
           </div>
           <ChevronRight className="w-4 h-4 text-muted-foreground/55" />

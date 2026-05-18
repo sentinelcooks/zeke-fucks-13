@@ -1,4 +1,4 @@
-import { useState, useEffect, type JSX } from "react";
+import { useState, useEffect, useCallback, startTransition, memo, type JSX } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import type { ComponentType, ReactNode } from "react";
@@ -216,7 +216,7 @@ function Sparkline({ color = "#00FF6A", down = false, className = "" }: { color?
 /* ───────────────────────────────────────────────
    Screen 1 — Hero / Welcome
    ─────────────────────────────────────────────── */
-function ScreenHero({ onNext }: { onNext: () => void }) {
+const ScreenHero = memo(function ScreenHero({ onNext }: { onNext: () => void }) {
   const navigate = useNavigate();
   return (
     <>
@@ -377,12 +377,12 @@ function ScreenHero({ onNext }: { onNext: () => void }) {
     </div>
     </>
   );
-}
+});
 
 /* ───────────────────────────────────────────────
    Screen 2 — Value Prop
    ─────────────────────────────────────────────── */
-function ScreenValue({ onNext }: { onNext: () => void }) {
+const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }) {
   const [activeTab, setActiveTab] = useState<"Dashboard" | "Picks" | "Tracker" | "Parlay">("Dashboard");
   const reduce = useReducedMotion();
   const tabT = { duration: reduce ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] as const };
@@ -398,7 +398,7 @@ function ScreenValue({ onNext }: { onNext: () => void }) {
       </motion.div>
 
       <motion.div
-        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.1 }}
+        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={pageT}
         className="mt-5 rounded-2xl border border-[#2A2A2A] bg-[#141414] p-3.5"
       >
         {/* App header */}
@@ -588,7 +588,7 @@ function ScreenValue({ onNext }: { onNext: () => void }) {
 
       {/* Social proof */}
       <motion.div
-        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.18 }}
+        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.05 }}
         className="mt-4 rounded-2xl border border-[#2A2A2A] bg-[#141414] p-3 flex items-center gap-3"
       >
         <div className="flex -space-x-2">
@@ -612,12 +612,12 @@ function ScreenValue({ onNext }: { onNext: () => void }) {
       </div>
     </SectionContainer>
   );
-}
+});
 
 /* ───────────────────────────────────────────────
    Screen 3 — Personalize
    ─────────────────────────────────────────────── */
-function ScreenPersonalize({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const [oddsFormat, setOddsFormat] = useState<"american" | "decimal" | null>(() => {
     try { return (localStorage.getItem(STORAGE.oddsFormat) as any) || "american"; } catch { return "american"; }
   });
@@ -800,12 +800,12 @@ function ScreenPersonalize({ onBack, onNext }: { onBack: () => void; onNext: () 
       </div>
     </SectionContainer>
   );
-}
+});
 
 /* ───────────────────────────────────────────────
    Screen 4 — Without vs With
    ─────────────────────────────────────────────── */
-function ScreenComparison({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+const ScreenComparison = memo(function ScreenComparison({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   return (
     <SectionContainer>
       <ProgressDots current={4} total={6} />
@@ -893,7 +893,7 @@ function ScreenComparison({ onBack, onNext }: { onBack: () => void; onNext: () =
       </div>
     </SectionContainer>
   );
-}
+});
 
 /* ───────────────────────────────────────────────
    Top-level Onboarding orchestrator
@@ -917,21 +917,31 @@ export default function OnboardingPage() {
     Object.values(ASSETS).forEach((a) => {
       preloadGeneratedImage(a.prompt, a.key, a.model);
     });
+    // Warm Screen 2 image cache so they're already decoded by the time the user advances.
+    const urls = [
+      ESPN_HEADSHOTS.jaysonTatum,
+      ESPN_HEADSHOTS.austinMatthews,
+      ESPN_HEADSHOTS.lukaDoncic,
+      ESPN_TEAM_LOGOS.rockies,
+      "https://i.pravatar.cc/80?img=11",
+      "https://i.pravatar.cc/80?img=12",
+      "https://i.pravatar.cc/80?img=13",
+    ];
+    urls.forEach((u) => { const i = new Image(); i.src = u; });
   }, []);
 
-  const goNext = () => setStep((s) => s + 1);
-  const goBack = () => setStep((s) => Math.max(0, s - 1));
-  const goPaywall = () => navigate("/paywall");
+  const goNext = useCallback(() => startTransition(() => setStep((s) => s + 1)), []);
+  const goBack = useCallback(() => startTransition(() => setStep((s) => Math.max(0, s - 1))), []);
+  const goPaywall = useCallback(() => navigate("/paywall"), [navigate]);
 
-  const screens = [
-    <ScreenHero key="s1" onNext={goNext} />,
-    <ScreenValue key="s2" onNext={goNext} />,
-    <ScreenPersonalize key="s3" onBack={goBack} onNext={goNext} />,
-    <ScreenComparison key="s4" onBack={goBack} onNext={goPaywall} />,
-  ];
+  const current =
+    step === 0 ? <ScreenHero        key="s1" onNext={goNext} /> :
+    step === 1 ? <ScreenValue       key="s2" onNext={goNext} /> :
+    step === 2 ? <ScreenPersonalize key="s3" onBack={goBack} onNext={goNext} /> :
+                 <ScreenComparison  key="s4" onBack={goBack} onNext={goPaywall} />;
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
+    <AnimatePresence initial={false}>
       <motion.div
         key={step}
         initial={{ opacity: 0, x: 24 }}
@@ -939,7 +949,7 @@ export default function OnboardingPage() {
         exit={{ opacity: 0, x: -24 }}
         transition={pageT}
       >
-        {screens[step]}
+        {current}
       </motion.div>
     </AnimatePresence>
   );

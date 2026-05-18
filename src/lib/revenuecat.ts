@@ -76,6 +76,19 @@ export async function restorePurchases() {
   );
 }
 
+// 🔗 Resolve Apple subscription management URL (RevenueCat managementURL with Apple fallback)
+const APPLE_MANAGE_URL = "https://apps.apple.com/account/subscriptions";
+
+export async function getSubscriptionManagementURL(): Promise<string> {
+  if (!Capacitor.isNativePlatform()) return APPLE_MANAGE_URL;
+  try {
+    const { customerInfo } = await Purchases.getCustomerInfo();
+    return customerInfo?.managementURL ?? APPLE_MANAGE_URL;
+  } catch {
+    return APPLE_MANAGE_URL;
+  }
+}
+
 // 🚀 Hosted RevenueCat Paywall (what your screen is using now)
 export async function openRevenueCatPaywall(): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) {

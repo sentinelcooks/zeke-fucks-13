@@ -149,6 +149,8 @@ const GamesPage = () => {
 
   // Per-sport cache to enable instant switching
   const sportCache = useRef<Partial<Record<SportFilter, { games: Game[]; ufcEvents: UfcEvent[]; oddsMap: Record<string, RealOdds> }>>>({});
+  // Tracks the sport of the last fetch so we only blank the visible list on a real sport change.
+  const lastFetchedSportRef = useRef<SportFilter | null>(null);
 
   // Load subscribed game IDs from Supabase (replaces localStorage)
   useEffect(() => {
@@ -263,6 +265,7 @@ const GamesPage = () => {
       setOddsMap(cached.oddsMap);
       setLoading(false);
       setError("");
+      lastFetchedSportRef.current = s;
       return;
     }
 
@@ -273,9 +276,14 @@ const GamesPage = () => {
 
     if (!silent) {
       setLoading(true);
-      setGames([]);
-      setUfcEvents([]);
+      // Only blank the lists when switching sports; for same-sport (refresh/force) keep
+      // previously rendered games visible so the tab doesn't flash empty.
+      if (lastFetchedSportRef.current !== s) {
+        setGames([]);
+        setUfcEvents([]);
+      }
     }
+    lastFetchedSportRef.current = s;
     setError("");
     try {
       if (s === "ufc") {
@@ -460,14 +468,16 @@ const GamesPage = () => {
   useEffect(() => { fetchGames(sport); }, [sport]);
 
   // Auto-refresh: 10s when live games exist, 60s otherwise — silent to avoid spinner flicker
-  const hasLiveGames = games.some(g => g.status === "in" || g.status === "halftime");
-  const hasLiveUfc = ufcEvents.some(ev => ev.fights.some(f =>
-    f.state === "in" ||
-    f.status === "STATUS_IN_PROGRESS" ||
-    f.status === "STATUS_END_OF_ROUND" ||
-    f.status === "STATUS_HALFTIME"
-  ));
-  const hasLive = hasLiveGames || hasLiveUfc;
+  const hasLive = useMemo(() => {
+    const hasLiveGames = games.some(g => g.status === "in" || g.status === "halftime");
+    const hasLiveUfc = ufcEvents.some(ev => ev.fights.some(f =>
+      f.state === "in" ||
+      f.status === "STATUS_IN_PROGRESS" ||
+      f.status === "STATUS_END_OF_ROUND" ||
+      f.status === "STATUS_HALFTIME"
+    ));
+    return hasLiveGames || hasLiveUfc;
+  }, [games, ufcEvents]);
   useEffect(() => {
     const ms = hasLive ? 10000 : 60000;
     const interval = setInterval(() => {
@@ -1123,7 +1133,7 @@ const GamesPage = () => {
         </button>
       </div>
 
-      {loading ? (
+      {loading && games.length === 0 && ufcEvents.length === 0 ? (
         <div className="space-y-2 relative z-10">
           {[0, 1, 2, 3].map((i) => (
             <div
