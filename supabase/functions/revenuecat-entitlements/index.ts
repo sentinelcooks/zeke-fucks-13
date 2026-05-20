@@ -89,7 +89,9 @@ Deno.serve(async (req) => {
         !expiresDate || new Date(expiresDate) > new Date();
     }
 
-    const isProActive = activeEntitlements["Sentinel Pro"] === true;
+    const isProActive =
+      activeEntitlements["Sentinel Premium"] === true ||
+      activeEntitlements["Sentinel Pro"] === true;
 
     return new Response(
       JSON.stringify({

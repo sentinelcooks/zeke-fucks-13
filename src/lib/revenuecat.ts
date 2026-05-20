@@ -1,32 +1,78 @@
 import { Capacitor } from "@capacitor/core";
-import { Purchases } from "@revenuecat/purchases-capacitor";
+import {
+  Purchases,
+  type CustomerInfo,
+  type PurchasesPackage,
+} from "@revenuecat/purchases-capacitor";
 import { RevenueCatUI, PAYWALL_RESULT } from "@revenuecat/purchases-capacitor-ui";
 
 const API_KEY = "appl_wmSrROmrGLyeBmcpgxydApKAxLl";
-const ENTITLEMENT_ID = "Sentinel Pro";
+export const ENTITLEMENT_ID = "Sentinel Premium";
 
-// 🔧 Initialize RevenueCat
+let configured = false;
+
 export async function initRevenueCat() {
   if (!Capacitor.isNativePlatform()) return;
-
+  if (configured) return;
   await Purchases.configure({ apiKey: API_KEY });
+  configured = true;
 }
 
-// 👤 Identify the logged-in Supabase user so purchases link to their account
 export async function loginRevenueCatUser(userId: string) {
   if (!Capacitor.isNativePlatform()) return;
-
   await Purchases.logIn({ appUserID: userId });
 }
 
-// 🚪 Clear the RevenueCat user on sign-out
 export async function logoutRevenueCatUser() {
   if (!Capacitor.isNativePlatform()) return;
-
   await Purchases.logOut();
 }
 
-// 💰 Custom purchase (uses your UI plan selection)
+export async function fetchCustomerInfo(): Promise<CustomerInfo | null> {
+  if (!Capacitor.isNativePlatform()) return null;
+  const { customerInfo } = await Purchases.getCustomerInfo();
+  return customerInfo;
+}
+
+export function hasActivePremium(customerInfo: CustomerInfo | null | undefined): boolean {
+  if (!customerInfo) return false;
+  return Boolean(customerInfo.entitlements.active[ENTITLEMENT_ID]);
+}
+
+export async function addCustomerInfoListener(
+  cb: (info: CustomerInfo) => void
+): Promise<() => void> {
+  if (!Capacitor.isNativePlatform()) return () => {};
+  const handle = await Purchases.addCustomerInfoUpdateListener(cb);
+  return () => {
+    try {
+      // SDK v13 returns a callback id usable with removeCustomerInfoUpdateListener
+      // @ts-expect-error — runtime API exists; types vary by SDK minor
+      Purchases.removeCustomerInfoUpdateListener?.(handle);
+    } catch {
+      // no-op
+    }
+  };
+}
+
+export async function getCurrentOfferingPackages(): Promise<{
+  weekly?: PurchasesPackage;
+  monthly?: PurchasesPackage;
+  yearly?: PurchasesPackage;
+}> {
+  if (!Capacitor.isNativePlatform()) return {};
+  const offeringsResult = await Purchases.getOfferings();
+  const currentOffering = offeringsResult.current;
+  if (!currentOffering) return {};
+  const find = (id: string) =>
+    currentOffering.availablePackages.find((p) => p.identifier === id);
+  return {
+    weekly: find("$rc_weekly"),
+    monthly: find("$rc_monthly"),
+    yearly: find("$rc_annual"),
+  };
+}
+
 export async function purchasePlan(plan: "weekly" | "monthly" | "yearly") {
   if (!Capacitor.isNativePlatform()) {
     throw new Error("RevenueCat purchases only work inside the iOS app.");
@@ -58,25 +104,18 @@ export async function purchasePlan(plan: "weekly" | "monthly" | "yearly") {
     aPackage: selectedPackage,
   });
 
-  return Boolean(
-    purchaseResult.customerInfo.entitlements.active[ENTITLEMENT_ID]
-  );
+  return hasActivePremium(purchaseResult.customerInfo);
 }
 
-// 🔄 Restore purchases
 export async function restorePurchases() {
   if (!Capacitor.isNativePlatform()) {
     throw new Error("RevenueCat restore only works inside the iOS app.");
   }
 
   const restoreResult = await Purchases.restorePurchases();
-
-  return Boolean(
-    restoreResult.customerInfo.entitlements.active[ENTITLEMENT_ID]
-  );
+  return hasActivePremium(restoreResult.customerInfo);
 }
 
-// 🔗 Resolve Apple subscription management URL (RevenueCat managementURL with Apple fallback)
 const APPLE_MANAGE_URL = "https://apps.apple.com/account/subscriptions";
 
 export async function getSubscriptionManagementURL(): Promise<string> {
@@ -89,7 +128,6 @@ export async function getSubscriptionManagementURL(): Promise<string> {
   }
 }
 
-// 🚀 Hosted RevenueCat Paywall (what your screen is using now)
 export async function openRevenueCatPaywall(): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) {
     throw new Error("Must run on iOS device");

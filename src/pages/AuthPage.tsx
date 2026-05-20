@@ -8,6 +8,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import sentinelLogo from "@/assets/sentinel-lock.jpg";
 import { SplashScreen } from "@/components/SplashScreen";
+import { Capacitor } from "@capacitor/core";
+import { Browser } from "@capacitor/browser";
 
 // Sentinel purple brand
 const ACCENT = "#A855F7";       // primary purple
@@ -195,6 +197,28 @@ const AuthPage = () => {
     setOauthLoading(provider);
     try {
       persistRememberChoice(remember);
+
+      if (Capacitor.isNativePlatform()) {
+        // Apple rejects opening Safari/Chrome for sign-in. Use SFSafariViewController
+        // via @capacitor/browser so the OAuth flow stays in-app, and rely on the
+        // sentinel://auth/callback deep link to return.
+        const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo: getAuthRedirectUrl(),
+            skipBrowserRedirect: true,
+          },
+        });
+        if (oauthError || !data?.url) {
+          setError(oauthError?.message || `${provider} sign-in failed`);
+          setOauthLoading(null);
+          return;
+        }
+        await Browser.open({ url: data.url, presentationStyle: "popover" });
+        // DeepLinkHandler closes the in-app browser when SIGNED_IN fires.
+        return;
+      }
+
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider,
         options: { redirectTo: getAuthRedirectUrl() },
@@ -204,7 +228,6 @@ const AuthPage = () => {
         setOauthLoading(null);
         return;
       }
-      // Browser navigates away to the provider — nothing left to do here.
     } catch (err) {
       setError(err instanceof Error ? err.message : `${provider} sign-in failed`);
       setOauthLoading(null);

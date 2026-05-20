@@ -1,25 +1,40 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Globe, Bell, BellOff, LogOut, User, Check, ChevronRight, ChevronDown, Hash, MessageSquare, Send, Loader2, CheckCircle, CreditCard, Palette, Calculator, DollarSign } from "lucide-react";
+import { Globe, Bell, BellOff, LogOut, User, Check, ChevronRight, ChevronDown, Hash, MessageSquare, Send, Loader2, CheckCircle, CreditCard, Palette, Calculator, DollarSign, RefreshCw, Trash2 } from "lucide-react";
 import { getActiveUnitSize, readUnitSettings } from "@/lib/profitFormat";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Capacitor } from "@capacitor/core";
+import { restorePurchases, getSubscriptionManagementURL } from "@/lib/revenuecat";
+import { usePremium } from "@/contexts/PremiumContext";
+import { openExternal } from "@/lib/openExternal";
 import { resolveDisplayName } from "@/lib/displayName";
-import { getSubscriptionManagementURL } from "@/lib/revenuecat";
 import {
   isPushSupported,
   requestAndRegisterPush,
   checkPushPermission,
   unregisterPushToken,
 } from "@/services/pushNotificationService";
+
+const MANAGE_SUBSCRIPTION_URL = "https://apps.apple.com/account/subscriptions";
 
 const TIMEZONES = [
   { value: "America/New_York", label: "Eastern (ET)" },
@@ -612,7 +627,7 @@ const SettingsPage = () => {
     setIsManagingSubscription(true);
     try {
       const url = await getSubscriptionManagementURL();
-      window.open(url, "_blank");
+      await openExternal(url);
     } catch (error) {
       console.error("Failed to open subscription management:", error);
       toast.error(
@@ -708,10 +723,55 @@ const SettingsPage = () => {
     navigate("/auth", { replace: true });
   };
 
+  const { refresh: refreshPremium } = usePremium();
+  const [restoring, setRestoring] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleRestore = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      toast.info("Restore Purchases is available in the iOS app.");
+      return;
+    }
+    setRestoring(true);
+    try {
+      const restored = await restorePurchases();
+      await refreshPremium();
+      toast[restored ? "success" : "info"](
+        restored ? "Subscription restored." : "No active subscription found to restore."
+      );
+    } catch (err) {
+      console.error("Restore failed:", err);
+      toast.error("Restore failed. Try again.");
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      const { error } = await supabase.functions.invoke("delete-account");
+      if (error) {
+        toast.error(error.message || "Could not delete account. Try again.");
+        setDeleting(false);
+        return;
+      }
+      toast.success("Account deleted.");
+      setDeleteOpen(false);
+      await signOut();
+      navigate("/auth", { replace: true });
+    } catch (err) {
+      console.error("Delete account failed:", err);
+      toast.error("Could not delete account. Try again.");
+      setDeleting(false);
+    }
+  };
+
   const currentTzLabel = TIMEZONES.find((t) => t.value === selectedTz)?.label || selectedTz;
 
   return (
-    <div className="px-4 pt-2 pb-4 space-y-4 relative">
+    <div className="mx-auto w-full max-w-md px-4 pt-2 pb-4 space-y-4 relative">
       <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(142 100% 50%)' }} />
 
       
@@ -904,11 +964,95 @@ const SettingsPage = () => {
             <p className="text-[13px] font-bold text-foreground">
               {isManagingSubscription ? "Opening..." : "Manage Subscription"}
             </p>
-            <p className="text-[9px] text-muted-foreground/55">View or update your plan</p>
+            <p className="text-[9px] text-muted-foreground/55">View or update your plan in the App Store</p>
           </div>
           <ChevronRight className="w-4 h-4 text-muted-foreground/55" />
         </button>
       </motion.div>
+
+      {/* Restore Purchases */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.37 }} className="relative z-10">
+        <button
+          onClick={handleRestore}
+          disabled={restoring}
+          className="w-full vision-card px-5 py-4 flex items-center gap-3 hover:bg-secondary/20 transition-colors disabled:opacity-60"
+        >
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))' }}>
+            {restoring ? (
+              <Loader2 className="w-4 h-4 text-white animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4 text-white" />
+            )}
+          </div>
+          <div className="text-left flex-1">
+            <p className="text-[13px] font-bold text-foreground">Restore Purchases</p>
+            <p className="text-[9px] text-muted-foreground/55">Already subscribed? Re-sync your entitlement</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-muted-foreground/55" />
+        </button>
+      </motion.div>
+
+      {/* Delete Account */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.39 }} className="relative z-10">
+        <button
+          onClick={() => setDeleteOpen(true)}
+          className="w-full vision-card px-5 py-4 flex items-center gap-3 hover:bg-destructive/5 transition-colors"
+        >
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-destructive/15">
+            <Trash2 className="w-4 h-4 text-destructive" />
+          </div>
+          <div className="text-left flex-1">
+            <p className="text-[13px] font-bold text-destructive">Delete Account</p>
+            <p className="text-[9px] text-muted-foreground/55">Permanently delete your Sentinel account and data</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-muted-foreground/55" />
+        </button>
+      </motion.div>
+
+      <AlertDialog open={deleteOpen} onOpenChange={(o) => !deleting && setDeleteOpen(o)}>
+        <AlertDialogContent className="max-w-md mx-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete your Sentinel account?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-left">
+              <span className="block">
+                This permanently deletes your account and associated data. This action cannot be undone.
+              </span>
+              <span className="block font-semibold text-foreground">
+                Deleting your account does not cancel your Apple subscription.
+              </span>
+              <span className="block">
+                Cancel or manage your subscription in the App Store first to avoid further billing.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <button
+            type="button"
+            onClick={() => void openExternal(MANAGE_SUBSCRIPTION_URL)}
+            className="text-[12px] underline underline-offset-2 text-accent self-start"
+          >
+            Manage Subscription
+          </button>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Keep account</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDeleteAccount();
+              }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-3 h-3 animate-spin" /> Deleting…
+                </span>
+              ) : (
+                "Delete account"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Sign Out */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="relative z-10">

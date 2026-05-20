@@ -6,6 +6,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { openExternal } from "@/lib/openExternal";
 
 interface RateAppDialogProps {
   open: boolean;
@@ -14,7 +15,7 @@ interface RateAppDialogProps {
 
 export function RateAppDialog({ open, onClose }: RateAppDialogProps) {
   const handleRate = () => {
-    window.open("https://apps.apple.com", "_blank");
+    void openExternal("https://apps.apple.com");
     localStorage.setItem("sentinel_rate_dismissed", "true");
     onClose();
   };

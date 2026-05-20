@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
+import { Browser } from "@capacitor/browser";
 import { supabase } from "@/integrations/supabase/client";
 
 // Handles sentinel://auth/callback deep links on iOS/Android.
@@ -36,6 +37,8 @@ export function DeepLinkHandler() {
 
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
+          // Close the in-app SFSafariViewController opened for OAuth, if any.
+          try { await Browser.close(); } catch { /* no-op */ }
           if (error) {
             if (import.meta.env.DEV)
               console.error("[DeepLink] exchangeCodeForSession error:", error.message);
@@ -57,6 +60,7 @@ export function DeepLinkHandler() {
               access_token: accessToken,
               refresh_token: refreshToken,
             });
+            try { await Browser.close(); } catch { /* no-op */ }
             if (!error) {
               navigate(successPath, { replace: true });
               return;
@@ -64,6 +68,7 @@ export function DeepLinkHandler() {
           }
         }
 
+        try { await Browser.close(); } catch { /* no-op */ }
         navigate(errorPath, { replace: true });
       }).then((handle) => {
         removeListener = () => handle.remove();

@@ -13,6 +13,7 @@ import {
 } from "@/contexts/DeviceVerificationContext";
 import { DeviceLimitScreen } from "@/components/DeviceLimitScreen";
 import { ParlaySlipProvider } from "@/contexts/ParlaySlipContext";
+import { PremiumProvider, usePremium } from "@/contexts/PremiumContext";
 import DashboardLayout from "./pages/DashboardLayout";
 import NbaPropsPage from "./pages/NbaPropsPage";
 
@@ -115,6 +116,13 @@ function PushNotificationBootstrap() {
   return null;
 }
 
+function PaywallGuard({ children }: { children: React.ReactNode }) {
+  const { isPremium, isLoading } = usePremium();
+  if (isLoading) return <LoadingSpinner />;
+  if (isPremium) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
 function RevenueCatBootstrap() {
   const { user } = useAuth();
 
@@ -198,7 +206,9 @@ function AppRoutes() {
           path="/paywall"
           element={
             <Suspense fallback={<LoadingSpinner />}>
-              <PaywallPage />
+              <PaywallGuard>
+                <PaywallPage />
+              </PaywallGuard>
             </Suspense>
           }
         />
@@ -261,13 +271,15 @@ const App = () => {
         <Toaster />
         <Sonner />
         <AuthProvider>
-          <DeviceVerificationProvider>
-            <ParlaySlipProvider>
-              <BrowserRouter>
-                <AppRoutes />
-              </BrowserRouter>
-            </ParlaySlipProvider>
-          </DeviceVerificationProvider>
+          <PremiumProvider>
+            <DeviceVerificationProvider>
+              <ParlaySlipProvider>
+                <BrowserRouter>
+                  <AppRoutes />
+                </BrowserRouter>
+              </ParlaySlipProvider>
+            </DeviceVerificationProvider>
+          </PremiumProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

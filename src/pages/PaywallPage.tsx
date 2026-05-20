@@ -1,8 +1,18 @@
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Star, Shield, Zap, BarChart3, TrendingUp, Crown, ChevronDown, Lock } from "lucide-react";
-import { purchasePlan, restorePurchases } from "@/lib/revenuecat";
+import {
+  purchasePlan,
+  restorePurchases,
+  getCurrentOfferingPackages,
+} from "@/lib/revenuecat";
+import { openExternal } from "@/lib/openExternal";
+import { usePremium } from "@/contexts/PremiumContext";
+
+const TERMS_URL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
+const PRIVACY_URL = "https://sentinelprops.com/privacy";
+const MANAGE_SUBSCRIPTION_URL = "https://apps.apple.com/account/subscriptions";
 
 type PlanInterval = "weekly" | "monthly" | "yearly";
 
@@ -178,16 +188,43 @@ function ProgressDots({ current, total }: { current: number; total: number }) {
 
 export default function PaywallPage() {
   const navigate = useNavigate();
+  const { isPremium, refresh: refreshPremium } = usePremium();
   const [selectedPlan, setSelectedPlan] = useState<PlanInterval>("monthly");
   const [expandedFeature, setExpandedFeature] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [livePrices, setLivePrices] = useState<Partial<Record<PlanInterval, string>>>({});
+
+  // Pull localized App Store prices from RevenueCat offerings so we never
+  // display hardcoded prices on the paywall (Apple requires this).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const pkgs = await getCurrentOfferingPackages();
+        if (cancelled) return;
+        setLivePrices({
+          weekly: pkgs.weekly?.product.priceString,
+          monthly: pkgs.monthly?.product.priceString,
+          yearly: pkgs.yearly?.product.priceString,
+        });
+      } catch (err) {
+        console.error("Failed to load offerings:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const priceFor = (id: PlanInterval) => livePrices[id] || PLANS.find((p) => p.id === id)!.price;
 
   const handleSubscribe = async () => {
     setIsLoading(true);
     setError(null);
     try {
       const success = await purchasePlan(selectedPlan);
+      await refreshPremium();
       if (success) {
         navigate("/welcome", { replace: true });
       }
@@ -208,6 +245,7 @@ export default function PaywallPage() {
     setError(null);
     try {
       const success = await restorePurchases();
+      await refreshPremium();
       if (success) {
         navigate("/welcome", { replace: true });
       } else {
@@ -258,7 +296,8 @@ export default function PaywallPage() {
 
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-4">
-          <h1 className="text-[30px] leading-[1.05] font-extrabold tracking-tight">Start Winning With Data</h1>
+          <div className="text-[11px] font-extrabold tracking-[0.18em] uppercase text-[#00FF6A]">Sentinel Premium</div>
+          <h1 className="text-[30px] leading-[1.05] font-extrabold tracking-tight mt-1">Start Winning With Data</h1>
           <p className="mt-2 text-sm text-white/60">AI-powered props. Real edge. Proven results.</p>
         </motion.div>
 
@@ -325,11 +364,11 @@ export default function PaywallPage() {
                   </div>
                   <div className="text-right flex-shrink-0">
                     <div className="flex items-baseline justify-end gap-1">
-                      <span className="text-[34px] font-black text-[#00FF6A] tabular-nums leading-none">{monthly.price}</span>
+                      <span className="text-[34px] font-black text-[#00FF6A] tabular-nums leading-none">{priceFor("monthly")}</span>
                       <span className="text-[11px] font-bold text-white/50">{monthly.period}</span>
                     </div>
                     <div className="text-[10px] font-semibold text-white/70 mt-1">
-                      {TRIAL_DAYS} days free, then {monthly.price}{monthly.period}
+                      {TRIAL_DAYS} days free, then {priceFor("monthly")}{monthly.period}
                     </div>
                     {monthly.saving && (
                       <div className="flex items-center gap-0.5 mt-1 justify-end">
@@ -389,11 +428,11 @@ export default function PaywallPage() {
 
                   <div>
                     <div className={`text-[24px] font-extrabold tabular-nums leading-none ${isSelected ? "text-[#00FF6A]" : isWeekly ? "text-white/80" : "text-slate-50"}`}>
-                      {plan.price}
+                      {priceFor(plan.id)}
                     </div>
                     <div className={`text-[10px] mt-1 ${isWeekly ? "text-white/50" : "text-white/60"}`}>{plan.subtext}</div>
                     <div className="text-[9px] font-semibold text-white/70 mt-1 leading-tight">
-                      {TRIAL_DAYS} days free, then {plan.price}{plan.periodShort}
+                      {TRIAL_DAYS} days free, then {priceFor(plan.id)}{plan.periodShort}
                     </div>
                   </div>
 
@@ -501,6 +540,30 @@ export default function PaywallPage() {
           >
             Restore Purchases
           </button>
+
+          <p className="text-[10px] text-white/40 mt-3 leading-snug px-1">
+            Subscription auto-renews at the selected price until cancelled. Cancel anytime in your
+            Apple ID subscription settings at least 24 hours before the end of the current period.
+            Any unused portion of a free trial is forfeited when purchasing a subscription.
+          </p>
+
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] text-white/50">
+            <button onClick={() => void openExternal(TERMS_URL)} className="underline underline-offset-2 hover:text-white/80">
+              Terms of Use
+            </button>
+            <span className="w-1 h-1 rounded-full bg-white/20" />
+            <button onClick={() => void openExternal(PRIVACY_URL)} className="underline underline-offset-2 hover:text-white/80">
+              Privacy Policy
+            </button>
+            {isPremium && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-white/20" />
+                <button onClick={() => void openExternal(MANAGE_SUBSCRIPTION_URL)} className="underline underline-offset-2 hover:text-white/80">
+                  Manage Subscription
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
