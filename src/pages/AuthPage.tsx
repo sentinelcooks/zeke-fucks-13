@@ -10,6 +10,15 @@ import sentinelLogo from "@/assets/sentinel-lock.jpg";
 import { SplashScreen } from "@/components/SplashScreen";
 import { Capacitor } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
+import {
+  signInWithAppleNative,
+  isAppleNativeAvailable,
+  AppleSignInCancelledError,
+} from "@/lib/appleNativeSignIn";
+
+// iOS bundle identifier — must be allow-listed in Supabase → Auth → Providers
+// → Apple → Client IDs for native Sign in with Apple identity tokens to verify.
+const IOS_BUNDLE_ID = "com.sentinelprops.app";
 
 // Sentinel purple brand
 const ACCENT = "#A855F7";       // primary purple
@@ -211,6 +220,27 @@ const AuthPage = () => {
     setOauthLoading(provider);
     try {
       persistRememberChoice(remember);
+
+      // Native iOS Apple Sign In — use AuthenticationServices via the
+      // capacitor-community plugin instead of the OAuth-in-browser flow.
+      // Avoids the SFSafariViewController white screen and matches Apple's
+      // App Store review guidelines (4.8) for in-app Apple Sign In.
+      if (provider === "apple" && isAppleNativeAvailable()) {
+        try {
+          await signInWithAppleNative({ clientId: IOS_BUNDLE_ID });
+          // onAuthStateChange (SIGNED_IN) will fire and trigger
+          // saveOnboardingToDb + redirect via the existing useEffect.
+          return;
+        } catch (err) {
+          if (err instanceof AppleSignInCancelledError) {
+            setOauthLoading(null);
+            return;
+          }
+          setError(err instanceof Error ? err.message : "Apple sign-in failed");
+          setOauthLoading(null);
+          return;
+        }
+      }
 
       if (Capacitor.isNativePlatform()) {
         // Apple rejects opening Safari/Chrome for sign-in. Use SFSafariViewController
