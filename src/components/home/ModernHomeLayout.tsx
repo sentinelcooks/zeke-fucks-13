@@ -870,12 +870,13 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     })()}
 
                     {/* STAT + ODDS ROW */}
-                    <div className="relative z-10" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="relative z-10" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
                       <span style={{
                         background: '#252340', color: '#f0eeff',
                         borderRadius: 20, padding: '6px 14px',
                         fontSize: 13, fontWeight: 600,
                         border: '1px solid #352f60',
+                        flex: '1 1 auto', minWidth: 0,
                       }}>
                         {isGameBet
                           ? pick.bet_type === 'moneyline'
@@ -886,9 +887,9 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                           : `${pick.direction === "over" ? "Over" : "Under"} ${pick.line} ${formatPropType(pick.prop_type)}`
                         }
                       </span>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 9, letterSpacing: 1.5, color: '#555272', textTransform: 'uppercase', fontWeight: 600 }}>ODDS</div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: '#f0eeff' }}>{pick.odds ? formatOddsFn(pick.odds) : "—"}</div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: 9, letterSpacing: 1.5, color: '#555272', textTransform: 'uppercase', fontWeight: 600, whiteSpace: 'nowrap' }}>ODDS</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#f0eeff', whiteSpace: 'nowrap' }}>{pick.odds ? formatOddsFn(pick.odds) : "—"}</div>
                       </div>
                     </div>
 
