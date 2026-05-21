@@ -541,12 +541,29 @@ const GamesPage = () => {
     if (!profile) return;
     const alreadySubscribed = notifiedGames.has(gameId);
 
+    const startMs = new Date(commenceTime).getTime();
+    const notifyAtMs = startMs - 10 * 60 * 1000;
+    console.log("[reminder] tap", {
+      gameId,
+      commenceTime,
+      notifyAt: new Date(notifyAtMs).toISOString(),
+      alreadySubscribed,
+    });
+
+    if (!alreadySubscribed && (Number.isNaN(startMs) || notifyAtMs <= Date.now())) {
+      toast.error("This game starts too soon for a reminder.");
+      console.warn("[reminder] notify_at is in the past — refusing to subscribe", { gameId, notifyAtMs });
+      return;
+    }
+
     if (!alreadySubscribed) {
       // Ensure push permission before saving the preference
       if (isPushSupported()) {
         const permStatus = await checkPushPermission();
+        console.log("[reminder] iOS permission status:", permStatus);
         if (permStatus !== "granted") {
           const result = await requestAndRegisterPush();
+          console.log("[reminder] requestAndRegisterPush result:", result);
           if (result !== "granted") {
             toast.error("Enable notifications in Settings first.");
             return;
@@ -554,6 +571,7 @@ const GamesPage = () => {
         }
       } else if ("Notification" in window) {
         if (Notification.permission === "default") await Notification.requestPermission();
+        console.log("[reminder] web Notification.permission:", Notification.permission);
         if (Notification.permission !== "granted") {
           toast.error("Notification permission denied");
           return;
@@ -567,7 +585,8 @@ const GamesPage = () => {
         .delete()
         .eq("user_id", profile.id)
         .eq("game_id", gameId);
-      if (error) { toast.error("Could not remove alert"); return; }
+      if (error) { console.error("[reminder] delete failed", error); toast.error("Could not remove alert"); return; }
+      console.log("[reminder] removed", { gameId });
       setNotifiedGames((prev) => { const n = new Set(prev); n.delete(gameId); return n; });
       toast("Alert removed");
     } else {
@@ -582,7 +601,8 @@ const GamesPage = () => {
         },
         { onConflict: "user_id,game_id" },
       );
-      if (error) { toast.error("Could not set alert"); return; }
+      if (error) { console.error("[reminder] upsert failed", error); toast.error("Could not set alert"); return; }
+      console.log("[reminder] scheduled", { gameId, notifyAt: new Date(notifyAtMs).toISOString() });
       setNotifiedGames((prev) => new Set([...prev, gameId]));
       toast.success(`Alert set for ${label} — 10 min before kickoff`);
     }

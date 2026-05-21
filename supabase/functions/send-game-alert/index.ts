@@ -23,6 +23,25 @@ const corsHeaders = {
 };
 
 // ── APNs JWT (ES256) ────────────────────────────────────────────────────────
+// Module-scope cache. APNs accepts a JWT for 60 min; we rotate at 50 min so a
+// burst of cron ticks doesn't re-sign on every invocation.
+let cachedJwt: { token: string; expiresAt: number; kid: string } | null = null;
+const JWT_TTL_MS = 50 * 60 * 1000;
+
+async function getApnsJwt(
+  teamId: string,
+  keyId: string,
+  p8PrivateKey: string,
+): Promise<string> {
+  const now = Date.now();
+  if (cachedJwt && cachedJwt.kid === keyId && cachedJwt.expiresAt > now) {
+    return cachedJwt.token;
+  }
+  const token = await buildApnsJwt(teamId, keyId, p8PrivateKey);
+  cachedJwt = { token, expiresAt: now + JWT_TTL_MS, kid: keyId };
+  return token;
+}
+
 async function buildApnsJwt(
   teamId: string,
   keyId: string,
@@ -251,8 +270,8 @@ Deno.serve(async (req) => {
     sport_key: body.sport_key ?? "",
   };
 
-  // ── One JWT covers all tokens for this invocation (60-min validity) ──
-  const jwt = await buildApnsJwt(teamId, keyId, privateKey);
+  // ── One JWT covers all tokens for this invocation (cached up to 50 min) ──
+  const jwt = await getApnsJwt(teamId, keyId, privateKey);
 
   const results = await Promise.all(
     (tokens as { device_token: string }[]).map((row) =>
@@ -295,7 +314,10 @@ Deno.serve(async (req) => {
       .eq("id", body.game_notification_id);
   }
 
-  console.log(`[send-game-alert] user=${body.user_id} sent=${sent}/${tokens.length}`);
+  console.log(
+    `[send-game-alert] user=${body.user_id} game=${body.game_id} tokens=${tokens.length} sent=${sent} failed=${failed.length}` +
+      (failed.length ? ` errors=${failed.map((f) => f.error).join(",")}` : ""),
+  );
 
   return new Response(
     JSON.stringify({ sent, failed: failed.length }),
