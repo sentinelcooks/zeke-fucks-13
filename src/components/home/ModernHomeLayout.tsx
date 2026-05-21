@@ -16,7 +16,7 @@ import { AddToSlipSheet } from "@/components/AddToSlipSheet";
 import { getTeamLogoUrl } from "@/utils/teamLogos";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { isEdgeHistoryPick, isPicksHistoryPick, isActiveTodayPick } from "@/lib/pickHistoryFilters";
-import { todayInTZ, getGameDate } from "@/lib/gameDate";
+import { todayInTZ, getGameDate, isTodayGamePick, isResultFinal } from "@/lib/gameDate";
 import { formatPropType } from "@/lib/formatPickLabel";
 import { resolveDisplayName } from "@/lib/displayName";
 import { normalizeConfidencePercent, normalizeVerdict, verdictColorHex } from "@/lib/matchupGrade";
@@ -338,35 +338,78 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       ...((todayLegacyRes.data as DailyPick[]) || []),
     ];
 
-    // Active picks = game is today AND result not final.
+    // Event-identity dedupe so the same logical pick can't appear twice
+    // because the scanner inserted a fresh copy on a later run.
+    const dedupe = (arr: DailyPick[]): DailyPick[] => {
+      const seen = new Set<string>();
+      return arr.filter(p => {
+        const k = (p as any).event_id
+          ? `${(p as any).event_id}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`
+          : `${p.sport}|${getGameDate(p as any) ?? ""}|${p.home_team ?? p.team ?? ""}|${p.away_team ?? p.opponent ?? ""}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    };
+
+    // Today's Edge: allowlist — tier === "edge", status !== "empty_slate",
+    // game is today (ET), and result is still pending. Graded picks roll into
+    // Yesterday's Edge on the next day; keeping them out of today's rail
+    // prevents yesterday's manually-graded leftovers from masquerading as
+    // today's slate when their game_date happens to align.
+    const todayEdge = merged.filter(
+      p =>
+        isTodayGamePick(p as any) &&
+        isEdgeHistoryPick(p as any) &&
+        !isResultFinal(p.result),
+    );
+    const edgeTier = dedupe(todayEdge);
+
+    // Daily Picks rail keeps the stricter active-today guard + odds sanity.
     const activeToday = merged.filter(
       p => oddsOk(p.odds) && p.tier !== "pass" && isActiveTodayPick(p as any)
     );
-
-    // Event-identity dedupe so the same logical pick can't appear twice
-    // because the scanner inserted a fresh copy on a later run.
-    const seenKeys = new Set<string>();
-    const allActive = activeToday.filter(p => {
-      const k = (p as any).event_id
-        ? `${(p as any).event_id}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`
-        : `${p.sport}|${getGameDate(p as any) ?? ""}|${p.home_team ?? p.team ?? ""}|${p.away_team ?? p.opponent ?? ""}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`;
-      if (seenKeys.has(k)) return false;
-      seenKeys.add(k);
-      return true;
-    });
-
-    const edgeTier = allActive.filter(p => isEdgeHistoryPick(p as any));
-    const dailyTier = allActive.filter(p => p.tier !== "edge" && isPicksHistoryPick(p as any));
+    const dailyTier = dedupe(
+      activeToday.filter(p => p.tier !== "edge" && isPicksHistoryPick(p as any))
+    );
 
     if (import.meta.env.DEV) {
-      console.log(
-        "[PicksTab] fetched",
-        merged.length,
-        "edge",
-        edgeTier.length,
-        "daily",
-        dailyTier.length,
+      const dropped = merged.filter(
+        p =>
+          !(
+            isTodayGamePick(p as any) &&
+            isEdgeHistoryPick(p as any) &&
+            !isResultFinal(p.result)
+          ),
       );
+      console.groupCollapsed(
+        `[TodaysEdge] fetched=${merged.length} shown=${edgeTier.length} dropped=${dropped.length}`
+      );
+      console.log("todayET:", todayET);
+      for (const p of dropped) {
+        const gd = getGameDate(p as any);
+        const tier = String(p.tier ?? "").toLowerCase();
+        const status = String(p.status ?? "").toLowerCase();
+        let reason = "unknown";
+        if (gd !== todayET) reason = `game_date(${gd}) != todayET(${todayET})`;
+        else if (tier !== "edge") reason = `tier=${p.tier ?? "null"}`;
+        else if (status === "empty_slate") reason = "status=empty_slate";
+        else if (isResultFinal(p.result)) reason = `result=${p.result} (graded)`;
+        console.log(reason, {
+          id: (p as any).id,
+          tier: p.tier,
+          result: p.result,
+          status: p.status,
+          game_date: p.game_date,
+          pick_date: (p as any).pick_date,
+          commence_time: (p as any).commence_time,
+          created_at: (p as any).created_at,
+          sport: p.sport,
+          confidence: (p as any).confidence,
+        });
+      }
+      console.log(`[TodaysEdge] daily-tier rail: ${dailyTier.length}`);
+      console.groupEnd();
     }
 
     setTodayPicks(sortByPref(edgeTier));
@@ -614,6 +657,15 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     sourceContractVersion.startsWith("canonical.") ||
                     diagnostics.confidenceSource === "analyzer" ||
                     (pick.model_used === "nba-api/analyze" && diagnostics.stored_verdict != null);
+                  const resultRaw = String(pick.result ?? "pending").toLowerCase();
+                  const statusBadge =
+                    resultRaw === "hit" || resultRaw === "win"
+                      ? { label: "HIT", color: "hsl(142 100% 50%)" }
+                      : resultRaw === "miss" || resultRaw === "loss"
+                      ? { label: "MISS", color: "hsl(0 90% 60%)" }
+                      : resultRaw === "push"
+                      ? { label: "PUSH", color: "hsl(45 90% 55%)" }
+                      : { label: "PENDING", color: "hsl(220 15% 65%)" };
                   return (
                   <motion.div
                     key={`${pick.id}-${i}`}
@@ -734,6 +786,14 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                             fontSize: 10, fontWeight: 700, letterSpacing: 1,
                             borderRadius: 20, padding: '2px 8px',
                           }}>{(pick.sport || 'NBA').toUpperCase()}</span>
+                          <span style={{
+                            display: 'inline-block',
+                            background: `${statusBadge.color}1f`,
+                            color: statusBadge.color,
+                            fontSize: 10, fontWeight: 700, letterSpacing: 1,
+                            borderRadius: 20, padding: '2px 8px',
+                            border: `1px solid ${statusBadge.color}40`,
+                          }}>{statusBadge.label}</span>
                           {isGameBet && (
                             <span style={{
                               display: 'inline-block',
