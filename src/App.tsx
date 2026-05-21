@@ -35,6 +35,7 @@ import ArbitragePage from "./pages/ArbitragePage";
 import NotFound from "./pages/NotFound";
 import LandingPage from "./pages/LandingPage";
 import { DeepLinkHandler } from "./components/DeepLinkHandler";
+import { AppResumeAuthGuard } from "./components/AppResumeAuthGuard";
 import { SplashScreen } from "@/components/SplashScreen";
 
 const AuthPage = lazy(() => import("./pages/AuthPage"));
@@ -149,6 +150,7 @@ function AppRoutes() {
   return (
     <>
       <DeepLinkHandler />
+      <AppResumeAuthGuard />
       <RevenueCatBootstrap />
       <PushNotificationBootstrap />
 

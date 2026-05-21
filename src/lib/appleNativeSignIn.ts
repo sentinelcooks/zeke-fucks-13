@@ -88,6 +88,7 @@ export async function signInWithAppleNative(opts: {
 
   let appleResult: AppleAuthorizeResponse;
   try {
+    console.log("[auth] apple native start");
     appleResult = (await SignInWithApple.authorize({
       clientId: opts.clientId,
       // redirectURI is required by the plugin's TS types but unused for native
@@ -119,6 +120,7 @@ export async function signInWithAppleNative(opts: {
   if (error || !data?.user) {
     throw new Error(error?.message || "Supabase rejected Apple identity token");
   }
+  console.log("[auth] exchange success");
 
   // Apple returns givenName/familyName ONLY on the first sign-in. If present,
   // persist them so the rest of the app (which reads display_name from

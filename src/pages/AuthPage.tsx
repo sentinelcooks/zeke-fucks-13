@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Eye, EyeOff, ArrowRight, ArrowLeft, Mail, CheckCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useLocation, Link } from "react-router-dom";
@@ -144,24 +144,39 @@ const AuthPage = () => {
 
   useEffect(() => {
     if (isAuthenticated && !savingOnboarding && !confirmationPending && !forgotMode) {
-      console.log("[auth] AuthPage redirect effect → /dashboard");
+      console.log("[auth] navigating dashboard");
       navigate("/dashboard", { replace: true });
     }
   }, [isAuthenticated, savingOnboarding, confirmationPending, forgotMode, navigate]);
 
+  const oauthTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearOauthTimeout = useCallback(() => {
+    if (oauthTimeoutRef.current) {
+      clearTimeout(oauthTimeoutRef.current);
+      oauthTimeoutRef.current = null;
+    }
+  }, []);
+
   // Clear oauthLoading as soon as DeepLinkHandler signals the callback was received.
   useEffect(() => {
-    const clear = () => setOauthLoading(null);
+    const clear = () => {
+      clearOauthTimeout();
+      console.log("[auth] loading cleared");
+      setOauthLoading(null);
+    };
     window.addEventListener("sentinel:auth-callback", clear);
     return () => window.removeEventListener("sentinel:auth-callback", clear);
-  }, []);
+  }, [clearOauthTimeout]);
 
   // Clear oauthLoading when navigated back to /auth with an error (e.g. oauth_failed).
   useEffect(() => {
     if (location.search.includes("error=")) {
+      clearOauthTimeout();
+      console.log("[auth] loading cleared");
       setOauthLoading(null);
     }
-  }, [location.search]);
+  }, [location.search, clearOauthTimeout]);
 
   // After OAuth redirect lands us back on this page already authenticated,
   // capture the user and save onboarding. The useEffect above will then route to /dashboard.
@@ -170,7 +185,12 @@ const AuthPage = () => {
     const sub = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
-        if (event === "SIGNED_IN") persistRememberChoice(remember);
+        if (event === "SIGNED_IN") {
+          persistRememberChoice(remember);
+          // Covers Apple native sign-in which does not go through the deep-link path.
+          clearOauthTimeout();
+          setOauthLoading(null);
+        }
         await saveOnboardingToDb(session.user.id);
       }
     });
@@ -178,7 +198,7 @@ const AuthPage = () => {
       mounted = false;
       sub.data.subscription.unsubscribe();
     };
-  }, [saveOnboardingToDb, remember]);
+  }, [saveOnboardingToDb, remember, clearOauthTimeout]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -218,6 +238,17 @@ const AuthPage = () => {
   const handleOAuth = async (provider: "google" | "apple") => {
     setError("");
     setOauthLoading(provider);
+    console.log(`[auth] oauth started ${provider}`);
+
+    // 20-second safety timeout — clears spinner if no callback arrives.
+    clearOauthTimeout();
+    oauthTimeoutRef.current = setTimeout(() => {
+      oauthTimeoutRef.current = null;
+      console.log("[auth] loading cleared");
+      setOauthLoading(null);
+      setError("Sign-in timed out. Please try again.");
+    }, 20000);
+
     try {
       persistRememberChoice(remember);
 
@@ -232,11 +263,15 @@ const AuthPage = () => {
           // saveOnboardingToDb + redirect via the existing useEffect.
           return;
         } catch (err) {
+          clearOauthTimeout();
           if (err instanceof AppleSignInCancelledError) {
+            console.log("[auth] browser cancelled");
+            console.log("[auth] loading cleared");
             setOauthLoading(null);
             return;
           }
           setError(err instanceof Error ? err.message : "Apple sign-in failed");
+          console.log("[auth] loading cleared");
           setOauthLoading(null);
           return;
         }
@@ -254,7 +289,9 @@ const AuthPage = () => {
           },
         });
         if (oauthError || !data?.url) {
+          clearOauthTimeout();
           setError(oauthError?.message || `${provider} sign-in failed`);
+          console.log("[auth] loading cleared");
           setOauthLoading(null);
           return;
         }
@@ -266,7 +303,15 @@ const AuthPage = () => {
           handle.remove();
           const { data: { session } } = await supabase.auth.getSession();
           if (!session) {
-            setOauthLoading(null);
+            // Give in-flight exchangeCodeForSession a 500ms grace period before clearing.
+            await new Promise(resolve => setTimeout(resolve, 500));
+            const { data: { session: sessionRetry } } = await supabase.auth.getSession();
+            if (!sessionRetry) {
+              clearOauthTimeout();
+              console.log("[auth] browser cancelled");
+              console.log("[auth] loading cleared");
+              setOauthLoading(null);
+            }
           }
         });
         return;
@@ -277,12 +322,16 @@ const AuthPage = () => {
         options: { redirectTo: getAuthRedirectUrl() },
       });
       if (oauthError) {
+        clearOauthTimeout();
         setError(oauthError.message || `${provider} sign-in failed`);
+        console.log("[auth] loading cleared");
         setOauthLoading(null);
         return;
       }
     } catch (err) {
+      clearOauthTimeout();
       setError(err instanceof Error ? err.message : `${provider} sign-in failed`);
+      console.log("[auth] loading cleared");
       setOauthLoading(null);
     }
   };

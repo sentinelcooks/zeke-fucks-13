@@ -21,7 +21,7 @@ export function DeepLinkHandler() {
         const isCallback = url.startsWith("sentinel://auth/callback");
         const isPasswordReset = url.startsWith("sentinel://auth/reset-password");
         if (!isCallback && !isPasswordReset) return;
-        if (import.meta.env.DEV) console.log("[DeepLink] appUrlOpen:", url);
+        console.log("[auth] callback received", url);
 
         const successPath = isPasswordReset ? "/auth/reset-password" : "/dashboard";
         const errorPath = isPasswordReset
@@ -39,13 +39,16 @@ export function DeepLinkHandler() {
           // Close SFSafariViewController first so the app surface is visible
           // while the code exchange resolves — eliminates the white-screen flash.
           try { await Browser.close(); } catch { /* no-op */ }
-          window.dispatchEvent(new Event("sentinel:auth-callback"));
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
-            if (import.meta.env.DEV)
-              console.error("[DeepLink] exchangeCodeForSession error:", error.message);
+            console.error("[auth] exchangeCodeForSession error:", error.message);
+            window.dispatchEvent(new Event("sentinel:auth-callback"));
             navigate(errorPath, { replace: true });
           } else {
+            console.log("[auth] exchange success");
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) console.log("[auth] session found");
+            window.dispatchEvent(new Event("sentinel:auth-callback"));
             navigate(successPath, { replace: true });
           }
           return;
