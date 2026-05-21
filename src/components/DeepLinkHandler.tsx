@@ -36,9 +36,11 @@ export function DeepLinkHandler() {
         const code = params.get("code");
 
         if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          // Close the in-app SFSafariViewController opened for OAuth, if any.
+          // Close SFSafariViewController first so the app surface is visible
+          // while the code exchange resolves — eliminates the white-screen flash.
           try { await Browser.close(); } catch { /* no-op */ }
+          window.dispatchEvent(new Event("sentinel:auth-callback"));
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
             if (import.meta.env.DEV)
               console.error("[DeepLink] exchangeCodeForSession error:", error.message);
@@ -56,11 +58,12 @@ export function DeepLinkHandler() {
           const accessToken = hash.get("access_token");
           const refreshToken = hash.get("refresh_token");
           if (accessToken && refreshToken) {
+            try { await Browser.close(); } catch { /* no-op */ }
+            window.dispatchEvent(new Event("sentinel:auth-callback"));
             const { error } = await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken,
             });
-            try { await Browser.close(); } catch { /* no-op */ }
             if (!error) {
               navigate(successPath, { replace: true });
               return;
@@ -69,6 +72,7 @@ export function DeepLinkHandler() {
         }
 
         try { await Browser.close(); } catch { /* no-op */ }
+        window.dispatchEvent(new Event("sentinel:auth-callback"));
         navigate(errorPath, { replace: true });
       }).then((handle) => {
         removeListener = () => handle.remove();

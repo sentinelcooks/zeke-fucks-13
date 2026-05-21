@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, startTransition, memo, type JSX } from "react";
+import { useState, useEffect, useCallback, startTransition, memo, useMemo, type JSX } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import type { ComponentType, ReactNode } from "react";
@@ -934,20 +934,22 @@ export default function OnboardingPage() {
   const goBack = useCallback(() => startTransition(() => setStep((s) => Math.max(0, s - 1))), []);
   const goPaywall = useCallback(() => navigate("/paywall"), [navigate]);
 
-  const current =
+  const current = useMemo(() =>
     step === 0 ? <ScreenHero        key="s1" onNext={goNext} /> :
     step === 1 ? <ScreenValue       key="s2" onNext={goNext} /> :
     step === 2 ? <ScreenPersonalize key="s3" onBack={goBack} onNext={goNext} /> :
-                 <ScreenComparison  key="s4" onBack={goBack} onNext={goPaywall} />;
+                 <ScreenComparison  key="s4" onBack={goBack} onNext={goPaywall} />,
+  [step, goNext, goBack, goPaywall]);
 
   return (
-    <AnimatePresence initial={false}>
+    <AnimatePresence initial={false} mode="wait">
       <motion.div
         key={step}
-        initial={{ opacity: 0, x: 24 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: -24 }}
-        transition={pageT}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.18, ease: "easeInOut" }}
+        style={{ willChange: "opacity" }}
       >
         {current}
       </motion.div>
@@ -972,7 +974,7 @@ function FeatureAccordion() {
     >
       <FeatureCard id="live" title="Live Games" icon={Calendar}
         isExpanded={expanded === "live"} onToggle={() => toggle("live")}>
-        <LiveGameMini />
+        <LiveGameMini active={expanded === "live"} />
       </FeatureCard>
       <FeatureCard id="ai" title="AI Picks" icon={Brain}
         isExpanded={expanded === "ai"} onToggle={() => toggle("ai")}>
@@ -1046,14 +1048,14 @@ function FeatureCard({
   );
 }
 
-function LiveGameMini() {
+function LiveGameMini({ active }: { active?: boolean }) {
   const reduce = useReducedMotion();
   const [seconds, setSeconds] = useState(134);
   useEffect(() => {
-    if (reduce) return;
+    if (reduce || !active) return;
     const id = setInterval(() => setSeconds((s) => (s <= 1 ? 134 : s - 1)), 1000);
     return () => clearInterval(id);
-  }, [reduce]);
+  }, [reduce, active]);
   const m = Math.floor(seconds / 60);
   const s = (seconds % 60).toString().padStart(2, "0");
 

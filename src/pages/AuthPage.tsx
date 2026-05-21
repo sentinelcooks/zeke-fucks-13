@@ -140,6 +140,20 @@ const AuthPage = () => {
     }
   }, [isAuthenticated, savingOnboarding, confirmationPending, forgotMode, navigate]);
 
+  // Clear oauthLoading as soon as DeepLinkHandler signals the callback was received.
+  useEffect(() => {
+    const clear = () => setOauthLoading(null);
+    window.addEventListener("sentinel:auth-callback", clear);
+    return () => window.removeEventListener("sentinel:auth-callback", clear);
+  }, []);
+
+  // Clear oauthLoading when navigated back to /auth with an error (e.g. oauth_failed).
+  useEffect(() => {
+    if (location.search.includes("error=")) {
+      setOauthLoading(null);
+    }
+  }, [location.search]);
+
   // After OAuth redirect lands us back on this page already authenticated,
   // capture the user and save onboarding. The useEffect above will then route to /dashboard.
   useEffect(() => {
@@ -214,8 +228,17 @@ const AuthPage = () => {
           setOauthLoading(null);
           return;
         }
-        await Browser.open({ url: data.url, presentationStyle: "popover" });
-        // DeepLinkHandler closes the in-app browser when SIGNED_IN fires.
+        await Browser.open({ url: data.url, presentationStyle: "fullscreen" });
+
+        // Detect cancellation — fires when user dismisses SFSafariViewController
+        // without completing auth (swipe down, tap Done, etc.).
+        const handle = await Browser.addListener("browserFinished", async () => {
+          handle.remove();
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            setOauthLoading(null);
+          }
+        });
         return;
       }
 
