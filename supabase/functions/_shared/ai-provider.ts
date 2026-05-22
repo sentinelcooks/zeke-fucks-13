@@ -1,5 +1,15 @@
-// Shared AI provider with cascading fallback:
-// Gemini 2.0 Flash Lite → Grok fast-reasoning → Grok mini → OpenAI (optional)
+// Shared AI provider with cascading fallback.
+//
+// Primary path is Grok with three tiers selected by the caller via the
+// optional `tier` field on AICallOptions:
+//   - "normal" (default) → ANALYZER_MODEL  (grok-4.3)
+//   - "cheap"            → FALLBACK_MODEL  (grok-4.20-0309-non-reasoning)
+//   - "heavy"            → HEAVY_REASONING_MODEL  (grok-4.20-0309-reasoning)
+//
+// Each tier cascades down on failure to the next-lighter Grok model, then
+// hits Gemini (if GEMINI_API_KEY has quota) and finally OpenAI (if set) as
+// last-resort backstops so "Analysis currently unavailable" only shows when
+// every provider is actually down.
 
 export const ANTI_GENERIC_INSTRUCTION =
   `You must generate unique, context-aware analysis. Do NOT reuse generic templates or repeated phrasing. Tailor analysis specifically to the provided player, matchup, stats, and context passed in this prompt. Reference the actual data provided. Vary sentence structure across responses. Avoid phrases like "this is a strong play" unless justified by specific data points. Each output must feel specific to this exact query and not be reusable for any other query.`;
@@ -18,17 +28,27 @@ export interface AITool {
   parameters: Record<string, unknown>;
 }
 
+export type AITier = "normal" | "cheap" | "heavy";
+
 export interface AICallOptions {
   fnName: string;
   messages: AIMessage[];
   tool?: AITool;
   maxTokens?: number;
   temperature?: number;
+  /**
+   * Routing tier. Defaults to "normal" (grok-4.3).
+   * - "cheap"  → start at the non-reasoning fallback; for low-stakes UX copy
+   *              (e.g. prop-explainer, rotating-tip).
+   * - "heavy"  → start at the reasoning model; for hard/conflicting picks
+   *              where the analyzer disagrees with deterministic scoring.
+   */
+  tier?: AITier;
 }
 
 export interface AICallResult {
   output: string | Record<string, unknown>;
-  provider: "gemini" | "grok-fast" | "grok-mini" | "openai";
+  provider: "grok" | "gemini" | "openai";
   model: string;
 }
 
@@ -40,11 +60,27 @@ export class AIProviderError extends Error {
 }
 
 const GEMINI_MODEL = "gemini-2.0-flash-lite";
-const GROK_FAST_MODEL = "grok-4-1-fast-reasoning";
-const GROK_MINI_MODEL = "grok-3-mini";
 const OPENAI_MODEL = "gpt-4o-mini";
 const GROK_ENDPOINT = "https://api.x.ai/v1/chat/completions";
 const OPENAI_ENDPOINT = "https://api.openai.com/v1/chat/completions";
+
+// Grok models are env-driven so they can be rotated without redeploying.
+// Defaults match the production xAI team entitlements as of 2026-05.
+const ANALYZER_MODEL_DEFAULT = "grok-4.3";
+const FALLBACK_MODEL_DEFAULT = "grok-4.20-0309-non-reasoning";
+const HEAVY_REASONING_MODEL_DEFAULT = "grok-4.20-0309-reasoning";
+
+function grokModelsForTier(tier: AITier): string[] {
+  const analyzer = Deno.env.get("ANALYZER_MODEL") ?? ANALYZER_MODEL_DEFAULT;
+  const fallback = Deno.env.get("FALLBACK_MODEL") ?? FALLBACK_MODEL_DEFAULT;
+  const heavy = Deno.env.get("HEAVY_REASONING_MODEL") ?? HEAVY_REASONING_MODEL_DEFAULT;
+  // Each tier degrades to lighter models on failure rather than escalating —
+  // a heavy-tier failure most often means rate-limit, so retrying lighter is
+  // both cheaper and faster.
+  if (tier === "heavy") return [heavy, analyzer, fallback];
+  if (tier === "cheap") return [fallback];
+  return [analyzer, fallback];
+}
 
 // Gemini doesn't accept additionalProperties — strip it recursively
 function stripAdditionalProps(schema: unknown): unknown {
@@ -125,7 +161,7 @@ async function tryGemini(
 
 async function tryOpenAICompat(
   fnName: string,
-  providerLabel: "grok-fast" | "grok-mini" | "openai",
+  providerLabel: "grok" | "openai",
   endpoint: string,
   apiKey: string,
   model: string,
@@ -182,31 +218,34 @@ async function tryOpenAICompat(
 }
 
 export async function callAI(opts: AICallOptions): Promise<AICallResult> {
-  const { fnName, messages, tool, maxTokens = 600, temperature = 0.3 } = opts;
+  const { fnName, messages, tool, maxTokens = 600, temperature = 0.3, tier = "normal" } = opts;
 
-  // 1. Gemini
+  // 1. Grok (primary) — three configurable models per tier.
+  const grokKey = Deno.env.get("GROK_API_KEY");
+  if (grokKey) {
+    const models = grokModelsForTier(tier);
+    for (let i = 0; i < models.length; i++) {
+      const model = models[i];
+      const next = i + 1 < models.length ? models[i + 1] : "gemini";
+      try {
+        const output = await tryOpenAICompat(
+          fnName, "grok", GROK_ENDPOINT, grokKey, model, next,
+          messages, tool, maxTokens, temperature,
+        );
+        return { output, provider: "grok", model };
+      } catch { /* try next model */ }
+    }
+  } else {
+    console.log(`[ai-provider] fn=${fnName} GROK_API_KEY not set — skipping grok`);
+  }
+
+  // 2. Gemini backstop — only used if every Grok model failed.
   try {
     const output = await tryGemini(fnName, messages, tool, maxTokens, temperature);
     return { output, provider: "gemini", model: GEMINI_MODEL };
   } catch { /* fall through */ }
 
-  // 2 & 3. Grok (fast-reasoning, then mini — same key)
-  const grokKey = Deno.env.get("GROK_API_KEY");
-  if (grokKey) {
-    try {
-      const output = await tryOpenAICompat(fnName, "grok-fast", GROK_ENDPOINT, grokKey, GROK_FAST_MODEL, "grok-mini", messages, tool, maxTokens, temperature);
-      return { output, provider: "grok-fast", model: GROK_FAST_MODEL };
-    } catch { /* fall through */ }
-
-    try {
-      const output = await tryOpenAICompat(fnName, "grok-mini", GROK_ENDPOINT, grokKey, GROK_MINI_MODEL, "openai", messages, tool, maxTokens, temperature);
-      return { output, provider: "grok-mini", model: GROK_MINI_MODEL };
-    } catch { /* fall through */ }
-  } else {
-    console.log(`[ai-provider] fn=${fnName} GROK_API_KEY not set — skipping grok`);
-  }
-
-  // 4. OpenAI (optional)
+  // 3. OpenAI last-resort.
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
   if (openaiKey) {
     try {

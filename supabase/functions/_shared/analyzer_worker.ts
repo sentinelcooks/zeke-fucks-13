@@ -33,7 +33,10 @@ import {
   type QueueRow,
   type SupaClient,
 } from "./analyzer_queue.ts";
-import { buildNbaQueueFinalization } from "./nba_queue_finalization.ts";
+import {
+  buildGenericQueueFinalization,
+  buildNbaQueueFinalization,
+} from "./nba_queue_finalization.ts";
 import {
   normalizeCanonicalVerdict,
   normalizeConfidencePercent,
@@ -41,6 +44,24 @@ import {
 } from "./canonical_verdict.ts";
 import type { ScoredPlay } from "./edge_scoring.ts";
 import { parseRetryAfterMs } from "./sport_scan.ts";
+
+// Game-day in America/New_York. The scanner side already computes game_date
+// via toETDate() but the analyzer worker used to slice the first 10 chars of
+// the UTC commence_time ISO string — for any 8pm-ET-or-later tipoff that's
+// tomorrow's UTC date, NOT the ET game day. Frontend filters daily_picks by
+// game_date = todayET, so picks with the UTC-date drifted to tomorrow never
+// surfaced on Today's Edge or the Picks tab. Mirror sport_scan.toETDate here.
+function workerToETDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
 
 // ──────────────────────────────────────────────────────────────────────
 // Edge cap per sport. Mirrors EDGE_CAP_PER_SPORT in sport_scan.ts; kept
@@ -234,7 +255,7 @@ function buildScoredPlayFromQueueRow(
     reasoning: analyzerReasoning || scannerReasoning,
     event_id: (c.event_id as string | null) ?? null,
     commence_time: (c.commence_time as string | null) ?? null,
-    game_date: (c.commence_time as string | null)?.slice(0, 10) ?? null,
+    game_date: workerToETDate(c.commence_time as string | null),
     model_diagnostics: merged,
   };
 }
@@ -646,12 +667,23 @@ async function processRow(args: {
 
   // Build scored play + recompute tier via the edge-gate-aware finalizer.
   const scored = buildScoredPlayFromQueueRow(row, ar as Record<string, unknown>);
-  const finalization = buildNbaQueueFinalization({
-    baseDiagnostics: scored.model_diagnostics ?? null,
-    currentEdgeCount: args.edgeCount,
-    edgeCap: args.edgeCap,
-    finalized: scored,
-  });
+  // NBA picks go through the NBA-specific edge gate (heavy juice, market
+  // quality, opponent resolution, playoff series). MLB/NHL/UFC picks carry
+  // none of those diagnostics, so the NBA gate would always fail — that's
+  // why tier='edge' was permanently empty for those sports. Route by sport.
+  const finalization = row.sport === "nba"
+    ? buildNbaQueueFinalization({
+        baseDiagnostics: scored.model_diagnostics ?? null,
+        currentEdgeCount: args.edgeCount,
+        edgeCap: args.edgeCap,
+        finalized: scored,
+      })
+    : buildGenericQueueFinalization({
+        baseDiagnostics: scored.model_diagnostics ?? null,
+        currentEdgeCount: args.edgeCount,
+        edgeCap: args.edgeCap,
+        finalized: scored,
+      });
 
   // Drop low-confidence rows the gate downgrades to value if they fall
   // below the value floor (mirror legacy behavior at confidence < 0.50).

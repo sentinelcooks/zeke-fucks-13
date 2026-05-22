@@ -47,6 +47,96 @@ function promotionBlockerFor(args: {
   return null;
 }
 
+// For sports other than NBA the NBA edge gate would always fail (it requires
+// NBA-only diagnostic fields like marketDataQuality / opponentResolutionStatus
+// and applies NBA heavy-juice thresholds). MLB/NHL/UFC picks never carry those
+// fields, so every queue row was being demoted to daily/value and tier='edge'
+// was permanently empty for those sports. This finalizer mirrors the non-NBA
+// branch in sport_scan.ts (top-N within edge cap, no NBA gate) but operates
+// per-row using the running edge count the worker maintains.
+export function buildGenericQueueFinalization(args: {
+  baseDiagnostics: Record<string, unknown> | null | undefined;
+  currentEdgeCount: number;
+  edgeCap: number;
+  finalized: ScoredPlay;
+  now?: Date;
+}): NbaQueueFinalizationResult {
+  const hitRate = Math.round(normalizeConfidencePercent(args.finalized.confidence));
+  const confidence = roundedConfidence01(args.finalized);
+  const canonicalVerdict = finalCanonicalVerdict(args.finalized, hitRate);
+
+  let promotionBlocker: string | null = null;
+  if (canonicalVerdict !== "STRONG" && canonicalVerdict !== "LEAN") {
+    promotionBlocker = "verdict_not_strong_or_lean";
+  } else if (hitRate < 70) {
+    promotionBlocker = "confidence_below_edge_min";
+  } else if (args.currentEdgeCount >= args.edgeCap) {
+    promotionBlocker = "edge_cap_full";
+  }
+  const canPromote = promotionBlocker === null;
+  const finalTier: NbaQueueFinalTier = canPromote
+    ? "edge"
+    : confidence >= 0.70
+      ? "daily"
+      : "value";
+
+  const diagnostics: Record<string, unknown> = { ...(args.baseDiagnostics ?? {}) };
+  delete diagnostics.analyzer_skipped_reason;
+  diagnostics.canonical_confidence = hitRate;
+  diagnostics.canonical_verdict = canonicalVerdict;
+  diagnostics.stored_confidence = hitRate;
+  diagnostics.stored_verdict = canonicalVerdict;
+  diagnostics.postGateTier = finalTier;
+  diagnostics.final_edge_eligible = canPromote;
+  diagnostics.edge_pool_rank = null;
+  diagnostics.edge_pool_selected = canPromote;
+  diagnostics.edge_pool_selection_reason = canPromote
+    ? "selected_from_queue_generic"
+    : promotionBlocker;
+  diagnostics.evPct = Math.round(args.finalized.ev_pct * 100) / 100;
+  diagnostics.modelEdge = Math.round(args.finalized.edge * 10000) / 10000;
+  diagnostics.queue_processed_at = (args.now ?? new Date()).toISOString();
+
+  // Synthesize a minimal gate result matching the NBA gate shape so the
+  // worker's downstream telemetry (which assumes that shape) is uniform.
+  // Non-NBA sports don't have an analogous gate today; this is a placeholder.
+  const gate: NbaEdgeGateResult = {
+    ok: canPromote,
+    reasons: promotionBlocker ? [promotionBlocker] : [],
+    hardSafetyFail: false,
+    edge_gate_result: canPromote ? "passed" : "failed",
+    edge_gate_decision: {},
+    inputs: {
+      canonical_confidence: hitRate,
+      canonical_verdict: canonicalVerdict,
+      stored_confidence: hitRate,
+      stored_verdict: canonicalVerdict,
+      oddsAmerican: args.finalized.odds,
+      evPct: Math.round(args.finalized.ev_pct * 100) / 100,
+      modelEdge: Math.round(args.finalized.edge * 10000) / 10000,
+      bookCount: null,
+      marketDataQuality: null,
+      marketDepth: null,
+      opponentResolutionStatus: null,
+      hasTeam: !!args.finalized.team,
+      hasOpponent: !!args.finalized.opponent,
+    },
+    heavyJuiceThreshold: 0,
+    heavyJuiceAction: "penalty",
+  };
+
+  return {
+    canPromote,
+    canonicalVerdict,
+    confidence,
+    hitRate,
+    diagnostics,
+    finalTier,
+    gate,
+    promotionBlocker,
+  };
+}
+
 export function buildNbaQueueFinalization(args: {
   baseDiagnostics: Record<string, unknown> | null | undefined;
   currentEdgeCount: number;

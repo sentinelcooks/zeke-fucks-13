@@ -6,9 +6,11 @@ function compactKey(value: string | null | undefined): string {
     .trim()
     .toLowerCase()
     .replace(/['.]/g, "")
-    .replace(/&/g, "+")
+    .replace(/[&+]/g, "_")
     .replace(/-/g, "_")
-    .replace(/\s+/g, "_");
+    .replace(/\s+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
 }
 
 const NBA_PROP_ALIASES: Record<string, string> = {

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { normalizeNbaPropType } from "../_shared/prop_normalization.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,6 +27,10 @@ const profitUnits = (odds: unknown, result: string | null, stake = 1): number | 
   return stake * (americanToDecimal(a) - 1);
 };
 
+// Keys are the canonical output of normalizeNbaPropType (see
+// _shared/prop_normalization.ts). Combo props sum the listed stats — the
+// loop at the use-site adds each box-score key into actualValue, so
+// "pts+reb+ast" naturally evaluates to points + rebounds + assists.
 const PROP_TO_STAT: Record<string, string[]> = {
   points: ["points"],
   rebounds: ["rebounds"],
@@ -34,6 +39,12 @@ const PROP_TO_STAT: Record<string, string[]> = {
   threes: ["threePointFieldGoalsMade"],
   steals: ["steals"],
   blocks: ["blocks"],
+  turnovers: ["turnovers"],
+  "pts+reb+ast": ["points", "rebounds", "assists"],
+  "pts+reb": ["points", "rebounds"],
+  "pts+ast": ["points", "assists"],
+  "reb+ast": ["rebounds", "assists"],
+  "stl+blk": ["steals", "blocks"],
 };
 
 type MlbStatKey =
@@ -367,6 +378,7 @@ async function gradeNbaProps(
                   0,
                 steals: stats["STL"] || 0,
                 blocks: stats["BLK"] || 0,
+                turnovers: stats["TO"] || 0,
               };
             }
           }
@@ -413,7 +425,11 @@ async function gradeNbaProps(
       });
       continue;
     }
-    const statKeys = PROP_TO_STAT[(pick.prop_type || "").toLowerCase()] || [];
+    // Normalize through the canonical NBA prop key so any DB row variant
+    // ("PRA", "Points + Rebounds + Assists", "points_rebounds_assists",
+    // "pts_reb_ast", …) resolves to the same lookup key the scanner stores.
+    const canonicalProp = normalizeNbaPropType(pick.prop_type || "");
+    const statKeys = PROP_TO_STAT[canonicalProp] || [];
     if (statKeys.length === 0) {
       skippedNoData++;
       recordSkip(ctx, pick, "unsupported_prop", {
@@ -1484,6 +1500,20 @@ Deno.serve(async (req) => {
         provider_game_status: ctx.diagnostics,
       },
     };
+
+    // Skip-reason rollup keyed by (sport, reason) so a single grep on
+    // `[grade-picks] skip_summary` answers "why did N picks not grade?"
+    // without scanning every per-pick line.
+    const skipBreakdown: Record<string, Record<string, number>> = {};
+    for (const d of ctx.diagnostics) {
+      const sport = d.sport || "unknown";
+      const reason = d.reason || "unknown";
+      (skipBreakdown[sport] ||= {})[reason] =
+        (skipBreakdown[sport]?.[reason] ?? 0) + 1;
+    }
+    console.log(
+      `[grade-picks] skip_summary ${JSON.stringify(skipBreakdown)}`,
+    );
 
     console.log(
       `[grade-picks] done` +

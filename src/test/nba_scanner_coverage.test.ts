@@ -63,6 +63,23 @@ describe("NBA prop normalization", () => {
     expect(normalizeNbaPropType("player_threes")).toBe("3-pointers");
   });
 
+  it("collapses every PRA alias to the canonical pts+reb+ast key", () => {
+    for (const alias of [
+      "PRA",
+      "Points + Rebounds + Assists",
+      "Points+Rebounds+Assists",
+      "points_rebounds_assists",
+      "player_points_rebounds_assists",
+      "pts_reb_ast",
+      "pts+reb+ast",
+    ]) {
+      expect(normalizeNbaPropType(alias)).toBe("pts+reb+ast");
+    }
+    expect(normalizeNbaPropType("Points + Rebounds")).toBe("pts+reb");
+    expect(normalizeNbaPropType("rebounds_assists")).toBe("reb+ast");
+    expect(normalizeNbaPropType("stl_blk")).toBe("stl+blk");
+  });
+
   it("normalizes Jaden McDaniels 3-pointers Made to 3-pointers", () => {
     const candidate = makeNbaCandidate({
       player_name: "Jaden McDaniels",
