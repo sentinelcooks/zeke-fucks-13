@@ -53,7 +53,7 @@ workflows:
         script: |
           xcode-project use-profiles
 
-        - name: Build IPA
+      - name: Build IPA
         script: |
           echo "Fixing Capacitor SPM package before Xcode build..."
 
