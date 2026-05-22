@@ -53,7 +53,7 @@ workflows:
         script: |
           xcode-project use-profiles
 
-      - name: Build IPA
+        - name: Build IPA
         script: |
           echo "Fixing Capacitor SPM package before Xcode build..."
 
@@ -63,15 +63,28 @@ workflows:
           p = Path("ios/App/CapApp-SPM/Package.swift")
           s = p.read_text()
 
-          s = s.replace("\\\\", "/")
+          # Fix Windows paths if Capacitor generated them
+          s = s.replace("\\", "/")
 
-          line = '        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.3.1"),\n'
+          # Remove incompatible Apple Sign In native plugin from SPM graph
+          lines = s.splitlines()
+          lines = [
+              line for line in lines
+              if "CapacitorCommunityAppleSignIn" not in line
+              and "@capacitor-community/apple-sign-in" not in line
+          ]
+          s = "\n".join(lines) + "\n"
+
+          # Make sure Capacitor 8 SwiftPM dependency exists
+          cap_line = '        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.3.1"),'
           if "capacitor-swift-pm.git" not in s:
-              s = s.replace("    dependencies: [\n", "    dependencies: [\n" + line, 1)
+              s = s.replace("    dependencies: [\n", "    dependencies: [\n" + cap_line + "\n", 1)
 
           p.write_text(s)
           print(s)
           PY
+
+          rm -f ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
           xcodebuild -resolvePackageDependencies -project ios/App/App.xcodeproj -scheme App
           xcodebuild -list -project ios/App/App.xcodeproj
