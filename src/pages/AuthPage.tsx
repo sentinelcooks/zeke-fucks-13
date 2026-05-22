@@ -10,15 +10,6 @@ import sentinelLogo from "@/assets/sentinel-lock.jpg";
 import { SplashScreen } from "@/components/SplashScreen";
 import { Capacitor } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
-import {
-  signInWithAppleNative,
-  isAppleNativeAvailable,
-  AppleSignInCancelledError,
-} from "@/lib/appleNativeSignIn";
-
-// iOS bundle identifier — must be allow-listed in Supabase → Auth → Providers
-// → Apple → Client IDs for native Sign in with Apple identity tokens to verify.
-const IOS_BUNDLE_ID = "com.sentinelprops.app";
 
 // Sentinel purple brand
 const ACCENT = "#A855F7";       // primary purple
@@ -45,12 +36,6 @@ const GoogleGlyph = () => (
   </svg>
 );
 
-const AppleGlyph = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
-    <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35-4.78-4.9-4.1-12.36 1.34-12.66 1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.49 3.77zM12 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
-  </svg>
-);
-
 const AuthPage = () => {
   const location = useLocation();
   const locationState = location.state as { mode?: "login" | "signup" } | null;
@@ -61,7 +46,7 @@ const AuthPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [oauthLoading, setOauthLoading] = useState<"google" | "apple" | null>(null);
+  const [oauthLoading, setOauthLoading] = useState<"google" | null>(null);
   const [remember, setRemember] = useState(
     () => localStorage.getItem("primal-remember") !== "false"
   );
@@ -187,7 +172,6 @@ const AuthPage = () => {
       if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
         if (event === "SIGNED_IN") {
           persistRememberChoice(remember);
-          // Covers Apple native sign-in which does not go through the deep-link path.
           clearOauthTimeout();
           setOauthLoading(null);
         }
@@ -235,7 +219,7 @@ const AuthPage = () => {
     }
   };
 
-  const handleOAuth = async (provider: "google" | "apple") => {
+  const handleOAuth = async (provider: "google") => {
     setError("");
     setOauthLoading(provider);
     console.log(`[auth] oauth started ${provider}`);
@@ -251,31 +235,6 @@ const AuthPage = () => {
 
     try {
       persistRememberChoice(remember);
-
-      // Native iOS Apple Sign In — use AuthenticationServices via the
-      // capacitor-community plugin instead of the OAuth-in-browser flow.
-      // Avoids the SFSafariViewController white screen and matches Apple's
-      // App Store review guidelines (4.8) for in-app Apple Sign In.
-      if (provider === "apple" && isAppleNativeAvailable()) {
-        try {
-          await signInWithAppleNative({ clientId: IOS_BUNDLE_ID });
-          // onAuthStateChange (SIGNED_IN) will fire and trigger
-          // saveOnboardingToDb + redirect via the existing useEffect.
-          return;
-        } catch (err) {
-          clearOauthTimeout();
-          if (err instanceof AppleSignInCancelledError) {
-            console.log("[auth] browser cancelled");
-            console.log("[auth] loading cleared");
-            setOauthLoading(null);
-            return;
-          }
-          setError(err instanceof Error ? err.message : "Apple sign-in failed");
-          console.log("[auth] loading cleared");
-          setOauthLoading(null);
-          return;
-        }
-      }
 
       if (Capacitor.isNativePlatform()) {
         // Apple rejects opening Safari/Chrome for sign-in. Use SFSafariViewController
@@ -824,25 +783,6 @@ const AuthPage = () => {
               <>
                 <GoogleGlyph />
                 Continue with Google
-              </>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleOAuth("apple")}
-            disabled={!!oauthLoading}
-            className="w-full py-3 rounded-full text-[13px] font-semibold text-white flex items-center justify-center gap-2.5 transition-all hover:bg-white/[0.06] disabled:opacity-50"
-            style={{
-              background: 'hsla(0,0%,100%,0.03)',
-              border: '1px solid hsla(0,0%,100%,0.08)',
-            }}
-          >
-            {oauthLoading === "apple" ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <>
-                <AppleGlyph />
-                Continue with Apple
               </>
             )}
           </button>
