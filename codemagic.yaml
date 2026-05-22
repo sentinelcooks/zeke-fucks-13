@@ -55,6 +55,28 @@ workflows:
 
       - name: Build IPA
         script: |
+          echo "Fixing Capacitor SPM package before Xcode build..."
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          p = Path("ios/App/CapApp-SPM/Package.swift")
+          s = p.read_text()
+
+          s = s.replace("\\\\", "/")
+
+          line = '        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.3.1"),\n'
+          if "capacitor-swift-pm.git" not in s:
+              s = s.replace("    dependencies: [\n", "    dependencies: [\n" + line, 1)
+
+          p.write_text(s)
+          print(s)
+          PY
+
+          xcodebuild -resolvePackageDependencies -project ios/App/App.xcodeproj -scheme App
+          xcodebuild -list -project ios/App/App.xcodeproj
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -showBuildSettings
+
           xcode-project build-ipa \
             --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME"
