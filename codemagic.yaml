@@ -19,7 +19,7 @@ workflows:
         - sentinel_ios_env
 
       vars:
-        XCODE_PROJECT: "ios/App/App.xcodeproj"
+        XCODE_PROJECT: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
         BUNDLE_ID: "com.sentinelprops.app"
 
