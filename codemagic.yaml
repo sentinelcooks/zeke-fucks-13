@@ -59,6 +59,7 @@ workflows:
 
           python3 <<'PY'
           from pathlib import Path
+          import re
 
           p = Path("ios/App/CapApp-SPM/Package.swift")
           s = p.read_text()
@@ -73,6 +74,23 @@ workflows:
 
           p.write_text(s)
           print(s)
+
+          # Widen the Apple Sign In plugin's capacitor-swift-pm requirement so
+          # it accepts Capacitor 8.x. Upstream pins `from: "7.0.0"` which SPM
+          # treats as 7.0.0..<8.0.0 — conflicts with the rest of the graph.
+          plugin_pkg = Path("node_modules/@capacitor-community/apple-sign-in/Package.swift")
+          if plugin_pkg.exists():
+              t = plugin_pkg.read_text()
+              t_new = re.sub(
+                  r'\.package\(\s*url:\s*"https://github\.com/ionic-team/capacitor-swift-pm\.git"\s*,\s*from:\s*"7\.0\.0"\s*\)',
+                  '.package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", "7.0.0"..<"9.0.0")',
+                  t,
+              )
+              if t_new != t:
+                  plugin_pkg.write_text(t_new)
+                  print("Patched apple-sign-in Package.swift capacitor-swift-pm range")
+              else:
+                  print("apple-sign-in Package.swift already patched or pattern not found")
           PY
 
           rm -f ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
