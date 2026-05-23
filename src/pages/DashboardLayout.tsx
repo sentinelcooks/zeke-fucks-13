@@ -6,6 +6,8 @@ import AppFooter from "@/components/AppFooter";
 import { RateAppDialog } from "@/components/RateAppDialog";
 import { useSubscription } from "@/hooks/useSubscription";
 import { MobileHeader } from "@/components/mobile/MobileHeader";
+import { UsernamePromptDialog } from "@/components/UsernamePromptDialog";
+import { useAuth } from "@/contexts/AuthContext";
 
 const routeTitles: Record<string, string> = {
   "/dashboard/home": "Sentinel Dashboard",
@@ -28,7 +30,14 @@ const DashboardLayout = () => {
   const mainRef = useRef<HTMLElement>(null);
   const location = useLocation();
   const { isSubscribed, isLoading } = useSubscription();
+  const { user, profile, isLoading: authLoading } = useAuth();
   const [showRate, setShowRate] = useState(false);
+  const [usernameSaved, setUsernameSaved] = useState(false);
+
+  const profileDisplayName = profile?.display_name?.trim() || "";
+  const metaDisplayName = ((user?.user_metadata as { display_name?: string } | undefined)?.display_name || "").trim();
+  const needsUsername =
+    !authLoading && !!user && !!profile && !profileDisplayName && !metaDisplayName && !usernameSaved;
 
   const title = routeTitles[location.pathname] || "Sentinel";
 
@@ -115,6 +124,7 @@ const DashboardLayout = () => {
       {/* Vision UI style bottom tabs */}
       <BottomTabBar />
       <RateAppDialog open={showRate} onClose={() => setShowRate(false)} />
+      <UsernamePromptDialog open={needsUsername} onSaved={() => setUsernameSaved(true)} />
     </div>
   );
 };
