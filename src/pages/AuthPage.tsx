@@ -10,10 +10,18 @@ import sentinelLogo from "@/assets/sentinel-lock.jpg";
 import { SplashScreen } from "@/components/SplashScreen";
 import { Capacitor } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
+import {
+  signInWithAppleNative,
+  isAppleNativeAvailable,
+  AppleSignInCancelledError,
+} from "@/lib/appleNativeSignIn";
 
 // Sentinel purple brand
 const ACCENT = "#A855F7";       // primary purple
 const ACCENT_DEEP = "#7B2FFF";  // deeper purple for gradients
+
+// iOS bundle id — must be allow-listed under the Supabase Apple provider's Client IDs.
+const APPLE_NATIVE_CLIENT_ID = "com.sentinelprops.app";
 
 // Generate stars once
 const STARS = Array.from({ length: 32 }, (_, i) => ({
@@ -27,6 +35,15 @@ const STARS = Array.from({ length: 32 }, (_, i) => ({
 }));
 
 // Brand glyphs
+const AppleGlyph = () => (
+  <svg width="16" height="18" viewBox="0 0 384 512" aria-hidden="true">
+    <path
+      fill="currentColor"
+      d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zM256.6 84.5c30.3-36 27.5-68.8 26.6-80.5-26.7 1.5-57.5 18.2-75.1 38.7-19.4 22-30.8 49.2-28.3 79.9 28.9 2.2 55.3-12.7 76.8-38.1z"
+    />
+  </svg>
+);
+
 const GoogleGlyph = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.56c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -46,7 +63,8 @@ const AuthPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [oauthLoading, setOauthLoading] = useState<"google" | null>(null);
+  const [oauthLoading, setOauthLoading] = useState<"google" | "apple" | null>(null);
+  const appleNativeAvailable = isAppleNativeAvailable();
   const [remember, setRemember] = useState(
     () => localStorage.getItem("primal-remember") !== "false"
   );
@@ -292,6 +310,37 @@ const AuthPage = () => {
       setError(err instanceof Error ? err.message : `${provider} sign-in failed`);
       console.log("[auth] loading cleared");
       setOauthLoading(null);
+    }
+  };
+
+  const handleAppleNative = async () => {
+    setError("");
+    setOauthLoading("apple");
+    console.log("[auth] apple native start");
+
+    clearOauthTimeout();
+    oauthTimeoutRef.current = setTimeout(() => {
+      oauthTimeoutRef.current = null;
+      console.log("[auth] loading cleared");
+      setOauthLoading(null);
+      setError("Sign-in timed out. Please try again.");
+    }, 20000);
+
+    try {
+      persistRememberChoice(remember);
+      await signInWithAppleNative({ clientId: APPLE_NATIVE_CLIENT_ID });
+      // Success: onAuthStateChange listener handles onboarding + redirect.
+      clearOauthTimeout();
+      setOauthLoading(null);
+    } catch (err) {
+      clearOauthTimeout();
+      setOauthLoading(null);
+      if (err instanceof AppleSignInCancelledError) {
+        console.log("[auth] apple cancelled");
+        return;
+      }
+      const msg = err instanceof Error ? err.message : "Apple sign-in failed";
+      setError(msg);
     }
   };
 
@@ -767,6 +816,28 @@ const AuthPage = () => {
 
         {/* Social buttons */}
         <div className="relative space-y-2.5">
+          {appleNativeAvailable && (
+            <button
+              type="button"
+              onClick={handleAppleNative}
+              disabled={!!oauthLoading}
+              className="w-full py-3 rounded-full text-[13px] font-semibold flex items-center justify-center gap-2.5 transition-all disabled:opacity-50"
+              style={{
+                background: "#000",
+                color: "#fff",
+                border: "1px solid hsla(0,0%,100%,0.12)",
+              }}
+            >
+              {oauthLoading === "apple" ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>
+                  <AppleGlyph />
+                  Continue with Apple
+                </>
+              )}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => handleOAuth("google")}

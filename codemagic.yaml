@@ -66,15 +66,6 @@ workflows:
           # Fix Windows paths if Capacitor generated them
           s = s.replace("\\", "/")
 
-          # Remove incompatible Apple Sign In native plugin from SPM graph
-          lines = s.splitlines()
-          lines = [
-              line for line in lines
-              if "CapacitorCommunityAppleSignIn" not in line
-              and "@capacitor-community/apple-sign-in" not in line
-          ]
-          s = "\n".join(lines) + "\n"
-
           # Make sure Capacitor 8 SwiftPM dependency exists
           cap_line = '        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.3.1"),'
           if "capacitor-swift-pm.git" not in s:
