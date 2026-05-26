@@ -3,11 +3,12 @@ import { callAI, AIProviderError, ANTI_GENERIC_INSTRUCTION } from "../_shared/ai
 import { normalizeNbaTeam } from "../_shared/nba_teams.ts";
 import { normalizeCanonicalVerdict, normalizeConfidencePercent } from "../_shared/canonical_verdict.ts";
 import { normalizeDirection, normalizeNbaPropType } from "../_shared/prop_normalization.ts";
+import { requirePremiumAccess } from "../_shared/premium-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-session-token, x-device-fingerprint, x-request-nonce, x-request-timestamp",
+    "authorization, x-client-info, apikey, content-type, x-sentinel-device-id, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-session-token, x-device-fingerprint, x-request-nonce, x-request-timestamp",
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -4268,6 +4269,8 @@ serve(async (req) => {
     }
 
     if (path === "analyze" && req.method === "POST") {
+      const gate = await requirePremiumAccess(req, corsHeaders);
+      if (!gate.ok) return gate.response;
       const body = await req.json();
       const { player, prop_type, line, over_under, opponent, sport: reqSport, bet_type, team, home_team, away_team } = body;
       if (!player) return new Response(JSON.stringify({ error: "Player name is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });

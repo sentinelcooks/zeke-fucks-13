@@ -12,10 +12,11 @@
 // ─────────────────────────────────────────────────────────────
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { requirePremiumAccess } from "../_shared/premium-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sentinel-device-id",
 };
 
 function json(body: unknown, status = 200) {
@@ -27,6 +28,9 @@ function json(body: unknown, status = 200) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const access = await requirePremiumAccess(req, corsHeaders);
+  if (!access.ok) return access.response;
 
   const SVC_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const SUPA_URL = Deno.env.get("SUPABASE_URL")!;

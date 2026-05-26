@@ -6,6 +6,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { generateDeviceFingerprint } from "@/utils/fingerprint";
 import { getFunctionUrl, getSupabaseAnonKey } from "@/services/supabaseFunctionUrl";
+import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 
 function getStoredSessionToken(): string {
   const remember = localStorage.getItem("primal-remember") === "true";
@@ -23,13 +24,22 @@ async function getSessionHeaders(): Promise<Record<string, string>> {
   const token = getStoredSessionToken();
   const fingerprint = await generateDeviceFingerprint();
   const timestamp = Date.now().toString();
+  const deviceHeaders = await premiumRequestHeaders();
 
   return {
     "x-session-token": token,
     "x-device-fingerprint": fingerprint,
     "x-request-timestamp": timestamp,
     "x-request-nonce": crypto.randomUUID(),
+    ...deviceHeaders,
   };
+}
+
+async function getAuthHeader(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token
+    ? `Bearer ${session.access_token}`
+    : `Bearer ${getSupabaseAnonKey()}`;
 }
 
 async function callEdgeFunction(
@@ -43,6 +53,7 @@ async function callEdgeFunction(
   if (method === "POST") {
     const { data, error } = await supabase.functions.invoke(`${functionName}/${action}`, {
       body: { ...params, __sec: secHeaders },
+      headers: secHeaders,
     });
     if (error) {
       console.error("[edge]", functionName, action, error.message || error);
@@ -56,7 +67,7 @@ async function callEdgeFunction(
   const resp = await fetch(url, {
     headers: {
       apikey: getSupabaseAnonKey(),
-      Authorization: `Bearer ${getSupabaseAnonKey()}`,
+      Authorization: await getAuthHeader(),
       ...secHeaders,
     },
   });

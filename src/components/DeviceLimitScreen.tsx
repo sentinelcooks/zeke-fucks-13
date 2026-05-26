@@ -13,10 +13,11 @@ function formatLastSeen(iso: string): string {
 }
 
 export function DeviceLimitScreen() {
-  const { devices, revokeOthersAndContinue, errorMessage } = useDeviceVerification();
+  const { devices, revokeOthersAndContinue, errorMessage, recheck, status } = useDeviceVerification();
   const { signOut } = useAuth();
   const [working, setWorking] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const isVerificationError = status === "error";
 
   const handleRemove = async () => {
     setWorking(true);
@@ -24,7 +25,19 @@ export function DeviceLimitScreen() {
     try {
       await revokeOthersAndContinue();
     } catch (e) {
-      setLocalError(e instanceof Error ? e.message : "Failed to remove old phone");
+      setLocalError(e instanceof Error ? e.message : "Failed to remove old device");
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const handleRetry = async () => {
+    setWorking(true);
+    setLocalError(null);
+    try {
+      await recheck();
+    } catch (e) {
+      setLocalError(e instanceof Error ? e.message : "Failed to verify this device");
     } finally {
       setWorking(false);
     }
@@ -44,22 +57,23 @@ export function DeviceLimitScreen() {
       <div className="w-full max-w-md space-y-6 rounded-2xl border border-border/60 bg-card p-6 shadow-xl">
         <div className="space-y-2">
           <h1 className="text-xl font-semibold leading-tight">
-            Account already active on another phone
+            {isVerificationError ? "Device verification unavailable" : "Account already active on another device"}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Your Sentinel account is already active on another phone. Remove the old phone to
-            continue on this device.
+            {isVerificationError
+              ? "We couldn't verify this device. Check your connection and try again, or contact support."
+              : "Too many devices are using this account. Please log out on another device or contact support."}
           </p>
         </div>
 
-        {devices.length > 0 && (
+        {!isVerificationError && devices.length > 0 && (
           <div className="space-y-2 rounded-lg border border-border/50 bg-muted/30 p-3">
             {devices.map((d) => (
               <div key={d.id} className="flex items-center justify-between text-sm">
                 <div>
                   <div className="font-medium">{d.device_label ?? "Unknown device"}</div>
                   <div className="text-xs text-muted-foreground">
-                    {d.platform} · last seen {formatLastSeen(d.last_seen)}
+                    {d.platform} - last seen {formatLastSeen(d.last_seen)}
                   </div>
                 </div>
               </div>
@@ -74,9 +88,15 @@ export function DeviceLimitScreen() {
         )}
 
         <div className="space-y-2">
-          <Button onClick={handleRemove} disabled={working} className="w-full">
-            {working ? "Working…" : "Remove old phone and continue"}
-          </Button>
+          {isVerificationError ? (
+            <Button onClick={handleRetry} disabled={working} className="w-full">
+              {working ? "Working..." : "Try again"}
+            </Button>
+          ) : (
+            <Button onClick={handleRemove} disabled={working} className="w-full">
+              {working ? "Working..." : "Remove old device and continue"}
+            </Button>
+          )}
           <Button
             onClick={handleSignOut}
             disabled={working}

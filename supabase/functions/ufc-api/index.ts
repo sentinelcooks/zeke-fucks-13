@@ -1,8 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { requirePremiumAccess } from "../_shared/premium-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-session-token, x-device-fingerprint, x-request-nonce, x-request-timestamp",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sentinel-device-id, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-session-token, x-device-fingerprint, x-request-nonce, x-request-timestamp",
 };
 
 const ESPN_UFC_BASE = "https://site.api.espn.com/apis/site/v2/sports/mma/ufc";
@@ -1134,6 +1135,8 @@ serve(async (req) => {
     }
 
     if (path === "analyze" && req.method === "POST") {
+      const gate = await requirePremiumAccess(req, corsHeaders);
+      if (!gate.ok) return gate.response;
       const { fighter } = await req.json();
       if (!fighter) return new Response(JSON.stringify({ error: "Fighter name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
@@ -1161,6 +1164,8 @@ serve(async (req) => {
     }
 
     if (path === "matchup" && req.method === "POST") {
+      const gate = await requirePremiumAccess(req, corsHeaders);
+      if (!gate.ok) return gate.response;
       const { fighter1, fighter2 } = await req.json();
       if (!fighter1 || !fighter2) return new Response(JSON.stringify({ error: "Two fighter names required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 

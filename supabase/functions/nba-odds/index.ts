@@ -1,10 +1,11 @@
 import { normalizeBookKey } from "../_shared/normalizeBookName.ts";
 import { getMasterClient } from "../_shared/masterClient.ts";
+import { requirePremiumAccess } from "../_shared/premium-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-session-token, x-device-fingerprint, x-request-timestamp, x-request-nonce, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-sentinel-device-id, x-session-token, x-device-fingerprint, x-request-timestamp, x-request-nonce, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
@@ -447,6 +448,8 @@ Deno.serve(async (req) => {
     // GET /nba-odds/events — game lines from ALL regions
     // ────────────────────────────────────────────────────────────────
     if (action === "events") {
+      const gate = await requirePremiumAccess(req, corsHeaders);
+      if (!gate.ok) return gate.response;
       const sport = url.searchParams.get("sport") || "nba";
       const sportKey = getSportKey(sport);
       const cacheKey = `events-${sport}`;
@@ -485,6 +488,8 @@ Deno.serve(async (req) => {
     // GET /nba-odds/player-props?eventId=xxx — props from ALL regions
     // ────────────────────────────────────────────────────────────────
     if (action === "player-props") {
+      const gate = await requirePremiumAccess(req, corsHeaders);
+      if (!gate.ok) return gate.response;
       const eventId = url.searchParams.get("eventId");
       if (!eventId) return json({ error: "eventId is required" }, 400);
 
@@ -565,6 +570,8 @@ Deno.serve(async (req) => {
     // POST /nba-odds/player-odds — lookup specific player's odds
     // ────────────────────────────────────────────────────────────────
     if (action === "player-odds" && req.method === "POST") {
+      const gate = await requirePremiumAccess(req, corsHeaders);
+      if (!gate.ok) return gate.response;
       const body = await req.json();
       const { playerName, propType, overUnder, sport: reqSport } = body;
       if (!playerName) return json({ error: "playerName required" }, 400);
@@ -775,6 +782,8 @@ Deno.serve(async (req) => {
     // POST /nba-odds/scrape-dfs
     // ────────────────────────────────────────────────────────────────
     if (action === "scrape-dfs" && req.method === "POST") {
+      const gate = await requirePremiumAccess(req, corsHeaders);
+      if (!gate.ok) return gate.response;
       const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
       if (!firecrawlKey) return json({ error: "Firecrawl not configured" }, 500);
 

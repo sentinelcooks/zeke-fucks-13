@@ -1,5 +1,6 @@
 import { scanSport } from "../_shared/sport_scan.ts";
 import { applyWaitToScanResult, buildWaitClient, parseWaitOptions } from "../_shared/scan_wait.ts";
+import { requireServiceRoleAccess } from "../_shared/premium-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,6 +9,8 @@ const corsHeaders = {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const access = await requireServiceRoleAccess(req, corsHeaders);
+  if (!access.ok) return access.response;
   try {
     const waitOpts = await parseWaitOptions(req);
     // UFC keeps the legacy inline-analyzer path: there is no analyzer-worker-ufc

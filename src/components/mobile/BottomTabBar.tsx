@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { BarChart3, Home, Calendar, Settings, DollarSign, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
+import { usePremium } from "@/contexts/PremiumContext";
 
 const tabs = [
   { path: "/dashboard/home", icon: Home, label: "Home" },
@@ -31,8 +32,10 @@ const ROUTE_TAB_MAP: Record<string, string> = {
 export function BottomTabBar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { status } = usePremium();
 
   const activeTab = ROUTE_TAB_MAP[location.pathname] || "/dashboard/home";
+  const premiumTabs = new Set(["/dashboard/home", "/dashboard/analyze", "/dashboard/picks", "/dashboard/tracker"]);
 
   return (
     <nav
@@ -72,7 +75,13 @@ export function BottomTabBar() {
             return (
               <button
                 key={tab.path}
-                onClick={() => navigate(tab.path)}
+                onClick={() => {
+                  if (premiumTabs.has(tab.path) && status !== "active") {
+                    navigate("/paywall");
+                    return;
+                  }
+                  navigate(tab.path);
+                }}
                 className="relative flex flex-col items-center justify-center gap-0.5 transition-all duration-200 active:scale-[0.88]"
                 style={{
                   width: 48,

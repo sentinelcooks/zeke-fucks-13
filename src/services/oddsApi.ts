@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { generateDeviceFingerprint } from "@/utils/fingerprint";
 import { getFunctionUrl, getSupabaseAnonKey } from "@/services/supabaseFunctionUrl";
+import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 
 function getStoredSessionToken(): string {
   const remember = localStorage.getItem("primal-remember") === "true";
@@ -17,11 +18,20 @@ function getStoredSessionToken(): string {
 async function getSessionHeaders(): Promise<Record<string, string>> {
   const token = getStoredSessionToken();
   const fingerprint = await generateDeviceFingerprint();
+  const deviceHeaders = await premiumRequestHeaders();
   return {
     "x-session-token": token,
     "x-device-fingerprint": fingerprint,
     "x-request-nonce": crypto.randomUUID(),
+    ...deviceHeaders,
   };
+}
+
+async function getAuthHeader(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token
+    ? `Bearer ${session.access_token}`
+    : `Bearer ${getSupabaseAnonKey()}`;
 }
 
 async function logEdgeError(label: string, resp: Response) {
@@ -78,7 +88,7 @@ export async function fetchNbaOdds(bookmakers?: string, markets?: string, sport?
   const resp = await fetch(`${getFunctionUrl("nba-odds")}/events${qs}`, {
     headers: {
       apikey: getSupabaseAnonKey(),
-      Authorization: `Bearer ${getSupabaseAnonKey()}`,
+      Authorization: await getAuthHeader(),
       ...secHeaders,
     },
   });
@@ -101,7 +111,7 @@ export async function fetchPlayerProps(eventId: string, markets?: string, sport?
   const resp = await fetch(`${getFunctionUrl("nba-odds")}/player-props?${params.toString()}`, {
     headers: {
       apikey: getSupabaseAnonKey(),
-      Authorization: `Bearer ${getSupabaseAnonKey()}`,
+      Authorization: await getAuthHeader(),
       ...secHeaders,
     },
   });
@@ -121,7 +131,7 @@ export async function fetchPlayerOdds(playerName: string, propType: string, over
     method: "POST",
     headers: {
       apikey: getSupabaseAnonKey(),
-      Authorization: `Bearer ${getSupabaseAnonKey()}`,
+      Authorization: await getAuthHeader(),
       "Content-Type": "application/json",
       ...secHeaders,
     },
@@ -139,6 +149,7 @@ export async function fetchPlayerOdds(playerName: string, propType: string, over
 export async function scrapeDfsOdds(playerName: string, book: string) {
   const { data, error } = await supabase.functions.invoke("nba-odds/scrape-dfs", {
     body: { playerName, book },
+    headers: await getSessionHeaders(),
   });
   if (error) {
     console.error("[edge]", "nba-odds/scrape-dfs", error.message || error);

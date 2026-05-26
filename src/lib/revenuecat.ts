@@ -7,7 +7,7 @@ import {
 import { RevenueCatUI, PAYWALL_RESULT } from "@revenuecat/purchases-capacitor-ui";
 
 const API_KEY = "appl_wmSrROmrGLyeBmcpgxydApKAxLl";
-export const ENTITLEMENT_ID = "Sentinel Premium";
+export const ENTITLEMENT_ID = "premium";
 
 let configured = false;
 
@@ -20,16 +20,39 @@ export async function initRevenueCat() {
 
 export async function loginRevenueCatUser(userId: string) {
   if (!Capacitor.isNativePlatform()) return;
+  await initRevenueCat();
   await Purchases.logIn({ appUserID: userId });
+}
+
+export async function identifyRevenueCatUser(userId: string): Promise<CustomerInfo | null> {
+  if (!Capacitor.isNativePlatform()) return null;
+  await initRevenueCat();
+
+  const { appUserID } = await Purchases.getAppUserID();
+  const wasAnonymous = appUserID.startsWith("$RCAnonymousID:");
+  if (appUserID === userId) {
+    console.info("[revenuecat] already identified for Supabase user");
+    return fetchCustomerInfo();
+  }
+
+  console.info("[revenuecat] identify started", { wasAnonymous });
+  const result = await Purchases.logIn({ appUserID: userId });
+  console.info("[revenuecat] identify succeeded", {
+    created: result.created,
+    premiumActive: hasActivePremium(result.customerInfo),
+  });
+  return result.customerInfo;
 }
 
 export async function logoutRevenueCatUser() {
   if (!Capacitor.isNativePlatform()) return;
+  await initRevenueCat();
   await Purchases.logOut();
 }
 
 export async function fetchCustomerInfo(): Promise<CustomerInfo | null> {
   if (!Capacitor.isNativePlatform()) return null;
+  await initRevenueCat();
   const { customerInfo } = await Purchases.getCustomerInfo();
   return customerInfo;
 }
@@ -43,6 +66,7 @@ export async function addCustomerInfoListener(
   cb: (info: CustomerInfo) => void
 ): Promise<() => void> {
   if (!Capacitor.isNativePlatform()) return () => {};
+  await initRevenueCat();
   const handle = await Purchases.addCustomerInfoUpdateListener(cb);
   return () => {
     try {
@@ -61,6 +85,7 @@ export async function getCurrentOfferingPackages(): Promise<{
   yearly?: PurchasesPackage;
 }> {
   if (!Capacitor.isNativePlatform()) return {};
+  await initRevenueCat();
   const offeringsResult = await Purchases.getOfferings();
   const currentOffering = offeringsResult.current;
   if (!currentOffering) return {};
@@ -77,6 +102,7 @@ export async function purchasePlan(plan: "weekly" | "monthly" | "yearly") {
   if (!Capacitor.isNativePlatform()) {
     throw new Error("RevenueCat purchases only work inside the iOS app.");
   }
+  await initRevenueCat();
 
   const offeringsResult = await Purchases.getOfferings();
   const currentOffering = offeringsResult.current;
@@ -104,6 +130,10 @@ export async function purchasePlan(plan: "weekly" | "monthly" | "yearly") {
     aPackage: selectedPackage,
   });
 
+  console.info("[revenuecat] purchase completed", {
+    plan,
+    premiumActive: hasActivePremium(purchaseResult.customerInfo),
+  });
   return hasActivePremium(purchaseResult.customerInfo);
 }
 
@@ -111,8 +141,12 @@ export async function restorePurchases() {
   if (!Capacitor.isNativePlatform()) {
     throw new Error("RevenueCat restore only works inside the iOS app.");
   }
+  await initRevenueCat();
 
   const restoreResult = await Purchases.restorePurchases();
+  console.info("[revenuecat] restore completed", {
+    premiumActive: hasActivePremium(restoreResult.customerInfo),
+  });
   return hasActivePremium(restoreResult.customerInfo);
 }
 

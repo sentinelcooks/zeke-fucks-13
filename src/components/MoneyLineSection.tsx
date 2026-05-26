@@ -49,6 +49,7 @@ import { getSportsbookInfo } from "@/utils/sportsbookLogos";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatOdds } from "@/utils/oddsFormat";
 import { selectBestBookLine, type Direction, type MarketType } from "@/lib/bestBookLine";
+import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 import sportNba from "@/assets/logo-nba.png";
 import sportMlb from "@/assets/logo-mlb.png";
 
@@ -84,15 +85,18 @@ function getStoredSessionToken(): string {
 async function callMoneylineApi(action: string, body: Record<string, any>) {
   const token = getStoredSessionToken();
   const fingerprint = await generateDeviceFingerprint();
+  const secHeaders = {
+    "x-session-token": token,
+    "x-device-fingerprint": fingerprint,
+    "x-request-nonce": crypto.randomUUID(),
+    ...(await premiumRequestHeaders()),
+  };
   const { data, error } = await supabase.functions.invoke(`moneyline-api/${action}`, {
     body: {
       ...body,
-      __sec: {
-        "x-session-token": token,
-        "x-device-fingerprint": fingerprint,
-        "x-request-nonce": crypto.randomUUID(),
-      },
+      __sec: secHeaders,
     },
+    headers: secHeaders,
   });
   if (error) throw error;
   return data;

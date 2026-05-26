@@ -14,6 +14,7 @@ import {
   normalizeConfidencePercent,
 } from "../_shared/canonical_verdict.ts";
 import { applyAnalyzerFinalizeInsertGuard } from "../_shared/daily_pick_rows.ts";
+import { requireServiceRoleAccess } from "../_shared/premium-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,6 +51,9 @@ async function invokeSport(supabase: ReturnType<typeof createClient>, sport: str
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const access = await requireServiceRoleAccess(req, corsHeaders);
+  if (!access.ok) return access.response;
 
   const url = new URL(req.url);
   const debug = url.searchParams.get("debug") === "true";

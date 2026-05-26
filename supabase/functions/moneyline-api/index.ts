@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getMasterClient } from "../_shared/masterClient.ts";
 import { normalizeBookKey } from "../_shared/normalizeBookName.ts";
 import { selectBestBookLine, type BookLine, type Direction, type MarketType } from "../_shared/bestBookLine.ts";
+import { requirePremiumAccess } from "../_shared/premium-access.ts";
 
 /* ── Single Source of Truth: Decision Builder ──
  * Sport-agnostic. Used for moneyline / spread / total across all sports.
@@ -176,7 +177,7 @@ function buildDecision(opts: {
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-session-token, x-device-fingerprint, x-request-nonce, x-request-timestamp, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-sentinel-device-id, x-session-token, x-device-fingerprint, x-request-nonce, x-request-timestamp, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 function json(body: unknown, status = 200) {
@@ -1347,6 +1348,8 @@ Deno.serve(async (req) => {
     }
 
     if (path === "analyze" && req.method === "POST") {
+      const gate = await requirePremiumAccess(req, corsHeaders);
+      if (!gate.ok) return gate.response;
       const body = await req.json();
       const { bet_type, team1: t1Input, team2: t2Input, spread_team, spread_line, total_line, over_under, sport: reqSport } = body;
       const sport = reqSport || "nba";

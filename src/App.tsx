@@ -14,10 +14,11 @@ import {
 import { DeviceLimitScreen } from "@/components/DeviceLimitScreen";
 import { ParlaySlipProvider } from "@/contexts/ParlaySlipContext";
 import { PremiumProvider, usePremium } from "@/contexts/PremiumContext";
+import { PremiumGate } from "@/components/PremiumGate";
 import DashboardLayout from "./pages/DashboardLayout";
 import NbaPropsPage from "./pages/NbaPropsPage";
 
-import { initRevenueCat, loginRevenueCatUser, logoutRevenueCatUser } from "./lib/revenuecat";
+import { initRevenueCat, logoutRevenueCatUser } from "./lib/revenuecat";
 
 import UfcPage from "./pages/UfcPage";
 import ParlayPage from "./pages/ParlayPage";
@@ -66,7 +67,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function DeviceGate({ children }: { children: React.ReactNode }) {
   const { status } = useDeviceVerification();
   if (status === "checking" || status === "idle") return <SplashScreen persistent />;
-  if (status === "blocked") return <DeviceLimitScreen />;
+  if (status === "blocked" || status === "error") return <DeviceLimitScreen />;
   return <>{children}</>;
 }
 
@@ -118,14 +119,15 @@ function PushNotificationBootstrap() {
 }
 
 function PaywallGuard({ children }: { children: React.ReactNode }) {
-  const { isPremium, isLoading } = usePremium();
+  const { isPremium, isLoading, status } = usePremium();
   if (isLoading) return <LoadingSpinner />;
-  if (isPremium) return <Navigate to="/dashboard" replace />;
+  if (isPremium && status === "active") return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 }
 
 function RevenueCatBootstrap() {
-  const { user } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+  const wasAuthenticatedRef = useRef(false);
 
   useEffect(() => {
     initRevenueCat().catch((error) => {
@@ -134,14 +136,16 @@ function RevenueCatBootstrap() {
   }, []);
 
   useEffect(() => {
-    if (user?.id) {
-      loginRevenueCatUser(user.id).catch((error) => {
-        console.error("RevenueCat login failed:", error);
-      });
-    } else {
+    if (isLoading) return;
+    if (isAuthenticated) {
+      wasAuthenticatedRef.current = true;
+      return;
+    }
+    if (wasAuthenticatedRef.current) {
+      wasAuthenticatedRef.current = false;
       logoutRevenueCatUser().catch(() => {});
     }
-  }, [user?.id]);
+  }, [isAuthenticated, isLoading]);
 
   return null;
 }
@@ -244,16 +248,16 @@ function AppRoutes() {
           }
         >
           <Route index element={<Navigate to="home" replace />} />
-          <Route path="home" element={<HomePage />} />
-          <Route path="picks" element={<FreePicksPage />} />
-          <Route path="free-props" element={<FreePropsPage />} />
-          <Route path="analyze" element={<NbaPropsPage />} />
-          <Route path="moneyline" element={<MoneyLinePage />} />
-          <Route path="ufc" element={<UfcPage />} />
-          <Route path="parlay" element={<ParlayPage />} />
-          <Route path="tracker" element={<ProfitTrackerPage />} />
+          <Route path="home" element={<PremiumGate><HomePage /></PremiumGate>} />
+          <Route path="picks" element={<PremiumGate><FreePicksPage /></PremiumGate>} />
+          <Route path="free-props" element={<PremiumGate><FreePropsPage /></PremiumGate>} />
+          <Route path="analyze" element={<PremiumGate><NbaPropsPage /></PremiumGate>} />
+          <Route path="moneyline" element={<PremiumGate><MoneyLinePage /></PremiumGate>} />
+          <Route path="ufc" element={<PremiumGate><UfcPage /></PremiumGate>} />
+          <Route path="parlay" element={<PremiumGate><ParlayPage /></PremiumGate>} />
+          <Route path="tracker" element={<PremiumGate><ProfitTrackerPage /></PremiumGate>} />
           <Route path="games" element={<GamesPage />} />
-          <Route path="arbitrage" element={<ArbitragePage />} />
+          <Route path="arbitrage" element={<PremiumGate><ArbitragePage /></PremiumGate>} />
           <Route path="mlb-predictions" element={<Navigate to="/dashboard/moneyline" replace />} />
           <Route path="trends" element={<Navigate to="/dashboard/free-picks" replace />} />
           <Route path="settings" element={<SettingsPage />} />

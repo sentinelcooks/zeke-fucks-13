@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { motion, AnimatePresence } from "framer-motion";
 import logo from "@/assets/sentinel-lock.jpg";
+import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 
 // Client-side cache to avoid re-fetching the same prop
 const explanationCache = new Map<string, { explanation: string; example: string }>();
@@ -44,9 +45,10 @@ export function PropExplainerDialog({ propValue, propLabel, sport, bettingLevel,
     const controller = new AbortController();
     abortRef.current = controller;
 
-    supabase.functions.invoke("prop-explainer", {
+    premiumRequestHeaders().then((headers) => supabase.functions.invoke("prop-explainer", {
       body: { prop_value: propValue, prop_label: propLabel, sport, betting_level: bettingLevel },
-    }).then(({ data, error: fnError }) => {
+      headers,
+    })).then(({ data, error: fnError }) => {
       if (controller.signal.aborted) return;
       if (fnError) throw fnError;
       setExplanation(data.explanation || "");

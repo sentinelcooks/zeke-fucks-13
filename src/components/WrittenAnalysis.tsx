@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { FileText, Brain, TrendingUp, Swords, BarChart3, AlertTriangle, Loader2, ChevronDown, ChevronUp, CheckCircle, XCircle, MinusCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 import { formatPropType } from "@/lib/formatPickLabel";
 import { normalizeConfidencePercent, normalizeVerdict } from "@/lib/matchupGrade";
 
@@ -438,6 +439,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
       else setRegenerating(true);
       try {
         const { data, error } = await supabase.functions.invoke("ai-analysis", {
+          headers: await premiumRequestHeaders(),
           body: {
             type: props.type,
             verdict: props.verdict,

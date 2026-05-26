@@ -1,10 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getMasterClient } from "../_shared/masterClient.ts";
+import { requirePremiumAccess } from "../_shared/premium-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-session-token, x-device-fingerprint, x-request-nonce, x-request-timestamp",
+    "authorization, x-client-info, apikey, content-type, x-sentinel-device-id, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-session-token, x-device-fingerprint, x-request-nonce, x-request-timestamp",
 };
 
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
@@ -70,6 +71,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const gate = await requirePremiumAccess(req, corsHeaders);
+  if (!gate.ok) return gate.response;
 
   // Read odds_api_keys / app_config from MASTER DB so admin uploads are visible.
   const supabase = await getMasterClient();

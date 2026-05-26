@@ -31,6 +31,7 @@ import { InjuryStatusBadge } from "@/components/mobile/InjuryStatusBadge";
 import { formatPropType } from "@/lib/formatPickLabel";
 import { normalizeConfidencePercent, normalizeVerdict } from "@/lib/matchupGrade";
 import { isSavedPickPayload, mapSavedPickToView, type SavedDailyPickRow } from "@/lib/savedPick";
+import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 
 import { Bar } from "react-chartjs-2";
 import {
@@ -875,9 +876,10 @@ const NbaPropsPage = () => {
             if (s === "nba") {
               setCorrLoading(true);
               const playerTeam = data.team || data.player?.team_abbr || data.player?.team || data.player_info?.team || "";
-              supabase.functions.invoke("correlated-props", {
+              premiumRequestHeaders().then((headers) => supabase.functions.invoke("correlated-props", {
                 body: { player: navState.player!, prop: nextPropType, line: navState.line || 0, team: playerTeam, over_under: navState.over_under || "over" },
-              }).then(({ data: corrData, error: corrErr }) => {
+                headers,
+              })).then(({ data: corrData, error: corrErr }) => {
                 if (!corrErr && Array.isArray(corrData)) setCorrProps(corrData);
                 else setCorrProps([]);
                 setCorrLoading(false);
@@ -1051,9 +1053,10 @@ const NbaPropsPage = () => {
         if (sport === "nba") {
           setCorrLoading(true);
           const playerTeam = data.team || data.player?.team_abbr || data.player?.team || data.player_info?.team || "";
-          supabase.functions.invoke("correlated-props", {
+          premiumRequestHeaders().then((headers) => supabase.functions.invoke("correlated-props", {
             body: { player: effPlayer, prop: effPropType, line: lineNum, team: playerTeam, over_under: effOverUnder },
-          }).then(({ data: corrData, error: corrErr }) => {
+            headers,
+          })).then(({ data: corrData, error: corrErr }) => {
             if (analyzeRequestIdRef.current !== localId) return;
             if (!corrErr && Array.isArray(corrData)) setCorrProps(corrData);
             else setCorrProps([]);

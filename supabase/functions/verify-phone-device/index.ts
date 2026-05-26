@@ -12,7 +12,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const DEFAULT_DEVICE_LIMIT = 1;
+const DEFAULT_DEVICE_LIMIT = 2;
 const EXEMPT_DEVICE_LIMIT = 999;
 
 function json(body: Record<string, unknown>, status = 200) {
@@ -40,8 +40,15 @@ function isExempt(userId: string): boolean {
     .includes(userId.toLowerCase());
 }
 
-function normalizePlatform(p: unknown): "ios" | "android" {
-  return p === "android" ? "android" : "ios";
+function normalizePlatform(p: unknown): "ios" | "android" | "web" {
+  const s = String(p ?? "").toLowerCase();
+  if (s === "ios" || s === "android" || s === "web") return s;
+  return "web";
+}
+
+function configuredDeviceLimit(): number {
+  const raw = Number(Deno.env.get("ACTIVE_DEVICE_LIMIT") ?? "");
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_DEVICE_LIMIT;
 }
 
 function isUuidLike(v: unknown): v is string {
@@ -75,7 +82,7 @@ Deno.serve(async (req) => {
   if (userErr || !userData?.user) return json({ ok: false, error: "Invalid session" }, 401);
   const user = userData.user;
 
-  let body: { deviceId?: unknown; platform?: unknown; deviceLabel?: unknown };
+  let body: { deviceId?: unknown; platform?: unknown; deviceLabel?: unknown; appVersion?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -89,14 +96,21 @@ Deno.serve(async (req) => {
     typeof body.deviceLabel === "string" && body.deviceLabel.length <= 64
       ? body.deviceLabel
       : null;
+  const appVersion =
+    typeof body.appVersion === "string" && body.appVersion.length <= 64
+      ? body.appVersion
+      : null;
+  const userAgent = (req.headers.get("user-agent") ?? "").slice(0, 300) || null;
+  const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
 
   const deviceHash = await sha256(deviceId + HASH_SECRET);
+  const ipHash = forwardedFor ? await sha256(forwardedFor + HASH_SECRET) : null;
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const limit = isExempt(user.id) ? EXEMPT_DEVICE_LIMIT : DEFAULT_DEVICE_LIMIT;
+  const limit = isExempt(user.id) ? EXEMPT_DEVICE_LIMIT : configuredDeviceLimit();
 
   // Look up an existing row for this exact (user, device).
   const { data: existing, error: lookupErr } = await admin
@@ -114,6 +128,9 @@ Deno.serve(async (req) => {
         last_seen: new Date().toISOString(),
         device_label: deviceLabel ?? undefined,
         platform,
+        app_version: appVersion ?? undefined,
+        user_agent: userAgent ?? undefined,
+        ip_hash: ipHash ?? undefined,
       })
       .eq("id", existing.id);
 
@@ -149,6 +166,14 @@ Deno.serve(async (req) => {
       .eq("status", "active")
       .order("last_seen", { ascending: false });
 
+    await admin.from("account_security_events").insert({
+      user_id: user.id,
+      event_type: "device_limit_exceeded",
+      device_id_hash: deviceHash,
+      ip_hash: ipHash,
+      metadata: { platform, deviceLimit: limit, activeDeviceCount: active },
+    });
+
     return json({
       ok: false,
       allowed: false,
@@ -169,6 +194,9 @@ Deno.serve(async (req) => {
         last_seen: new Date().toISOString(),
         device_label: deviceLabel ?? undefined,
         platform,
+        app_version: appVersion ?? undefined,
+        user_agent: userAgent ?? undefined,
+        ip_hash: ipHash ?? undefined,
       })
       .eq("id", existing.id);
   } else {
@@ -177,8 +205,19 @@ Deno.serve(async (req) => {
       device_id_hash: deviceHash,
       platform,
       device_label: deviceLabel,
+      app_version: appVersion,
+      user_agent: userAgent,
+      ip_hash: ipHash,
     });
   }
+
+  await admin.from("account_security_events").insert({
+    user_id: user.id,
+    event_type: existing ? "device_login_reactivated" : "new_device_login",
+    device_id_hash: deviceHash,
+    ip_hash: ipHash,
+    metadata: { platform, deviceLabel, appVersion, deviceLimit: limit },
+  });
 
   return json({
     ok: true,

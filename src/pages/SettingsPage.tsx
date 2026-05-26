@@ -723,7 +723,7 @@ const SettingsPage = () => {
     navigate("/auth", { replace: true });
   };
 
-  const { refresh: refreshPremium } = usePremium();
+  const { refresh: refreshPremium, hasLifetimeAccess } = usePremium();
   const [restoring, setRestoring] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -738,7 +738,9 @@ const SettingsPage = () => {
       const restored = await restorePurchases();
       await refreshPremium();
       toast[restored ? "success" : "info"](
-        restored ? "Subscription restored." : "No active subscription found to restore."
+        restored
+          ? "Purchase restored. Sentinel Premium is active."
+          : "No active Sentinel Premium subscription was found for this Apple ID."
       );
     } catch (err) {
       console.error("Restore failed:", err);
@@ -949,6 +951,13 @@ const SettingsPage = () => {
 
       {/* Contact Us */}
       <ContactUsSection />
+
+      {hasLifetimeAccess && (
+        <div className="relative z-10 vision-card px-5 py-4">
+          <p className="text-[13px] font-bold text-foreground">Sentinel Premium: Lifetime Access</p>
+          <p className="text-[9px] text-muted-foreground/55">Your premium access is active.</p>
+        </div>
+      )}
 
       {/* Manage Subscription */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="relative z-10">

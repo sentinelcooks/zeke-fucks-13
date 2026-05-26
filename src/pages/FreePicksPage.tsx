@@ -5,6 +5,7 @@ import {
   BarChart3, Shield, MapPin, Trophy, Filter,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 import { useNavigate } from "react-router-dom";
 import { isPicksHistoryPick, isActiveTodayPick } from "@/lib/pickHistoryFilters";
 import { todayInTZ, getGameDate } from "@/lib/gameDate";
@@ -252,7 +253,9 @@ const FreePicksPage = () => {
     const fetchTrends = async () => {
       setTrendsLoading(true);
       try {
-        const { data, error } = await supabase.functions.invoke("trends-api");
+        const { data, error } = await supabase.functions.invoke("trends-api", {
+          headers: await premiumRequestHeaders(),
+        });
         if (error) throw error;
         setTrends(data.trends || []);
         setSgps(data.sgps || []);

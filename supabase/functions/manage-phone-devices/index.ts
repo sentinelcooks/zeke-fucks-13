@@ -90,6 +90,11 @@ Deno.serve(async (req) => {
       .eq("status", "active")
       .select("id");
     if (error) return json({ ok: false, error: "Revoke failed" }, 500);
+    await admin.from("account_security_events").insert({
+      user_id: user.id,
+      event_type: "device_revoked",
+      metadata: { revokedDeviceRowId: targetId, revoked: data?.length ?? 0 },
+    });
     return json({ ok: true, revoked: data?.length ?? 0 });
   }
 
@@ -104,6 +109,12 @@ Deno.serve(async (req) => {
       .neq("device_id_hash", currentHash)
       .select("id");
     if (error) return json({ ok: false, error: "Revoke failed" }, 500);
+    await admin.from("account_security_events").insert({
+      user_id: user.id,
+      event_type: "device_revoked",
+      device_id_hash: currentHash,
+      metadata: { action, revoked: data?.length ?? 0 },
+    });
     return json({ ok: true, revoked: data?.length ?? 0 });
   }
 

@@ -5,6 +5,7 @@ import { Flame, Shield, MapPin, TrendingUp, Zap, Filter, ChevronRight, Trophy, S
 import { supabase } from "@/integrations/supabase/client";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { formatPropType } from "@/lib/formatPickLabel";
+import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 
 interface TrendProp {
   player: string;
@@ -66,7 +67,9 @@ const TrendsPage = () => {
   useEffect(() => {
     const fetchTrends = async () => {
       try {
-        const { data, error: err } = await supabase.functions.invoke("trends-api");
+        const { data, error: err } = await supabase.functions.invoke("trends-api", {
+          headers: await premiumRequestHeaders(),
+        });
         if (err) throw err;
         setTrends(data.trends || []);
         setSgps(data.sgps || []);

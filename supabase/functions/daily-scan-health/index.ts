@@ -13,6 +13,7 @@
 // without further reshaping.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { requireServiceRoleAccess } from "../_shared/premium-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -75,6 +76,9 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const access = await requireServiceRoleAccess(req, corsHeaders);
+  if (!access.ok) return access.response;
 
   const url = new URL(req.url);
   const date = url.searchParams.get("date") || todayET();

@@ -9,6 +9,7 @@ import {
 } from "@/lib/revenuecat";
 import { openExternal } from "@/lib/openExternal";
 import { usePremium } from "@/contexts/PremiumContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 const TERMS_URL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
 const PRIVACY_URL = "https://sentinelprops.com/privacy";
@@ -188,6 +189,7 @@ function ProgressDots({ current, total }: { current: number; total: number }) {
 
 export default function PaywallPage() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const { isPremium, refresh: refreshPremium } = usePremium();
   const [selectedPlan, setSelectedPlan] = useState<PlanInterval>("monthly");
   const [expandedFeature, setExpandedFeature] = useState<string | null>(null);
@@ -224,9 +226,14 @@ export default function PaywallPage() {
     setError(null);
     try {
       const success = await purchasePlan(selectedPlan);
-      await refreshPremium();
       if (success) {
-        navigate("/welcome", { replace: true });
+        console.info("[paywall] purchase completed before auth", { isAuthenticated });
+        if (isAuthenticated) {
+          await refreshPremium("purchase_completed");
+          navigate("/welcome", { replace: true });
+        } else {
+          navigate("/auth", { replace: true, state: { mode: "signup" } });
+        }
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Something went wrong.";
@@ -245,11 +252,15 @@ export default function PaywallPage() {
     setError(null);
     try {
       const success = await restorePurchases();
-      await refreshPremium();
       if (success) {
-        navigate("/welcome", { replace: true });
+        if (isAuthenticated) {
+          await refreshPremium("restore_completed");
+          navigate("/welcome", { replace: true });
+        } else {
+          navigate("/auth", { replace: true, state: { mode: "login" } });
+        }
       } else {
-        setError("No active subscription found to restore.");
+        setError("No active Sentinel Premium subscription was found for this Apple ID.");
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Restore failed.";

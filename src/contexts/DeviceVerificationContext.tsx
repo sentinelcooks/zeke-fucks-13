@@ -1,5 +1,4 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from "react";
-import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -35,17 +34,12 @@ export function DeviceVerificationProvider({ children }: { children: ReactNode }
   const { isAuthenticated, isLoading, user } = useAuth();
   const [status, setStatus] = useState<Status>("idle");
   const [devices, setDevices] = useState<KnownDevice[]>([]);
-  const [deviceLimit, setDeviceLimit] = useState(1);
+  const [deviceLimit, setDeviceLimit] = useState(2);
   const [activeDeviceCount, setActiveDeviceCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const lastCheckedUser = useRef<string | null>(null);
 
   const verify = useCallback(async () => {
-    // Web/desktop is not gated.
-    if (!Capacitor.isNativePlatform()) {
-      setStatus("allowed");
-      return;
-    }
     setStatus("checking");
     setErrorMessage(null);
     try {
@@ -67,7 +61,7 @@ export function DeviceVerificationProvider({ children }: { children: ReactNode }
         activeDeviceCount?: number;
         devices?: KnownDevice[];
       };
-      setDeviceLimit(payload.deviceLimit ?? 1);
+      setDeviceLimit(payload.deviceLimit ?? 2);
       setActiveDeviceCount(payload.activeDeviceCount ?? 0);
       if (payload.allowed) {
         setDevices([]);
@@ -96,7 +90,6 @@ export function DeviceVerificationProvider({ children }: { children: ReactNode }
   }, [isAuthenticated, isLoading, user, verify, status]);
 
   const revokeOthersAndContinue = useCallback(async () => {
-    if (!Capacitor.isNativePlatform()) return;
     setStatus("checking");
     try {
       const deviceId = await getOrCreateMobileDeviceId();

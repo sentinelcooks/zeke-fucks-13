@@ -6,6 +6,7 @@ import {
   Users, TrendingDown, Zap, DollarSign, Target
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 import { useNavigate } from "react-router-dom";
 import { useParlaySlip } from "@/contexts/ParlaySlipContext";
 
@@ -245,7 +246,9 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     let cancelled = false;
     (async () => {
       try {
-        const { data, error } = await supabase.functions.invoke("rotating-tip");
+        const { data, error } = await supabase.functions.invoke("rotating-tip", {
+          headers: await premiumRequestHeaders(),
+        });
         if (!cancelled && !error && data?.tip) {
           setRotatingTip({ tip: data.tip, focus_area: data.focus_area });
         }

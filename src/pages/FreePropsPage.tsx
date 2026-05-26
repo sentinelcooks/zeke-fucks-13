@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatPropType } from "@/lib/formatPickLabel";
 
 import { analyzeProp } from "@/services/api";
-import { getFunctionUrl } from "@/services/supabaseFunctionUrl";
+import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 import WrittenAnalysis from "@/components/WrittenAnalysis";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import OddsComparison from "@/components/OddsComparison";
@@ -195,15 +195,11 @@ const FreePropsPage = () => {
 
       if (fetched.length === 0) {
         try {
-          const resp = await fetch(getFunctionUrl("free-props"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: "generate" }),
+          const { error } = await supabase.functions.invoke("free-props", {
+            body: { path: "generate" },
+            headers: await premiumRequestHeaders(),
           });
-          if (!resp.ok) {
-            const body = await resp.text().catch(() => "");
-            console.error("[edge]", "free-props/generate", resp.status, body.slice(0, 500));
-          }
+          if (error) console.error("[edge]", "free-props/generate", error.message || error);
           const { data: retry } = await supabase
             .from("free_props")
             .select("*")
@@ -263,9 +259,10 @@ const FreePropsPage = () => {
         if (prop.sport === "nba") {
           setCorrLoading(true);
           const playerTeam = data.team || data.player?.team_abbr || data.player?.team || data.player_info?.team || prop.team || "";
-          supabase.functions.invoke("correlated-props", {
+          premiumRequestHeaders().then((headers) => supabase.functions.invoke("correlated-props", {
             body: { player: prop.player_name, prop: prop.prop_type, line: prop.line, team: playerTeam, over_under: prop.direction || "over" },
-          }).then(({ data: corrData, error: corrErr }) => {
+            headers,
+          })).then(({ data: corrData, error: corrErr }) => {
             if (!corrErr && Array.isArray(corrData)) setCorrelations(corrData);
             else setCorrelations([]);
             setCorrLoading(false);

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { callAI, AIProviderError, ANTI_GENERIC_INSTRUCTION } from "../_shared/ai-provider.ts";
 import { formatPropTypeServer, stripPropCodes } from "../_shared/format_labels.ts";
+import { requirePremiumAccess } from "../_shared/premium-access.ts";
 
 // Risk section must contain risk factors only — unit sizing comes from the
 // Overall Verdict (decision.recommended_units), never from the AI text.
@@ -9,7 +10,7 @@ const TRAILING_UNITS_RE = /\b\d+(?:\.\d+)?\s*(?:units?|u)\b\.?/gi;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sentinel-device-id",
 };
 
 /* ── Truncate a section to ~100 words ── */
@@ -311,6 +312,9 @@ serve(async (req) => {
   }
 
   try {
+    const gate = await requirePremiumAccess(req, corsHeaders);
+    if (!gate.ok) return gate.response;
+
     const body = await req.json();
     const { type, verdict, confidence, playerOrTeam, line, propDisplay, overUnder, reasoning, factors, injuries, sport, withoutTeammatesData, overallRating, overallSummary: overallSummaryText, decision, team1Name, team2Name, oddsAmerican } = body;
 

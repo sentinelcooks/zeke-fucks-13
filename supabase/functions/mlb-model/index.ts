@@ -2,10 +2,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { callAI, AIProviderError, ANTI_GENERIC_INSTRUCTION } from "../_shared/ai-provider.ts";
 import { getMasterClient } from "../_shared/masterClient.ts";
 import { fetchWithRotation as poolFetchWithRotation } from "../_shared/oddsKeyPool.ts";
+import { requirePremiumAccess } from "../_shared/premium-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-session-token, x-device-fingerprint, x-request-timestamp, x-request-nonce, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sentinel-device-id, x-session-token, x-device-fingerprint, x-request-timestamp, x-request-nonce, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 function json(body: unknown, status = 200) {
@@ -551,6 +552,9 @@ function getClient() {
 // ── Main Handler ──
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const access = await requirePremiumAccess(req, corsHeaders);
+  if (!access.ok) return access.response;
   
   const url = new URL(req.url);
   const path = url.pathname.split("/").filter(Boolean).pop() || "";

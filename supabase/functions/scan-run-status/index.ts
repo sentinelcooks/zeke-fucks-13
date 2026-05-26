@@ -22,11 +22,12 @@
 // not need RLS-readable access to scan_run_metrics / analyzer_queue.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { requirePremiumAccess } from "../_shared/premium-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-sentinel-device-id",
 };
 
 const APP_TZ = "America/New_York";
@@ -96,6 +97,9 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const access = await requirePremiumAccess(req, corsHeaders);
+  if (!access.ok) return access.response;
 
   const url = new URL(req.url);
   const runIdParam = url.searchParams.get("run_id");

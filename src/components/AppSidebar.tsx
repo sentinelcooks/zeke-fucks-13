@@ -2,6 +2,7 @@ import { BarChart3, Crosshair, DollarSign, Layers, Flame, TrendingUp, Sparkles }
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import logo from "@/assets/sentinel-logo.jpg";
+import { usePremium } from "@/contexts/PremiumContext";
 import {
   Sidebar,
   SidebarContent,
@@ -16,13 +17,13 @@ import {
 } from "@/components/ui/sidebar";
 
 const items = [
-  { title: "Free Picks", url: "/dashboard/picks", icon: Flame },
-  { title: "Free Props", url: "/dashboard/free-props", icon: Sparkles },
-  { title: "Analyze", url: "/dashboard/analyze", icon: BarChart3 },
-  { title: "Money Line", url: "/dashboard/moneyline", icon: TrendingUp },
-  { title: "UFC Analysis", url: "/dashboard/ufc", icon: Crosshair },
-  { title: "Parlay Builder", url: "/dashboard/parlay", icon: Layers },
-  { title: "Profit Tracker", url: "/dashboard/tracker", icon: DollarSign },
+  { title: "Free Picks", url: "/dashboard/picks", icon: Flame, premium: true },
+  { title: "Free Props", url: "/dashboard/free-props", icon: Sparkles, premium: true },
+  { title: "Analyze", url: "/dashboard/analyze", icon: BarChart3, premium: true },
+  { title: "Money Line", url: "/dashboard/moneyline", icon: TrendingUp, premium: true },
+  { title: "UFC Analysis", url: "/dashboard/ufc", icon: Crosshair, premium: true },
+  { title: "Parlay Builder", url: "/dashboard/parlay", icon: Layers, premium: true },
+  { title: "Profit Tracker", url: "/dashboard/tracker", icon: DollarSign, premium: true },
   
 ];
 
@@ -30,6 +31,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const { status } = usePremium();
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border">
@@ -53,7 +55,7 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink
-                      to={item.url}
+                      to={item.premium && status !== "active" ? "/paywall" : item.url}
                       className="hover:bg-secondary/50"
                       activeClassName="bg-secondary text-accent font-medium"
                     >

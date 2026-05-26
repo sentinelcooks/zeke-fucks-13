@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { usePremium } from "@/contexts/PremiumContext";
+import { ENTITLEMENT_ID, usePremium } from "@/contexts/PremiumContext";
+import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 
 interface SubscriptionState {
   isSubscribed: boolean;
@@ -25,9 +26,10 @@ export function useSubscription(): SubscriptionState {
   const checkEntitlements = useCallback(async () => {
     if (native) {
       // On native, defer to PremiumContext (StoreKit + listener-driven, authoritative).
-      await premium.refresh();
-      setIsSubscribed(premium.isPremium);
-      setEntitlements(premium.isPremium ? { "Sentinel Premium": true } : {});
+      const status = await premium.refresh();
+      const active = status === "active";
+      setIsSubscribed(active);
+      setEntitlements(active ? { [ENTITLEMENT_ID]: true } : {});
       setIsLoading(false);
       return;
     }
@@ -43,13 +45,14 @@ export function useSubscription(): SubscriptionState {
     try {
       setIsLoading(true);
       const { data, error } = await supabase.functions.invoke(
-        "revenuecat-entitlements"
+        "revenuecat-entitlements",
+        { headers: await premiumRequestHeaders() },
       );
       if (error) {
         console.error("Entitlement check failed:", error);
         setIsSubscribed(false);
       } else {
-        setIsSubscribed(data.isSubscribed ?? false);
+        setIsSubscribed(data.status === "active" || data.isPremium === true || data.isSubscribed === true);
         setEntitlements(data.entitlements ?? {});
         setActiveSubscriptions(data.activeSubscriptions ?? []);
       }
@@ -64,7 +67,7 @@ export function useSubscription(): SubscriptionState {
   useEffect(() => {
     if (native) {
       setIsSubscribed(premium.isPremium);
-      setEntitlements(premium.isPremium ? { "Sentinel Premium": true } : {});
+      setEntitlements(premium.isPremium ? { [ENTITLEMENT_ID]: true } : {});
       setIsLoading(premium.isLoading);
       return;
     }
