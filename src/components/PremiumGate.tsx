@@ -1,14 +1,13 @@
-import { useEffect, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Lock, RefreshCw, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePremium } from "@/contexts/PremiumContext";
 
-function CheckingSubscription() {
+function InitialSubscriptionCheck() {
   return (
-    <div className="flex min-h-[70vh] flex-col items-center justify-center px-6 text-center">
-      <div className="mb-4 h-9 w-9 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-      <p className="text-sm font-semibold text-foreground">Checking subscription...</p>
+    <div className="flex min-h-[70vh] items-center justify-center px-6 text-center">
+      <p className="text-xs text-muted-foreground">Verifying subscription access...</p>
     </div>
   );
 }
@@ -53,13 +52,9 @@ function LockedSubscription({ kind }: { kind: "inactive" | "error" }) {
 }
 
 export function PremiumGate({ children }: { children: ReactNode }) {
-  const { status, refresh } = usePremium();
+  const { status, initialLoading } = usePremium();
 
-  useEffect(() => {
-    void refresh("premium_gate");
-  }, [refresh]);
-
-  if (status === "loading") return <CheckingSubscription />;
+  if (initialLoading || status === "loading") return <InitialSubscriptionCheck />;
   if (status === "active") return <>{children}</>;
   if (status === "error") return <LockedSubscription kind="error" />;
   return <LockedSubscription kind="inactive" />;

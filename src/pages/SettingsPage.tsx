@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Globe, Bell, BellOff, LogOut, User, Check, ChevronRight, ChevronDown, Hash, MessageSquare, Send, Loader2, CheckCircle, CreditCard, Palette, Calculator, DollarSign, RefreshCw, Trash2 } from "lucide-react";
+import { Globe, Bell, BellOff, LogOut, User, Check, ChevronRight, ChevronDown, Hash, MessageSquare, Send, Loader2, CheckCircle, CreditCard, Calculator, DollarSign, RefreshCw, Trash2 } from "lucide-react";
 import { getActiveUnitSize, readUnitSettings } from "@/lib/profitFormat";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -55,6 +55,20 @@ const ODDS_FORMATS = [
   { value: "american", label: "American", example: "-110 / +150" },
   { value: "decimal", label: "Decimal", example: "1.91 / 2.50" },
 ];
+
+const USERNAME_RE = /^[A-Za-z0-9_.\- ]+$/;
+const USERNAME_MIN_LENGTH = 3;
+const USERNAME_MAX_LENGTH = 24;
+
+const formatAccessDate = (value: string | null, includeTime: boolean) => {
+  if (!value) return "Expiration date unavailable";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "Expiration date unavailable";
+  return new Intl.DateTimeFormat("en-US", includeTime
+    ? { dateStyle: "medium", timeStyle: "short" }
+    : { dateStyle: "medium" }
+  ).format(date);
+};
 
 const ContactUsSection = () => {
   const [open, setOpen] = useState(false);
@@ -604,22 +618,18 @@ const ProfitDisplayModeSection = () => {
   );
 };
 
-const HOME_THEMES = [
-  { value: "modern", label: "Modern", desc: "Today's Edge cards" },
-  { value: "classic", label: "Classic", desc: "Stat cards + PNL" },
-];
-
 const SettingsPage = () => {
-  const { profile, user, updateProfile, signOut } = useAuth();
+  const { profile, user, updateProfile, refreshProfile, signOut } = useAuth();
   const navigate = useNavigate();
   const [selectedTz, setSelectedTz] = useState(profile?.timezone || "America/New_York");
   const [notifEnabled, setNotifEnabled] = useState(profile?.notification_enabled || false);
   const [oddsFormat, setOddsFormat] = useState<"american" | "decimal">(profile?.odds_format || "american");
   const [saving, setSaving] = useState(false);
   const [showTzPicker, setShowTzPicker] = useState(false);
-  const [homeTheme, setHomeTheme] = useState<"modern" | "classic">(() => {
-    return (localStorage.getItem("sentinel_home_theme") as "modern" | "classic") || "modern";
-  });
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [username, setUsername] = useState("");
+  const [usernameSaving, setUsernameSaving] = useState(false);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
   const [isManagingSubscription, setIsManagingSubscription] = useState(false);
 
   const handleManageSubscription = async () => {
@@ -636,11 +646,6 @@ const SettingsPage = () => {
     } finally {
       setIsManagingSubscription(false);
     }
-  };
-
-  const handleHomeThemeChange = (theme: "modern" | "classic") => {
-    setHomeTheme(theme);
-    localStorage.setItem("sentinel_home_theme", theme);
   };
 
   useEffect(() => {
@@ -723,7 +728,16 @@ const SettingsPage = () => {
     navigate("/auth", { replace: true });
   };
 
-  const { refresh: refreshPremium, hasLifetimeAccess } = usePremium();
+  const {
+    status: premiumStatus,
+    isPremium,
+    isLoading: premiumLoading,
+    hasLifetimeAccess,
+    accessSource,
+    accessType,
+    accessExpiresAt,
+    refresh: refreshPremium,
+  } = usePremium();
   const [restoring, setRestoring] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -771,6 +785,88 @@ const SettingsPage = () => {
   };
 
   const currentTzLabel = TIMEZONES.find((t) => t.value === selectedTz)?.label || selectedTz;
+  const isTemporaryAccess = isPremium && accessSource === "premium_override" && !hasLifetimeAccess;
+  const accessTypeLabel = hasLifetimeAccess
+    ? "Lifetime Access"
+    : isTemporaryAccess
+      ? "Temporary Access"
+      : isPremium && accessSource === "revenuecat"
+        ? "RevenueCat subscription"
+        : isPremium && accessType
+          ? accessType
+          : "No active subscription";
+  const subscriptionTitle = premiumLoading
+    ? "Checking subscription status..."
+    : premiumStatus === "error"
+      ? "Subscription status unavailable"
+      : hasLifetimeAccess
+        ? "Sentinel Premium: Lifetime Access"
+        : isTemporaryAccess
+          ? "Sentinel Premium: Temporary Access"
+          : isPremium
+            ? "Sentinel Premium: Active"
+            : "Subscription required";
+  const subscriptionTiming = premiumLoading
+    ? "Loading access details..."
+    : premiumStatus === "error"
+      ? "Unable to load subscription details right now."
+      : hasLifetimeAccess
+        ? "No expiration"
+        : isTemporaryAccess
+          ? `Expires: ${formatAccessDate(accessExpiresAt, true)}`
+          : isPremium
+            ? `Renews/Expires: ${formatAccessDate(accessExpiresAt, false)}`
+            : "No active Sentinel Premium subscription";
+
+  const openAccount = () => {
+    setUsername(resolveDisplayName(profile, user, ""));
+    setUsernameError(null);
+    setAccountOpen(true);
+  };
+
+  const handleUsernameSave = async () => {
+    if (usernameSaving || !user) return;
+    const trimmed = username.trim();
+    if (trimmed.length < USERNAME_MIN_LENGTH) {
+      setUsernameError(`Username must be at least ${USERNAME_MIN_LENGTH} characters.`);
+      return;
+    }
+    if (trimmed.length > USERNAME_MAX_LENGTH) {
+      setUsernameError(`Username must be ${USERNAME_MAX_LENGTH} characters or fewer.`);
+      return;
+    }
+    if (!USERNAME_RE.test(trimmed)) {
+      setUsernameError("Use letters, numbers, spaces, _, -, or .");
+      return;
+    }
+
+    setUsernameSaving(true);
+    setUsernameError(null);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ display_name: trimmed })
+        .eq("id", user.id);
+      if (error) throw error;
+
+      const { error: metadataError } = await supabase.auth.updateUser({ data: { display_name: trimmed } });
+      if (metadataError) console.error("Username metadata sync failed:", metadataError);
+
+      await refreshProfile(user.id);
+      setUsername(trimmed);
+      if (metadataError) {
+        toast.warning("Username updated, but account metadata could not be refreshed.");
+      } else {
+        toast.success("Username updated.");
+      }
+    } catch (error) {
+      console.error("Username save failed:", error);
+      const message = error instanceof Error ? error.message : "Could not update username. Please try again.";
+      setUsernameError(/duplicate|unique/i.test(message) ? "That username is already taken." : message);
+    } finally {
+      setUsernameSaving(false);
+    }
+  };
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pt-2 pb-4 space-y-4 relative">
@@ -783,7 +879,11 @@ const SettingsPage = () => {
         <div className="px-5 py-3 border-b border-border/20">
           <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">Account</span>
         </div>
-        <div className="px-5 py-4 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={openAccount}
+          className="w-full px-5 py-4 flex items-center gap-3 text-left hover:bg-secondary/20 active:bg-secondary/30 transition-colors"
+        >
           <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))' }}>
             <User className="w-5 h-5 text-white" />
           </div>
@@ -793,8 +893,118 @@ const SettingsPage = () => {
             </p>
             <p className="text-[10px] text-muted-foreground/65 truncate">{user?.email}</p>
           </div>
-        </div>
+          <div className="flex items-center gap-1 text-muted-foreground/55">
+            <span className="hidden min-[360px]:inline text-[9px] font-bold uppercase tracking-wider">Manage</span>
+            <ChevronRight className="w-4 h-4" />
+          </div>
+        </button>
       </motion.div>
+
+      <Dialog open={accountOpen} onOpenChange={(open) => !usernameSaving && setAccountOpen(open)}>
+        <DialogContent className="bg-card border-border/50 rounded-2xl max-w-md mx-auto p-0 overflow-hidden">
+          <div className="p-6 space-y-5">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold text-foreground">Account Details</DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Manage your Sentinel profile and subscription access.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="rounded-xl bg-secondary/35 border border-border/25 p-4 space-y-2">
+              <p className="text-[13px] font-bold text-foreground">{subscriptionTitle}</p>
+              <p className="text-[11px] text-muted-foreground">{subscriptionTiming}</p>
+              {!premiumLoading && premiumStatus !== "error" && (
+                <div className="flex items-center justify-between gap-3 pt-2 mt-2 border-t border-border/20">
+                  <span className="text-[10px] text-muted-foreground/65">Access type</span>
+                  <span className="text-[11px] font-semibold text-foreground text-right">{accessTypeLabel}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <p className="text-[10px] text-muted-foreground/65 mb-1">Email</p>
+                <p className="text-[13px] font-medium text-foreground truncate">{user?.email || "No email available"}</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="account-username" className="text-[10px] text-muted-foreground/65">Username</Label>
+                <Input
+                  id="account-username"
+                  value={username}
+                  onChange={(event) => {
+                    setUsername(event.target.value);
+                    setUsernameError(null);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void handleUsernameSave();
+                    }
+                  }}
+                  maxLength={USERNAME_MAX_LENGTH}
+                  disabled={usernameSaving}
+                  placeholder="Enter username"
+                  className="bg-secondary/50 border-border/40 rounded-xl h-10 text-sm placeholder:text-muted-foreground/50"
+                />
+                {usernameError && <p className="text-[11px] text-destructive">{usernameError}</p>}
+                <p className="text-[10px] text-muted-foreground/55">3-24 characters. Letters, numbers, spaces, `_`, `-`, and `.` allowed.</p>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={usernameSaving}
+                  onClick={() => {
+                    setUsername(resolveDisplayName(profile, user, ""));
+                    setUsernameError(null);
+                  }}
+                  className="flex-1 rounded-xl h-10 text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  disabled={usernameSaving}
+                  onClick={() => void handleUsernameSave()}
+                  className="flex-1 bg-accent hover:bg-accent/90 text-accent-foreground rounded-xl h-10 text-xs gap-2"
+                >
+                  {usernameSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {usernameSaving ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            </div>
+
+            {(accessSource === "revenuecat" || (!isPremium && Capacitor.isNativePlatform())) && (
+              <div className="pt-2 border-t border-border/20 space-y-2">
+                {accessSource === "revenuecat" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleManageSubscription}
+                    disabled={isManagingSubscription}
+                    className="w-full justify-start rounded-xl h-11 text-xs gap-2"
+                  >
+                    <CreditCard className="w-4 h-4 text-accent" />
+                    {isManagingSubscription ? "Opening..." : "Manage Subscription"}
+                  </Button>
+                )}
+                {Capacitor.isNativePlatform() && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void handleRestore()}
+                    disabled={restoring}
+                    className="w-full justify-start rounded-xl h-11 text-xs gap-2"
+                  >
+                    {restoring ? <Loader2 className="w-4 h-4 animate-spin text-accent" /> : <RefreshCw className="w-4 h-4 text-accent" />}
+                    {restoring ? "Restoring Purchases..." : "Restore Purchases"}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Odds Format */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="vision-card overflow-hidden relative z-10">
@@ -904,45 +1114,6 @@ const SettingsPage = () => {
         </button>
       </motion.div>
 
-      {/* Appearance */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="vision-card overflow-hidden relative z-10">
-        <div className="px-5 py-3 border-b border-border/20">
-          <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">Appearance</span>
-        </div>
-        <div className="px-5 py-4 space-y-2">
-          <div className="flex items-center gap-3 mb-3">
-            <Palette className="w-5 h-5 text-accent/60" />
-            <div>
-              <p className="text-[13px] font-bold text-foreground">Home Screen Layout</p>
-              <p className="text-[9px] text-muted-foreground/55">Choose your preferred dashboard style</p>
-            </div>
-          </div>
-          <div className="flex rounded-xl p-1 gap-1" style={{
-            background: 'hsla(228, 20%, 8%, 0.6)',
-            border: '1px solid hsla(228, 30%, 16%, 0.25)',
-          }}>
-            {HOME_THEMES.map((t) => (
-              <button
-                key={t.value}
-                onClick={() => handleHomeThemeChange(t.value as "modern" | "classic")}
-                className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 rounded-lg text-center transition-all duration-300 ${
-                  homeTheme === t.value
-                    ? "text-[hsl(228_30%_8%)]"
-                    : "text-muted-foreground/65 hover:text-foreground/50"
-                }`}
-                style={homeTheme === t.value ? {
-                  background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))',
-                  boxShadow: '0 4px 12px -2px hsla(142,100%,50%,0.3)',
-                } : {}}
-              >
-                <span className="text-[11px] font-bold tracking-wider">{t.label}</span>
-                <span className={`text-[9px] font-semibold ${homeTheme === t.value ? "text-[hsl(228_30%_8%)]/75" : "text-muted-foreground/50"}`}>{t.desc}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </motion.div>
-
       {/* Unit Calculator */}
       <UnitCalculatorSection />
 
@@ -951,55 +1122,6 @@ const SettingsPage = () => {
 
       {/* Contact Us */}
       <ContactUsSection />
-
-      {hasLifetimeAccess && (
-        <div className="relative z-10 vision-card px-5 py-4">
-          <p className="text-[13px] font-bold text-foreground">Sentinel Premium: Lifetime Access</p>
-          <p className="text-[9px] text-muted-foreground/55">Your premium access is active.</p>
-        </div>
-      )}
-
-      {/* Manage Subscription */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="relative z-10">
-        <button
-          onClick={handleManageSubscription}
-          disabled={isManagingSubscription}
-          className="w-full vision-card px-5 py-4 flex items-center gap-3 hover:bg-secondary/20 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))' }}>
-            <CreditCard className="w-4 h-4 text-white" />
-          </div>
-          <div className="text-left flex-1">
-            <p className="text-[13px] font-bold text-foreground">
-              {isManagingSubscription ? "Opening..." : "Manage Subscription"}
-            </p>
-            <p className="text-[9px] text-muted-foreground/55">View or update your plan in the App Store</p>
-          </div>
-          <ChevronRight className="w-4 h-4 text-muted-foreground/55" />
-        </button>
-      </motion.div>
-
-      {/* Restore Purchases */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.37 }} className="relative z-10">
-        <button
-          onClick={handleRestore}
-          disabled={restoring}
-          className="w-full vision-card px-5 py-4 flex items-center gap-3 hover:bg-secondary/20 transition-colors disabled:opacity-60"
-        >
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))' }}>
-            {restoring ? (
-              <Loader2 className="w-4 h-4 text-white animate-spin" />
-            ) : (
-              <RefreshCw className="w-4 h-4 text-white" />
-            )}
-          </div>
-          <div className="text-left flex-1">
-            <p className="text-[13px] font-bold text-foreground">Restore Purchases</p>
-            <p className="text-[9px] text-muted-foreground/55">Already subscribed? Re-sync your entitlement</p>
-          </div>
-          <ChevronRight className="w-4 h-4 text-muted-foreground/55" />
-        </button>
-      </motion.div>
 
       {/* Delete Account */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.39 }} className="relative z-10">

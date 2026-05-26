@@ -10,3 +10,68 @@ project_id = "rizijiwjfavvjcdqtguk"
 # The function itself still 401s on any unauthenticated request.
 [functions.grade-picks]
 verify_jwt = false
+
+# Scanner pipeline endpoints validate configured service-role credentials in
+# function code. Gateway JWT verification must be disabled so Supabase's
+# opaque sb_secret_* service keys can reach that validation.
+[functions.slate-scanner]
+verify_jwt = false
+
+[functions.slate-scanner-nba]
+verify_jwt = false
+
+[functions.slate-scanner-mlb]
+verify_jwt = false
+
+[functions.slate-scanner-nhl]
+verify_jwt = false
+
+[functions.slate-scanner-ufc]
+verify_jwt = false
+
+[functions.daily-picks]
+verify_jwt = false
+
+[functions.daily-scan-health]
+verify_jwt = false
+
+# Queue drainers are invoked by the scanner cron helper with the same opaque
+# service credential and enforce requireServiceRoleAccess before any work.
+[functions.analyzer-worker-nba]
+verify_jwt = false
+
+[functions.analyzer-worker-mlb]
+verify_jwt = false
+
+[functions.analyzer-worker-nhl]
+verify_jwt = false
+
+[functions.process-analyzer-queue]
+verify_jwt = false
+
+[functions.process-nba-analyzer-queue]
+verify_jwt = false
+
+# Scanner dependencies receive internal service-role requests. Their
+# premium operations continue to enforce requirePremiumAccess in function
+# code; public schedule/search routes were already anon-accessible.
+[functions.games-schedule]
+verify_jwt = false
+
+[functions.nba-odds]
+verify_jwt = false
+
+[functions.nba-api]
+verify_jwt = false
+
+[functions.moneyline-api]
+verify_jwt = false
+
+[functions.mlb-model]
+verify_jwt = false
+
+[functions.nhl-model]
+verify_jwt = false
+
+[functions.ufc-api]
+verify_jwt = false

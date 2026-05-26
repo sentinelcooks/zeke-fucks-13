@@ -7,8 +7,8 @@
 //   GET ?date=YYYY-MM-DD     - explicit day
 //   GET                      - defaults to today ET
 //
-// Auth: service-role required (verify_jwt=true on deploy). Same pattern as
-// scan-run-status. The response shape is intentionally flat per sport so a
+// Auth: service-role required in function code (verify_jwt=false so opaque
+// service keys reach this guard). The response shape is intentionally flat per sport so a
 // future Discord-webhook job can map each row to a single embed field
 // without further reshaping.
 

@@ -20,16 +20,21 @@ type PremiumAccessFailure = {
 
 export type PremiumAccessResult = PremiumAccessSuccess | PremiumAccessFailure;
 
-function serviceRoleKey(): string | null {
+function serviceRoleKeys(): string[] {
+  const keys: string[] = [];
   for (const name of [
     "SUPABASE_SERVICE_ROLE_KEY",
     "SERVICE_ROLE_KEY",
     "MASTER_SUPABASE_SERVICE_KEY",
   ]) {
-    const value = Deno.env.get(name);
-    if (value?.trim()) return value.trim();
+    const value = Deno.env.get(name)?.trim();
+    if (value && !keys.includes(value)) keys.push(value);
   }
-  return null;
+  return keys;
+}
+
+function serviceRoleKey(): string | null {
+  return serviceRoleKeys()[0] ?? null;
 }
 
 function json(
@@ -122,7 +127,7 @@ export async function requirePremiumAccess(
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  if (token === serviceKey) {
+  if (serviceRoleKeys().includes(token)) {
     return {
       ok: true,
       admin,
@@ -311,8 +316,10 @@ export async function requireServiceRoleAccess(
   corsHeaders: Record<string, string>,
 ): Promise<PremiumAccessResult> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceKey = serviceRoleKey();
+  const configuredKeys = serviceRoleKeys();
+  const serviceKey = configuredKeys[0] ?? null;
   if (!supabaseUrl || !serviceKey) {
+    console.error("[service-role-auth] rejected reason=server_misconfigured");
     return {
       ok: false,
       status: 500,
@@ -322,7 +329,17 @@ export async function requireServiceRoleAccess(
   }
 
   const token = bearerToken(req);
-  if (token !== serviceKey) {
+  if (!configuredKeys.includes(token)) {
+    let path = "unknown";
+    try {
+      path = new URL(req.url).pathname;
+    } catch {
+      // Use a bounded fallback in logs for malformed request URLs.
+    }
+    console.warn(
+      `[service-role-auth] rejected method=${req.method} path=${path} ` +
+        `bearer=${token ? "present" : "missing"} configured_keys=${configuredKeys.length}`,
+    );
     return {
       ok: false,
       status: 401,

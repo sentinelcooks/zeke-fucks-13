@@ -527,7 +527,7 @@ interface FetchResult {
 // Decode the JWT payload (no signature verification — we only need the role
 // claim to choose between platform-injected vs custom secret and to refuse
 // to attempt an insert that will deterministically violate RLS).
-type JwtAuthSource = "service_role" | "anon" | "user_jwt" | "missing";
+type JwtAuthSource = "service_role" | "non_jwt_secret" | "anon" | "user_jwt" | "missing";
 
 function decodeJwtRole(jwt: string): JwtAuthSource {
   try {
@@ -546,16 +546,13 @@ function decodeJwtRole(jwt: string): JwtAuthSource {
   }
 }
 
-// Resolve the service-role JWT for daily_picks inserts. The Supabase CLI
-// refuses `supabase secrets set SUPABASE_*` (reserved prefix), so we cannot
-// rely on a user-managed SUPABASE_SERVICE_ROLE_KEY. Read user-controlled
-// secrets first (SERVICE_ROLE_KEY, MASTER_SUPABASE_SERVICE_KEY) and pick the
-// first JWT that actually decodes to role=service_role. SUPABASE_SERVICE_ROLE_KEY
-// remains as a last-resort platform fallback for non-broken envs.
+// Resolve a service-role credential for internal calls and daily_picks writes.
+// Modern Supabase service keys can be opaque sb_secret_* values rather than
+// JWTs, so only reject configured JWT values whose role claim is not service_role.
 const SERVICE_ROLE_CANDIDATE_NAMES = [
+  "SUPABASE_SERVICE_ROLE_KEY",
   "SERVICE_ROLE_KEY",
   "MASTER_SUPABASE_SERVICE_KEY",
-  "SUPABASE_SERVICE_ROLE_KEY",
 ] as const;
 
 type ServiceRoleAuth = {
@@ -573,6 +570,9 @@ function resolveServiceRoleAuth(): ServiceRoleAuth {
     const value = Deno.env.get(name)?.trim();
     if (!value) continue;
     presence.push(name);
+    if (value.split(".").length !== 3) {
+      return { key: value, sourceName: name, decodedRole: "non_jwt_secret", presence };
+    }
     const role = decodeJwtRole(value);
     if (firstSeenRole === "missing") firstSeenRole = role;
     if (role === "service_role") {
@@ -583,6 +583,19 @@ function resolveServiceRoleAuth(): ServiceRoleAuth {
   return { key: null, sourceName: "none", decodedRole: firstSeenRole, presence };
 }
 
+function resolveInternalFunctionAuth(): ServiceRoleAuth {
+  const presence: string[] = [];
+  for (const name of SERVICE_ROLE_CANDIDATE_NAMES) {
+    const value = Deno.env.get(name)?.trim();
+    if (!value) continue;
+    presence.push(name);
+    if (decodeJwtRole(value) === "service_role") {
+      return { key: value, sourceName: name, decodedRole: "service_role", presence };
+    }
+  }
+  return resolveServiceRoleAuth();
+}
+
 // Read credentials at call-time so the values are always freshly resolved
 // from the Deno isolate's environment.
 function getInternalHeaders(): {
@@ -590,17 +603,16 @@ function getInternalHeaders(): {
   apikey: string;
   "Content-Type": string;
 } | null {
-  const key = Deno.env.get("SERVICE_ROLE_KEY")?.trim();
+  // Downstream functions still use gateway JWT verification; prefer a legacy
+  // service-role JWT when configured, while scanner persistence can use opaque keys.
+  const { key, sourceName, decodedRole } = resolveInternalFunctionAuth();
 
   if (!key) {
-    console.error("sport_scan: SERVICE_ROLE_KEY is missing");
+    console.error("sport_scan: no valid configured service-role credential for internal request");
     return null;
   }
 
-  if (!key.startsWith("eyJ")) {
-    console.error("sport_scan: SERVICE_ROLE_KEY is not a valid JWT. Check Supabase secrets.");
-    return null;
-  }
+  console.log(`sport_scan: internal auth env=${sourceName} role=${decodedRole}`);
 
   return {
     Authorization: `Bearer ${key}`,
@@ -3142,12 +3154,14 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
     if (!supabaseUrl) {
       throw new Error("Missing PROJECT_URL/SUPABASE_URL for daily_picks insert");
     }
-    if (!serviceRoleKey || insertClientDecodedRole !== "service_role") {
+    if (
+      !serviceRoleKey ||
+      (insertClientDecodedRole !== "service_role" && insertClientDecodedRole !== "non_jwt_secret")
+    ) {
       console.error(
         `[scanner][persist] insert_error code=AUTH_NOT_SERVICE_ROLE ` +
           `presence=${presenceStr} selected_source=${insertClientAuthSource} decoded_role=${insertClientDecodedRole} — ` +
-          `refusing to attempt RLS-doomed insert. Set SERVICE_ROLE_KEY (or MASTER_SUPABASE_SERVICE_KEY) ` +
-          `to a JWT whose payload.role === "service_role".`,
+          `refusing to attempt insert without a configured service-role credential.`,
       );
     } else {
       const supabase = createClient(supabaseUrl, serviceRoleKey, {

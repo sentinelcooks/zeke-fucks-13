@@ -19,6 +19,7 @@
 // for work they never performed.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { requireServiceRoleAccess } from "../_shared/premium-access.ts";
 import {
   applyAnalyzerFinalizeInsertGuard,
   buildDailyPickRow,
@@ -672,6 +673,9 @@ async function processOne(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const access = await requireServiceRoleAccess(req, corsHeaders);
+  if (!access.ok) return access.response;
 
   const supabaseUrl = getEnv("SUPABASE_URL");
   const resolved = resolveServiceRoleKey();

@@ -11,6 +11,7 @@
 // rollout; legacy nba_analyzer_queue rows are NOT touched here.
 
 import { runAnalyzerWorker } from "../_shared/analyzer_worker.ts";
+import { requireServiceRoleAccess } from "../_shared/premium-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,6 +21,9 @@ const corsHeaders = {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const access = await requireServiceRoleAccess(req, corsHeaders);
+  if (!access.ok) return access.response;
 
   const result = await runAnalyzerWorker("nba", {
     batchSize: 8,

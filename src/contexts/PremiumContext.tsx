@@ -26,6 +26,12 @@ type PremiumContextValue = {
   status: PremiumStatus;
   isPremium: boolean;
   hasLifetimeAccess: boolean;
+  accessSource: string | null;
+  accessType: string | null;
+  accessExpiresAt: string | null;
+  hasCheckedPremium: boolean;
+  initialLoading: boolean;
+  isRefreshing: boolean;
   isLoading: boolean;
   errorMessage: string | null;
   refresh: (reason?: string) => Promise<PremiumStatus>;
@@ -35,6 +41,12 @@ const PremiumContext = createContext<PremiumContextValue>({
   status: "loading",
   isPremium: false,
   hasLifetimeAccess: false,
+  accessSource: null,
+  accessType: null,
+  accessExpiresAt: null,
+  hasCheckedPremium: false,
+  initialLoading: true,
+  isRefreshing: false,
   isLoading: true,
   errorMessage: null,
   refresh: async () => "error",
@@ -44,6 +56,12 @@ export function PremiumProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const [status, setStatus] = useState<PremiumStatus>("loading");
   const [hasLifetimeAccess, setHasLifetimeAccess] = useState(false);
+  const [accessSource, setAccessSource] = useState<string | null>(null);
+  const [accessType, setAccessType] = useState<string | null>(null);
+  const [accessExpiresAt, setAccessExpiresAt] = useState<string | null>(null);
+  const [hasCheckedPremium, setHasCheckedPremium] = useState(false);
+  const [checkedUserId, setCheckedUserId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const removeListenerRef = useRef<(() => void) | null>(null);
   const refreshInFlightRef = useRef<Promise<PremiumStatus> | null>(null);
@@ -56,11 +74,16 @@ export function PremiumProvider({ children }: { children: ReactNode }) {
       if (!isAuthenticated || !user) {
         setStatus("inactive");
         setHasLifetimeAccess(false);
+        setAccessSource(null);
+        setAccessType(null);
+        setAccessExpiresAt(null);
+        setHasCheckedPremium(true);
+        setCheckedUserId(null);
         setErrorMessage(null);
         return "inactive" as PremiumStatus;
       }
 
-      setStatus("loading");
+      setIsRefreshing(true);
       setErrorMessage(null);
 
       try {
@@ -85,25 +108,43 @@ export function PremiumProvider({ children }: { children: ReactNode }) {
           console.error("Premium entitlement check failed:", error);
           setStatus("error");
           setHasLifetimeAccess(false);
+          setAccessSource(null);
+          setAccessType(null);
+          setAccessExpiresAt(null);
+          setHasCheckedPremium(true);
+          setCheckedUserId(user.id);
           setErrorMessage("Network error while checking subscription.");
           return "error" as PremiumStatus;
         }
 
         const active = data?.status === "active" || data?.isPremium === true || data?.isSubscribed === true;
         const lifetimeAccess = data?.lifetimeAccess === true;
+        const source = typeof data?.accessSource === "string" ? data.accessSource : null;
+        const type = typeof data?.accessType === "string" ? data.accessType : null;
+        const expiresAt = typeof data?.expiresAt === "string" ? data.expiresAt : null;
         console.info("[premium] Supabase subscription cache synced", {
           status: data?.status ?? "unknown",
           premiumActive: active,
         });
         if (active) {
           setHasLifetimeAccess(lifetimeAccess);
+          setAccessSource(source);
+          setAccessType(type);
+          setAccessExpiresAt(expiresAt);
           setStatus("active");
+          setHasCheckedPremium(true);
+          setCheckedUserId(user.id);
           console.info("[premium] user allowed into premium app");
           return "active" as PremiumStatus;
         }
 
         setHasLifetimeAccess(false);
+        setAccessSource(null);
+        setAccessType(null);
+        setAccessExpiresAt(null);
         setStatus("inactive");
+        setHasCheckedPremium(true);
+        setCheckedUserId(user.id);
         console.info("[premium] user locked because entitlement inactive", {
           nativePremiumActive: nativeActive,
         });
@@ -112,8 +153,15 @@ export function PremiumProvider({ children }: { children: ReactNode }) {
         console.error("Premium refresh failed:", err);
         setStatus("error");
         setHasLifetimeAccess(false);
+        setAccessSource(null);
+        setAccessType(null);
+        setAccessExpiresAt(null);
+        setHasCheckedPremium(true);
+        setCheckedUserId(user.id);
         setErrorMessage("Network error while checking subscription.");
         return "error" as PremiumStatus;
+      } finally {
+        setIsRefreshing(false);
       }
     })();
 
@@ -126,10 +174,7 @@ export function PremiumProvider({ children }: { children: ReactNode }) {
   }, [authLoading, isAuthenticated, user]);
 
   useEffect(() => {
-    if (authLoading) {
-      setStatus("loading");
-      return;
-    }
+    if (authLoading) return;
     void refresh("auth_state");
   }, [authLoading, refresh, user?.id]);
 
@@ -145,8 +190,6 @@ export function PremiumProvider({ children }: { children: ReactNode }) {
         premiumActive: nativeActive,
         entitlement: ENTITLEMENT_ID,
       });
-      setStatus("loading");
-      setErrorMessage(null);
       void refresh("customer_info_listener");
     })
       .then((remove) => {
@@ -180,14 +223,31 @@ export function PremiumProvider({ children }: { children: ReactNode }) {
     return () => remove?.();
   }, [refresh]);
 
+  const currentUserId = isAuthenticated && user ? user.id : null;
+  const hasKnownPremiumState = !currentUserId
+    ? !authLoading
+    : hasCheckedPremium && checkedUserId === currentUserId;
+  const initialLoading = authLoading || !hasKnownPremiumState;
+  const visibleStatus: PremiumStatus = initialLoading
+    ? "loading"
+    : currentUserId
+      ? status
+      : "inactive";
+
   const value = useMemo<PremiumContextValue>(() => ({
-    status,
-    isPremium: status === "active",
+    status: visibleStatus,
+    isPremium: visibleStatus === "active",
     hasLifetimeAccess,
-    isLoading: status === "loading",
+    accessSource,
+    accessType,
+    accessExpiresAt,
+    hasCheckedPremium: hasKnownPremiumState,
+    initialLoading,
+    isRefreshing: isRefreshing && hasKnownPremiumState,
+    isLoading: initialLoading,
     errorMessage,
     refresh,
-  }), [errorMessage, hasLifetimeAccess, refresh, status]);
+  }), [accessExpiresAt, accessSource, accessType, errorMessage, hasKnownPremiumState, hasLifetimeAccess, initialLoading, isRefreshing, refresh, visibleStatus]);
 
   return (
     <PremiumContext.Provider value={value}>
