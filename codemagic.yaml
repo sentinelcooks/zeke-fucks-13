@@ -47,7 +47,15 @@ workflows:
       - name: Set iOS build number
         script: |
           cd ios/App
-          agvtool new-version -all "$PROJECT_BUILD_NUMBER"
+          # Build 12 has already been used; never let CI overwrite the project
+          # bump with a lower Codemagic counter for the next App Store upload.
+          MIN_BUILD_NUMBER=13
+          if [ "${PROJECT_BUILD_NUMBER:-0}" -gt "$MIN_BUILD_NUMBER" ]; then
+            NEXT_BUILD_NUMBER="$PROJECT_BUILD_NUMBER"
+          else
+            NEXT_BUILD_NUMBER="$MIN_BUILD_NUMBER"
+          fi
+          agvtool new-version -all "$NEXT_BUILD_NUMBER"
 
       - name: Set up iOS code signing
         script: |
