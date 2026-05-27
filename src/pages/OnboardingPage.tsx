@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, startTransition, memo, useMemo, type JSX } from "react";
+import { useState, useEffect, useCallback, memo, useMemo, type JSX } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import type { ComponentType, ReactNode } from "react";
@@ -43,6 +43,16 @@ const SPORT_LOGOS: Record<string, string> = {
   ufc: "https://a.espncdn.com/i/teamlogos/leagues/500/ufc.png",
 };
 
+const ONBOARDING_IMAGE_URLS = [
+  ...Object.values(ESPN_HEADSHOTS),
+  ...Object.values(ESPN_TEAM_LOGOS),
+  ...Object.values(SPORT_LOGOS),
+  "https://i.pravatar.cc/80?img=11",
+  "https://i.pravatar.cc/80?img=12",
+  "https://i.pravatar.cc/80?img=13",
+  "https://i.pravatar.cc/100?img=11",
+];
+
 /* ─────────── Storage keys ─────────── */
 const STORAGE = {
   oddsFormat: "sentinel_onboarding_odds_format",
@@ -62,6 +72,12 @@ const SPORTS = [
 /* ─────────── Animation ─────────── */
 const ease = [0.32, 0.72, 0, 1] as const;
 const pageT = { duration: 0.3, ease };
+const stepT = { duration: 0.14, ease };
+const stepVariants = {
+  enter: (direction: number) => ({ opacity: 0, x: direction * 10 }),
+  center: { opacity: 1, x: 0 },
+  exit: (direction: number) => ({ opacity: 0, x: direction * -8, pointerEvents: "none" as const }),
+};
 
 /* ─────────── Atoms ─────────── */
 function ProgressDots({ current, total }: { current: number; total: number }) {
@@ -901,6 +917,8 @@ const ScreenComparison = memo(function ScreenComparison({ onBack, onNext }: { on
 export default function OnboardingPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
+  const [direction, setDirection] = useState(1);
+  const reduce = useReducedMotion();
 
   // Default referral if missing (used downstream)
   useEffect(() => {
@@ -917,21 +935,23 @@ export default function OnboardingPage() {
     Object.values(ASSETS).forEach((a) => {
       preloadGeneratedImage(a.prompt, a.key, a.model);
     });
-    // Warm Screen 2 image cache so they're already decoded by the time the user advances.
-    const urls = [
-      ESPN_HEADSHOTS.jaysonTatum,
-      ESPN_HEADSHOTS.austinMatthews,
-      ESPN_HEADSHOTS.lukaDoncic,
-      ESPN_TEAM_LOGOS.rockies,
-      "https://i.pravatar.cc/80?img=11",
-      "https://i.pravatar.cc/80?img=12",
-      "https://i.pravatar.cc/80?img=13",
-    ];
-    urls.forEach((u) => { const i = new Image(); i.src = u; });
+    // Request and decode later-step images before they first enter the viewport.
+    ONBOARDING_IMAGE_URLS.forEach((url) => {
+      const image = new Image();
+      image.decoding = "async";
+      image.src = url;
+      void image.decode().catch(() => undefined);
+    });
   }, []);
 
-  const goNext = useCallback(() => startTransition(() => setStep((s) => s + 1)), []);
-  const goBack = useCallback(() => startTransition(() => setStep((s) => Math.max(0, s - 1))), []);
+  const goNext = useCallback(() => {
+    setDirection(1);
+    setStep((s) => Math.min(3, s + 1));
+  }, []);
+  const goBack = useCallback(() => {
+    setDirection(-1);
+    setStep((s) => Math.max(0, s - 1));
+  }, []);
   const goPaywall = useCallback(() => navigate("/paywall"), [navigate]);
 
   const current = useMemo(() =>
@@ -942,18 +962,23 @@ export default function OnboardingPage() {
   [step, goNext, goBack, goPaywall]);
 
   return (
-    <AnimatePresence initial={false} mode="wait">
-      <motion.div
-        key={step}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.18, ease: "easeInOut" }}
-        style={{ willChange: "opacity" }}
-      >
-        {current}
-      </motion.div>
-    </AnimatePresence>
+    <div className="relative min-h-screen bg-[#0A0A0A]">
+      <AnimatePresence initial={false} mode="popLayout" custom={direction}>
+        <motion.div
+          key={step}
+          custom={direction}
+          variants={reduce ? undefined : stepVariants}
+          initial={reduce ? false : "enter"}
+          animate={reduce ? undefined : "center"}
+          exit={reduce ? undefined : "exit"}
+          transition={reduce ? { duration: 0 } : stepT}
+          className="w-full"
+          style={reduce ? undefined : { willChange: "opacity, transform" }}
+        >
+          {current}
+        </motion.div>
+      </AnimatePresence>
+    </div>
   );
 }
 
