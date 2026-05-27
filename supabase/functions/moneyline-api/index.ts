@@ -217,11 +217,13 @@ async function logSnapshot(payload: Record<string, any>): Promise<void> {
 
 // ── ESPN API helpers ──
 const ESPN_NBA = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba";
+const ESPN_WNBA = "https://site.api.espn.com/apis/site/v2/sports/basketball/wnba";
 const ESPN_NCAAB = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball";
 const ESPN_MLB = "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb";
 const ESPN_NHL = "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl";
 
 function getEspnBase(sport: string) {
+  if (sport === "wnba") return ESPN_WNBA;
   if (sport === "ncaab") return ESPN_NCAAB;
   if (sport === "mlb") return ESPN_MLB;
   if (sport === "nhl") return ESPN_NHL;
@@ -323,6 +325,7 @@ function getSeasonForSport(sport: string, date = new Date()) {
   const month = date.getMonth() + 1;
 
   if (sport === "mlb") return year;
+  if (sport === "wnba") return year;
   if (sport === "nba" || sport === "nhl" || sport === "ncaab") {
     return month >= 9 ? year + 1 : year;
   }
@@ -376,6 +379,27 @@ async function getTeamSchedule(teamId: string, sport = "nba") {
   }
 
   return bestEvents;
+}
+
+async function getTeamScheduleForSeason(teamId: string, sport: string, season: number) {
+  const base = getEspnBase(sport);
+  const urls = [
+    `${base}/teams/${teamId}/schedule?season=${season}&seasontype=2`,
+    `${base}/teams/${teamId}/schedule?season=${season}&seasontype=3`,
+  ];
+  const merged = new Map<string, any>();
+  for (const url of urls) {
+    try {
+      const data = await fetchJSON(url);
+      for (const ev of data.events || []) {
+        const id = String(ev.id || ev.uid || `${ev.date}-${ev.name}`);
+        if (!merged.has(id)) merged.set(id, ev);
+      }
+    } catch {
+      // best-effort fallback only
+    }
+  }
+  return Array.from(merged.values());
 }
 
 async function getTeamStats(teamId: string, sport = "nba") {
@@ -1017,10 +1041,12 @@ function analyzeTotal(team1: any, team2: any, totalLine: number, overUnder: stri
 
   const t1ppg = team1Stats.avgPoints || team1Stats.pointsPerGame || 0;
   const t2ppg = team2Stats.avgPoints || team2Stats.pointsPerGame || 0;
+  let projectionConfidence: number | null = null;
   if (t1ppg && t2ppg) {
     const projected = t1ppg + t2ppg;
     factors.push(`Combined PPG projection: ${projected.toFixed(1)} (${team1.shortName}: ${t1ppg.toFixed(1)}, ${team2.shortName}: ${t2ppg.toFixed(1)})`);
     const diff = overUnder === "over" ? projected - totalLine : totalLine - projected;
+    projectionConfidence = Math.round(Math.max(35, Math.min(75, 50 + diff * 1.5)));
     if (diff > 10) factors.push("Projection strongly favors the " + overUnder);
     else if (diff > 3) factors.push("Projection slightly favors the " + overUnder);
     else if (diff < -3) factors.push("Projection leans against the " + overUnder);
@@ -1045,8 +1071,12 @@ function analyzeTotal(team1: any, team2: any, totalLine: number, overUnder: stri
     if (totalOut >= 6) factors.push(`💀 Combined ${totalOut} players OUT — depleted rosters historically produce lower-scoring games, favors UNDER`);
   }
 
-  const basePct = h2h.length > 0 ? (hitCount / h2h.length) * 100 : 50;
-  const confidence = Math.max(15, Math.min(90, Math.round(basePct)));
+  const basePct = h2h.length > 0 ? (hitCount / h2h.length) * 100 : null;
+  const confidence = Math.max(15, Math.min(90, Math.round(
+    basePct != null && projectionConfidence != null
+      ? basePct * 0.55 + projectionConfidence * 0.45
+      : basePct ?? projectionConfidence ?? 50
+  )));
 
   const verdict =
     confidence >= 60 ? `STRONG ${overUnder.toUpperCase()}` :
@@ -1060,6 +1090,7 @@ function analyzeTotal(team1: any, team2: any, totalLine: number, overUnder: stri
 // ── Odds API: fetch live odds for any sport ──
 const SPORT_ODDS_KEYS: Record<string, string> = {
   nba: "basketball_nba",
+  wnba: "basketball_wnba",
   ncaab: "basketball_ncaab",
   mlb: "baseball_mlb",
   nhl: "icehockey_nhl",
@@ -1136,7 +1167,7 @@ async function fetchOddsForMatchup(team1Name: string, team2Name: string, sport: 
   try {
     const sb = supabaseClient || (await getMasterClient());
     const sportKey = SPORT_ODDS_KEYS[sport] || SPORT_ODDS_KEYS.nba;
-    const url = `https://api.the-odds-api.com/v4/sports/${sportKey}/odds/?apiKey=__API_KEY__&regions=us,us2,us_dfs,us_ex&markets=h2h,spreads,totals&oddsFormat=american`;
+    const url = `https://api.the-odds-api.com/v4/sports/${sportKey}/odds/?apiKey=__API_KEY__&regions=us,us2&markets=h2h,spreads,totals&oddsFormat=american`;
 
     const resp = await fetchOddsWithRotation(sb, url);
     if (!resp) return { __unavailable: true, reason: "fetch_failed" } as any;
@@ -1376,7 +1407,7 @@ Deno.serve(async (req) => {
       const team1HomeAway: "home" | "away" | null = venue ? (venue.team1IsHome ? "home" : "away") : null;
       const team2HomeAway: "home" | "away" | null = venue ? (venue.team1IsHome ? "away" : "home") : null;
 
-      const [h2h, team1Stats, team2Stats, injuryReport, schedule1, schedule2] = await Promise.all([
+      let [h2h, team1Stats, team2Stats, injuryReport, schedule1, schedule2] = await Promise.all([
         getHeadToHead(team1.id, team2.id, sport),
         getTeamStats(team1.id, sport),
         getTeamStats(team2.id, sport),
@@ -1384,6 +1415,26 @@ Deno.serve(async (req) => {
         getTeamSchedule(team1.id, sport),
         getTeamSchedule(team2.id, sport),
       ]);
+      let previousSeasonFallbackUsed = false;
+      let previousSeasonNote: string | null = null;
+      if (sport === "wnba") {
+        const currentSeason = getSeasonForSport(sport);
+        const previousSeason = currentSeason - 1;
+        const [current1, current2, previous1, previous2] = await Promise.all([
+          getTeamScheduleForSeason(team1.id, sport, currentSeason),
+          getTeamScheduleForSeason(team2.id, sport, currentSeason),
+          getTeamScheduleForSeason(team1.id, sport, previousSeason),
+          getTeamScheduleForSeason(team2.id, sport, previousSeason),
+        ]);
+        const currentFinals1 = current1.filter((ev: any) => isFinalCompetition(ev?.competitions?.[0])).length;
+        const currentFinals2 = current2.filter((ev: any) => isFinalCompetition(ev?.competitions?.[0])).length;
+        if ((currentFinals1 < 8 || currentFinals2 < 8) && (previous1.length > 0 || previous2.length > 0)) {
+          schedule1 = [...current1, ...previous1];
+          schedule2 = [...current2, ...previous2];
+          previousSeasonFallbackUsed = true;
+          previousSeasonNote = "Confidence is moderated because WNBA current-season sample is limited; previous-season form was included as a fallback.";
+        }
+      }
       const injuries1: NormalizedInjury[] = injuryReport.team1;
       const injuries2: NormalizedInjury[] = injuryReport.team2;
 
@@ -1396,7 +1447,7 @@ Deno.serve(async (req) => {
       const pace1 = computePace(team1Stats, schedule1, team1.id);
       const pace2 = computePace(team2Stats, schedule2, team2.id);
 
-      const extras = { injuries1, injuries2, splits1, splits2, b2b1, b2b2, pace1, pace2, team1IsHome: venue ? venue.team1IsHome : null };
+      const extras = { injuries1, injuries2, splits1, splits2, b2b1, b2b2, pace1, pace2, team1IsHome: venue ? venue.team1IsHome : null, previousSeasonFallbackUsed, previousSeasonNote };
 
       // Fetch live odds for all sports — always read rotation pool from MASTER DB.
       const oddsDb = await getMasterClient();
@@ -1595,10 +1646,25 @@ Deno.serve(async (req) => {
         return json({ error: "Invalid bet_type. Use: moneyline, spread, or total" }, 400);
       }
 
+      if (sport === "wnba" && previousSeasonFallbackUsed) {
+        if (bet_type === "moneyline" && typeof analysis.team1_pct === "number") {
+          analysis.team1_pct = Math.max(32, Math.min(68, analysis.team1_pct));
+          analysis.team2_pct = 100 - analysis.team1_pct;
+        } else if (typeof analysis.confidence === "number") {
+          analysis.confidence = Math.min(analysis.confidence, 68);
+        }
+        analysis.factors = [
+          previousSeasonNote,
+          ...(analysis.factors || []),
+        ].filter(Boolean);
+        analysis.previousSeasonFallbackUsed = true;
+      }
+
       // Keep only special emoji-prefixed lines in factors array; factorBreakdown is passed raw
       const specialLines = (analysis.factors || []).filter((f: string) =>
         f.startsWith("🤖") || f.startsWith("🚨") || f.startsWith("😴") || f.startsWith("💀") || f.startsWith("📐") || f.startsWith("⚡")
       );
+      if (sport === "wnba" && previousSeasonNote) specialLines.unshift(previousSeasonNote);
       analysis.factors = specialLines;
 
       // Compute odds/EV for generic model
@@ -1649,6 +1715,8 @@ Deno.serve(async (req) => {
         splits: { team1: splits1, team2: splits2 },
         back_to_back: { team1: b2b1, team2: b2b2 },
         pace: { team1: pace1, team2: pace2 },
+        previousSeasonFallbackUsed,
+        previousSeasonNote,
         odds,
         decision,
         ...analysis,

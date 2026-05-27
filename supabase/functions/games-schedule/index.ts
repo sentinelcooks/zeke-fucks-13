@@ -7,6 +7,7 @@ const corsHeaders = {
 // ── ESPN API (free, no API key, high volume) ──
 const ESPN_SPORT_MAP: Record<string, { sport: string; league: string }> = {
   basketball_nba: { sport: "basketball", league: "nba" },
+  basketball_wnba: { sport: "basketball", league: "wnba" },
   baseball_mlb: { sport: "baseball", league: "mlb" },
   icehockey_nhl: { sport: "hockey", league: "nhl" },
   americanfootball_nfl: { sport: "football", league: "nfl" },
@@ -109,7 +110,7 @@ Deno.serve(async (req) => {
       sport = url.searchParams.get("sport") || sport;
     }
 
-    const validSports = ["basketball_nba", "baseball_mlb", "icehockey_nhl", "americanfootball_nfl"];
+    const validSports = ["basketball_nba", "basketball_wnba", "baseball_mlb", "icehockey_nhl", "americanfootball_nfl"];
     if (!validSports.includes(sport)) {
       return new Response(
         JSON.stringify({ error: "Invalid sport" }),

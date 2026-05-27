@@ -21,7 +21,7 @@ import {
   requestAndRegisterPush,
 } from "@/services/pushNotificationService";
 
-type SportFilter = "nba" | "mlb" | "ufc" | "nhl" | "nfl";
+type SportFilter = "nba" | "wnba" | "mlb" | "ufc" | "nhl" | "nfl";
 
 interface Game {
   id: string;
@@ -67,6 +67,7 @@ interface UfcEvent {
 
 const SPORT_MAP: Record<Exclude<SportFilter, "ufc">, string> = {
   nba: "basketball_nba",
+  wnba: "basketball_wnba",
   mlb: "baseball_mlb",
   nhl: "icehockey_nhl",
   nfl: "americanfootball_nfl",
@@ -74,13 +75,14 @@ const SPORT_MAP: Record<Exclude<SportFilter, "ufc">, string> = {
 
 const SPORT_COLOR: Record<SportFilter, string> = {
   nba: "#1D428A",
+  wnba: "#E03A3E",
   mlb: "#002D72",
   nhl: "#111111",
   nfl: "#013369",
   ufc: "#3a1518",
 };
 
-const SPORT_LOGO: Record<SportFilter, string> = {
+const SPORT_LOGO: Partial<Record<SportFilter, string>> = {
   nba: logoNba,
   mlb: logoMlb,
   ufc: logoUfc,
@@ -90,6 +92,7 @@ const SPORT_LOGO: Record<SportFilter, string> = {
 
 const SPORT_LOGO_SIZE: Record<SportFilter, string> = {
   nba: "w-7 h-7",
+  wnba: "w-7 h-7",
   mlb: "w-6 h-6",
   nhl: "w-6 h-6",
   nfl: "w-6 h-6",
@@ -97,6 +100,17 @@ const SPORT_LOGO_SIZE: Record<SportFilter, string> = {
 };
 
 const CARD_ORDER = ["Main Card", "Prelims", "Early Prelims"];
+
+function WnbaMark({ className = "" }: { className?: string }) {
+  return (
+    <span
+      className={`inline-flex items-center justify-center rounded-full bg-white/10 text-white font-black tracking-[-0.08em] ${className}`}
+      style={{ boxShadow: "inset 0 0 0 1px hsla(0,0%,100%,0.16)" }}
+    >
+      W
+    </span>
+  );
+}
 
 function teamNameKey(value: string | null | undefined): string {
   return String(value ?? "")
@@ -669,7 +683,7 @@ const GamesPage = () => {
       const period = game.period || 0;
       const clock = game.display_clock || "";
       const sportLower = sport.toLowerCase();
-      if (sportLower === "nba" || sportLower === "nfl") return `Q${period}${clock ? ` ${clock}` : ""}`;
+      if (sportLower === "nba" || sportLower === "wnba" || sportLower === "nfl") return `Q${period}${clock ? ` ${clock}` : ""}`;
       if (sportLower === "nhl") {
         const periodLabel = period === 1 ? "1st" : period === 2 ? "2nd" : period === 3 ? "3rd" : `OT${period - 3}`;
         return `${periodLabel}${clock ? ` ${clock}` : ""}`;
@@ -680,8 +694,8 @@ const GamesPage = () => {
 
     const spreadLabel = odds?.homeSpread != null
       ? `${odds.homeSpread > 0 ? "+" : ""}${odds.homeSpread}`
-      : "—";
-    const totalLabel = odds?.totalLine != null ? `O/U ${odds.totalLine}` : "—";
+      : "Odds unavailable";
+    const totalLabel = odds?.totalLine != null ? `O/U ${odds.totalLine}` : "Odds unavailable";
 
     return (
       <motion.div {...stagger(index)} className={`vision-card p-4 relative overflow-hidden ${isEnded ? 'opacity-75' : ''}`}>
@@ -737,7 +751,7 @@ const GamesPage = () => {
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold text-muted-foreground/55 uppercase w-8">Away</span>
             {(() => {
-              const url = game.away_logo || getTeamLogoUrl(game.away_team, sport as "nba" | "mlb" | "nhl" | "nfl");
+              const url = game.away_logo || (sport === "wnba" ? "" : getTeamLogoUrl(game.away_team, sport as "nba" | "mlb" | "nhl" | "nfl"));
               const initials = game.away_team.split(" ").map(w => w[0]).join("").slice(0, 2);
               return url ? (
                 <img src={url} alt="" className="w-5 h-5 object-contain" onError={(e) => {
@@ -763,14 +777,14 @@ const GamesPage = () => {
                 ? awayWon ? 'hsl(142, 71%, 45%)' : 'hsl(var(--foreground))'
                 : mlColor(odds?.awayML ?? null)
             }}>
-              {(isLive || isEnded) && hasScore ? game.score!.away ?? '-' : odds?.awayML ? fmt(odds.awayML) : '—'}
+              {(isLive || isEnded) && hasScore ? game.score!.away ?? '-' : odds?.awayML ? fmt(odds.awayML) : 'Odds unavailable'}
             </span>
           </div>
           <div className="h-px w-full" style={{ background: 'linear-gradient(90deg, transparent, hsla(228,18%,15%,0.5), transparent)' }} />
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold text-muted-foreground/55 uppercase w-8">Home</span>
             {(() => {
-              const url = game.home_logo || getTeamLogoUrl(game.home_team, sport as "nba" | "mlb" | "nhl" | "nfl");
+              const url = game.home_logo || (sport === "wnba" ? "" : getTeamLogoUrl(game.home_team, sport as "nba" | "mlb" | "nhl" | "nfl"));
               const initials = game.home_team.split(" ").map(w => w[0]).join("").slice(0, 2);
               return url ? (
                 <img src={url} alt="" className="w-5 h-5 object-contain" onError={(e) => {
@@ -796,7 +810,7 @@ const GamesPage = () => {
                 ? homeWon ? 'hsl(142, 71%, 45%)' : 'hsl(var(--foreground))'
                 : mlColor(odds?.homeML ?? null)
             }}>
-              {(isLive || isEnded) && hasScore ? game.score!.home ?? '-' : odds?.homeML ? fmt(odds.homeML) : '—'}
+              {(isLive || isEnded) && hasScore ? game.score!.home ?? '-' : odds?.homeML ? fmt(odds.homeML) : 'Odds unavailable'}
             </span>
           </div>
         </div>
@@ -1144,7 +1158,7 @@ const GamesPage = () => {
 
       {/* Sport toggle */}
       <div className="flex p-1 rounded-xl relative z-10" style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
-        {(["nba", "mlb", "nhl", "nfl", "ufc"] as const).map((s) => {
+        {(["nba", "wnba", "mlb", "nhl", "nfl", "ufc"] as const).map((s) => {
           const isActive = sport === s;
           const color = SPORT_COLOR[s];
           return (
@@ -1159,7 +1173,11 @@ const GamesPage = () => {
                 boxShadow: `0 4px 16px -2px ${color}55`,
               } : undefined}
             >
-              <img src={SPORT_LOGO[s]} alt={s} className={`${SPORT_LOGO_SIZE[s]} object-contain shrink-0`} />
+              {s === "wnba" ? (
+                <WnbaMark className={`${SPORT_LOGO_SIZE[s]} text-[11px] shrink-0`} />
+              ) : (
+                <img src={SPORT_LOGO[s]} alt={s} className={`${SPORT_LOGO_SIZE[s]} object-contain shrink-0`} />
+              )}
               {s.toUpperCase()}
             </button>
           );

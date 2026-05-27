@@ -59,7 +59,18 @@ import sportNcaab from "@/assets/sport-ncaab.png";
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, LineController, PointElement, Title, Tooltip, Legend);
 
 type BetType = "moneyline" | "spread" | "total";
-type SportType = "nba" | "ncaab" | "mlb" | "nhl";
+type SportType = "nba" | "wnba" | "ncaab" | "mlb" | "nhl";
+
+function WnbaMark({ className = "" }: { className?: string }) {
+  return (
+    <span
+      className={`inline-flex items-center justify-center rounded-full bg-white/10 text-white font-black tracking-[-0.08em] ${className}`}
+      style={{ boxShadow: "inset 0 0 0 1px hsla(0,0%,100%,0.16)" }}
+    >
+      W
+    </span>
+  );
+}
 
 interface Team {
   id: string;
@@ -1415,6 +1426,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
           layoutId="lines-sport"
           options={[
             { value: "nba" as SportType, label: "NBA", icon: <img src={sportNba} alt="NBA" className="w-7 h-7 object-contain" /> },
+            { value: "wnba" as SportType, label: "WNBA", icon: <WnbaMark className="w-7 h-7 text-[11px]" /> },
             { value: "mlb" as SportType, label: "MLB", icon: <img src={sportMlb} alt="MLB" className="w-7 h-7 object-contain" /> },
             { value: "nhl" as SportType, label: "NHL", icon: <img src={sportNhl} alt="NHL" className="w-7 h-7 object-contain" /> },
             { value: "ncaab" as SportType, label: "NCAAB", icon: <img src={sportNcaab} alt="NCAAB" className="w-7 h-7 object-contain" /> },
@@ -1428,6 +1440,12 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-medium text-nba-yellow" style={{ background: 'hsla(43, 96%, 56%, 0.08)', border: '1px solid hsla(43, 96%, 56%, 0.15)' }}>
           <span>⚠️</span>
           <span>MLB data is from last season. More info will come as the season progresses to help predict outcomes.</span>
+        </div>
+      )}
+
+      {sport === "wnba" && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-medium text-nba-yellow" style={{ background: 'hsla(43, 96%, 56%, 0.08)', border: '1px solid hsla(43, 96%, 56%, 0.15)' }}>
+          <span>WNBA lines use basketball factors with conservative scoring when matchup data is thin.</span>
         </div>
       )}
 
@@ -1640,7 +1658,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                     background: 'hsla(228, 20%, 10%, 0.5)',
                     border: '1px solid hsla(228, 30%, 20%, 0.25)',
                   }}>
-                    <input type="number" value={totalLine} onChange={(e) => setTotalLine(e.target.value)} placeholder={sport === "ncaab" ? "140.5" : sport === "mlb" ? "8.5" : sport === "nhl" ? "5.5" : "215.5"} step="0.5" min="0"
+                    <input type="number" value={totalLine} onChange={(e) => setTotalLine(e.target.value)} placeholder={sport === "ncaab" ? "140.5" : sport === "mlb" ? "8.5" : sport === "nhl" ? "5.5" : sport === "wnba" ? "165.5" : "215.5"} step="0.5" min="0"
                       className="w-full bg-transparent py-2.5 text-center text-lg font-extrabold text-foreground placeholder:text-muted-foreground/12 focus:outline-none tabular-nums" />
                   </div>
                 </div>

@@ -21,6 +21,7 @@ const REGION_CONFIGS = [
 // Sport key mapping
 const SPORT_KEYS: Record<string, string> = {
   nba: "basketball_nba",
+  wnba: "basketball_wnba",
   mlb: "baseball_mlb",
   ufc: "mma_mixed_martial_arts",
   nhl: "icehockey_nhl",
@@ -36,6 +37,9 @@ const NBA_PROP_MARKETS = [
   "player_steals",
   "player_blocks",
   "player_turnovers",
+  "player_points_rebounds",
+  "player_points_assists",
+  "player_rebounds_assists",
   "player_points_rebounds_assists",
 ].join(",");
 
@@ -664,6 +668,21 @@ Deno.serve(async (req) => {
         blocked_shots: "player_blocked_shots",
       };
 
+      const BASKETBALL_PROP_MAP: Record<string, string> = {
+        "pts+reb+ast": "player_points_rebounds_assists",
+        pra: "player_points_rebounds_assists",
+        "points+rebounds+assists": "player_points_rebounds_assists",
+        "pts+reb": "player_points_rebounds",
+        "points+rebounds": "player_points_rebounds",
+        "pts+ast": "player_points_assists",
+        "points+assists": "player_points_assists",
+        "reb+ast": "player_rebounds_assists",
+        "rebounds+assists": "player_rebounds_assists",
+        "3-pointers": "player_threes",
+        threes: "player_threes",
+        "3pm": "player_threes",
+      };
+
       const validPrefixes = ["player_", "pitcher_", "batter_"];
       const alreadyPrefixed = validPrefixes.some(p => (propType || "").startsWith(p));
       let propMarketKey: string;
@@ -671,6 +690,9 @@ Deno.serve(async (req) => {
       if (alreadyPrefixed) {
         propMarketKey = propType
           .replace("pts+reb+ast", "points_rebounds_assists")
+          .replace("pts+reb", "points_rebounds")
+          .replace("pts+ast", "points_assists")
+          .replace("reb+ast", "rebounds_assists")
           .replace("3-pointers", "threes")
           // Strip sport-specific infixes: player_nhl_points → player_points
           .replace(/^(player_)(nhl_|mlb_|nba_|nfl_|ufc_)/i, "$1");
@@ -678,8 +700,10 @@ Deno.serve(async (req) => {
         propMarketKey = MLB_PROP_MAP[ptLower];
       } else if (sport === "nhl" && NHL_PROP_MAP[ptLower]) {
         propMarketKey = NHL_PROP_MAP[ptLower];
+      } else if ((sport === "nba" || sport === "wnba") && BASKETBALL_PROP_MAP[ptLower]) {
+        propMarketKey = BASKETBALL_PROP_MAP[ptLower];
       } else {
-        propMarketKey = `player_${(propType || "points").replace("pts+reb+ast", "points_rebounds_assists").replace("3-pointers", "threes")}`;
+        propMarketKey = `player_${(propType || "points").replace("pts+reb+ast", "points_rebounds_assists").replace("pts+reb", "points_rebounds").replace("pts+ast", "points_assists").replace("reb+ast", "rebounds_assists").replace("3-pointers", "threes")}`;
       }
 
       let bestMatch: any = null;

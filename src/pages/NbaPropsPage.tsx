@@ -179,6 +179,20 @@ const NBA_PROP_TYPES = NBA_PROP_CATEGORIES.flatMap((c) => c.props);
 const MLB_PROP_TYPES = MLB_PROP_CATEGORIES.flatMap((c) => c.props);
 const NHL_PROP_TYPES = NHL_PROP_CATEGORIES.flatMap((c) => c.props);
 
+type PropsSport = "nba" | "wnba" | "mlb" | "nhl" | "ufc";
+type LinesSport = "nba" | "wnba" | "mlb" | "nhl" | "ncaab";
+
+function WnbaMark({ className = "" }: { className?: string }) {
+  return (
+    <span
+      className={`inline-flex items-center justify-center rounded-full bg-white/10 text-white font-black tracking-[-0.08em] ${className}`}
+      style={{ boxShadow: "inset 0 0 0 1px hsla(0,0%,100%,0.16)" }}
+    >
+      W
+    </span>
+  );
+}
+
 function Section({ title, children, defaultOpen = true, icon }: { title: string; children: React.ReactNode; defaultOpen?: boolean; icon?: React.ReactNode }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -395,7 +409,7 @@ function getReasoningType(r: string) {
   return "neutral";
 }
 
-function normalizePickPropType(propType: string | undefined, sport: "nba" | "mlb" | "nhl" | "ufc") {
+function normalizePickPropType(propType: string | undefined, sport: PropsSport) {
   const normalized = (propType || "").toLowerCase();
   if (!normalized) return sport === "mlb" ? "hits" : sport === "nhl" ? "goals" : "points";
   if (sport === "nhl") {
@@ -427,7 +441,7 @@ const NbaPropsPage = () => {
   const linesNavigationState = location.state as {
     home_team?: string;
     away_team?: string;
-    sport?: "nba" | "mlb" | "nhl" | "ncaab";
+    sport?: LinesSport;
     autoAnalyze?: boolean;
   } | null;
   const globalSlip = useParlaySlip();
@@ -456,10 +470,10 @@ const NbaPropsPage = () => {
   const autoScrollToResultsRef = useRef(false);
   const resultsRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<"props" | "lines">(searchParams.get("mode") === "lines" ? "lines" : "props");
-  const [linesSport, setLinesSport] = useState<"nba" | "mlb" | "nhl" | "ncaab">(
+  const [linesSport, setLinesSport] = useState<LinesSport>(
     linesNavigationState?.sport ?? "nba",
   );
-  const [sport, setSport] = useState<"nba" | "mlb" | "nhl" | "ufc">("nba");
+  const [sport, setSport] = useState<PropsSport>("nba");
   const [player, setPlayer] = useState("");
   const [propType, setPropType] = useState("points");
   const [opponent, setOpponent] = useState("");
@@ -615,7 +629,7 @@ const NbaPropsPage = () => {
       autoAnalyzePrefillRef.current = true;
       autoScrollToResultsRef.current = true;
 
-      const s = (navState.sport || "nba") as "nba" | "mlb" | "nhl" | "ufc";
+      const s = (navState.sport || "nba") as PropsSport;
       const nextPropType = normalizePickPropType(navState.prop_type, s);
       // Accept full team names — resolve to abbreviation using loaded teams, or pass as-is
       const rawOpponent = navState.opponent || "";
@@ -1093,8 +1107,8 @@ const NbaPropsPage = () => {
   const prev = results?.prev_season_h2h || {};
 
 
-  const sportLabel = sport === "ufc" ? "UFC" : sport === "mlb" ? "MLB" : sport === "nhl" ? "NHL" : "NBA";
-  const sportEmoji = sport === "ufc" ? "🥊" : sport === "mlb" ? "⚾" : sport === "nhl" ? "🏒" : "🏀";
+  const sportLabel = sport === "ufc" ? "UFC" : sport === "mlb" ? "MLB" : sport === "nhl" ? "NHL" : sport === "wnba" ? "WNBA" : "NBA";
+  const sportEmoji = sport === "wnba" ? "W" : sport === "ufc" ? "🥊" : sport === "mlb" ? "⚾" : sport === "nhl" ? "🏒" : "🏀";
 
   return (
     <div className="flex flex-col min-h-full relative">
@@ -1115,6 +1129,9 @@ const NbaPropsPage = () => {
           {[
             { value: "nba" as const, label: "NBA", color: "#1D428A", icon: (active: boolean) => (
               <img src={nbaLogo} alt="NBA" className={`h-6 w-auto object-contain ${active ? '' : 'opacity-70'}`} />
+            )},
+            { value: "wnba" as const, label: "WNBA", color: "#E03A3E", icon: (active: boolean) => (
+              <WnbaMark className={`h-6 w-6 text-[11px] ${active ? "" : "opacity-70"}`} />
             )},
             { value: "mlb" as const, label: "MLB", color: "#002D72", icon: (active: boolean) => (
               <img src={mlbLogo} alt="MLB" className={`h-5 w-auto object-contain ${active ? '' : 'opacity-70'}`} />
@@ -1154,6 +1171,7 @@ const NbaPropsPage = () => {
         }}>
           {[
             { value: "nba", label: "NBA", color: "#1D428A", logo: nbaLogo, logoClass: "-mr-2.5" },
+            { value: "wnba", label: "WNBA", color: "#E03A3E", logo: null, logoClass: "" },
             { value: "mlb", label: "MLB", color: "#002D72", logo: mlbLogo, logoClass: "" },
             { value: "nhl", label: "NHL", color: "#111111", logo: nhlLogo, logoClass: "" },
           ].map((s) => {
@@ -1171,7 +1189,11 @@ const NbaPropsPage = () => {
                   boxShadow: `0 4px 16px -2px ${s.color}55`,
                 } : {}}
               >
-                <img src={s.logo} alt={s.label} className={`h-8 w-8 object-contain ${s.logoClass} ${active ? '' : 'opacity-70'}`} />
+                {s.logo ? (
+                  <img src={s.logo} alt={s.label} className={`h-8 w-8 object-contain ${s.logoClass} ${active ? '' : 'opacity-70'}`} />
+                ) : (
+                  <WnbaMark className={`h-8 w-8 text-[11px] ${active ? "" : "opacity-70"}`} />
+                )}
                 <span className="relative z-10">{s.label}</span>
               </motion.button>
             );
@@ -1232,6 +1254,12 @@ const NbaPropsPage = () => {
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-medium text-nba-yellow" style={{ background: 'hsla(43, 96%, 56%, 0.08)', border: '1px solid hsla(43, 96%, 56%, 0.15)' }}>
             <span>⚠️</span>
             <span>MLB data uses last season as baseline. Projections will improve as the current season progresses.</span>
+          </div>
+        )}
+
+        {mode === "props" && sport === "wnba" && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-medium text-nba-yellow" style={{ background: 'hsla(43, 96%, 56%, 0.08)', border: '1px solid hsla(43, 96%, 56%, 0.15)' }}>
+            <span>WNBA markets can be thinner than NBA. Sentinel shows available odds and only scores props when enough player data is available.</span>
           </div>
         )}
 
@@ -2227,7 +2255,7 @@ const NbaPropsPage = () => {
                       if (existing) globalSlip.removeLeg(existing.id);
                     } else {
                       setSlipSheetPick({
-                        sport: sport === "mlb" ? "MLB" : sport === "nhl" ? "NHL" : "NBA",
+                        sport: sport === "mlb" ? "MLB" : sport === "nhl" ? "NHL" : sport === "wnba" ? "WNBA" : "NBA",
                         player,
                         propType,
                         line,

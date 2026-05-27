@@ -1,6 +1,6 @@
 import { normalizeConfidencePercent, normalizeVerdict, type CanonicalVerdict } from "@/lib/matchupGrade";
 
-export type SavedPickSport = "nba" | "mlb" | "nhl" | "ufc" | "nfl";
+export type SavedPickSport = "nba" | "wnba" | "mlb" | "nhl" | "ufc" | "nfl";
 
 export interface SavedDailyPickRow {
   id?: string;
@@ -96,7 +96,7 @@ export interface CanonicalSavedPick {
   avg_value: number | null;
 }
 
-const SUPPORTED_SPORTS: ReadonlyArray<SavedPickSport> = ["nba", "mlb", "nhl", "ufc", "nfl"];
+const SUPPORTED_SPORTS: ReadonlyArray<SavedPickSport> = ["nba", "wnba", "mlb", "nhl", "ufc", "nfl"];
 
 function toSport(input: unknown): SavedPickSport {
   const s = String(input ?? "").toLowerCase().trim();

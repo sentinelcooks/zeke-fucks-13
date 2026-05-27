@@ -63,6 +63,7 @@ export interface OddsEvent {
 
 const SPORT_ALIASES: Record<string, string> = {
   basketball_nba: "nba",
+  basketball_wnba: "wnba",
   baseball_mlb: "mlb",
   mma_mixed_martial_arts: "ufc",
   icehockey_nhl: "nhl",

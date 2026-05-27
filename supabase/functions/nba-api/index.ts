@@ -429,6 +429,16 @@ const NBA_TEAMS = [
   { abbr: "UTA", name: "Utah Jazz" }, { abbr: "WAS", name: "Washington Wizards" },
 ];
 
+const WNBA_TEAMS = [
+  { abbr: "ATL", name: "Atlanta Dream" }, { abbr: "CHI", name: "Chicago Sky" },
+  { abbr: "CONN", name: "Connecticut Sun" }, { abbr: "DAL", name: "Dallas Wings" },
+  { abbr: "GS", name: "Golden State Valkyries" }, { abbr: "IND", name: "Indiana Fever" },
+  { abbr: "LV", name: "Las Vegas Aces" }, { abbr: "LA", name: "Los Angeles Sparks" },
+  { abbr: "MIN", name: "Minnesota Lynx" }, { abbr: "NY", name: "New York Liberty" },
+  { abbr: "PHX", name: "Phoenix Mercury" }, { abbr: "SEA", name: "Seattle Storm" },
+  { abbr: "WAS", name: "Washington Mystics" },
+];
+
 const MLB_TEAMS = [
   { abbr: "ARI", name: "Arizona Diamondbacks" }, { abbr: "ATL", name: "Atlanta Braves" },
   { abbr: "BAL", name: "Baltimore Orioles" }, { abbr: "BOS", name: "Boston Red Sox" },
@@ -467,6 +477,16 @@ const NHL_TEAMS = [
 ];
 
 function getEspnConfig(sport: string) {
+  if (sport === "wnba") {
+    return {
+      base: "https://site.api.espn.com/apis/site/v2/sports/basketball/wnba",
+      core: "https://sports.core.api.espn.com/v2/sports/basketball/leagues/wnba",
+      searchSport: "basketball",
+      searchLeague: "wnba",
+      teams: WNBA_TEAMS,
+      sportKey: "wnba" as const,
+    };
+  }
   if (sport === "mlb") {
     return {
       base: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb",
@@ -3479,7 +3499,7 @@ async function analyzeProp(
   eventAwayTeam?: string | null,
 ) {
   const cfg = getEspnConfig(sport || "nba");
-  propType = cfg.searchLeague === "nba" ? normalizeNbaPropType(propType) : String(propType || "");
+  propType = cfg.searchLeague === "nba" || cfg.searchLeague === "wnba" ? normalizeNbaPropType(propType) : String(propType || "");
   overUnder = normalizeDirection(overUnder);
   const matches = await searchPlayers(playerName, cfg);
   if (!matches.length) return { error: `Player '${playerName}' not found.` };
@@ -3487,14 +3507,14 @@ async function analyzeProp(
   const playerId = matches[0].id;
   const player = await getPlayerInfo(playerId, cfg);
 
-  // Fetch current + previous season for MLB blending
+  // Fetch current + previous season for thin-season sports that benefit from a fallback baseline.
   const currentYear = new Date().getFullYear();
   const prevYear = currentYear - 1;
   let games = await getGameLog(playerId, undefined, cfg);
   let prevSeasonGames: GameRow[] = [];
   
-  if (cfg.searchLeague === "mlb") {
-    // Always fetch previous season for MLB blending
+  if (cfg.searchLeague === "mlb" || cfg.searchLeague === "wnba") {
+    // Always fetch previous season for MLB/WNBA blending or fallback.
     prevSeasonGames = await getGameLog(playerId, prevYear, cfg);
     if (!games.length && prevSeasonGames.length) {
       games = prevSeasonGames;
@@ -3538,6 +3558,26 @@ async function analyzeProp(
   const analysisGames = is1QProp ? games.filter(g => g.q1_pts !== undefined) : games;
   
   const statValues = analysisGames.map(g => getStatValue(g, propType));
+  const prevSeasonStatValues = cfg.searchLeague === "wnba"
+    ? prevSeasonGames.map(g => getStatValue(g, propType)).filter((v) => Number.isFinite(v))
+    : [];
+  const currentFiniteSample = statValues.filter((v) => Number.isFinite(v)).length;
+  const totalWnbaFallbackSample = currentFiniteSample + prevSeasonStatValues.length;
+  if (cfg.searchLeague === "wnba" && totalWnbaFallbackSample < 5) {
+    return {
+      error: "Insufficient WNBA data available for a confident analysis.",
+      player,
+      sport: "wnba",
+      prop_type: propType,
+      line,
+      over_under: overUnder,
+      game_log: [],
+      confidence: 0,
+      verdict: "PASS",
+      reasoning: ["Insufficient WNBA data available for a confident analysis."],
+      dataQuality: { quality: "estimated", flags: ["INSUFFICIENT_WNBA_SAMPLE"], sampleSize: "insufficient" },
+    };
+  }
   const gameLog = analysisGames.map((g, i) => ({
     date: g.date ? new Date(g.date).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit" }) : "",
     matchup: g.matchup,
@@ -3556,7 +3596,24 @@ async function analyzeProp(
   }));
 
   const seasonHr = hitRate(statValues, line, overUnder);
-  const seasonHitRate = { ...seasonHr, avg: avg(statValues) };
+  let seasonHitRate = { ...seasonHr, avg: avg(statValues) };
+  let wnbaPreviousSeasonUsed = false;
+  let wnbaPreviousSeasonNote: string | null = null;
+  let wnbaPreviousSeasonHitRate: any = null;
+  if (cfg.searchLeague === "wnba" && currentFiniteSample < 10 && prevSeasonStatValues.length >= 5) {
+    const prevHr = hitRate(prevSeasonStatValues, line, overUnder);
+    const currentWeight = currentFiniteSample >= 5 ? 0.65 : 0.45;
+    const prevWeight = 1 - currentWeight;
+    seasonHitRate = {
+      hits: seasonHr.hits + prevHr.hits,
+      total: seasonHr.total + prevHr.total,
+      rate: Math.round((seasonHr.rate * currentWeight + prevHr.rate * prevWeight) * 10) / 10,
+      avg: Math.round(((avg(statValues) || 0) * currentWeight + (avg(prevSeasonStatValues) || 0) * prevWeight) * 10) / 10,
+    };
+    wnbaPreviousSeasonUsed = true;
+    wnbaPreviousSeasonHitRate = { ...prevHr, avg: avg(prevSeasonStatValues) };
+    wnbaPreviousSeasonNote = "Confidence is moderated because WNBA current-season sample is limited; previous-season form was included as a fallback.";
+  }
   const l10v = statValues.slice(-10);
   const last10 = { ...hitRate(l10v, line, overUnder), avg: avg(l10v) };
   const l5v = statValues.slice(-5);
@@ -3749,8 +3806,11 @@ async function analyzeProp(
     recency_games: recencyGames,
     pace_context: paceContext,
     // MLB-specific
-    current_season_games: cfg.searchLeague === "mlb" ? games : undefined,
-    prev_season_games: cfg.searchLeague === "mlb" ? prevSeasonGames : undefined,
+    current_season_games: cfg.searchLeague === "mlb" || cfg.searchLeague === "wnba" ? games : undefined,
+    prev_season_games: cfg.searchLeague === "mlb" || cfg.searchLeague === "wnba" ? prevSeasonGames : undefined,
+    previous_season_used: wnbaPreviousSeasonUsed,
+    previous_season_hit_rate: wnbaPreviousSeasonHitRate,
+    previous_season_note: wnbaPreviousSeasonNote,
     all_games: games,
     confidence: 0, verdict: "N/A", reasoning: [],
   };
@@ -3989,6 +4049,17 @@ async function analyzeProp(
 
   // Discretion override — now DATA-DRIVEN and ROLE-WEIGHTED
   let confidence = rawConf;
+  if (cfg.searchLeague === "wnba" && wnbaPreviousSeasonUsed) {
+    confidence = Math.min(confidence, 68);
+    if (wnbaPreviousSeasonNote) reasoning.unshift(wnbaPreviousSeasonNote);
+    result.model_diagnostics = {
+      ...(result.model_diagnostics ?? {}),
+      previousSeasonFallbackUsed: true,
+      currentSeasonSample: currentFiniteSample,
+      previousSeasonSample: prevSeasonStatValues.length,
+      previousSeasonConfidenceCap: 68,
+    };
+  }
   const playerNameLower2 = (result.player?.full_name || "").toLowerCase();
   const rosterKeyOut = (result.team_roster_context?.keyOut || []).filter((p: any) => p.name.toLowerCase() !== playerNameLower2);
   const sigTeammateOut = (result.teammate_injuries || []).filter((i: any) => ["out","doubtful"].includes(i.status?.toLowerCase()));
