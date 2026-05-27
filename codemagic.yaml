@@ -5,7 +5,7 @@ workflows:
     instance_type: mac_mini_m2
 
     integrations:
-      app_store_connect: Sentinel
+      app_store_connect: Sentinel2.0
 
     environment:
       xcode: latest
