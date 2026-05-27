@@ -313,6 +313,18 @@ function normName(value: string | null | undefined): string {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+function teamNameKey(value: string | null | undefined): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function matchupKey(homeTeam: string | null | undefined, awayTeam: string | null | undefined): string {
+  return `${teamNameKey(homeTeam)}|${teamNameKey(awayTeam)}`;
+}
+
 function sameLine(a: number, b: number): boolean {
   return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < 0.001;
 }
@@ -1051,11 +1063,8 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
   const oddsMap = new Map<string, any>();
 
   for (const ev of oddsEvents) {
-    const home = (ev.home_team || "").toLowerCase();
-    const away = (ev.away_team || "").toLowerCase();
-
-    oddsMap.set(`${home}|${away}`, ev);
-    oddsMap.set(`${away}|${home}`, ev);
+    oddsMap.set(matchupKey(ev.home_team, ev.away_team), ev);
+    oddsMap.set(matchupKey(ev.away_team, ev.home_team), ev);
   }
 
   // MLB currently does not have reliable player props on the free/current Odds API setup.
@@ -1088,7 +1097,7 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
   }
 
   for (const g of upcoming) {
-    const key = `${(g.home_team || "").toLowerCase()}|${(g.away_team || "").toLowerCase()}`;
+    const key = matchupKey(g.home_team, g.away_team);
     const ev = oddsMap.get(key);
 
     if (!ev?.bookmakers?.length) continue;
@@ -1101,7 +1110,7 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
           for (const o of mkt.outcomes || []) {
             if (typeof o.price !== "number") continue;
 
-            const isHome = o.name === g.home_team;
+            const isHome = teamNameKey(o.name) === teamNameKey(g.home_team);
             const implied = americanToImpliedProb(o.price);
             const projected = Math.max(
               0.35,
@@ -1152,7 +1161,7 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
                 ? (o.name || "").toLowerCase().includes("over")
                   ? "over"
                   : "under"
-                : o.name === g.home_team
+                : teamNameKey(o.name) === teamNameKey(g.home_team)
                   ? "home"
                   : "away";
 
@@ -1258,18 +1267,13 @@ async function evaluatePlayerProps(
     const eventByMatchup = new Map<string, any>();
 
     for (const ev of events) {
-      const home = (ev.home_team || "").toLowerCase();
-      const away = (ev.away_team || "").toLowerCase();
-
-      eventByMatchup.set(`${home}|${away}`, ev);
-      eventByMatchup.set(`${away}|${home}`, ev);
+      eventByMatchup.set(matchupKey(ev.home_team, ev.away_team), ev);
+      eventByMatchup.set(matchupKey(ev.away_team, ev.home_team), ev);
     }
 
     upcoming = upcomingGames
       .map((g: any) =>
-        eventByMatchup.get(
-          `${(g.home_team || "").toLowerCase()}|${(g.away_team || "").toLowerCase()}`
-        )
+        eventByMatchup.get(matchupKey(g.home_team, g.away_team))
       )
       .filter(Boolean);
   } else {

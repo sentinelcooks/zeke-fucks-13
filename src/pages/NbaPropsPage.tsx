@@ -424,6 +424,12 @@ function formatDisplayPropType(propType: string | null | undefined): string {
 const NbaPropsPage = () => {
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const linesNavigationState = location.state as {
+    home_team?: string;
+    away_team?: string;
+    sport?: "nba" | "mlb" | "nhl" | "ncaab";
+    autoAnalyze?: boolean;
+  } | null;
   const globalSlip = useParlaySlip();
   const autoAnalyzedRef = useRef(false);
   // Discard stale analyze responses if the user retriggers before the previous resolves.
@@ -441,11 +447,18 @@ const NbaPropsPage = () => {
     const m = searchParams.get("mode");
     if (m === "lines" || m === "props") setMode(m);
   }, [searchParams]);
+  useEffect(() => {
+    if (searchParams.get("mode") === "lines" && linesNavigationState?.sport) {
+      setLinesSport(linesNavigationState.sport);
+    }
+  }, [location.key, searchParams, linesNavigationState?.sport]);
   const autoAnalyzePrefillRef = useRef(false);
   const autoScrollToResultsRef = useRef(false);
   const resultsRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<"props" | "lines">(searchParams.get("mode") === "lines" ? "lines" : "props");
-  const [linesSport, setLinesSport] = useState<"nba" | "mlb" | "nhl" | "ncaab">("nba");
+  const [linesSport, setLinesSport] = useState<"nba" | "mlb" | "nhl" | "ncaab">(
+    linesNavigationState?.sport ?? "nba",
+  );
   const [sport, setSport] = useState<"nba" | "mlb" | "nhl" | "ufc">("nba");
   const [player, setPlayer] = useState("");
   const [propType, setPropType] = useState("points");
@@ -1204,7 +1217,14 @@ const NbaPropsPage = () => {
 
         {/* ── Lines Mode: show MoneyLineSection ── */}
         {mode === "lines" && (
-          <MoneyLineSection embeddedSport={linesSport as any} hideSportToggle />
+          <MoneyLineSection
+            key={`${location.key}-${linesSport}`}
+            embeddedSport={linesSport as any}
+            hideSportToggle
+            initialTeam1={linesNavigationState?.home_team}
+            initialTeam2={linesNavigationState?.away_team}
+            autoAnalyze={linesNavigationState?.autoAnalyze}
+          />
         )}
 
         {/* ── Props Mode ── */}

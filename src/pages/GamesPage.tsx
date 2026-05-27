@@ -98,6 +98,18 @@ const SPORT_LOGO_SIZE: Record<SportFilter, string> = {
 
 const CARD_ORDER = ["Main Card", "Prelims", "Early Prelims"];
 
+function teamNameKey(value: string | null | undefined): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function matchupKey(homeTeam: string | null | undefined, awayTeam: string | null | undefined): string {
+  return `${teamNameKey(homeTeam)}|${teamNameKey(awayTeam)}`;
+}
+
 /* ── EV calculation ── */
 function impliedProb(odds: number): number {
   return odds > 0 ? 100 / (odds + 100) : Math.abs(odds) / (Math.abs(odds) + 100);
@@ -172,8 +184,6 @@ const GamesPage = () => {
       const events: any[] = data?.events || data || [];
       const map: Record<string, RealOdds> = {};
 
-      const normalize = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
-
       for (const ev of events) {
         const bookmakers = ev.bookmakers || [];
         if (!bookmakers.length) continue;
@@ -196,8 +206,9 @@ const GamesPage = () => {
           for (const market of bm.markets || []) {
             if (market.key === "h2h") {
               for (const o of market.outcomes || []) {
-                const n = normalize(o.name);
-                const isHome = normalize(ev.home_team || "").includes(n) || n.includes(normalize(ev.home_team || ""));
+                const n = teamNameKey(o.name);
+                const home = teamNameKey(ev.home_team);
+                const isHome = !!n && !!home && (home.includes(n) || n.includes(home));
                 if (isHome || o.name === ev.home_team) {
                   allHomeMLs.push(o.price);
                   if (bestHomeML === null || o.price > bestHomeML) bestHomeML = o.price;
@@ -209,8 +220,9 @@ const GamesPage = () => {
             }
             if (market.key === "spreads" && homeSpread === null) {
               for (const o of market.outcomes || []) {
-                const n = normalize(o.name);
-                const isHome = normalize(ev.home_team || "").includes(n) || n.includes(normalize(ev.home_team || ""));
+                const n = teamNameKey(o.name);
+                const home = teamNameKey(ev.home_team);
+                const isHome = !!n && !!home && (home.includes(n) || n.includes(home));
                 if (isHome || o.name === ev.home_team) {
                   homeSpread = o.point ?? null;
                   homeSpreadOdds = o.price;
@@ -240,7 +252,7 @@ const GamesPage = () => {
           awayEV = Math.round(calcEV(bestAwayML, avgAwayProb) * 10) / 10;
         }
 
-        const key = normalize(ev.home_team || "") + "|" + normalize(ev.away_team || "");
+        const key = matchupKey(ev.home_team, ev.away_team);
         map[key] = {
           homeML: bestHomeML, awayML: bestAwayML,
           homeSpread, homeSpreadOdds, awaySpread, awaySpreadOdds,
@@ -609,17 +621,18 @@ const GamesPage = () => {
   };
 
   const getGameOdds = (game: Game): RealOdds | null => {
-    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
-    const key = normalize(game.home_team) + "|" + normalize(game.away_team);
+    const key = matchupKey(game.home_team, game.away_team);
     if (oddsMap[key]) return oddsMap[key];
     // Try reverse
-    const revKey = normalize(game.away_team) + "|" + normalize(game.home_team);
+    const revKey = matchupKey(game.away_team, game.home_team);
     if (oddsMap[revKey]) return oddsMap[revKey];
     // Fuzzy match
+    const gameHome = teamNameKey(game.home_team);
+    const gameAway = teamNameKey(game.away_team);
     for (const [k, v] of Object.entries(oddsMap)) {
       const [h, a] = k.split("|");
-      if ((normalize(game.home_team).includes(h) || h.includes(normalize(game.home_team))) &&
-          (normalize(game.away_team).includes(a) || a.includes(normalize(game.away_team)))) {
+      if ((gameHome.includes(h) || h.includes(gameHome)) &&
+          (gameAway.includes(a) || a.includes(gameAway))) {
         return v;
       }
     }
@@ -633,6 +646,12 @@ const GamesPage = () => {
     const isHalftime = game.status === "STATUS_HALFTIME";
     const hasScore = game.score && (game.score.home !== null || game.score.away !== null);
     const odds = getGameOdds(game);
+    const hasDisplayedOdds = !!odds && [
+      odds.homeML,
+      odds.awayML,
+      odds.homeSpread,
+      odds.totalLine,
+    ].some((value) => value != null);
 
     const mlColor = (ml: number | null) => !ml ? "#8b87b8" : ml < 0 ? "#f0eeff" : "#22c55e";
     const evColor = (ev: number | null) => !ev ? "transparent" : ev > 0 ? "hsla(142,71%,45%,0.15)" : "hsla(0,72%,51%,0.1)";
@@ -807,17 +826,22 @@ const GamesPage = () => {
             )}
           </div>
         )}
+        {!hasDisplayedOdds && !isEnded && !isLive && !isHalftime && (
+          <div className="mt-3 text-center text-[10px] font-medium text-muted-foreground/65">
+            Odds unavailable
+          </div>
+        )}
 
         <button
           onClick={() => {
-            // Normalize sport key: GamesPage uses Odds API keys (basketball_nba) but
-            // moneyline-api expects short keys (nba). Map them before passing via state.
-            const sportShort: Record<string, string> = {
-              basketball_nba: "nba", baseball_mlb: "mlb",
-              icehockey_nhl: "nhl", americanfootball_nfl: "nfl",
-            };
-            const normalizedSport = sportShort[sport] ?? sport;
-            navigate("/dashboard/moneyline", { state: { home_team: game.home_team, away_team: game.away_team, sport: normalizedSport, autoAnalyze: true } });
+            navigate("/dashboard/analyze?mode=lines", {
+              state: {
+                home_team: game.home_team,
+                away_team: game.away_team,
+                sport,
+                autoAnalyze: true,
+              },
+            });
           }}
           className="mt-3 w-full flex items-center justify-center gap-2 transition-all hover:opacity-80"
           style={{

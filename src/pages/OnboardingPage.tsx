@@ -1,22 +1,9 @@
-import { useState, useEffect, useCallback, memo, useMemo, type JSX } from "react";
+import { createContext, useState, useEffect, useCallback, useContext, useRef, memo, useMemo, type JSX } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import type { ComponentType, ReactNode } from "react";
 import { ArrowLeft, Lock, TrendingUp, Brain, BarChart3, Calendar, Check, X, Sparkles, ShieldCheck, Swords, CheckCircle2, ChevronDown } from "lucide-react";
 import logo from "@/assets/sentinel-lock.jpg";
-import { preloadGeneratedImage } from "@/hooks/useGeneratedImage";
-import type { WaveModel } from "@/utils/generateImage";
-
-/* ─────────── WaveSpeed asset registry (stadium bg only) ─────────── */
-const KREA: WaveModel = "wavespeed-ai/flux-dev/lora/krea";
-
-const ASSETS = {
-  stadiumBg: {
-    key: "stadium-bg",
-    model: KREA,
-    prompt: "Cinematic silhouette of a person standing in a massive sports stadium at night, looking out at the field, dramatic purple and violet atmospheric lighting from stadium lights, fog, moody, dark, wide angle, ultra realistic",
-  },
-};
 
 /* ─────────── Direct CDN image sources ─────────── */
 const ESPN_HEADSHOTS = {
@@ -79,8 +66,17 @@ const stepVariants = {
   exit: (direction: number) => ({ opacity: 0, x: direction * -8, pointerEvents: "none" as const }),
 };
 
+const LightweightMotionContext = createContext(false);
+
+function useLightweightMotion() {
+  const lightweight = useContext(LightweightMotionContext);
+  const reduce = useReducedMotion();
+  return lightweight || !!reduce;
+}
+
 /* ─────────── Atoms ─────────── */
 function ProgressDots({ current, total }: { current: number; total: number }) {
+  const lightweight = useLightweightMotion();
   return (
     <div className="flex items-center gap-2 mb-6">
       <span className="text-xs font-bold text-white/60 tabular-nums">
@@ -93,7 +89,7 @@ function ProgressDots({ current, total }: { current: number; total: number }) {
           return (
             <motion.div
               key={i}
-              animate={{
+              animate={lightweight ? undefined : {
                 width: isActive ? 28 : 14,
                 backgroundColor: isActive
                   ? "#00FF6A"
@@ -106,8 +102,12 @@ function ProgressDots({ current, total }: { current: number; total: number }) {
                   ? "0 0 6px rgba(0,255,106,0.35)"
                   : "0 0 0 rgba(0,0,0,0)",
               }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
+              transition={lightweight ? { duration: 0 } : { duration: 0.25, ease: "easeOut" }}
               className="h-1.5 rounded-full"
+              style={lightweight ? {
+                width: isActive ? 28 : 14,
+                backgroundColor: isActive ? "#00FF6A" : isCompleted ? "rgba(0,255,106,0.7)" : "#2A2A2A",
+              } : undefined}
             />
           );
         })}
@@ -117,9 +117,10 @@ function ProgressDots({ current, total }: { current: number; total: number }) {
 }
 
 function GreenCTA({ children, onClick, disabled }: { children: React.ReactNode; onClick: () => void; disabled?: boolean }) {
+  const lightweight = useLightweightMotion();
   return (
     <motion.button
-      whileTap={{ scale: 0.97 }}
+      whileTap={lightweight ? undefined : { scale: 0.97 }}
       disabled={disabled}
       onClick={onClick}
       className={`w-full py-4 rounded-full font-extrabold text-base transition-all ${
@@ -127,7 +128,7 @@ function GreenCTA({ children, onClick, disabled }: { children: React.ReactNode; 
           ? "bg-[#1a1a1a] text-white/40 cursor-not-allowed"
           : "bg-[#00FF6A] text-black shadow-lg shadow-[#00FF6A]/20 hover:shadow-[#00FF6A]/40"
       }`}
-      style={!disabled ? { animation: "pulse-cta 2.5s ease-in-out infinite" } : undefined}
+      style={!disabled && !lightweight ? { animation: "pulse-cta 2.5s ease-in-out infinite" } : undefined}
     >
       {children}
     </motion.button>
@@ -135,18 +136,23 @@ function GreenCTA({ children, onClick, disabled }: { children: React.ReactNode; 
 }
 
 function SectionContainer({ children }: { children: React.ReactNode }) {
+  const lightweight = useLightweightMotion();
   return (
-    <div className="relative min-h-screen w-full bg-[#0A0A0A] text-white overflow-x-hidden">
+    <div className="relative min-h-screen-safe w-full bg-[#0A0A0A] text-white overflow-x-hidden">
       <style>{`
         @keyframes pulse-cta { 0%,100% { box-shadow: 0 0 0 0 rgba(0,255,106,0.35) } 50% { box-shadow: 0 0 24px 6px rgba(0,255,106,0.45) } }
         @keyframes draw-line { from { stroke-dashoffset: 200 } to { stroke-dashoffset: 0 } }
       `}</style>
-      {/* Atmospheric corner glows */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[520px] h-[420px] rounded-full bg-[#7B2FFF]/30 blur-[120px]" />
-        <div className="absolute -bottom-32 -left-32 w-[420px] h-[420px] rounded-full bg-[#641EDC]/20 blur-[120px]" />
-        <div className="absolute bottom-0 right-0 w-[360px] h-[320px] rounded-full bg-[#00FF6A]/[0.05] blur-[120px]" />
-      </div>
+      {lightweight ? (
+        <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top,rgba(123,47,255,0.16),transparent_46%)]" />
+      ) : (
+        /* Atmospheric corner glows stay off the phone compositing path. */
+        <div className="pointer-events-none fixed inset-0 overflow-hidden">
+          <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[520px] h-[420px] rounded-full bg-[#7B2FFF]/30 blur-[120px]" />
+          <div className="absolute -bottom-32 -left-32 w-[420px] h-[420px] rounded-full bg-[#641EDC]/20 blur-[120px]" />
+          <div className="absolute bottom-0 right-0 w-[360px] h-[320px] rounded-full bg-[#00FF6A]/[0.05] blur-[120px]" />
+        </div>
+      )}
       <div className="relative z-10 mx-auto max-w-md px-5 py-6 pb-safe-plus-4 pt-safe-plus-4">
         {children}
       </div>
@@ -156,6 +162,7 @@ function SectionContainer({ children }: { children: React.ReactNode }) {
 
 /* ─────────── Mini sparkline ─────────── */
 function Sparkline({ color = "#00FF6A", down = false, className = "" }: { color?: string; down?: boolean; className?: string }) {
+  const lightweight = useLightweightMotion();
   const points = down
     ? [[2, 10], [12, 18], [22, 15], [32, 28], [42, 30], [52, 38]]
     : [[2, 38], [12, 30], [22, 32], [32, 20], [42, 22], [52, 8]];
@@ -184,9 +191,9 @@ function Sparkline({ color = "#00FF6A", down = false, className = "" }: { color?
         <motion.path
           d={fillPath}
           fill={`url(#${gradId})`}
-          initial={{ opacity: 0 }}
+          initial={lightweight ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
+          transition={lightweight ? { duration: 0 } : { duration: 0.6, delay: 0.3 }}
         />
         {/* Glowing polyline */}
         <motion.polyline
@@ -195,10 +202,10 @@ function Sparkline({ color = "#00FF6A", down = false, className = "" }: { color?
           strokeWidth={1.8}
           strokeLinecap="round"
           strokeLinejoin="round"
-          style={{ filter: `drop-shadow(0 0 4px ${color}) drop-shadow(0 0 8px ${color}80)` }}
-          initial={{ pathLength: 0 }}
+          style={lightweight ? undefined : { filter: `drop-shadow(0 0 4px ${color}) drop-shadow(0 0 8px ${color}80)` }}
+          initial={lightweight ? false : { pathLength: 0 }}
           animate={{ pathLength: 1 }}
-          transition={{ duration: 1.1, ease: "easeOut" }}
+          transition={lightweight ? { duration: 0 } : { duration: 1.1, ease: "easeOut" }}
         />
         {/* Dot nodes */}
         {points.slice(0, -1).map(([x, y], i) => (
@@ -208,9 +215,9 @@ function Sparkline({ color = "#00FF6A", down = false, className = "" }: { color?
             cy={y}
             r={1.4}
             fill={color}
-            initial={{ opacity: 0, scale: 0 }}
+            initial={lightweight ? false : { opacity: 0, scale: 0 }}
             animate={{ opacity: 0.85, scale: 1 }}
-            transition={{ duration: 0.25, delay: 0.5 + i * 0.08 }}
+            transition={lightweight ? { duration: 0 } : { duration: 0.25, delay: 0.5 + i * 0.08 }}
           />
         ))}
         {/* Bright endpoint */}
@@ -219,10 +226,10 @@ function Sparkline({ color = "#00FF6A", down = false, className = "" }: { color?
           cy={last[1]}
           r={2.4}
           fill={color}
-          style={{ filter: `drop-shadow(0 0 4px ${color}) drop-shadow(0 0 10px ${color})` }}
-          initial={{ opacity: 0, scale: 0 }}
+          style={lightweight ? undefined : { filter: `drop-shadow(0 0 4px ${color}) drop-shadow(0 0 10px ${color})` }}
+          initial={lightweight ? false : { opacity: 0, scale: 0 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.35, delay: 1.0 }}
+          transition={lightweight ? { duration: 0 } : { duration: 0.35, delay: 1.0 }}
         />
       </g>
     </svg>
@@ -232,22 +239,21 @@ function Sparkline({ color = "#00FF6A", down = false, className = "" }: { color?
 /* ───────────────────────────────────────────────
    Screen 1 — Hero / Welcome
    ─────────────────────────────────────────────── */
-const ScreenHero = memo(function ScreenHero({ onNext }: { onNext: () => void }) {
-  const navigate = useNavigate();
+const ScreenHero = memo(function ScreenHero() {
+  const lightweight = useLightweightMotion();
   return (
-    <>
     <SectionContainer>
       <ProgressDots current={1} total={5} />
 
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={pageT} className="flex flex-col items-center text-center">
+      <motion.div initial={lightweight ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : pageT} className="flex flex-col items-center text-center">
         <div className="relative mb-3">
-          <div className="absolute -inset-3 rounded-3xl bg-[#00FF6A]/40 blur-2xl" />
-          <div className="absolute -inset-1 rounded-2xl bg-[#00FF6A]/30 blur-xl" />
+          {!lightweight && <div className="absolute -inset-3 rounded-3xl bg-[#00FF6A]/40 blur-2xl" />}
+          {!lightweight && <div className="absolute -inset-1 rounded-2xl bg-[#00FF6A]/30 blur-xl" />}
           <img
             src={logo}
             alt="Sentinel"
             className="relative w-16 h-16 rounded-2xl"
-            style={{ boxShadow: "0 0 32px 4px rgba(0,255,106,0.45), 0 0 64px 8px rgba(0,255,106,0.2)" }}
+            style={lightweight ? undefined : { boxShadow: "0 0 32px 4px rgba(0,255,106,0.45), 0 0 64px 8px rgba(0,255,106,0.2)" }}
           />
         </div>
         <p className="text-[11px] font-extrabold tracking-[0.4em] text-white/80 mb-6">SENTINEL</p>
@@ -263,7 +269,7 @@ const ScreenHero = memo(function ScreenHero({ onNext }: { onNext: () => void }) 
 
       {/* App preview card */}
       <motion.div
-        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.1 }}
+        initial={lightweight ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : { ...pageT, delay: 0.1 }}
         className="mt-6 rounded-2xl border border-[#2A2A2A] bg-[#141414] p-4"
       >
         <div className="flex items-center justify-between mb-3">
@@ -371,27 +377,6 @@ const ScreenHero = memo(function ScreenHero({ onNext }: { onNext: () => void }) 
       {/* Spacer so content doesn't hide behind the sticky CTA bar */}
       <div className="h-28" />
     </SectionContainer>
-
-    {/* Sticky Get Started CTA — always visible at bottom of viewport */}
-    <div
-      className="fixed inset-x-0 bottom-0 z-50"
-      style={{
-        background: "rgba(10,10,10,0.92)",
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
-        borderTop: "1px solid rgba(255,255,255,0.06)",
-        paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)",
-      }}
-    >
-      <div className="mx-auto max-w-md px-5 pt-3">
-        <GreenCTA onClick={onNext}>Get Started</GreenCTA>
-        <p className="text-center text-[11px] text-white/50 mt-2.5">
-          Already have an account?{" "}
-          <button onClick={() => navigate("/auth")} className="text-[#00FF6A] underline font-semibold">Sign in</button>
-        </p>
-      </div>
-    </div>
-    </>
   );
 });
 
@@ -400,13 +385,13 @@ const ScreenHero = memo(function ScreenHero({ onNext }: { onNext: () => void }) 
    ─────────────────────────────────────────────── */
 const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }) {
   const [activeTab, setActiveTab] = useState<"Dashboard" | "Picks" | "Tracker" | "Parlay">("Dashboard");
-  const reduce = useReducedMotion();
-  const tabT = { duration: reduce ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] as const };
+  const lightweight = useLightweightMotion();
+  const tabT = { duration: lightweight ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] as const };
   return (
     <SectionContainer>
       <ProgressDots current={2} total={5} />
 
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={pageT}>
+      <motion.div initial={lightweight ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : pageT}>
         <h1 className="text-[32px] leading-[1.05] font-extrabold tracking-tight">
           See What You're<br />Missing.
         </h1>
@@ -414,7 +399,7 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
       </motion.div>
 
       <motion.div
-        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={pageT}
+        initial={lightweight ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : pageT}
         className="mt-5 rounded-2xl border border-[#2A2A2A] bg-[#141414] p-3.5"
       >
         {/* App header */}
@@ -432,7 +417,7 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
               <motion.button
                 key={t}
                 onClick={() => setActiveTab(t)}
-                whileTap={{ scale: 0.96 }}
+                whileTap={lightweight ? undefined : { scale: 0.96 }}
                 aria-pressed={active}
                 className={`px-2 py-1 rounded-full text-[9px] font-bold whitespace-nowrap transition-colors ${
                   active ? "bg-[#00FF6A] text-black" : "text-white/50 hover:text-white/80"
@@ -604,7 +589,7 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
 
       {/* Social proof */}
       <motion.div
-        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.05 }}
+        initial={lightweight ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : { ...pageT, delay: 0.05 }}
         className="mt-4 rounded-2xl border border-[#2A2A2A] bg-[#141414] p-3 flex items-center gap-3"
       >
         <div className="flex -space-x-2">
@@ -634,6 +619,7 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
    Screen 3 — Personalize
    ─────────────────────────────────────────────── */
 const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+  const lightweight = useLightweightMotion();
   const [oddsFormat, setOddsFormat] = useState<"american" | "decimal" | null>(() => {
     try { return (localStorage.getItem(STORAGE.oddsFormat) as any) || "american"; } catch { return "american"; }
   });
@@ -686,7 +672,7 @@ const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { 
     <SectionContainer>
       <ProgressDots current={3} total={5} />
 
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={pageT}>
+      <motion.div initial={lightweight ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : pageT}>
         <h1 className="text-[32px] leading-[1.05] font-extrabold tracking-tight">Make It Yours.</h1>
         <p className="mt-2 text-sm text-white/60">We'll personalize your experience.</p>
       </motion.div>
@@ -705,7 +691,7 @@ const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { 
               <motion.button
                 key={o.id}
                 onClick={() => setOddsFormat(o.id)}
-                whileTap={{ scale: 0.97 }}
+                whileTap={lightweight ? undefined : { scale: 0.97 }}
                 className={`rounded-xl border px-3 py-3 text-left transition-all ${
                   active
                     ? "border-[#00FF6A] bg-[#00FF6A]/5 shadow-[0_0_18px_rgba(0,255,106,0.15)]"
@@ -731,7 +717,7 @@ const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { 
               <motion.button
                 key={s.id}
                 onClick={() => toggleSport(s.id)}
-                whileTap={{ scale: 0.97 }}
+                whileTap={lightweight ? undefined : { scale: 0.97 }}
                 className={`relative rounded-xl border p-3 transition-all ${
                   active
                     ? "border-[#00FF6A] bg-[#00FF6A]/5 shadow-[0_0_18px_rgba(0,255,106,0.15)]"
@@ -760,7 +746,7 @@ const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { 
         <motion.button
           type="button"
           onClick={toggleOther}
-          whileTap={{ scale: 0.98 }}
+          whileTap={lightweight ? undefined : { scale: 0.98 }}
           className={`mt-3 relative w-full rounded-xl border p-3 flex items-center gap-3 transition-all ${
             otherActive
               ? "border-[#00FF6A] bg-[#00FF6A]/5 shadow-[0_0_18px_rgba(0,255,106,0.15)]"
@@ -822,11 +808,12 @@ const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { 
    Screen 4 — Without vs With
    ─────────────────────────────────────────────── */
 const ScreenComparison = memo(function ScreenComparison({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+  const lightweight = useLightweightMotion();
   return (
     <SectionContainer>
       <ProgressDots current={4} total={6} />
 
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={pageT}>
+      <motion.div initial={lightweight ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : pageT}>
         <h1 className="text-[30px] leading-[1.05] font-extrabold tracking-tight">
           Don't Bet Blind.<br />
           <span className="text-[#00FF6A]">See The Difference.</span>
@@ -837,7 +824,7 @@ const ScreenComparison = memo(function ScreenComparison({ onBack, onNext }: { on
       <div className="mt-5 grid grid-cols-2 gap-3">
         {/* WITHOUT */}
         <motion.div
-          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.1 }}
+          initial={lightweight ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : { ...pageT, delay: 0.1 }}
           className="rounded-2xl border border-[#FF3B3B]/30 bg-[#141414] p-2.5"
           style={{ boxShadow: "inset 0 0 30px rgba(255,59,59,0.06)" }}
         >
@@ -857,7 +844,7 @@ const ScreenComparison = memo(function ScreenComparison({ onBack, onNext }: { on
 
         {/* WITH */}
         <motion.div
-          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.18 }}
+          initial={lightweight ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : { ...pageT, delay: 0.18 }}
           className="rounded-2xl border border-[#00FF6A]/40 bg-[#141414] p-2.5"
           style={{ boxShadow: "inset 0 0 30px rgba(0,255,106,0.08), 0 0 24px rgba(0,255,106,0.12)" }}
         >
@@ -878,7 +865,7 @@ const ScreenComparison = memo(function ScreenComparison({ onBack, onNext }: { on
 
       {/* Testimonial */}
       <motion.div
-        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...pageT, delay: 0.26 }}
+        initial={lightweight ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : { ...pageT, delay: 0.26 }}
         className="mt-5 rounded-2xl border border-[#2A2A2A] bg-[#141414] p-4 flex items-start gap-3"
       >
         <img
@@ -918,7 +905,26 @@ export default function OnboardingPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState(1);
+  const stepTapLocked = useRef(false);
+  const stepTapUnlockTimer = useRef<number>();
   const reduce = useReducedMotion();
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches
+  );
+  const lightweight = !!reduce || isMobile;
+
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => () => {
+    if (stepTapUnlockTimer.current !== undefined) {
+      window.clearTimeout(stepTapUnlockTimer.current);
+    }
+  }, []);
 
   // Default referral if missing (used downstream)
   useEffect(() => {
@@ -929,56 +935,96 @@ export default function OnboardingPage() {
     } catch {}
   }, []);
 
-  // Batch-preload all WaveSpeed assets in parallel on mount.
-  // Stadium (slowest) and avatars get fired immediately.
   useEffect(() => {
-    Object.values(ASSETS).forEach((a) => {
-      preloadGeneratedImage(a.prompt, a.key, a.model);
-    });
-    // Request and decode later-step images before they first enter the viewport.
-    ONBOARDING_IMAGE_URLS.forEach((url) => {
-      const image = new Image();
-      image.decoding = "async";
-      image.src = url;
-      void image.decode().catch(() => undefined);
-    });
-  }, []);
+    const preloadStepImages = () => {
+      ONBOARDING_IMAGE_URLS.forEach((url) => {
+        const image = new Image();
+        image.decoding = "async";
+        image.src = url;
+        void image.decode().catch(() => undefined);
+      });
+    };
 
-  const goNext = useCallback(() => {
-    setDirection(1);
-    setStep((s) => Math.min(3, s + 1));
+    if (!lightweight) {
+      preloadStepImages();
+      return;
+    }
+
+    if (typeof window.requestIdleCallback === "function") {
+      const idleId = window.requestIdleCallback(preloadStepImages, { timeout: 1000 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+
+    const timerId = window.setTimeout(preloadStepImages, 250);
+    return () => window.clearTimeout(timerId);
+  }, [lightweight]);
+
+  const changeStep = useCallback((nextDirection: 1 | -1) => {
+    if (stepTapLocked.current) return;
+
+    stepTapLocked.current = true;
+    setDirection(nextDirection);
+    setStep((s) => nextDirection === 1 ? Math.min(3, s + 1) : Math.max(0, s - 1));
+    stepTapUnlockTimer.current = window.setTimeout(() => {
+      stepTapLocked.current = false;
+    }, 220);
   }, []);
-  const goBack = useCallback(() => {
-    setDirection(-1);
-    setStep((s) => Math.max(0, s - 1));
-  }, []);
+  const goNext = useCallback(() => changeStep(1), [changeStep]);
+  const goBack = useCallback(() => changeStep(-1), [changeStep]);
   const goPaywall = useCallback(() => navigate("/paywall"), [navigate]);
 
   const current = useMemo(() =>
-    step === 0 ? <ScreenHero        key="s1" onNext={goNext} /> :
+    step === 0 ? <ScreenHero        key="s1" /> :
     step === 1 ? <ScreenValue       key="s2" onNext={goNext} /> :
     step === 2 ? <ScreenPersonalize key="s3" onBack={goBack} onNext={goNext} /> :
                  <ScreenComparison  key="s4" onBack={goBack} onNext={goPaywall} />,
   [step, goNext, goBack, goPaywall]);
 
   return (
-    <div className="relative min-h-screen bg-[#0A0A0A]">
-      <AnimatePresence initial={false} mode="popLayout" custom={direction}>
-        <motion.div
-          key={step}
-          custom={direction}
-          variants={reduce ? undefined : stepVariants}
-          initial={reduce ? false : "enter"}
-          animate={reduce ? undefined : "center"}
-          exit={reduce ? undefined : "exit"}
-          transition={reduce ? { duration: 0 } : stepT}
-          className="w-full"
-          style={reduce ? undefined : { willChange: "opacity, transform" }}
-        >
-          {current}
-        </motion.div>
-      </AnimatePresence>
-    </div>
+    <LightweightMotionContext.Provider value={lightweight}>
+      <div className="relative min-h-screen-safe bg-[#0A0A0A]">
+        {lightweight ? (
+          <div className="w-full">{current}</div>
+        ) : (
+          <AnimatePresence initial={false} mode="popLayout" custom={direction}>
+            <motion.div
+              key={step}
+              custom={direction}
+              variants={reduce ? undefined : stepVariants}
+              initial={reduce ? false : "enter"}
+              animate={reduce ? undefined : "center"}
+              exit={reduce ? undefined : "exit"}
+              transition={reduce ? { duration: 0 } : stepT}
+              className="w-full"
+              style={reduce ? undefined : { willChange: "opacity, transform" }}
+            >
+              {current}
+            </motion.div>
+          </AnimatePresence>
+        )}
+        {step === 0 && (
+          /* Keep the viewport-fixed CTA outside the transformed step animation wrapper. */
+          <div
+            className="fixed inset-x-0 bottom-0 z-50"
+            style={{
+              background: lightweight ? "#0A0A0A" : "rgba(10,10,10,0.92)",
+              backdropFilter: lightweight ? undefined : "blur(20px)",
+              WebkitBackdropFilter: lightweight ? undefined : "blur(20px)",
+              borderTop: "1px solid rgba(255,255,255,0.06)",
+              paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)",
+            }}
+          >
+            <div className="mx-auto max-w-md px-5 pt-3">
+              <GreenCTA onClick={goNext}>Get Started</GreenCTA>
+              <p className="text-center text-[11px] text-white/50 mt-2.5">
+                Already have an account?{" "}
+                <button onClick={() => navigate("/auth")} className="text-[#00FF6A] underline font-semibold">Sign in</button>
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </LightweightMotionContext.Provider>
   );
 }
 
@@ -988,13 +1034,14 @@ export default function OnboardingPage() {
 const microEase = [0.32, 0.72, 0, 1] as const;
 
 function FeatureAccordion() {
+  const lightweight = useLightweightMotion();
   const [expanded, setExpanded] = useState<string | null>(null);
   const toggle = (id: string) => setExpanded((cur) => (cur === id ? null : id));
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={lightweight ? false : { opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.18 }}
+      transition={lightweight ? { duration: 0 } : { duration: 0.4, delay: 0.18 }}
       className="mt-4 space-y-2"
     >
       <FeatureCard id="live" title="Live Games" icon={Calendar}
@@ -1028,7 +1075,7 @@ function FeatureCard({
   onToggle: () => void;
   children: ReactNode;
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useLightweightMotion();
   return (
     <div
       className={`rounded-xl border bg-[#141414] transition-colors ${
@@ -1074,7 +1121,7 @@ function FeatureCard({
 }
 
 function LiveGameMini({ active }: { active?: boolean }) {
-  const reduce = useReducedMotion();
+  const reduce = useLightweightMotion();
   const [seconds, setSeconds] = useState(134);
   useEffect(() => {
     if (reduce || !active) return;
@@ -1116,7 +1163,7 @@ function LiveGameMini({ active }: { active?: boolean }) {
 }
 
 function AIPickMini() {
-  const reduce = useReducedMotion();
+  const reduce = useLightweightMotion();
   const picks = [
     { name: "J. Tatum", matchup: "BOS vs MIA", line: "Over 24.5 Pts", conf: 78, ev: "+7.2%" },
     { name: "L. Doncic", matchup: "DAL vs PHX", line: "Over 8.5 Ast", conf: 72, ev: "+5.8%" },
@@ -1136,7 +1183,7 @@ function AIPickMini() {
 }
 
 function PickRow({ pick, delay }: { pick: { name: string; matchup: string; line: string; conf: number; ev: string }; delay: number }) {
-  const reduce = useReducedMotion();
+  const reduce = useLightweightMotion();
   const radius = 9;
   const c = 2 * Math.PI * radius;
   const offset = c - (pick.conf / 100) * c;
@@ -1178,7 +1225,7 @@ function PickRow({ pick, delay }: { pick: { name: string; matchup: string; line:
 }
 
 function ProfitTrackerMini() {
-  const reduce = useReducedMotion();
+  const reduce = useLightweightMotion();
   // Polyline across 240x60 viewBox — left-to-right uptrend with realistic dips
   const points = "0,48 20,44 40,46 60,38 80,40 100,32 120,30 140,22 160,26 180,16 200,18 220,10 240,6";
   const lastX = 240;
