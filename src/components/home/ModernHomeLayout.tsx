@@ -522,6 +522,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const yesterdayTotal = yesterdayGraded.length;
   const yesterdayAcc = yesterdayTotal > 0 ? Math.round((yesterdayHits / yesterdayTotal) * 100) : 0;
   const hasYesterdayData = yesterdayPicks.length > 0;
+  const yesterdayPendingVisibleLimit = 5;
 
   const ringRadius = 52;
   const ringCircumference = 2 * Math.PI * ringRadius;
@@ -1031,7 +1032,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       </div>
                     );
                   })}
-                {yesterdayPending.slice(0, 5).map(pick => {
+                {yesterdayPending.slice(0, yesterdayPendingVisibleLimit).map(pick => {
                   const pickLabel = formatPickLabel(pick);
                   return (
                     <div key={pick.id} className="flex items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '1px solid hsl(250 20% 18% / 0.4)' }}>
@@ -1052,7 +1053,9 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                 </p>
               ) : yesterdayPending.length > 0 ? (
                 <p className="text-center mt-3" style={{ fontSize: 12, fontWeight: 600, color: 'hsl(45 93% 58%)' }}>
-                  {yesterdayPending.length} edge pick{yesterdayPending.length > 1 ? "s" : ""} still pending — games in progress
+                  {yesterdayPending.length > yesterdayPendingVisibleLimit
+                    ? `Showing ${yesterdayPendingVisibleLimit} of ${yesterdayPending.length} pending edge picks - games in progress`
+                    : `${yesterdayPending.length} edge pick${yesterdayPending.length > 1 ? "s" : ""} still pending - games in progress`}
                 </p>
               ) : null}
             </>

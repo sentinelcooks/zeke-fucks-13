@@ -3,6 +3,7 @@ import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, CheckCircle, Loader2, RefreshCw, TrendingUp, TrendingDown, Zap, Shield, Crown, ArrowRight, HelpCircle, ChevronDown } from "lucide-react";
 import { fetchPlayerOdds } from "@/services/oddsApi";
+import { getSportsbookInfo } from "@/utils/sportsbookLogos";
 
 interface OddsProjectionProps {
   playerName: string;
@@ -98,25 +99,6 @@ function getEdgeLabel(edge: number): { label: string; color: string; bg: string 
   return { label: "BAD VALUE", color: "text-nba-red", bg: "bg-nba-red/10" };
 }
 
-const BOOK_ICONS: Record<string, string> = {
-  FanDuel: "FD",
-  DraftKings: "DK",
-  BetMGM: "MG",
-  "Caesars Sportsbook": "CZ",
-  "PointsBet (US)": "PB",
-  PointsBet: "PB",
-  Bovada: "BV",
-  "BetOnline.ag": "BO",
-  "William Hill (US)": "WH",
-  "ESPN BET": "ES",
-  Fliff: "FL",
-  "Hard Rock Bet": "HR",
-  BetRivers: "BR",
-  SuperBook: "SB",
-  WynnBET: "WB",
-  BetAnySports: "BA",
-};
-
 const BOOK_GRADIENTS: Record<string, string> = {
   FanDuel: "from-[hsl(210,100%,55%)] to-[hsl(210,100%,40%)]",
   DraftKings: "from-[hsl(145,70%,45%)] to-[hsl(160,60%,35%)]",
@@ -136,13 +118,43 @@ const BOOK_GRADIENTS: Record<string, string> = {
   BetAnySports: "from-[hsl(170,60%,45%)] to-[hsl(175,50%,35%)]",
 };
 
-const BOOK_SHORT: Record<string, string> = {
-  "Caesars Sportsbook": "Caesars",
-  "PointsBet (US)": "PointsBet",
-  "BetOnline.ag": "BetOnline",
-  "William Hill (US)": "William Hill",
-  "Hard Rock Bet": "Hard Rock",
-};
+function SportsbookLogoBadge({
+  bookName,
+  sizeClass,
+  logoClass,
+  fallbackClass,
+  fallbackGradient = "from-secondary to-secondary/60",
+}: {
+  bookName: string;
+  sizeClass: string;
+  logoClass: string;
+  fallbackClass: string;
+  fallbackGradient?: string;
+}) {
+  const info = getSportsbookInfo(bookName);
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => setImageFailed(false), [info.logo]);
+
+  return (
+    <div
+      className={`${sizeClass} rounded-xl bg-gradient-to-br ${
+        BOOK_GRADIENTS[bookName] || BOOK_GRADIENTS[info.label] || fallbackGradient
+      } flex items-center justify-center shadow-lg overflow-hidden`}
+    >
+      {info.logo && !imageFailed ? (
+        <img
+          src={info.logo}
+          alt={info.label}
+          className={logoClass}
+          onError={() => setImageFailed(true)}
+        />
+      ) : (
+        <span className={fallbackClass}>{info.abbrev}</span>
+      )}
+    </div>
+  );
+}
 
 function EdgeExplainer({ modelRate, impliedRate, edge, ev }: { modelRate: number; impliedRate: number; edge: number; ev: number }) {
   const [open, setOpen] = useState(false);
@@ -329,6 +341,7 @@ export function OddsProjection({
     const evDisplay = backendEvPct != null && Number.isFinite(backendEvPct) && backendEvPct !== 0
       ? `${backendEvPct > 0 ? "+" : ""}${backendEvPct.toFixed(1)}%`
       : null;
+    const savedBookInfo = savedBook ? getSportsbookInfo(savedBook) : null;
     return (
       <div className="vision-card p-4 space-y-3">
         <div className="flex items-center justify-between">
@@ -359,8 +372,16 @@ export function OddsProjection({
         ) : (
           <p className="text-xs text-muted-foreground/65 text-center py-2">Saved odds unavailable</p>
         )}
-        {savedBook && (
-          <p className="text-[10px] text-muted-foreground/55 text-center">Best book at scan time: <span className="text-foreground/75 font-bold uppercase">{savedBook}</span></p>
+        {savedBook && savedBookInfo && (
+          <div className="flex items-center justify-center gap-2 text-[10px] text-muted-foreground/55">
+            <SportsbookLogoBadge
+              bookName={savedBook}
+              sizeClass="w-6 h-6"
+              logoClass="w-4 h-4 object-contain"
+              fallbackClass="text-[8px] font-black text-white"
+            />
+            <p>Best book at scan time: <span className="text-foreground/75 font-bold uppercase">{savedBookInfo.label}</span></p>
+          </div>
         )}
       </div>
     );
@@ -408,6 +429,7 @@ export function OddsProjection({
 
   const books: OddsBook[] = data.books ?? [];
   const bestBook = books[0]; // sorted best-first from API
+  const bestBookInfo = getSportsbookInfo(bestBook.book);
   const avgImplied = books.reduce((sum, b) => sum + impliedProb(b.odds), 0) / books.length;
   const bestImplied = impliedProb(bestBook.odds);
 
@@ -589,11 +611,15 @@ export function OddsProjection({
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${BOOK_GRADIENTS[bestBook.book] || 'from-accent to-accent/60'} flex items-center justify-center shadow-lg`}>
-                <span className="text-[12px] font-black text-white">{BOOK_ICONS[bestBook.book] || bestBook.book.slice(0, 2).toUpperCase()}</span>
-              </div>
+              <SportsbookLogoBadge
+                bookName={bestBook.book}
+                sizeClass="w-11 h-11"
+                logoClass="w-8 h-8 object-contain"
+                fallbackClass="text-[12px] font-black text-white"
+                fallbackGradient="from-accent to-accent/60"
+              />
               <div>
-                <p className="text-[15px] font-extrabold text-foreground">{BOOK_SHORT[bestBook.book] || bestBook.book}</p>
+                <p className="text-[15px] font-extrabold text-foreground">{bestBookInfo.label}</p>
                 <p className="text-[10px] text-muted-foreground/65">{overUnder.toUpperCase()} {bestBook.line}</p>
               </div>
             </div>
@@ -614,6 +640,7 @@ export function OddsProjection({
 
         {booksWithEV.map((book, i) => {
           const isBest = i === 0;
+          const bookInfo = getSportsbookInfo(book.book);
 
           return (
             <motion.div
@@ -632,12 +659,15 @@ export function OddsProjection({
               <div className="flex items-center justify-between px-4 py-3.5">
                 {/* Book info */}
                 <div className="flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${BOOK_GRADIENTS[book.book] || 'from-secondary to-secondary/60'} flex items-center justify-center`}>
-                    <span className="text-[10px] font-black text-white">{BOOK_ICONS[book.book] || book.book.slice(0, 2).toUpperCase()}</span>
-                  </div>
+                  <SportsbookLogoBadge
+                    bookName={book.book}
+                    sizeClass="w-9 h-9"
+                    logoClass="w-6 h-6 object-contain"
+                    fallbackClass="text-[10px] font-black text-white"
+                  />
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[12px] font-bold text-foreground/80">{BOOK_SHORT[book.book] || book.book}</span>
+                      <span className="text-[12px] font-bold text-foreground/80">{bookInfo.label}</span>
                       {isBest && <span className="text-[8px] font-black text-nba-green bg-nba-green/10 px-1.5 py-0.5 rounded-md">BEST</span>}
                     </div>
                     <span className="text-[9px] text-muted-foreground/55">{overUnder.toUpperCase()} {book.line}</span>

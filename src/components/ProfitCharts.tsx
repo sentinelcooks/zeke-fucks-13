@@ -144,8 +144,8 @@ const ProfitCharts = ({ plays }: ProfitChartsProps) => {
         {[
           { label: "Win Days", value: winDays.toString(), color: GREEN },
           { label: "Loss Days", value: lossDays.toString(), color: RED },
-          { label: "Best Day", value: `+$${bestDay.toFixed(0)}`, color: GREEN },
-          { label: "Worst Day", value: `${worstDay >= 0 ? "+$" : "-$"}${Math.abs(worstDay).toFixed(0)}`, color: worstDay >= 0 ? GREEN : RED },
+          { label: "Best Day", value: fmtProfit(bestDay), color: GREEN },
+          { label: "Worst Day", value: fmtProfit(worstDay), color: worstDay >= 0 ? GREEN : RED },
         ].map((stat) => (
           <div key={stat.label} className="rounded-lg px-2 py-1.5 text-center"
             style={{ background: 'hsla(228, 20%, 12%, 0.5)', border: '1px solid hsla(228, 30%, 18%, 0.3)' }}>
@@ -183,7 +183,7 @@ const ProfitCharts = ({ plays }: ProfitChartsProps) => {
               <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} vertical={false} />
               <XAxis dataKey="date" tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} dy={6} />
               <YAxis tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false}
-                tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`} domain={['auto', 'auto']} width={48} />
+                tickFormatter={(v) => fmtProfit(Number(v))} domain={['auto', 'auto']} width={56} />
               <Tooltip content={customTooltip} cursor={{ stroke: 'hsla(228, 20%, 40%, 0.3)', strokeDasharray: '4 4' }} />
               <ReferenceLine y={0} stroke="hsla(228, 15%, 30%, 0.4)" strokeDasharray="4 4" />
               <Area type="monotone" dataKey="profit"
@@ -206,7 +206,7 @@ const ProfitCharts = ({ plays }: ProfitChartsProps) => {
               <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} vertical={false} />
               <XAxis dataKey="date" tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} dy={6} padding={{ left: 20, right: 20 }} />
               <YAxis tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false}
-                tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`} domain={['auto', 'auto']} width={48} />
+                tickFormatter={(v) => fmtProfit(Number(v))} domain={['auto', 'auto']} width={56} />
               <Tooltip content={customTooltip} cursor={{ fill: 'hsla(228, 20%, 20%, 0.15)', radius: 4 }} />
               <ReferenceLine y={0} stroke="hsla(228, 15%, 30%, 0.4)" strokeDasharray="4 4" />
               <Bar dataKey="profit" radius={[6, 6, 2, 2]} maxBarSize={40} minPointSize={3}>

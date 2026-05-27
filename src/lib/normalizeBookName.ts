@@ -50,6 +50,19 @@ const ALIASES: Record<string, string> = {
   // Novig
   novig: "novig",
 
+  // Additional books returned by Odds API feeds
+  caesars: "caesars",
+  caesarssportsbook: "caesars",
+  caesars_sportsbook: "caesars",
+  fanatics: "fanatics",
+  fanaticsbook: "fanatics",
+  fanatics_sportsbook: "fanatics",
+  bet365: "bet365",
+  hardrock: "hardrock",
+  hardrockbet: "hardrock",
+  hard_rock_bet: "hardrock",
+  sleeper: "sleeper",
+
   // Kalshi
   kalshi: "kalshi",
 

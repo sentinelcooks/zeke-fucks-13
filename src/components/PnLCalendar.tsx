@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Calendar, Share2 } from "lucide-react";
 import { ShareProfitCard } from "@/components/ShareProfitCard";
+import { useProfitDisplay } from "@/hooks/useProfitDisplay";
 
 interface Play {
   id: string;
@@ -21,6 +22,7 @@ const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
 export function PnLCalendar({ plays }: PnLCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showShareCard, setShowShareCard] = useState(false);
+  const { format: fmtProfit } = useProfitDisplay();
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
@@ -129,7 +131,7 @@ export function PnLCalendar({ plays }: PnLCalendarProps) {
                 <TrendingDown className="w-3 h-3 text-nba-red" />
               )}
               <span className={`text-[11px] font-extrabold tabular-nums ${monthTotal >= 0 ? "text-nba-green" : "text-nba-red"}`}>
-                {monthTotal >= 0 ? "+" : ""}${Math.abs(monthTotal).toFixed(0)}
+                {fmtProfit(monthTotal)}
               </span>
             </div>
           </div>
@@ -211,7 +213,7 @@ export function PnLCalendar({ plays }: PnLCalendarProps) {
                 </span>
                 {hasData && (
                   <span className={`text-[6.5px] font-extrabold tabular-nums mt-0.5 ${textColor}`}>
-                    {pnl >= 0 ? "+" : ""}${Math.abs(pnl).toFixed(0)}
+                    {fmtProfit(pnl)}
                   </span>
                 )}
                 {isTodayDate && (

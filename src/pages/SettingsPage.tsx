@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Globe, Bell, BellOff, LogOut, User, Check, ChevronRight, ChevronDown, Hash, MessageSquare, Send, Loader2, CheckCircle, CreditCard, Calculator, DollarSign, RefreshCw, Trash2 } from "lucide-react";
 import { getActiveUnitSize, readUnitSettings } from "@/lib/profitFormat";
@@ -185,6 +185,9 @@ type RiskPreset = "conservative" | "standard" | "aggressive" | "custom";
 
 type UnitSetupModeLocal = "calculated" | "manual";
 
+const SETTINGS_CHANGED_EVENT = "sentinel:settings-changed";
+const SHOW_UNIT_CALCULATOR_EVENT = "sentinel:show-unit-calculator";
+
 const UnitCalculatorSection = () => {
   const [setupMode, setSetupMode] = useState<UnitSetupModeLocal>(
     () => (localStorage.getItem("sentinel_unit_setup_mode") as UnitSetupModeLocal) ?? "calculated"
@@ -202,9 +205,13 @@ const UnitCalculatorSection = () => {
     () => localStorage.getItem("sentinel_unit_manual") ?? ""
   );
   const [isUnitCalculatorOpen, setIsUnitCalculatorOpen] = useState(false);
+  const [showUnitRequiredHighlight, setShowUnitRequiredHighlight] = useState(false);
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const bankrollInputRef = useRef<HTMLInputElement>(null);
+  const manualUnitInputRef = useRef<HTMLInputElement>(null);
 
   const dispatchChanged = () =>
-    window.dispatchEvent(new Event("sentinel:settings-changed"));
+    window.dispatchEvent(new Event(SETTINGS_CHANGED_EVENT));
 
   useEffect(() => {
     localStorage.setItem("sentinel_unit_setup_mode", setupMode);
@@ -236,8 +243,30 @@ const UnitCalculatorSection = () => {
   const bankrollNum = parseFloat(bankroll);
   const manualUnitNum = parseFloat(manualUnit);
 
-  // Derive active unit size via shared helper
-  const unitSize = getActiveUnitSize(readUnitSettings());
+  const unitSize = getActiveUnitSize({
+    setupMode,
+    bankroll: Number.isFinite(bankrollNum) ? bankrollNum : 0,
+    riskPct: Number.isFinite(pct) ? pct : 0,
+    manualUnit: Number.isFinite(manualUnitNum) ? manualUnitNum : 0,
+  });
+
+  useEffect(() => {
+    const revealUnitCalculator = () => {
+      setIsUnitCalculatorOpen(true);
+      setShowUnitRequiredHighlight(true);
+      window.requestAnimationFrame(() => {
+        sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        (setupMode === "manual" ? manualUnitInputRef.current : bankrollInputRef.current)?.focus();
+      });
+    };
+
+    window.addEventListener(SHOW_UNIT_CALCULATOR_EVENT, revealUnitCalculator);
+    return () => window.removeEventListener(SHOW_UNIT_CALCULATOR_EVENT, revealUnitCalculator);
+  }, [setupMode]);
+
+  useEffect(() => {
+    if (unitSize) setShowUnitRequiredHighlight(false);
+  }, [unitSize]);
 
   const fmt = (n: number) =>
     n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
@@ -338,10 +367,13 @@ const UnitCalculatorSection = () => {
 
   return (
     <motion.div
+      ref={sectionRef}
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.275 }}
-      className="vision-card overflow-hidden relative z-10"
+      className={`vision-card overflow-hidden relative z-10 transition-shadow ${
+        showUnitRequiredHighlight && !unitSize ? "ring-1 ring-amber-400/50 shadow-[0_0_18px_hsla(38,92%,50%,0.12)]" : ""
+      }`}
     >
       <button
         type="button"
@@ -367,6 +399,14 @@ const UnitCalculatorSection = () => {
 
       {isUnitCalculatorOpen && (
       <div className="px-5 pb-5 pt-4 space-y-4 border-t border-border/20">
+        {showUnitRequiredHighlight && !unitSize && (
+          <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2.5">
+            <p className="text-[11px] font-semibold text-amber-300">
+              Enter a valid unit size below to display profit/loss in units.
+            </p>
+          </div>
+        )}
+
         {/* Setup mode segmented control */}
         <div className="space-y-1.5">
           <Label className="text-[10px] text-muted-foreground/65">Setup Mode</Label>
@@ -414,6 +454,7 @@ const UnitCalculatorSection = () => {
                   $
                 </span>
                 <Input
+                  ref={bankrollInputRef}
                   type="number"
                   inputMode="decimal"
                   min="0"
@@ -421,7 +462,9 @@ const UnitCalculatorSection = () => {
                   placeholder="0.00"
                   value={bankroll}
                   onChange={(e) => setBankroll(e.target.value)}
-                  className="bg-secondary/50 border-border/40 rounded-xl h-10 text-sm pl-7 placeholder:text-muted-foreground/50"
+                  className={`bg-secondary/50 border-border/40 rounded-xl h-10 text-sm pl-7 placeholder:text-muted-foreground/50 ${
+                    showUnitRequiredHighlight && !unitSize ? "border-amber-400/60 ring-1 ring-amber-400/25" : ""
+                  }`}
                 />
               </div>
             </div>
@@ -504,6 +547,7 @@ const UnitCalculatorSection = () => {
                 $
               </span>
               <Input
+                ref={manualUnitInputRef}
                 type="number"
                 inputMode="decimal"
                 min="0"
@@ -511,7 +555,9 @@ const UnitCalculatorSection = () => {
                 placeholder="0.00"
                 value={manualUnit}
                 onChange={(e) => setManualUnit(e.target.value)}
-                className="bg-secondary/50 border-border/40 rounded-xl h-10 text-sm pl-7 placeholder:text-muted-foreground/50"
+                className={`bg-secondary/50 border-border/40 rounded-xl h-10 text-sm pl-7 placeholder:text-muted-foreground/50 ${
+                  showUnitRequiredHighlight && !unitSize ? "border-amber-400/60 ring-1 ring-amber-400/25" : ""
+                }`}
               />
             </div>
           </div>
@@ -544,14 +590,37 @@ const ProfitDisplayModeSection = () => {
   const [mode, setMode] = useState<"dollars" | "units">(
     () => (localStorage.getItem("sentinel_profit_display_mode") as "dollars" | "units") ?? "dollars"
   );
+  const [unitSize, setUnitSize] = useState<number | null>(
+    () => getActiveUnitSize(readUnitSettings())
+  );
+
+  useEffect(() => {
+    const syncUnitSize = () => setUnitSize(getActiveUnitSize(readUnitSettings()));
+
+    window.addEventListener(SETTINGS_CHANGED_EVENT, syncUnitSize);
+    window.addEventListener("storage", syncUnitSize);
+
+    return () => {
+      window.removeEventListener(SETTINGS_CHANGED_EVENT, syncUnitSize);
+      window.removeEventListener("storage", syncUnitSize);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (mode === "units" && !unitSize) {
+      window.dispatchEvent(new Event(SHOW_UNIT_CALCULATOR_EVENT));
+    }
+  }, [mode, unitSize]);
 
   const handleModeChange = (newMode: "dollars" | "units") => {
     setMode(newMode);
     localStorage.setItem("sentinel_profit_display_mode", newMode);
-    window.dispatchEvent(new Event("sentinel:settings-changed"));
+    window.dispatchEvent(new Event(SETTINGS_CHANGED_EVENT));
+    if (newMode === "units" && !getActiveUnitSize(readUnitSettings())) {
+      window.dispatchEvent(new Event(SHOW_UNIT_CALCULATOR_EVENT));
+    }
   };
 
-  const unitSize = getActiveUnitSize(readUnitSettings());
   const showHint = mode === "units" && !unitSize;
 
   return (
@@ -609,9 +678,18 @@ const ProfitDisplayModeSection = () => {
           ))}
         </div>
         {showHint && (
-          <p className="text-[10px] text-muted-foreground/55 text-center">
-            Set your unit size above to view profit in units.
-          </p>
+          <div className="rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2.5 text-center space-y-2">
+            <p className="text-[11px] font-semibold text-amber-300">
+              Set your unit size to display profit/loss in units.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event(SHOW_UNIT_CALCULATOR_EVENT))}
+              className="text-[10px] font-bold uppercase tracking-wider text-amber-300/85 hover:text-amber-200 transition-colors"
+            >
+              Set Unit Size
+            </button>
+          </div>
         )}
       </div>
     </motion.div>
@@ -824,6 +902,21 @@ const SettingsPage = () => {
     setAccountOpen(true);
   };
 
+  const closeAccount = () => {
+    if (usernameSaving) return;
+    setUsername(resolveDisplayName(profile, user, ""));
+    setUsernameError(null);
+    setAccountOpen(false);
+  };
+
+  const handleAccountOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setAccountOpen(true);
+      return;
+    }
+    closeAccount();
+  };
+
   const handleUsernameSave = async () => {
     if (usernameSaving || !user) return;
     const trimmed = username.trim();
@@ -900,7 +993,7 @@ const SettingsPage = () => {
         </button>
       </motion.div>
 
-      <Dialog open={accountOpen} onOpenChange={(open) => !usernameSaving && setAccountOpen(open)}>
+      <Dialog open={accountOpen} onOpenChange={handleAccountOpenChange}>
         <DialogContent className="bg-card border-border/50 rounded-2xl max-w-md mx-auto p-0 overflow-hidden">
           <div className="p-6 space-y-5">
             <DialogHeader>
@@ -954,10 +1047,7 @@ const SettingsPage = () => {
                   type="button"
                   variant="ghost"
                   disabled={usernameSaving}
-                  onClick={() => {
-                    setUsername(resolveDisplayName(profile, user, ""));
-                    setUsernameError(null);
-                  }}
+                  onClick={closeAccount}
                   className="flex-1 rounded-xl h-10 text-xs"
                 >
                   Cancel

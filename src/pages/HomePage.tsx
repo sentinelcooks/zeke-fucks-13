@@ -13,6 +13,7 @@ import { PnLCalendar } from "@/components/PnLCalendar";
 import { useAuth } from "@/contexts/AuthContext";
 import { ModernHomeLayout } from "@/components/home/ModernHomeLayout";
 import { resolveDisplayName } from "@/lib/displayName";
+import { useProfitDisplay } from "@/hooks/useProfitDisplay";
 
 interface Play {
   id: string;
@@ -93,6 +94,7 @@ const HomePage = () => {
   const [homeTheme, setHomeTheme] = useState<"modern" | "classic">(() => {
     return (localStorage.getItem("sentinel_home_theme") as "modern" | "classic") || "modern";
   });
+  const { format: fmtProfit } = useProfitDisplay();
 
   useEffect(() => {
     const handler = () => {
@@ -222,7 +224,7 @@ const HomePage = () => {
     },
     { 
       icon: DollarSign, label: "Net Profit", 
-      value: `${stats.profit >= 0 ? "+" : ""}$${Math.abs(stats.profit).toFixed(0)}`, 
+      value: fmtProfit(stats.profit),
       gradient: stats.profit >= 0 ? "from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)]" : "from-[hsl(0,72%,51%)] to-[hsl(340,65%,47%)]",
       glow: stats.profit >= 0 ? "hsla(158,64%,52%,0.15)" : "hsla(0,72%,51%,0.15)",
       sub: `${stats.roi}% ROI`,
@@ -523,7 +525,7 @@ const HomePage = () => {
             <div className="flex items-center gap-2">
               <Sparkles className="w-3 h-3 text-accent/40" />
               <span className="text-[9px] text-muted-foreground/35">
-                {stats.bestDay > 0 ? `Best day: +$${stats.bestDay.toFixed(0)}` : stats.last7Total > 0 
+                {stats.bestDay > 0 ? `Best day: ${fmtProfit(stats.bestDay)}` : stats.last7Total > 0
                   ? `${Math.round((stats.last7Wins / Math.max(stats.last7Total, 1)) * 100)}% weekly hit rate`
                   : "No plays this week"
                 }

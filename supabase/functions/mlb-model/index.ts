@@ -385,6 +385,29 @@ function computeLast5(events: any[], teamId: string): string[] {
   return results;
 }
 
+function computeRecentRunsPerGame(events: any[], teamId: string): number | null {
+  const scores = events
+    .filter(e => e.competitions?.[0]?.status?.type?.name === "STATUS_FINAL")
+    .slice(-10)
+    .map((ev) => {
+      const comp = ev.competitions?.[0];
+      const team = comp?.competitors?.find((c: any) => String(c.team?.id || c.id) === String(teamId));
+      const score = Number(team?.score?.value ?? team?.score);
+      return Number.isFinite(score) ? score : null;
+    })
+    .filter((score): score is number => score !== null);
+  return scores.length > 0 ? scores.reduce((sum, score) => sum + score, 0) / scores.length : null;
+}
+
+function getRunsPerGame(stats: Record<string, any>, events: any[], teamId: string): number | null {
+  const direct = Number(stats.runsPerGame ?? stats.avgRuns ?? stats.rpg);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+  const runs = Number(stats.runs ?? stats.runsScored);
+  const games = Number(stats.gamesPlayed ?? stats.games);
+  if (Number.isFinite(runs) && Number.isFinite(games) && games > 0) return runs / games;
+  return computeRecentRunsPerGame(events, teamId);
+}
+
 function computeRestDays(events: any[]): number {
   const completed = events.filter(e => e.competitions?.[0]?.status?.type?.name === "STATUS_FINAL");
   if (completed.length === 0) return 1;
@@ -622,9 +645,17 @@ Deno.serve(async (req) => {
       if (!["moneyline", "runline", "total", "player_prop"].includes(bet_type)) {
         return json({ error: "Invalid bet_type. Use: moneyline, runline, total, player_prop" }, 400);
       }
+      const totalLine = bet_type === "total" ? Number(line) : null;
+      const totalSide = bet_type === "total" ? String(over_under).toLowerCase() : null;
+      if (bet_type === "total" && (!Number.isFinite(totalLine) || (totalLine as number) <= 0)) {
+        return json({ error: "Insufficient data: a valid MLB total line is required." }, 422);
+      }
+      if (bet_type === "total" && !["over", "under"].includes(totalSide || "")) {
+        return json({ error: "Insufficient data: choose Over or Under for the MLB total." }, 422);
+      }
       
-      // Check cache
-      if (game_id) {
+      // Totals depend on the selected line and side, which are not cache key columns.
+      if (game_id && bet_type !== "total") {
         const { data: cached } = await supabase
           .from("mlb_predictions")
           .select("*")
@@ -699,7 +730,7 @@ Deno.serve(async (req) => {
       const rd2 = computeRunDifferential(stats2);
       
       const isDayGame = eventData ? new Date(eventData.date).getHours() < 17 : false;
-      const isOver = over_under === "over";
+      const isOver = totalSide === "over";
       const windSpeed = weather?.wind?.speed || 0;
       const windDir = weather?.wind?.direction || "";
       const temp = weather?.temperature || 72;
@@ -806,14 +837,27 @@ Deno.serve(async (req) => {
       // Compute predicted total for O/U (order-independent: uses symmetric inputs only)
       let predicted_total: number | null = null;
       if (bet_type === "total") {
+        const team1Runs = getRunsPerGame(stats1, schedule1, team1_id);
+        const team2Runs = getRunsPerGame(stats2, schedule2, team2_id);
+        const offenseProjection = team1Runs != null && team2Runs != null ? team1Runs + team2Runs : null;
+        const hasPitcherContext = Boolean(pitchers.home || pitchers.away);
+        if (offenseProjection == null && !hasPitcherContext) {
+          console.warn(
+            `[mlb-model][total] insufficient teams=${team1_id}/${team2_id} event=${game_id ?? "none"} side=${over_under} line=${totalLine}`,
+          );
+          return json({ error: "Insufficient data: recent scoring and starting pitching context are unavailable for this MLB total." }, 422);
+        }
         const eraH = homePitcher.era || 4.50;
         const eraA = awayPitcher.era || 4.50;
         const avgERA = (eraH + eraA) / 2;
-        const baseRuns = 9.0;
+        const baseRuns = offenseProjection ?? 9.0;
         const projectedRuns = baseRuns * (avgERA / 4.20) * parkFactor;
         const tempAdj = temp > 75 ? 1.03 : temp < 55 ? 0.97 : 1.0;
         const windAdj = windDir?.toLowerCase().includes("out") ? 1 + windSpeed * 0.008 : windDir?.toLowerCase().includes("in") ? 1 - windSpeed * 0.005 : 1.0;
         predicted_total = Math.round(projectedRuns * tempAdj * windAdj * 10) / 10;
+        console.info(
+          `[mlb-model][total] inputs teams=${team1_id}/${team2_id} event=${game_id ?? "none"} side=${over_under} line=${totalLine} scoring=${offenseProjection?.toFixed(1) ?? "unavailable"} pitchers=${hasPitcherContext ? "available" : "fallback"} weather=${weather ? "available" : "unavailable"} projection=${predicted_total}`,
+        );
         console.log(`⚾ Pitcher-adjusted total projection: ${predicted_total} runs (ERA avg ${avgERA.toFixed(2)}, PF ${parkFactor})`);
       }
       
@@ -845,15 +889,18 @@ Deno.serve(async (req) => {
       // Override verdict/confidence for totals using predicted_total vs line (order-independent)
       let finalConfidence = result.confidence;
       let finalVerdict = result.verdict;
-      if (bet_type === "total" && predicted_total != null && line != null) {
-        const lineNum = typeof line === "string" ? parseFloat(line) : line;
-        if (!isNaN(lineNum)) {
-          const diff = predicted_total - lineNum;
-          if (diff > 0.3) finalVerdict = "OVER";
-          else if (diff < -0.3) finalVerdict = "UNDER";
-          else finalVerdict = "PASS";
-          finalConfidence = Math.max(50, Math.min(90, Math.round(50 + Math.abs(diff) * 8)));
-        }
+      if (bet_type === "total" && predicted_total != null && totalLine != null) {
+        const diff = predicted_total - totalLine;
+        const overProbability = Math.max(10, Math.min(90, Math.round(50 + diff * 8)));
+        finalConfidence = totalSide === "over" ? overProbability : 100 - overProbability;
+        if (Math.abs(diff) <= 0.3) finalVerdict = "PASS";
+        else if (finalConfidence >= 72) finalVerdict = `STRONG ${String(totalSide).toUpperCase()}`;
+        else if (finalConfidence >= 58) finalVerdict = `LEAN ${String(totalSide).toUpperCase()}`;
+        else if (finalConfidence >= 42) finalVerdict = "RISKY";
+        else finalVerdict = `FADE ${String(totalSide).toUpperCase()}`;
+        console.info(
+          `[mlb-model][total] result side=${over_under} line=${totalLine} projection=${predicted_total} over_probability=${overProbability} confidence=${finalConfidence} verdict=${finalVerdict}`,
+        );
       }
 
       // Generate AI writeup
@@ -884,7 +931,7 @@ Deno.serve(async (req) => {
       };
       
       // Cache prediction
-      if (game_id && !player_name) {
+      if (game_id && !player_name && bet_type !== "total") {
         try {
           await supabase.from("mlb_predictions").insert({
             game_id: String(game_id),

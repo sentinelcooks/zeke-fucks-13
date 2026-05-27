@@ -402,7 +402,7 @@ async function getScoreboard(sport = "nba") {
 }
 
 // ── Resolve real scheduled venue (HOME/AWAY for tonight's matchup) ──
-async function resolveMatchupVenue(team1Id: string, team2Id: string, sport: string): Promise<{ team1IsHome: boolean; gameDate: string } | null> {
+async function resolveMatchupVenue(team1Id: string, team2Id: string, sport: string): Promise<{ gameId: string; team1IsHome: boolean; gameDate: string } | null> {
   try {
     const base = getEspnBase(sport);
     const t1 = String(team1Id), t2 = String(team2Id);
@@ -418,7 +418,7 @@ async function resolveMatchupVenue(team1Id: string, team2Id: string, sport: stri
         if (ids.includes(t1) && ids.includes(t2)) {
           const home = comp.competitors.find((c: any) => c.homeAway === "home");
           const homeId = String(home?.id || home?.team?.id);
-          return { team1IsHome: homeId === t1, gameDate: ev.date };
+          return { gameId: String(ev.id), team1IsHome: homeId === t1, gameDate: ev.date };
         }
       }
     }
@@ -1356,6 +1356,13 @@ Deno.serve(async (req) => {
 
       if (!t1Input || !t2Input) return json({ error: "Both teams are required" }, 400);
       if (!bet_type) return json({ error: "bet_type is required (moneyline|spread|total)" }, 400);
+      const parsedTotalLine = bet_type === "total" ? Number(total_line) : null;
+      if (bet_type === "total" && (!Number.isFinite(parsedTotalLine) || (parsedTotalLine as number) <= 0)) {
+        return json({ error: "A valid total_line is required for totals analysis" }, 400);
+      }
+      if (bet_type === "total" && !["over", "under"].includes(String(over_under).toLowerCase())) {
+        return json({ error: "over_under must be over or under for totals analysis" }, 400);
+      }
 
       const teams = await getTeamsList(sport);
       const team1 = resolveTeam(teams, t1Input);
@@ -1402,14 +1409,21 @@ Deno.serve(async (req) => {
         if (supabaseUrl && serviceKey) {
           try {
             const mlbBetType = bet_type === "spread" ? "runline" : bet_type;
+            if (bet_type === "total") {
+              console.info(
+                `[moneyline-api][mlb-total] request teams=${team1.id}/${team2.id} event=${venue?.gameId ?? "unmatched"} side=${over_under} line=${parsedTotalLine}`,
+              );
+            }
             const mlbResp = await fetch(`${supabaseUrl}/functions/v1/mlb-model/analyze`, {
               method: "POST",
               headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
               body: JSON.stringify({
+                game_id: venue?.gameId ?? null,
                 team1_id: team1.id,
                 team2_id: team2.id,
                 bet_type: mlbBetType,
                 over_under,
+                line: bet_type === "total" ? parsedTotalLine : null,
                 team1_is_home: venue ? venue.team1IsHome : null,
                 game_date: venue?.gameDate ?? null,
               }),
@@ -1430,6 +1444,11 @@ Deno.serve(async (req) => {
               }
 
               const odds = buildOddsPayload(oddsData, bet_type, conf, team1.name, team2.name, over_under);
+              if (bet_type === "total") {
+                console.info(
+                  `[moneyline-api][mlb-total] result side=${over_under} line=${parsedTotalLine} confidence=${conf} verdict=${mlbResult.verdict} odds=${odds?.bestOdds?.american ?? "unavailable"} projection=${mlbResult.predicted_total ?? "unavailable"}`,
+                );
+              }
 
               const decision = buildDecision({
                 team1, team2,
@@ -1465,9 +1484,24 @@ Deno.serve(async (req) => {
                 ...analysis,
               });
             }
+            if (bet_type === "total") {
+              const modelError = await mlbResp.json().catch(() => null);
+              console.warn(
+                `[moneyline-api][mlb-total] model unavailable status=${mlbResp.status} event=${venue?.gameId ?? "unmatched"} side=${over_under} line=${parsedTotalLine}`,
+              );
+              return json({
+                error: modelError?.error || "Insufficient MLB totals data for this matchup right now.",
+              });
+            }
           } catch (e: any) {
             console.error("MLB model delegation failed, falling back to generic:", e.message);
+            if (bet_type === "total") {
+              return json({ error: "Insufficient MLB totals data for this matchup right now." });
+            }
           }
+        } else if (bet_type === "total") {
+          console.warn("[moneyline-api][mlb-total] model unavailable: server configuration missing");
+          return json({ error: "Insufficient MLB totals data for this matchup right now." });
         }
       }
 
@@ -1556,9 +1590,7 @@ Deno.serve(async (req) => {
         if (spread_line === undefined) return json({ error: "spread_line is required" }, 400);
         analysis = analyzeSpread(team1, team2, spread_team || t1Input, parseFloat(spread_line), h2h, team1Stats, team2Stats, extras);
       } else if (bet_type === "total") {
-        if (!total_line) return json({ error: "total_line is required" }, 400);
-        if (!over_under) return json({ error: "over_under is required" }, 400);
-        analysis = analyzeTotal(team1, team2, parseFloat(total_line), over_under, h2h, team1Stats, team2Stats, extras);
+        analysis = analyzeTotal(team1, team2, parsedTotalLine as number, over_under, h2h, team1Stats, team2Stats, extras);
       } else {
         return json({ error: "Invalid bet_type. Use: moneyline, spread, or total" }, 400);
       }
