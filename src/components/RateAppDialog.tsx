@@ -1,4 +1,7 @@
 import { Star, ChevronRight } from "lucide-react";
+import { Browser } from "@capacitor/browser";
+import { Capacitor } from "@capacitor/core";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -6,7 +9,10 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { openExternal } from "@/lib/openExternal";
+
+const APP_STORE_WEB_URL = "https://apps.apple.com/ph/app/sentinel-sports-analyzer/id6764711439";
+const APP_STORE_REVIEW_URL = "https://apps.apple.com/app/id6764711439?action=write-review";
+const APP_STORE_NATIVE_REVIEW_URL = "itms-apps://itunes.apple.com/app/id6764711439?action=write-review";
 
 interface RateAppDialogProps {
   open: boolean;
@@ -14,10 +20,35 @@ interface RateAppDialogProps {
 }
 
 export function RateAppDialog({ open, onClose }: RateAppDialogProps) {
-  const handleRate = () => {
-    void openExternal("https://apps.apple.com");
-    localStorage.setItem("sentinel_rate_dismissed", "true");
-    onClose();
+  const openAppStoreReview = async () => {
+    if (Capacitor.isNativePlatform()) {
+      if (Capacitor.getPlatform() === "ios") {
+        try {
+          await Browser.open({ url: APP_STORE_NATIVE_REVIEW_URL, presentationStyle: "popover" });
+          return;
+        } catch {
+          await Browser.open({ url: APP_STORE_WEB_URL, presentationStyle: "popover" });
+          return;
+        }
+      }
+
+      await Browser.open({ url: APP_STORE_WEB_URL, presentationStyle: "popover" });
+      return;
+    }
+
+    const win = window.open(APP_STORE_REVIEW_URL, "_blank", "noopener,noreferrer");
+    if (!win) throw new Error("Popup blocked");
+    win.opener = null;
+  };
+
+  const handleRate = async () => {
+    try {
+      await openAppStoreReview();
+      localStorage.setItem("sentinel_rate_dismissed", "true");
+      onClose();
+    } catch {
+      toast.error("Unable to open the App Store right now.");
+    }
   };
 
   const handleDismiss = () => {
