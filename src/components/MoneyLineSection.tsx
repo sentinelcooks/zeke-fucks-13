@@ -51,6 +51,7 @@ import { formatOdds } from "@/utils/oddsFormat";
 import { selectBestBookLine, type Direction, type MarketType } from "@/lib/bestBookLine";
 import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 import sportNba from "@/assets/logo-nba.png";
+import sportWnba from "@/assets/wnba-logo.png";
 import sportMlb from "@/assets/logo-mlb.png";
 
 import sportNhl from "@/assets/logo-nhl.png";
@@ -60,17 +61,6 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, LineContro
 
 type BetType = "moneyline" | "spread" | "total";
 type SportType = "nba" | "wnba" | "ncaab" | "mlb" | "nhl";
-
-function WnbaMark({ className = "" }: { className?: string }) {
-  return (
-    <span
-      className={`inline-flex items-center justify-center rounded-full bg-white/10 text-white font-black tracking-[-0.08em] ${className}`}
-      style={{ boxShadow: "inset 0 0 0 1px hsla(0,0%,100%,0.16)" }}
-    >
-      W
-    </span>
-  );
-}
 
 interface Team {
   id: string;
@@ -126,7 +116,7 @@ function SegmentedControl<T extends string>({
   layoutId?: string;
 }) {
   return (
-    <div className="relative flex rounded-xl p-1 gap-1" style={{
+    <div className="relative flex rounded-xl p-1 gap-1 overflow-x-auto" style={{
       background: 'hsla(228, 20%, 8%, 0.6)',
       border: '1px solid hsla(228, 30%, 16%, 0.25)',
     }}>
@@ -136,7 +126,7 @@ function SegmentedControl<T extends string>({
           <button
             key={opt.value}
             onClick={() => onChange(opt.value)}
-            className={`relative flex-1 z-10 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-[11px] font-bold tracking-wider transition-all duration-300 ${active ? "text-accent-foreground" : "text-muted-foreground/65 hover:text-foreground/50"}`}
+            className={`relative min-h-[44px] min-w-[78px] flex-1 flex-shrink-0 z-10 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-[11px] font-bold tracking-wider transition-all duration-300 whitespace-nowrap ${active ? "text-accent-foreground" : "text-muted-foreground/65 hover:text-foreground/50"}`}
           >
             {active && (
               <motion.div
@@ -149,7 +139,7 @@ function SegmentedControl<T extends string>({
                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
               />
             )}
-            <span className="relative z-10 flex items-center gap-1.5">
+            <span className="relative z-10 flex items-center gap-1.5 whitespace-nowrap">
               {opt.icon}
               {opt.label}
             </span>
@@ -1426,7 +1416,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
           layoutId="lines-sport"
           options={[
             { value: "nba" as SportType, label: "NBA", icon: <img src={sportNba} alt="NBA" className="w-7 h-7 object-contain" /> },
-            { value: "wnba" as SportType, label: "WNBA", icon: <WnbaMark className="w-7 h-7 text-[11px]" /> },
+            { value: "wnba" as SportType, label: "WNBA", icon: <img src={sportWnba} alt="WNBA" className="w-7 h-7 object-contain" /> },
             { value: "mlb" as SportType, label: "MLB", icon: <img src={sportMlb} alt="MLB" className="w-7 h-7 object-contain" /> },
             { value: "nhl" as SportType, label: "NHL", icon: <img src={sportNhl} alt="NHL" className="w-7 h-7 object-contain" /> },
             { value: "ncaab" as SportType, label: "NCAAB", icon: <img src={sportNcaab} alt="NCAAB" className="w-7 h-7 object-contain" /> },

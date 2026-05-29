@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import logoNba from "@/assets/logo-nba.png";
+import logoWnba from "@/assets/wnba-logo.png";
 import logoMlb from "@/assets/logo-mlb.png";
 import logoNhl from "@/assets/logo-nhl.png";
 import logoNfl from "@/assets/logo-nfl.png";
@@ -84,6 +85,7 @@ const SPORT_COLOR: Record<SportFilter, string> = {
 
 const SPORT_LOGO: Partial<Record<SportFilter, string>> = {
   nba: logoNba,
+  wnba: logoWnba,
   mlb: logoMlb,
   ufc: logoUfc,
   nhl: logoNhl,
@@ -100,17 +102,6 @@ const SPORT_LOGO_SIZE: Record<SportFilter, string> = {
 };
 
 const CARD_ORDER = ["Main Card", "Prelims", "Early Prelims"];
-
-function WnbaMark({ className = "" }: { className?: string }) {
-  return (
-    <span
-      className={`inline-flex items-center justify-center rounded-full bg-white/10 text-white font-black tracking-[-0.08em] ${className}`}
-      style={{ boxShadow: "inset 0 0 0 1px hsla(0,0%,100%,0.16)" }}
-    >
-      W
-    </span>
-  );
-}
 
 function teamNameKey(value: string | null | undefined): string {
   return String(value ?? "")
@@ -1157,7 +1148,7 @@ const GamesPage = () => {
       
 
       {/* Sport toggle */}
-      <div className="flex p-1 rounded-xl relative z-10" style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+      <div className="flex p-1 rounded-xl relative z-10 overflow-x-auto gap-1" style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
         {(["nba", "wnba", "mlb", "nhl", "nfl", "ufc"] as const).map((s) => {
           const isActive = sport === s;
           const color = SPORT_COLOR[s];
@@ -1165,7 +1156,7 @@ const GamesPage = () => {
             <button
               key={s}
               onClick={() => setSport(s)}
-              className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
+              className={`min-h-[44px] min-w-[76px] flex-1 flex-shrink-0 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
                 isActive ? "text-white shadow-lg" : "text-muted-foreground/65 hover:text-muted-foreground/60"
               }`}
               style={isActive ? {
@@ -1173,12 +1164,8 @@ const GamesPage = () => {
                 boxShadow: `0 4px 16px -2px ${color}55`,
               } : undefined}
             >
-              {s === "wnba" ? (
-                <WnbaMark className={`${SPORT_LOGO_SIZE[s]} text-[11px] shrink-0`} />
-              ) : (
-                <img src={SPORT_LOGO[s]} alt={s} className={`${SPORT_LOGO_SIZE[s]} object-contain shrink-0`} />
-              )}
-              {s.toUpperCase()}
+              <img src={SPORT_LOGO[s]} alt={s} className={`${SPORT_LOGO_SIZE[s]} object-contain shrink-0`} />
+              <span className="whitespace-nowrap">{s.toUpperCase()}</span>
             </button>
           );
         })}

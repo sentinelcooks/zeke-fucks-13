@@ -4,6 +4,7 @@ import MoneyLineSection from "@/components/MoneyLineSection";
 
 import sportNcaabLogo from "@/assets/sport-ncaab.png";
 import nbaLogo from "@/assets/nba-logo.png";
+import wnbaLogo from "@/assets/wnba-logo.png";
 import mlbLogo from "@/assets/mlb-logo.png";
 import nhlLogo from "@/assets/logo-nhl.png";
 import ufcLogo from "@/assets/ufc-logo.png";
@@ -181,17 +182,6 @@ const NHL_PROP_TYPES = NHL_PROP_CATEGORIES.flatMap((c) => c.props);
 
 type PropsSport = "nba" | "wnba" | "mlb" | "nhl" | "ufc";
 type LinesSport = "nba" | "wnba" | "mlb" | "nhl" | "ncaab";
-
-function WnbaMark({ className = "" }: { className?: string }) {
-  return (
-    <span
-      className={`inline-flex items-center justify-center rounded-full bg-white/10 text-white font-black tracking-[-0.08em] ${className}`}
-      style={{ boxShadow: "inset 0 0 0 1px hsla(0,0%,100%,0.16)" }}
-    >
-      W
-    </span>
-  );
-}
 
 function Section({ title, children, defaultOpen = true, icon }: { title: string; children: React.ReactNode; defaultOpen?: boolean; icon?: React.ReactNode }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -1121,7 +1111,7 @@ const NbaPropsPage = () => {
 
         {/* ── Sport Toggle (always visible) ── */}
         {mode === "props" ? (
-        <div className="flex rounded-2xl p-1.5 gap-1.5" style={{
+        <div className="flex rounded-2xl p-1.5 gap-1.5 overflow-x-auto" style={{
           background: 'hsla(228, 25%, 7%, 0.8)',
           border: '1px solid hsla(228, 30%, 18%, 0.3)',
           backdropFilter: 'blur(12px)',
@@ -1131,7 +1121,7 @@ const NbaPropsPage = () => {
               <img src={nbaLogo} alt="NBA" className={`h-6 w-auto object-contain ${active ? '' : 'opacity-70'}`} />
             )},
             { value: "wnba" as const, label: "WNBA", color: "#E03A3E", icon: (active: boolean) => (
-              <WnbaMark className={`h-6 w-6 text-[11px] ${active ? "" : "opacity-70"}`} />
+              <img src={wnbaLogo} alt="WNBA" className={`h-6 w-auto object-contain ${active ? "" : "opacity-70"}`} />
             )},
             { value: "mlb" as const, label: "MLB", color: "#002D72", icon: (active: boolean) => (
               <img src={mlbLogo} alt="MLB" className={`h-5 w-auto object-contain ${active ? '' : 'opacity-70'}`} />
@@ -1149,7 +1139,7 @@ const NbaPropsPage = () => {
                 key={s.value}
                 onClick={() => setSport(s.value)}
                 whileTap={{ scale: 0.96 }}
-                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[13px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden ${
+                className={`min-h-[48px] min-w-[82px] flex-1 flex-shrink-0 flex items-center justify-center gap-2 py-3 rounded-xl text-[13px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden whitespace-nowrap ${
                   active ? "text-white" : "text-muted-foreground/55 hover:text-muted-foreground/50"
                 }`}
                 style={active ? {
@@ -1158,20 +1148,20 @@ const NbaPropsPage = () => {
                 } : {}}
               >
                 {s.icon(active)}
-                <span className="relative z-10">{s.label}</span>
+                <span className="relative z-10 whitespace-nowrap">{s.label}</span>
               </motion.button>
             );
           })}
         </div>
         ) : (
-        <div className="flex rounded-2xl p-1.5 gap-1.5" style={{
+        <div className="flex rounded-2xl p-1.5 gap-1.5 overflow-x-auto" style={{
           background: 'hsla(228, 25%, 7%, 0.8)',
           border: '1px solid hsla(228, 30%, 18%, 0.3)',
           backdropFilter: 'blur(12px)',
         }}>
           {[
             { value: "nba", label: "NBA", color: "#1D428A", logo: nbaLogo, logoClass: "-mr-2.5" },
-            { value: "wnba", label: "WNBA", color: "#E03A3E", logo: null, logoClass: "" },
+            { value: "wnba", label: "WNBA", color: "#E03A3E", logo: wnbaLogo, logoClass: "" },
             { value: "mlb", label: "MLB", color: "#002D72", logo: mlbLogo, logoClass: "" },
             { value: "nhl", label: "NHL", color: "#111111", logo: nhlLogo, logoClass: "" },
           ].map((s) => {
@@ -1181,7 +1171,7 @@ const NbaPropsPage = () => {
                 key={s.value}
                 onClick={() => setLinesSport(s.value as any)}
                 whileTap={{ scale: 0.96 }}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-3.5 rounded-xl text-[14px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden ${
+                className={`min-h-[52px] min-w-[88px] flex-1 flex-shrink-0 flex items-center justify-center gap-1.5 py-3.5 rounded-xl text-[14px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden whitespace-nowrap ${
                   active ? "text-white" : "text-muted-foreground/55 hover:text-muted-foreground/50"
                 }`}
                 style={active ? {
@@ -1189,12 +1179,8 @@ const NbaPropsPage = () => {
                   boxShadow: `0 4px 16px -2px ${s.color}55`,
                 } : {}}
               >
-                {s.logo ? (
-                  <img src={s.logo} alt={s.label} className={`h-8 w-8 object-contain ${s.logoClass} ${active ? '' : 'opacity-70'}`} />
-                ) : (
-                  <WnbaMark className={`h-8 w-8 text-[11px] ${active ? "" : "opacity-70"}`} />
-                )}
-                <span className="relative z-10">{s.label}</span>
+                <img src={s.logo} alt={s.label} className={`h-8 w-8 object-contain ${s.logoClass} ${active ? '' : 'opacity-70'}`} />
+                <span className="relative z-10 whitespace-nowrap">{s.label}</span>
               </motion.button>
             );
           })}
