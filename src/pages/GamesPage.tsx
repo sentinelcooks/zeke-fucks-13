@@ -93,12 +93,12 @@ const SPORT_LOGO: Partial<Record<SportFilter, string>> = {
 };
 
 const SPORT_LOGO_SIZE: Record<SportFilter, string> = {
-  nba: "w-7 h-7",
-  wnba: "w-7 h-7",
-  mlb: "w-6 h-6",
-  nhl: "w-6 h-6",
-  nfl: "w-6 h-6",
-  ufc: "w-6 h-6",
+  nba: "w-5 h-5",
+  wnba: "w-5 h-5",
+  mlb: "w-5 h-5",
+  nhl: "w-5 h-5",
+  nfl: "w-5 h-5",
+  ufc: "w-5 h-5",
 };
 
 const CARD_ORDER = ["Main Card", "Prelims", "Early Prelims"];
@@ -1148,7 +1148,7 @@ const GamesPage = () => {
       
 
       {/* Sport toggle */}
-      <div className="flex p-1 rounded-xl relative z-10 overflow-x-auto gap-1" style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+      <div className="flex w-full max-w-full p-1 rounded-xl relative z-10 overflow-x-auto overscroll-x-contain scrollbar-hide gap-1" style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
         {(["nba", "wnba", "mlb", "nhl", "nfl", "ufc"] as const).map((s) => {
           const isActive = sport === s;
           const color = SPORT_COLOR[s];
@@ -1156,7 +1156,7 @@ const GamesPage = () => {
             <button
               key={s}
               onClick={() => setSport(s)}
-              className={`min-h-[44px] min-w-[76px] flex-1 flex-shrink-0 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
+              className={`min-h-[44px] min-w-[82px] shrink-0 sm:flex-1 px-3 py-2.5 text-[13px] font-bold rounded-lg transition-all flex items-center justify-center gap-2 whitespace-nowrap ${
                 isActive ? "text-white shadow-lg" : "text-muted-foreground/65 hover:text-muted-foreground/60"
               }`}
               style={isActive ? {
@@ -1165,7 +1165,7 @@ const GamesPage = () => {
               } : undefined}
             >
               <img src={SPORT_LOGO[s]} alt={s} className={`${SPORT_LOGO_SIZE[s]} object-contain shrink-0`} />
-              <span className="whitespace-nowrap">{s.toUpperCase()}</span>
+              <span className="whitespace-nowrap leading-none">{s.toUpperCase()}</span>
             </button>
           );
         })}

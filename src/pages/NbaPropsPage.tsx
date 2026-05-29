@@ -1111,26 +1111,26 @@ const NbaPropsPage = () => {
 
         {/* ── Sport Toggle (always visible) ── */}
         {mode === "props" ? (
-        <div className="flex rounded-2xl p-1.5 gap-1.5 overflow-x-auto" style={{
+        <div className="flex w-full max-w-full rounded-2xl p-1.5 gap-1.5 overflow-x-auto overscroll-x-contain scrollbar-hide" style={{
           background: 'hsla(228, 25%, 7%, 0.8)',
           border: '1px solid hsla(228, 30%, 18%, 0.3)',
           backdropFilter: 'blur(12px)',
         }}>
           {[
             { value: "nba" as const, label: "NBA", color: "#1D428A", icon: (active: boolean) => (
-              <img src={nbaLogo} alt="NBA" className={`h-6 w-auto object-contain ${active ? '' : 'opacity-70'}`} />
+              <img src={nbaLogo} alt="NBA" className={`h-5 w-5 object-contain shrink-0 ${active ? '' : 'opacity-70'}`} />
             )},
             { value: "wnba" as const, label: "WNBA", color: "#E03A3E", icon: (active: boolean) => (
-              <img src={wnbaLogo} alt="WNBA" className={`h-6 w-auto object-contain ${active ? "" : "opacity-70"}`} />
+              <img src={wnbaLogo} alt="WNBA" className={`h-5 w-5 object-contain shrink-0 ${active ? "" : "opacity-70"}`} />
             )},
             { value: "mlb" as const, label: "MLB", color: "#002D72", icon: (active: boolean) => (
-              <img src={mlbLogo} alt="MLB" className={`h-5 w-auto object-contain ${active ? '' : 'opacity-70'}`} />
+              <img src={mlbLogo} alt="MLB" className={`h-5 w-5 object-contain shrink-0 ${active ? '' : 'opacity-70'}`} />
             )},
             { value: "nhl" as const, label: "NHL", color: "#111111", icon: (active: boolean) => (
-              <img src={nhlLogo} alt="NHL" className={`h-9 w-auto object-contain ${active ? '' : 'opacity-70'}`} />
+              <img src={nhlLogo} alt="NHL" className={`h-5 w-5 object-contain shrink-0 ${active ? '' : 'opacity-70'}`} />
             )},
             { value: "ufc" as const, label: "UFC", color: "#3a1518", icon: (active: boolean) => (
-              <img src={ufcLogo} alt="UFC" className={`h-3.5 w-auto object-contain ${active ? '' : 'opacity-70'}`} />
+              <img src={ufcLogo} alt="UFC" className={`h-5 w-5 object-contain shrink-0 ${active ? '' : 'opacity-70'}`} />
             )},
           ].map((s) => {
             const active = sport === s.value;
@@ -1139,7 +1139,7 @@ const NbaPropsPage = () => {
                 key={s.value}
                 onClick={() => setSport(s.value)}
                 whileTap={{ scale: 0.96 }}
-                className={`min-h-[48px] min-w-[82px] flex-1 flex-shrink-0 flex items-center justify-center gap-2 py-3 rounded-xl text-[13px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden whitespace-nowrap ${
+                className={`min-h-[48px] min-w-[88px] shrink-0 sm:flex-1 flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-[13px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden whitespace-nowrap ${
                   active ? "text-white" : "text-muted-foreground/55 hover:text-muted-foreground/50"
                 }`}
                 style={active ? {
@@ -1154,13 +1154,13 @@ const NbaPropsPage = () => {
           })}
         </div>
         ) : (
-        <div className="flex rounded-2xl p-1.5 gap-1.5 overflow-x-auto" style={{
+        <div className="flex w-full max-w-full rounded-2xl p-1.5 gap-1.5 overflow-x-auto overscroll-x-contain scrollbar-hide" style={{
           background: 'hsla(228, 25%, 7%, 0.8)',
           border: '1px solid hsla(228, 30%, 18%, 0.3)',
           backdropFilter: 'blur(12px)',
         }}>
           {[
-            { value: "nba", label: "NBA", color: "#1D428A", logo: nbaLogo, logoClass: "-mr-2.5" },
+            { value: "nba", label: "NBA", color: "#1D428A", logo: nbaLogo, logoClass: "" },
             { value: "wnba", label: "WNBA", color: "#E03A3E", logo: wnbaLogo, logoClass: "" },
             { value: "mlb", label: "MLB", color: "#002D72", logo: mlbLogo, logoClass: "" },
             { value: "nhl", label: "NHL", color: "#111111", logo: nhlLogo, logoClass: "" },
@@ -1171,7 +1171,7 @@ const NbaPropsPage = () => {
                 key={s.value}
                 onClick={() => setLinesSport(s.value as any)}
                 whileTap={{ scale: 0.96 }}
-                className={`min-h-[52px] min-w-[88px] flex-1 flex-shrink-0 flex items-center justify-center gap-1.5 py-3.5 rounded-xl text-[14px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden whitespace-nowrap ${
+                className={`min-h-[48px] min-w-[90px] shrink-0 sm:flex-1 flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-[13px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden whitespace-nowrap ${
                   active ? "text-white" : "text-muted-foreground/55 hover:text-muted-foreground/50"
                 }`}
                 style={active ? {
@@ -1179,7 +1179,7 @@ const NbaPropsPage = () => {
                   boxShadow: `0 4px 16px -2px ${s.color}55`,
                 } : {}}
               >
-                <img src={s.logo} alt={s.label} className={`h-8 w-8 object-contain ${s.logoClass} ${active ? '' : 'opacity-70'}`} />
+                <img src={s.logo} alt={s.label} className={`h-5 w-5 object-contain shrink-0 ${s.logoClass} ${active ? '' : 'opacity-70'}`} />
                 <span className="relative z-10 whitespace-nowrap">{s.label}</span>
               </motion.button>
             );
