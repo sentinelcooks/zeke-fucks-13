@@ -1111,7 +1111,7 @@ const NbaPropsPage = () => {
 
         {/* ── Sport Toggle (always visible) ── */}
         {mode === "props" ? (
-        <div className="flex w-full max-w-full rounded-2xl p-1.5 gap-1.5 overflow-x-auto overscroll-x-contain scrollbar-hide" style={{
+        <div className="grid w-full max-w-full grid-cols-6 gap-1.5 rounded-2xl p-1.5 sm:grid-cols-5" style={{
           background: 'hsla(228, 25%, 7%, 0.8)',
           border: '1px solid hsla(228, 30%, 18%, 0.3)',
           backdropFilter: 'blur(12px)',
@@ -1139,7 +1139,7 @@ const NbaPropsPage = () => {
                 key={s.value}
                 onClick={() => setSport(s.value)}
                 whileTap={{ scale: 0.96 }}
-                className={`min-h-[48px] min-w-[88px] shrink-0 sm:flex-1 flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-[13px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden whitespace-nowrap ${
+                className={`${s.value === "nhl" || s.value === "ufc" ? "col-span-3" : "col-span-2"} flex min-h-[46px] w-full items-center justify-center gap-1.5 rounded-xl px-2.5 py-2.5 text-[12px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden whitespace-nowrap sm:col-span-1 sm:min-h-[48px] sm:gap-2 sm:px-3 sm:text-[13px] ${
                   active ? "text-white" : "text-muted-foreground/55 hover:text-muted-foreground/50"
                 }`}
                 style={active ? {
@@ -1154,7 +1154,7 @@ const NbaPropsPage = () => {
           })}
         </div>
         ) : (
-        <div className="flex w-full max-w-full rounded-2xl p-1.5 gap-1.5 overflow-x-auto overscroll-x-contain scrollbar-hide" style={{
+        <div className="grid w-full max-w-full grid-cols-4 gap-1.5 rounded-2xl p-1.5" style={{
           background: 'hsla(228, 25%, 7%, 0.8)',
           border: '1px solid hsla(228, 30%, 18%, 0.3)',
           backdropFilter: 'blur(12px)',
@@ -1171,7 +1171,7 @@ const NbaPropsPage = () => {
                 key={s.value}
                 onClick={() => setLinesSport(s.value as any)}
                 whileTap={{ scale: 0.96 }}
-                className={`min-h-[48px] min-w-[90px] shrink-0 sm:flex-1 flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-[13px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden whitespace-nowrap ${
+                className={`flex min-h-[46px] w-full items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[12px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden whitespace-nowrap sm:min-h-[48px] sm:gap-2 sm:px-3 sm:text-[13px] ${
                   active ? "text-white" : "text-muted-foreground/55 hover:text-muted-foreground/50"
                 }`}
                 style={active ? {
