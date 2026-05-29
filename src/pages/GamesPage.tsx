@@ -7,7 +7,7 @@ import logoNfl from "@/assets/logo-nfl.png";
 import logoUfc from "@/assets/logo-ufc.png";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Clock, Loader2, Calendar, Bell, BellOff, RefreshCw, Swords, Search, ChevronDown } from "lucide-react";
+import { Clock, Loader2, Calendar, Bell, BellOff, RefreshCw, Swords, Search, ChevronDown, ChevronRight } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -172,11 +172,24 @@ const GamesPage = () => {
   const [oddsMap, setOddsMap] = useState<Record<string, RealOdds>>({});
   const [notifiedGames, setNotifiedGames] = useState<Set<string>>(new Set());
   const fetchAbort = useRef<AbortController | null>(null);
+  const sportScrollRef = useRef<HTMLDivElement | null>(null);
+  const [sportScrollHint, setSportScrollHint] = useState({ left: false, right: false });
 
   // Per-sport cache to enable instant switching
   const sportCache = useRef<Partial<Record<GamesSportFilter, { games: Game[]; ufcEvents: UfcEvent[]; oddsMap: Record<string, RealOdds> }>>>({});
   // Tracks the sport of the last fetch so we only blank the visible list on a real sport change.
   const lastFetchedSportRef = useRef<GamesSportFilter | null>(null);
+
+  const updateSportScrollHint = () => {
+    const el = sportScrollRef.current;
+    if (!el) return;
+
+    const maxScrollLeft = el.scrollWidth - el.clientWidth;
+    setSportScrollHint({
+      left: el.scrollLeft > 2,
+      right: maxScrollLeft - el.scrollLeft > 2,
+    });
+  };
 
   // Load subscribed game IDs from Supabase (replaces localStorage)
   useEffect(() => {
@@ -492,6 +505,13 @@ const GamesPage = () => {
   };
 
   useEffect(() => { fetchGames(sport); }, [sport]);
+
+  useEffect(() => {
+    updateSportScrollHint();
+    const onResize = () => updateSportScrollHint();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   // Auto-refresh: 10s when live games exist, 60s otherwise — silent to avoid spinner flicker
   const hasLive = useMemo(() => {
@@ -1157,27 +1177,52 @@ const GamesPage = () => {
       
 
       {/* Sport toggle */}
-      <div className="flex w-full max-w-full p-1 rounded-xl relative z-10 overflow-x-auto overscroll-x-contain scrollbar-hide gap-1" style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
-        {GAMES_SPORT_OPTIONS.map((s) => {
-          const isActive = sport === s;
-          const color = SPORT_COLOR[s];
-          return (
-            <button
-              key={s}
-              onClick={() => setSport(s)}
-              className={`min-h-[44px] min-w-[82px] shrink-0 sm:flex-1 px-3 py-2.5 text-[13px] font-bold rounded-lg transition-all flex items-center justify-center gap-2 whitespace-nowrap ${
-                isActive ? "text-white shadow-lg" : "text-muted-foreground/65 hover:text-muted-foreground/60"
-              }`}
-              style={isActive ? {
-                background: `linear-gradient(135deg, ${color}, ${color}dd)`,
-                boxShadow: `0 4px 16px -2px ${color}55`,
-              } : undefined}
-            >
-              <img src={SPORT_LOGO[s]} alt={s} className={`${SPORT_LOGO_SIZE[s]} object-contain shrink-0`} />
-              <span className="whitespace-nowrap leading-none">{s.toUpperCase()}</span>
-            </button>
-          );
-        })}
+      <div className="relative z-10">
+        <div
+          ref={sportScrollRef}
+          onScroll={updateSportScrollHint}
+          className="flex w-full max-w-full p-1 rounded-xl overflow-x-auto overscroll-x-contain scrollbar-hide gap-1"
+          style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}
+        >
+          {GAMES_SPORT_OPTIONS.map((s) => {
+            const isActive = sport === s;
+            const color = SPORT_COLOR[s];
+            return (
+              <button
+                key={s}
+                onClick={() => setSport(s)}
+                className={`min-h-[44px] min-w-[82px] shrink-0 sm:flex-1 px-3 py-2.5 text-[13px] font-bold rounded-lg transition-all flex items-center justify-center gap-2 whitespace-nowrap ${
+                  isActive ? "text-white shadow-lg" : "text-muted-foreground/65 hover:text-muted-foreground/60"
+                }`}
+                style={isActive ? {
+                  background: `linear-gradient(135deg, ${color}, ${color}dd)`,
+                  boxShadow: `0 4px 16px -2px ${color}55`,
+                } : undefined}
+              >
+                <img src={SPORT_LOGO[s]} alt={s} className={`${SPORT_LOGO_SIZE[s]} object-contain shrink-0`} />
+                <span className="whitespace-nowrap leading-none">{s.toUpperCase()}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-y-0 left-0 w-8 rounded-l-xl transition-opacity duration-200 ${
+            sportScrollHint.left ? "opacity-100" : "opacity-0"
+          }`}
+          style={{ background: 'linear-gradient(90deg, hsla(228, 20%, 8%, 0.95), hsla(228, 20%, 8%, 0))' }}
+        />
+        <div
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-y-0 right-0 flex w-14 items-center justify-end rounded-r-xl pr-1.5 transition-opacity duration-200 ${
+            sportScrollHint.right ? "opacity-100" : "opacity-0"
+          }`}
+          style={{ background: 'linear-gradient(270deg, hsla(228, 20%, 8%, 0.96), hsla(228, 20%, 8%, 0))' }}
+        >
+          <div className="flex h-7 w-7 items-center justify-center rounded-full border border-primary/20 bg-background/75 text-primary shadow-[0_0_16px_hsla(142,100%,50%,0.14)] backdrop-blur-sm">
+            <ChevronRight className="h-4 w-4" />
+          </div>
+        </div>
       </div>
 
       {/* Timezone info */}
