@@ -23,6 +23,7 @@ import {
 } from "@/services/pushNotificationService";
 
 type SportFilter = "nba" | "wnba" | "mlb" | "ufc" | "nhl" | "nfl";
+type GamesSportFilter = Exclude<SportFilter, "nfl">;
 
 interface Game {
   id: string;
@@ -101,6 +102,13 @@ const SPORT_LOGO_SIZE: Record<SportFilter, string> = {
   ufc: "w-5 h-5",
 };
 
+const GAMES_SPORT_OPTIONS: readonly GamesSportFilter[] = ["nba", "wnba", "mlb", "nhl", "ufc"];
+const DEFAULT_GAMES_SPORT: GamesSportFilter = GAMES_SPORT_OPTIONS[0];
+
+function isGamesSportFilter(value: unknown): value is GamesSportFilter {
+  return typeof value === "string" && GAMES_SPORT_OPTIONS.includes(value as GamesSportFilter);
+}
+
 const CARD_ORDER = ["Main Card", "Prelims", "Early Prelims"];
 
 function teamNameKey(value: string | null | undefined): string {
@@ -154,8 +162,9 @@ const GamesPage = () => {
   const { profile } = useAuth();
   const { fmt } = useOddsFormat();
   const tz = profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const initialSport = ((location.state as { selectedSport?: SportFilter } | null)?.selectedSport) ?? "nba";
-  const [sport, setSport] = useState<SportFilter>(initialSport);
+  const requestedSport = (location.state as { selectedSport?: SportFilter } | null)?.selectedSport;
+  const initialSport = isGamesSportFilter(requestedSport) ? requestedSport : DEFAULT_GAMES_SPORT;
+  const [sport, setSport] = useState<GamesSportFilter>(initialSport);
   const [games, setGames] = useState<Game[]>([]);
   const [ufcEvents, setUfcEvents] = useState<UfcEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,9 +174,9 @@ const GamesPage = () => {
   const fetchAbort = useRef<AbortController | null>(null);
 
   // Per-sport cache to enable instant switching
-  const sportCache = useRef<Partial<Record<SportFilter, { games: Game[]; ufcEvents: UfcEvent[]; oddsMap: Record<string, RealOdds> }>>>({});
+  const sportCache = useRef<Partial<Record<GamesSportFilter, { games: Game[]; ufcEvents: UfcEvent[]; oddsMap: Record<string, RealOdds> }>>>({});
   // Tracks the sport of the last fetch so we only blank the visible list on a real sport change.
-  const lastFetchedSportRef = useRef<SportFilter | null>(null);
+  const lastFetchedSportRef = useRef<GamesSportFilter | null>(null);
 
   // Load subscribed game IDs from Supabase (replaces localStorage)
   useEffect(() => {
@@ -273,7 +282,7 @@ const GamesPage = () => {
     }
   };
 
-  const fetchGames = async (s: SportFilter, silent = false, force = false) => {
+  const fetchGames = async (s: GamesSportFilter, silent = false, force = false) => {
     // If cached and not forced, restore instantly
     if (!force && !silent && sportCache.current[s]) {
       const cached = sportCache.current[s]!;
@@ -1149,7 +1158,7 @@ const GamesPage = () => {
 
       {/* Sport toggle */}
       <div className="flex w-full max-w-full p-1 rounded-xl relative z-10 overflow-x-auto overscroll-x-contain scrollbar-hide gap-1" style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
-        {(["nba", "wnba", "mlb", "nhl", "nfl", "ufc"] as const).map((s) => {
+        {GAMES_SPORT_OPTIONS.map((s) => {
           const isActive = sport === s;
           const color = SPORT_COLOR[s];
           return (
