@@ -114,6 +114,9 @@
 							com.apple.developer.applesignin = {
 								enabled = 1;
 							};
+							com.apple.Push = {
+								enabled = 1;
+							};
 						};
 					};
 				};

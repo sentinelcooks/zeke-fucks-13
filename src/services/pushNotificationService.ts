@@ -16,9 +16,12 @@ export function isPushSupported(): boolean {
 
 async function saveTokenToSupabase(token: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) {
+    console.warn("[push] APNs token received but no authenticated user is available");
+    return;
+  }
 
-  await supabase
+  const { error } = await supabase
     .from("mobile_push_tokens")
     .upsert(
       {
@@ -30,6 +33,13 @@ async function saveTokenToSupabase(token: string): Promise<void> {
       },
       { onConflict: "user_id,device_token" }
     );
+
+  if (error) {
+    console.error("[push] Failed to save APNs token:", error);
+    return;
+  }
+
+  console.log("[push] APNs token saved for user:", user.id);
 }
 
 export async function checkPushPermission(): Promise<PushRegistrationStatus> {
