@@ -617,8 +617,8 @@ function parseOdds(odds: string | null | undefined): number {
 }
 
 import { score, scorePrecomputed, rankAndDistribute, type ScoredPlay } from "../_shared/edge_scoring.ts";
-import { americanToImplied, fairImpliedFromPair, calcEvPct, clamp01 } from "../_shared/prob_math.ts";
-import { getCalibration } from "../_shared/calibration_cache.ts";
+import { americanToImplied, fairImpliedFromPair, calcEvPct, clamp01, applyCalibration } from "../_shared/prob_math.ts";
+import { getCalibrationState } from "../_shared/calibration_cache.ts";
 import { buildDailyPickRow, applyAnalyzerFinalizeInsertGuard } from "../_shared/daily_pick_rows.ts";
 import {
   canonicalToScoredVerdict,
@@ -896,7 +896,7 @@ Deno.serve(async (req) => {
     async function calFor(sport: string, betType: string) {
       const k = `${sport}|${betType}`;
       if (!calibrationBySport.has(k)) {
-        calibrationBySport.set(k, await getCalibration(sport, betType));
+        calibrationBySport.set(k, await getCalibrationState(sport, betType));
       }
       return calibrationBySport.get(k);
     }
@@ -907,13 +907,16 @@ Deno.serve(async (req) => {
       const oddsOpp = p.odds_opp != null ? parseOdds(p.odds_opp) : null;
       const betType = (p.bet_type === "over_under" ? "total" : p.bet_type) as
         "prop" | "moneyline" | "spread" | "total";
-      const calibration = await calFor(p.sport, betType);
+      const calibrationState = await calFor(p.sport, betType);
       const canonicalVerdict =
         p.canonical_verdict != null
           ? normalizeCanonicalVerdict(p.canonical_verdict, p.hit_rate)
           : null;
       if (p.sport === "nba" && betType === "prop" && canonicalVerdict) {
-        const confidence = normalizeConfidencePercent(p.hit_rate) / 100;
+        const rawScore = normalizeConfidencePercent(p.hit_rate) / 100;
+        const confidence = calibrationState.supported
+          ? applyCalibration(rawScore, calibrationState.calibration)
+          : rawScore;
         const implied = oddsOpp != null
           ? fairImpliedFromPair(oddsNum, oddsOpp)
           : americanToImpliedProb(oddsNum);
@@ -939,20 +942,30 @@ Deno.serve(async (req) => {
           edge,
           ev_pct,
           confidence,
-          raw_confidence: confidence,
+          raw_confidence: rawScore,
           raw_implied_prob: americanToImpliedProb(oddsNum),
           model_diagnostics: {
             ...(p.model_diagnostics ?? {}),
-            canonical_verdict: canonicalVerdict,
+            canonical_verdict: normalizeCanonicalVerdict(undefined, confidence),
             scanner_confidence_raw: p.hit_rate,
             scanner_confidence_percent: normalizeConfidencePercent(p.hit_rate),
             analyzer_confidence_percent: normalizeConfidencePercent(p.hit_rate),
             confidenceSource: "analyzer",
             verdictSource: "analyzer",
             sourceContractVersion: "canonical.v1",
+            raw_model_score: rawScore,
+            score_kind: calibrationState.supported ? "calibrated_probability" : "heuristic_score",
+            calibration_status: calibrationState.status,
+            calibration_applied: calibrationState.supported,
+            probability_supported: calibrationState.supported,
+            calibration_n_samples: calibrationState.nSamples,
+            calibration_train_samples: calibrationState.trainSamples,
+            calibration_test_samples: calibrationState.testSamples,
           },
         });
-        scored.verdict = canonicalToScoredVerdict(canonicalVerdict);
+        scored.verdict = canonicalToScoredVerdict(
+          normalizeCanonicalVerdict(undefined, confidence),
+        );
         scoredPlays.push(scored);
         continue;
       }
@@ -973,7 +986,8 @@ Deno.serve(async (req) => {
           odds: oddsNum,
           odds_opp: oddsOpp,
           raw_confidence: Number(p.hit_rate || 0),
-          calibration,
+          calibration: calibrationState.calibration,
+          calibrationSupported: calibrationState.supported,
         }),
       );
     }

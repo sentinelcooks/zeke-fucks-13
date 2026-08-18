@@ -44,6 +44,7 @@ function makeNbaCandidate(overrides: Partial<ScoredPlay> = {}): ScoredPlay {
     event_id: "evt_nba",
     commence_time: "2026-05-07T23:00:00Z",
     game_date: "2026-05-07",
+    ...overrides,
     model_diagnostics: {
       canonical_confidence: Math.round(confidence * 100),
       canonical_verdict: overrides.verdict === "Strong" ? "STRONG" : "LEAN",
@@ -51,9 +52,12 @@ function makeNbaCandidate(overrides: Partial<ScoredPlay> = {}): ScoredPlay {
       marketDataQuality: "medium",
       marketDepth: "normal",
       opponentResolutionStatus: "resolved",
+      score_kind: "calibrated_probability",
+      calibration_status: "validated",
+      calibration_applied: true,
+      probability_supported: true,
       ...(overrides.model_diagnostics ?? {}),
     },
-    ...overrides,
   };
 }
 

@@ -151,12 +151,13 @@ function SegmentedControl<T extends string>({
 }
 
 /* ── Confidence Gauge ── */
-function ConfidenceGauge({ value, label }: { value: number; label: string }) {
+function ConfidenceGauge({ value, label, probabilitySupported = false }: { value: number; label: string; probabilitySupported?: boolean }) {
   const color =
     value >= 65 ? "text-nba-green" : value >= 50 ? "text-nba-blue" : value >= 35 ? "text-nba-yellow" : "text-nba-red";
   return (
     <div className="flex flex-col items-center justify-center gap-0.5">
-      <div className={`text-4xl font-black ${color}`}>{value}%</div>
+      <div className={`text-4xl font-black ${color}`}>{value}{probabilitySupported ? "%" : "/100"}</div>
+      {!probabilitySupported && <div className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/55">Heuristic score</div>}
       <div className={`text-[10px] font-bold tracking-[2px] uppercase ${color}`}>{label}</div>
     </div>
   );
@@ -647,7 +648,7 @@ function getPastMeetingsLabel(sport?: string): string {
 }
 
 /* ── Platform Odds (Real from Odds API) — OddsProjection-style design ── */
-function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType = "moneyline", activeOverUnder = "over", factorBreakdown, mode = "preview" }: { team1: Team; team2: Team; sport?: string; modelProb?: number; activeBetType?: BetType; activeOverUnder?: "over" | "under"; factorBreakdown?: any[]; mode?: "preview" | "analysis" }) {
+function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupported = false, activeBetType = "moneyline", activeOverUnder = "over", factorBreakdown, mode = "preview" }: { team1: Team; team2: Team; sport?: string; modelProb?: number; probabilitySupported?: boolean; activeBetType?: BetType; activeOverUnder?: "over" | "under"; factorBreakdown?: any[]; mode?: "preview" | "analysis" }) {
   const { profile } = useAuth();
   const oddsFormat = (profile?.odds_format as "american" | "decimal") || "american";
   const [allMarketData, setAllMarketData] = useState<Record<string, Array<{ name: string; logo: string; abbrev: string; color: string; bookKey: string; t1: string; t2: string; t1Raw: number; t2Raw: number; spread1?: string; spread2?: string; total?: string }>>>({});
@@ -851,7 +852,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
 
   // Compute EV for each market using side-aware selection
   const evCards: Array<{ market: string; label: string; ev: number; edge: number; bestOdds: number; bestBook: string; modelProbUsed: number; bestImplied: number }> = [];
-  if (modelProb && modelProb > 0) {
+  if (probabilitySupported && modelProb && modelProb > 0) {
     for (const [marketKey, rows] of Object.entries(allMarketData)) {
       if (!rows || rows.length === 0) continue;
       const dir = getMarketDirection(marketKey);
@@ -961,6 +962,14 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
             transition={{ duration: 0.3 }}
             className="overflow-hidden space-y-3"
           >
+      {!isPreviewMode && !probabilitySupported && (
+        <div className="vision-card p-4 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-nba-yellow shrink-0 mt-0.5" />
+          <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
+            Model output is an uncalibrated heuristic score. Live prices are shown, but probability, edge, EV, and stake sizing are withheld until out-of-sample calibration is validated.
+          </p>
+        </div>
+      )}
       {/* ── MODEL vs MARKET HERO CARD ── */}
       {!isPreviewMode && activeEV && modelProb && modelProb > 0 && (
         <motion.div
@@ -1248,7 +1257,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, activeBetType =
           activeMarketKey={activeMarketKey}
           activeOverUnder={activeOverUnder}
           team1={team1}
-          modelProb={modelProb}
+          modelProb={probabilitySupported ? modelProb : undefined}
           oddsFormat={oddsFormat}
           getEVColorLocal={getEVColorLocal}
         />
@@ -1708,14 +1717,14 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                 {betType === "moneyline" ? (
                   <>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-2xl font-black text-nba-green whitespace-nowrap">{results.team1_pct}<span className="text-base">%</span></span>
+                      <span className="text-2xl font-black text-nba-green whitespace-nowrap">{results.team1_pct}<span className="text-sm">{results.probability_supported === true ? "%" : "/100"}</span></span>
                       <Swords className="w-4 h-4 text-muted-foreground/55" />
-                      <span className="text-2xl font-black text-nba-red whitespace-nowrap">{results.team2_pct}<span className="text-base">%</span></span>
+                      <span className="text-2xl font-black text-nba-red whitespace-nowrap">{results.team2_pct}<span className="text-sm">{results.probability_supported === true ? "%" : "/100"}</span></span>
                     </div>
                     <span className="text-[10px] font-bold tracking-[2px] uppercase text-accent">{results.verdict}</span>
                   </>
                 ) : (
-                  <ConfidenceGauge value={results.confidence} label={results.verdict} />
+                  <ConfidenceGauge value={results.confidence} label={results.verdict} probabilitySupported={results.probability_supported === true} />
                 )}
               </div>
               <div className="flex flex-col items-center text-center w-[30%]">
@@ -1732,8 +1741,8 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                   <div className="bg-nba-red transition-all duration-700 rounded-r-full" style={{ width: `${results.team2_pct}%` }} />
                 </div>
                 <div className="flex justify-between mt-1.5 text-[10px] text-muted-foreground/65">
-                  <span>{results.team1?.shortName} {results.team1_pct}%</span>
-                  <span>{results.team2_pct}% {results.team2?.shortName}</span>
+                  <span>{results.team1?.shortName} {results.team1_pct}{results.probability_supported === true ? "%" : "/100"}</span>
+                  <span>{results.team2_pct}{results.probability_supported === true ? "%" : "/100"} {results.team2?.shortName}</span>
                 </div>
               </div>
             )}
@@ -1750,7 +1759,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
             </div>
           )}
 
-          <MoneylinePlatformOdds team1={results.team1} team2={results.team2} sport={results.sport || sport} modelProb={betType === "moneyline" ? results.team1_pct : results.confidence} activeBetType={betType} activeOverUnder={overUnder} factorBreakdown={results.factorBreakdown} mode="analysis" />
+          <MoneylinePlatformOdds team1={results.team1} team2={results.team2} sport={results.sport || sport} modelProb={betType === "moneyline" ? results.team1_pct : results.confidence} probabilitySupported={results.probability_supported === true} activeBetType={betType} activeOverUnder={overUnder} factorBreakdown={results.factorBreakdown} mode="analysis" />
 
           {(results.head_to_head || []).length > 0 && (
             <div className="grid grid-cols-4 gap-2">
@@ -1945,6 +1954,8 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
           decision={results.decision}
           team1Name={results.team1?.shortName || results.team1?.name}
           team2Name={results.team2?.shortName || results.team2?.name}
+          scoreKind={results.score_kind}
+          probabilitySupported={results.probability_supported === true}
         />
       )}
 

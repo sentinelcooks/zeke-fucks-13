@@ -21,6 +21,9 @@ export interface SavedDailyPickRow {
   player_image_url?: string | null;
   metadata?: Record<string, unknown> | null;
   avg_value?: number | string | null;
+  score_kind?: string | null;
+  calibration_status?: string | null;
+  calibrated_probability?: number | null;
 }
 
 export interface SavedPickSnapshot {
@@ -39,6 +42,9 @@ export interface SavedPickSnapshot {
   line?: number | string | null;
   direction?: string | null;
   model_diagnostics?: Record<string, unknown> | null;
+  score_kind?: string | null;
+  calibration_status?: string | null;
+  calibrated_probability?: number | null;
 }
 
 export interface SavedPickNavState {
@@ -94,6 +100,9 @@ export interface CanonicalSavedPick {
   player_image_url: string | null;
   market: SavedPickMarket;
   avg_value: number | null;
+  score_kind: string;
+  calibration_status: string;
+  probability_supported: boolean;
 }
 
 const SUPPORTED_SPORTS: ReadonlyArray<SavedPickSport> = ["nba", "wnba", "mlb", "nhl", "ufc", "nfl"];
@@ -192,6 +201,16 @@ export function mapSavedPickToView(input: {
   const edge = toNumberOrNull(edgeRaw);
   const market = pickMarketDiagnostics(diagnostics);
   const avg_value = toNumberOrNull(row?.avg_value ?? null);
+  const score_kind = toStringOrNull(
+    row?.score_kind ?? snap?.score_kind ?? diagnostics?.score_kind,
+  ) ?? "heuristic_score";
+  const calibration_status = toStringOrNull(
+    row?.calibration_status ?? snap?.calibration_status ?? diagnostics?.calibration_status,
+  ) ?? "not_calibrated";
+  const probability_supported = score_kind === "calibrated_probability" &&
+    calibration_status === "validated" &&
+    (toNumberOrNull(row?.calibrated_probability ?? snap?.calibrated_probability) != null ||
+      diagnostics?.probability_supported === true);
 
   return {
     ready: true,
@@ -215,5 +234,8 @@ export function mapSavedPickToView(input: {
     player_image_url: row?.player_image_url ?? null,
     market,
     avg_value,
+    score_kind,
+    calibration_status,
+    probability_supported,
   };
 }

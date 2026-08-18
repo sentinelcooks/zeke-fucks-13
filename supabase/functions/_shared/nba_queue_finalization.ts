@@ -11,7 +11,6 @@ import {
 import {
   EDGE_LEAN_MIN,
   PROB_LEAN,
-  RELIABILITY_LEAN_MIN,
 } from "./thresholds.ts";
 
 export type NbaQueueFinalTier = "edge" | "daily" | "value";
@@ -36,13 +35,22 @@ function finalCanonicalVerdict(play: ScoredPlay, hitRate: number): CanonicalVerd
   return normalizeCanonicalVerdict(md.canonical_verdict ?? play.verdict, hitRate);
 }
 
+function probabilityIsSupported(play: ScoredPlay): boolean {
+  const diagnostics = (play.model_diagnostics ?? {}) as Record<string, unknown>;
+  return diagnostics.probability_supported === true &&
+    diagnostics.score_kind === "calibrated_probability" &&
+    diagnostics.calibration_status === "validated";
+}
+
 function promotionBlockerFor(args: {
   canonicalVerdict: CanonicalVerdict;
   hitRate: number;
   gate: NbaEdgeGateResult;
   currentEdgeCount: number;
   edgeCap: number;
+  probabilitySupported: boolean;
 }): string | null {
+  if (!args.probabilitySupported) return "calibration_not_supported";
   if (args.canonicalVerdict !== "STRONG" && args.canonicalVerdict !== "LEAN") {
     return "verdict_not_strong_or_lean";
   }
@@ -72,21 +80,21 @@ export function buildGenericQueueFinalization(args: {
   const canonicalVerdict = finalCanonicalVerdict(args.finalized, hitRate);
 
   let promotionBlocker: string | null = null;
-  if (canonicalVerdict !== "STRONG" && canonicalVerdict !== "LEAN") {
+  if (!probabilityIsSupported(args.finalized)) {
+    promotionBlocker = "calibration_not_supported";
+  } else if (canonicalVerdict !== "STRONG" && canonicalVerdict !== "LEAN") {
     promotionBlocker = "verdict_not_strong_or_lean";
   } else if (args.finalized.confidence < PROB_LEAN) {
     promotionBlocker = "confidence_below_lean_min";
   } else if (args.finalized.edge < EDGE_LEAN_MIN) {
     promotionBlocker = "edge_below_lean_min";
-  } else if ((args.finalized.reliability ?? 0) < RELIABILITY_LEAN_MIN) {
-    promotionBlocker = "reliability_below_lean_min";
   } else if (args.currentEdgeCount >= args.edgeCap) {
     promotionBlocker = "edge_cap_full";
   }
   const canPromote = promotionBlocker === null;
   const finalTier: NbaQueueFinalTier = canPromote
     ? "edge"
-    : confidence >= 0.70
+    : confidence >= PROB_LEAN
       ? "daily"
       : "value";
 
@@ -165,11 +173,12 @@ export function buildNbaQueueFinalization(args: {
     gate,
     currentEdgeCount: args.currentEdgeCount,
     edgeCap: args.edgeCap,
+    probabilitySupported: probabilityIsSupported(args.finalized),
   });
   const canPromote = promotionBlocker === null;
   const finalTier: NbaQueueFinalTier = canPromote
     ? "edge"
-    : confidence >= 0.70
+    : confidence >= PROB_LEAN
       ? "daily"
       : "value";
 

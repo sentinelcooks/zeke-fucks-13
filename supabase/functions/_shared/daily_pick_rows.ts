@@ -132,6 +132,9 @@ export function analyzerFinalizedRejectReason(args: {
   if (diagnostics.sourceContractVersion !== "analyzer-finalize.v1") {
     return "missing_source_contract_version";
   }
+  if (tier === "edge" && diagnostics.probability_supported !== true) {
+    return "calibration_not_supported";
+  }
   if (diagnostics.analyzer_payload === null || diagnostics.analyzer_payload === undefined) {
     return "missing_analyzer_payload";
   }
@@ -192,8 +195,16 @@ export function buildDailyPickRow({
       ? raw.model_diagnostics as Record<string, unknown>
       : {};
   const playDiag = (play.model_diagnostics ?? {}) as Record<string, unknown>;
-  const calibrationApplied = playDiag.calibration_applied === true;
+  const calibrationApplied =
+    playDiag.calibration_applied === true &&
+    playDiag.probability_supported === true &&
+    playDiag.calibration_status === "validated";
   const scoreKind = calibrationApplied ? "calibrated_probability" : "heuristic_score";
+  const calibrationStatus = calibrationApplied
+    ? "validated"
+    : typeof playDiag.calibration_status === "string"
+      ? playDiag.calibration_status
+      : "not_calibrated";
   const resolvedModelVersion =
     modelVersion ??
     (typeof playDiag.model_version === "string" ? playDiag.model_version : null);
@@ -232,7 +243,8 @@ export function buildDailyPickRow({
     model_used: modelUsed,
     model_version: resolvedModelVersion,
     score_kind: scoreKind,
-    calibration_status: calibrationApplied ? "applied" : "not_calibrated",
+    calibration_status: calibrationStatus,
+    probability_supported: calibrationApplied,
     runId: runId ?? (playDiag.runId as string | null | undefined) ?? null,
   };
 
@@ -318,10 +330,10 @@ export function buildDailyPickRow({
     model_used: modelUsed,
     model_version: resolvedModelVersion,
     score_kind: scoreKind,
-    calibration_status: calibrationApplied ? "applied" : "not_calibrated",
+    calibration_status: calibrationStatus,
     calibrated_probability:
-      calibrationApplied && typeof playDiag.calibrated_probability === "number"
-        ? playDiag.calibrated_probability
+      calibrationApplied
+        ? confidence01
         : null,
     prediction_recorded_at: createdAt,
     model_diagnostics: modelDiagnostics,

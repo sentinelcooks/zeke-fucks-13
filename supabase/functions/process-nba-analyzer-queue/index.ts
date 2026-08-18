@@ -31,6 +31,8 @@ import {
   type AnalyzerErrorCandidate,
 } from "../_shared/sport_scan.ts";
 import { buildNbaQueueFinalization } from "../_shared/nba_queue_finalization.ts";
+import { getCalibrationState } from "../_shared/calibration_cache.ts";
+import { americanToImplied, applyCalibration, calcEvPct } from "../_shared/prob_math.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -145,7 +147,15 @@ function payloadToScoredPlay(payload: Record<string, unknown>): ScoredPlay {
   return payload as unknown as ScoredPlay;
 }
 
-function rescore(p: ScoredPlay): ScoredPlay {
+async function rescore(p: ScoredPlay): Promise<ScoredPlay> {
+  const calibrationState = await getCalibrationState("nba", p.bet_type);
+  const rawScore = p.confidence;
+  const confidence = calibrationState.supported
+    ? applyCalibration(rawScore, calibrationState.calibration)
+    : rawScore;
+  const implied = p.implied_prob || americanToImplied(p.odds);
+  const edge = calibrationState.supported ? confidence - implied : 0;
+  const evPct = calibrationState.supported ? calcEvPct(confidence, p.odds) : 0;
   const rescored = scorePrecomputed({
     sport: p.sport,
     bet_type: p.bet_type,
@@ -160,17 +170,28 @@ function rescore(p: ScoredPlay): ScoredPlay {
     total_line: p.total_line ?? null,
     direction: p.direction,
     odds: p.odds,
-    projected_prob: p.projected_prob,
-    implied_prob: p.implied_prob,
-    edge: p.edge,
-    ev_pct: p.ev_pct,
-    confidence: p.confidence,
+    projected_prob: confidence,
+    implied_prob: implied,
+    edge,
+    ev_pct: evPct,
+    confidence,
+    raw_confidence: rawScore,
     event_id: p.event_id ?? null,
     commence_time: p.commence_time ?? null,
     game_date: p.game_date ?? null,
   });
   rescored.reasoning = p.reasoning || rescored.reasoning;
-  rescored.model_diagnostics = p.model_diagnostics ?? null;
+  rescored.model_diagnostics = {
+    ...(p.model_diagnostics ?? {}),
+    raw_model_score: rawScore,
+    score_kind: calibrationState.supported ? "calibrated_probability" : "heuristic_score",
+    calibration_status: calibrationState.status,
+    calibration_applied: calibrationState.supported,
+    probability_supported: calibrationState.supported,
+    calibration_n_samples: calibrationState.nSamples,
+    calibration_train_samples: calibrationState.trainSamples,
+    calibration_test_samples: calibrationState.testSamples,
+  };
   const canonical = (rescored.model_diagnostics ?? {})?.canonical_verdict as
     | string
     | undefined;
@@ -304,7 +325,7 @@ async function processOne(
 
   // 5. Analyzer returned. Re-score, re-evaluate the NBA edge gate.
   const finalized = analyzed ?? play;
-  const rescored = rescore(finalized);
+  const rescored = await rescore(finalized);
 
   // Edge cap reconciliation: only promote if there is room.
   const live = await currentEdgeCount(supabase, row.pick_date);

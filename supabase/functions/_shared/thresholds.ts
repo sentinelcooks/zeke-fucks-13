@@ -4,13 +4,13 @@
 // — model narrative tiers, daily-picks gating, edge_scoring verdicts,
 // frontend "Strong / Lean / Pass" badges — MUST import from here.
 //
-// Thresholds are expressed in *calibrated* probability space (0-1).
-// After the calibrate-model job runs, a confidence of 0.70 is a genuine
-// 70% hit-rate, not a raw factor-score sum.
+// Public use of these probability-space thresholds requires a validated
+// chronological holdout under calibration_policy. Raw model scores may use
+// the same cutoffs for internal routing, but are not probabilities.
 
-export const PROB_STRONG = 0.70; // ≥ 70% calibrated probability
-export const PROB_LEAN   = 0.62; // ≥ 62% calibrated probability
-export const PROB_FLOOR  = 0.58; // hard floor; anything less is "Pass"
+export const PROB_STRONG = 0.72;
+export const PROB_LEAN   = 0.58;
+export const PROB_FLOOR  = 0.42;
 
 // Edge thresholds (calibrated_prob − fair_implied).
 export const EDGE_STRONG_MIN = 0.03;  // 3% edge

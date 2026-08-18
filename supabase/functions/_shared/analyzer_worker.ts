@@ -43,6 +43,8 @@ import {
   canonicalToScoredVerdict,
 } from "./canonical_verdict.ts";
 import { getMarketReliability, type ScoredPlay } from "./edge_scoring.ts";
+import { getCalibrationState, type CalibrationState } from "./calibration_cache.ts";
+import { americanToImplied, applyCalibration, calcEvPct } from "./prob_math.ts";
 import { parseRetryAfterMs } from "./sport_scan.ts";
 import {
   analyzerConfidenceRaw,
@@ -149,7 +151,15 @@ function rejectReasonsForAnalyzerResponse(ar: unknown): string[] {
   ) {
     reasons.push("analyzer_unsupported_sport");
   }
+  const prediction = obj.prediction && typeof obj.prediction === "object"
+    ? obj.prediction as Record<string, unknown>
+    : null;
+  const decision = obj.decision && typeof obj.decision === "object"
+    ? obj.decision as Record<string, unknown>
+    : null;
   const verdictRaw =
+    (prediction?.verdict as string | undefined) ??
+    (decision?.verdict as string | undefined) ??
     (obj.canonical_verdict as string | undefined) ??
     (obj.verdict as string | undefined) ??
     null;
@@ -165,34 +175,29 @@ function rejectReasonsForAnalyzerResponse(ar: unknown): string[] {
   return reasons;
 }
 
-function computeEvPct(prob: number, odds: number): number {
-  if (!Number.isFinite(prob) || !Number.isFinite(odds) || prob <= 0) return 0;
-  const payout = odds > 0 ? odds / 100 : 100 / Math.abs(odds);
-  const ev = prob * payout - (1 - prob);
-  return Math.round(ev * 1000) / 10;
-}
-
 // Build a ScoredPlay from a queue row + analyzer response. Mirrors
 // process-analyzer-queue's buildScoredPlayFromQueueRow (duplicated to
 // isolate change here from the legacy drainer).
 function buildScoredPlayFromQueueRow(
   row: QueueRow,
   ar: Record<string, unknown>,
+  calibrationState: CalibrationState,
 ): ScoredPlay {
   const c = row.candidate_payload as Record<string, unknown>;
   const confPercent = normalizeConfidencePercent(analyzerConfidenceRaw(ar));
-  const conf01 = confPercent / 100;
-  const canonicalVerdict = normalizeCanonicalVerdict(
-    (ar.canonical_verdict as string | undefined) ?? (ar.verdict as string | undefined),
-    confPercent,
-  );
+  const rawScore01 = confPercent / 100;
+  const probabilitySupported = calibrationState.supported;
+  const projectedProb = probabilitySupported
+    ? applyCalibration(rawScore01, calibrationState.calibration)
+    : rawScore01;
+  const canonicalVerdict = normalizeCanonicalVerdict(undefined, projectedProb);
   const analyzerCalledAt = new Date().toISOString();
   const md = (c.model_diagnostics ?? {}) as Record<string, unknown>;
   const merged: Record<string, unknown> = {
     ...md,
     confidenceSource: "analyzer",
     sourceContractVersion: "analyzer-finalize.v1",
-    canonical_confidence: Math.round(confPercent),
+    canonical_confidence: Math.round(projectedProb * 100),
     canonical_verdict: canonicalVerdict,
     analyzer_payload: row.analyzer_payload,
     analyzer_response_snapshot: ar,
@@ -200,6 +205,16 @@ function buildScoredPlayFromQueueRow(
     analyzer_verdict_raw: ar.verdict ?? ar.canonical_verdict ?? null,
     analyzer_confidence_percent: Math.round(confPercent),
     analyzer_called_at: analyzerCalledAt,
+    raw_model_score: rawScore01,
+    score_kind: probabilitySupported ? "calibrated_probability" : "heuristic_score",
+    calibration_status: calibrationState.status,
+    calibration_applied: probabilitySupported,
+    probability_supported: probabilitySupported,
+    calibration_n_samples: calibrationState.nSamples,
+    calibration_train_samples: calibrationState.trainSamples,
+    calibration_test_samples: calibrationState.testSamples,
+    calibration_fitted_at: calibrationState.fittedAt,
+    calibration_activation_reason: calibrationState.activationReason,
     queue_finalized: true,
     queue_row_id: row.id,
   };
@@ -207,8 +222,8 @@ function buildScoredPlayFromQueueRow(
   const betType = String(c.bet_type ?? "prop") as ScoredPlay["bet_type"];
   const propType = String(c.prop_type ?? "");
   const direction = String(c.direction ?? "");
-  const impliedRaw = odds > 0 ? 100 / (odds + 100) : -odds / (-odds + 100);
-  const edge = Math.max(0, conf01 - impliedRaw);
+  const impliedRaw = americanToImplied(odds);
+  const edge = probabilitySupported ? Math.max(0, projectedProb - impliedRaw) : 0;
   const analyzerReasoning =
     (typeof ar.reasoning === "string" && ar.reasoning.trim()) ? ar.reasoning :
     (typeof ar.analysis === "string" && ar.analysis.trim()) ? ar.analysis :
@@ -229,16 +244,16 @@ function buildScoredPlayFromQueueRow(
     total_line: (c.total_line as number | null) ?? null,
     direction,
     odds,
-    projected_prob: conf01,
+    projected_prob: projectedProb,
     implied_prob: impliedRaw,
     raw_implied_prob: impliedRaw,
     edge,
-    ev_pct: computeEvPct(conf01, odds),
-    confidence: conf01,
-    raw_confidence: (c.raw_confidence as number | null) ?? conf01,
+    ev_pct: probabilitySupported ? Math.round(calcEvPct(projectedProb, odds) * 10) / 10 : 0,
+    confidence: projectedProb,
+    raw_confidence: (c.raw_confidence as number | null) ?? rawScore01,
     reliability: getMarketReliability(betType, propType, direction, odds),
-    score: edge * conf01,
-    quality_score: edge * conf01,
+    score: edge * projectedProb,
+    quality_score: edge * projectedProb,
     verdict: canonicalToScoredVerdict(canonicalVerdict),
     reasoning: analyzerReasoning || scannerReasoning,
     event_id: (c.event_id as string | null) ?? null,
@@ -568,7 +583,15 @@ async function processRow(args: {
   let resp: { status: number; body: unknown; headers: Headers; duration_ms: number };
   try {
     resp = await callAnalyzer(
-      supabaseUrl, serviceKey, endpoint, row.analyzer_payload, row.id, row.sport,
+      supabaseUrl,
+      serviceKey,
+      endpoint,
+      {
+        ...row.analyzer_payload,
+        american_odds: row.analyzer_payload.american_odds ?? candidate.odds ?? null,
+      },
+      row.id,
+      row.sport,
     );
   } catch (e) {
     const isAbort =
@@ -659,7 +682,14 @@ async function processRow(args: {
   }
 
   // Build scored play + recompute tier via the edge-gate-aware finalizer.
-  const scored = buildScoredPlayFromQueueRow(row, ar as Record<string, unknown>);
+  const rawBetType = String(candidate.bet_type ?? "prop").toLowerCase();
+  const calibrationBetType = rawBetType === "over_under" ? "total" : rawBetType;
+  const calibrationState = await getCalibrationState(row.sport, calibrationBetType);
+  const scored = buildScoredPlayFromQueueRow(
+    row,
+    ar as Record<string, unknown>,
+    calibrationState,
+  );
   // NBA picks go through the NBA-specific edge gate (heavy juice, market
   // quality, opponent resolution, playoff series). MLB/NHL/UFC picks carry
   // none of those diagnostics, so the NBA gate would always fail — that's

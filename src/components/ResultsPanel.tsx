@@ -43,6 +43,8 @@ function getHitRateBg(rate: number) {
 
 function VerdictCard({ data }: { data: any }) {
   const confidence = Math.round(normalizeConfidencePercent(data.confidence));
+  const probabilitySupported = data.probability_supported === true &&
+    data.score_kind === "calibrated_probability";
   const v = normalizeVerdict(data.verdict, confidence);
   const borderClass =
     v === "STRONG" ? "border-[hsl(var(--nba-green))] shadow-[0_0_30px_hsl(var(--nba-green)/0.3)]" :
@@ -60,7 +62,12 @@ function VerdictCard({ data }: { data: any }) {
 
   return (
     <div className={`bg-card border-2 ${borderClass} rounded-2xl p-5 text-center flex flex-col items-center justify-center`}>
-      <div className={`text-5xl font-extrabold ${textClass}`}>{confidence}%</div>
+      <div className={`text-5xl font-extrabold ${textClass}`}>
+        {probabilitySupported ? `${confidence}%` : `${confidence}/100`}
+      </div>
+      <div className="text-[9px] uppercase tracking-wider text-muted-foreground mt-1">
+        {probabilitySupported ? "Validated probability" : "Heuristic model score"}
+      </div>
       <div className={`text-base font-extrabold tracking-[2px] mt-1 ${textClass}`}>{v}</div>
       <div className="text-muted-foreground text-xs mt-1.5">
         {data.over_under.toUpperCase()} {data.line} {data.prop_display}

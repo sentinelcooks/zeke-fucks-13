@@ -26,6 +26,7 @@ interface OddsProjectionProps {
   savedOdds?: string | null;
   savedBook?: string | null;
   savedImpliedProbability?: number | null;
+  probabilitySupported?: boolean;
 }
 
 // formatOdds removed — using useOddsFormat hook instead
@@ -277,6 +278,7 @@ export function OddsProjection({
   savedOdds = null,
   savedBook = null,
   savedImpliedProbability = null,
+  probabilitySupported = false,
 }: OddsProjectionProps) {
   const { fmt: formatOdds } = useOddsFormat();
   const [loading, setLoading] = useState(false);
@@ -338,7 +340,7 @@ export function OddsProjection({
     const impliedPct = savedImpliedProbability != null
       ? Math.round(savedImpliedProbability * (savedImpliedProbability <= 1 ? 100 : 1))
       : (americanOdds != null ? Math.round(impliedProb(americanOdds)) : null);
-    const evDisplay = backendEvPct != null && Number.isFinite(backendEvPct) && backendEvPct !== 0
+    const evDisplay = probabilitySupported && backendEvPct != null && Number.isFinite(backendEvPct) && backendEvPct !== 0
       ? `${backendEvPct > 0 ? "+" : ""}${backendEvPct.toFixed(1)}%`
       : null;
     const savedBookInfo = savedBook ? getSportsbookInfo(savedBook) : null;
@@ -388,12 +390,14 @@ export function OddsProjection({
   }
 
   // Calculate composite model hit rate
-  const compositeModelRate = modelHitRate || calculateModelHitRate({
-    seasonRate: seasonHitRate,
-    last10Rate: last10HitRate,
-    last5Rate: last5HitRate,
-    h2hRate: h2hHitRate,
-  });
+  const compositeModelRate = probabilitySupported
+    ? modelHitRate || calculateModelHitRate({
+        seasonRate: seasonHitRate,
+        last10Rate: last10HitRate,
+        last5Rate: last5HitRate,
+        h2hRate: h2hHitRate,
+      })
+    : 0;
 
   if (loading) {
     return (
@@ -450,6 +454,11 @@ export function OddsProjection({
 
   return (
     <div className="space-y-3">
+      {!probabilitySupported && (
+        <div className="vision-card p-4 text-xs text-muted-foreground/70">
+          Live prices are available below, but this model score is not a validated probability. Edge and EV are withheld until chronological out-of-sample calibration is supported.
+        </div>
+      )}
       {/* Event context */}
       {data.event && (
         <div className="flex items-center justify-between text-[10px] text-muted-foreground/65 px-1">

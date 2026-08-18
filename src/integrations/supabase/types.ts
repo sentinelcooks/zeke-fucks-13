@@ -744,6 +744,84 @@ export type Database = {
         }
         Relationships: []
       }
+      model_calibration: {
+        Row: {
+          activation_reason: string | null
+          active: boolean
+          baseline_brier: number | null
+          baseline_log_loss: number | null
+          bet_type: string
+          brier_score: number | null
+          data_end_at: string | null
+          data_start_at: string | null
+          evaluation_method: string | null
+          fitted_at: string
+          holdout_baseline_brier: number | null
+          holdout_baseline_log_loss: number | null
+          holdout_brier: number | null
+          holdout_log_loss: number | null
+          holdout_passed: boolean
+          id: string
+          log_loss: number | null
+          method: string
+          n_samples: number
+          params: Json
+          sport: string
+          test_samples: number
+          train_samples: number
+        }
+        Insert: {
+          activation_reason?: string | null
+          active?: boolean
+          baseline_brier?: number | null
+          baseline_log_loss?: number | null
+          bet_type: string
+          brier_score?: number | null
+          data_end_at?: string | null
+          data_start_at?: string | null
+          evaluation_method?: string | null
+          fitted_at?: string
+          holdout_baseline_brier?: number | null
+          holdout_baseline_log_loss?: number | null
+          holdout_brier?: number | null
+          holdout_log_loss?: number | null
+          holdout_passed?: boolean
+          id?: string
+          log_loss?: number | null
+          method: string
+          n_samples?: number
+          params: Json
+          sport: string
+          test_samples?: number
+          train_samples?: number
+        }
+        Update: {
+          activation_reason?: string | null
+          active?: boolean
+          baseline_brier?: number | null
+          baseline_log_loss?: number | null
+          bet_type?: string
+          brier_score?: number | null
+          data_end_at?: string | null
+          data_start_at?: string | null
+          evaluation_method?: string | null
+          fitted_at?: string
+          holdout_baseline_brier?: number | null
+          holdout_baseline_log_loss?: number | null
+          holdout_brier?: number | null
+          holdout_log_loss?: number | null
+          holdout_passed?: boolean
+          id?: string
+          log_loss?: number | null
+          method?: string
+          n_samples?: number
+          params?: Json
+          sport?: string
+          test_samples?: number
+          train_samples?: number
+        }
+        Relationships: []
+      }
       onboarding_responses: {
         Row: {
           ai_recommendations: Json | null

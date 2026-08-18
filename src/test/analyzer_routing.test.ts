@@ -19,6 +19,7 @@ describe("analyzer market routing", () => {
       prop_type: "points",
       line: 24.5,
       direction: "over",
+      odds: -115,
     });
 
     expect(route.endpoint).toBe("nba-api/analyze");
@@ -29,6 +30,7 @@ describe("analyzer market routing", () => {
       prop_type: "points",
       line: 24.5,
       over_under: "over",
+      american_odds: -115,
     });
   });
 
@@ -93,6 +95,14 @@ describe("analyzer market routing", () => {
 
   it("reads moneyline-api team1 probability as analyzer confidence", () => {
     expect(analyzerConfidenceRaw({ team1_pct: 66, verdict: "Lean" })).toBe(66);
+  });
+
+  it("prefers the data-quality-penalized nested prediction score", () => {
+    expect(analyzerConfidenceRaw({
+      confidence: 82,
+      prediction: { confidence: 61 },
+      decision: { displayConfidence: 58 },
+    })).toBe(61);
   });
 
   it("preserves the existing UFC analyzer payload while team markets change", () => {

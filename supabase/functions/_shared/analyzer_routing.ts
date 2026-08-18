@@ -17,6 +17,7 @@ export type AnalyzerCandidate = {
   spread_line?: number | null;
   total_line?: number | null;
   direction?: string | null;
+  odds?: string | number | null;
 };
 
 export type AnalyzerPoolCandidate = {
@@ -108,6 +109,7 @@ export function buildAnalyzerRequest(
         away_team: candidate.away_team ?? null,
         sport: candidate.sport,
         bet_type: "player_prop",
+        american_odds: candidate.odds ?? null,
       },
     };
   }
@@ -126,6 +128,7 @@ export function buildAnalyzerRequest(
         away_team: candidate.away_team ?? null,
         sport: candidate.sport,
         bet_type: "player_prop",
+        american_odds: candidate.odds ?? null,
       },
     };
   }
@@ -150,6 +153,7 @@ export function buildAnalyzerRequest(
       team1,
       team2,
       sport: candidate.sport,
+      american_odds: candidate.odds ?? null,
       ...(candidate.bet_type === "spread"
         ? {
             spread_team: selectedTeam ?? team1,
@@ -172,12 +176,17 @@ export function analyzerConfidenceRaw(response: unknown): number {
   const decision = value.decision && typeof value.decision === "object"
     ? value.decision as Record<string, unknown>
     : null;
+  const prediction = value.prediction && typeof value.prediction === "object"
+    ? value.prediction as Record<string, unknown>
+    : null;
   return Number(
-    value.canonical_confidence ??
-      value.confidence ??
-      value.displayConfidence ??
-      value.team1_pct ??
+    prediction?.confidence ??
+      decision?.displayConfidence ??
       decision?.confidence ??
+      value.canonical_confidence ??
+      value.displayConfidence ??
+      value.confidence ??
+      value.team1_pct ??
       Number.NaN,
   );
 }

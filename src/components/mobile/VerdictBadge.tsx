@@ -7,6 +7,8 @@ interface VerdictBadgeProps {
   overUnder: string;
   line: number;
   propDisplay: string;
+  probabilitySupported?: boolean;
+  scoreKind?: string;
 }
 
 function getVerdictTheme(v: string) {
@@ -54,7 +56,7 @@ function getVerdictTheme(v: string) {
   }
 }
 
-export function VerdictBadge({ confidence, verdict, overUnder, line, propDisplay }: VerdictBadgeProps) {
+export function VerdictBadge({ confidence, verdict, overUnder, line, propDisplay, probabilitySupported = false, scoreKind }: VerdictBadgeProps) {
   const confPct = Math.round(normalizeConfidencePercent(confidence));
   const canonicalVerdict = normalizeVerdict(verdict, confPct);
   const theme = getVerdictTheme(canonicalVerdict);
@@ -77,8 +79,11 @@ export function VerdictBadge({ confidence, verdict, overUnder, line, propDisplay
           transition={{ delay: 0.15, type: "spring", stiffness: 400, damping: 20 }}
           className={`text-5xl font-black ${theme.text} tabular-nums`}
         >
-          {confPct}%
+          {probabilitySupported && scoreKind === "calibrated_probability" ? `${confPct}%` : `${confPct}/100`}
         </motion.div>
+        <div className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mt-1">
+          {probabilitySupported && scoreKind === "calibrated_probability" ? "Validated probability" : "Heuristic model score"}
+        </div>
         <div className={`text-sm font-black tracking-[3px] mt-1 ${theme.text}`}>
           {canonicalVerdict}
         </div>

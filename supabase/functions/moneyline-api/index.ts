@@ -21,6 +21,8 @@ interface Decision {
   verdict_text: string;
   grade_explanation?: string;
   pass_reason?: "low_conviction" | "toss_up" | "negative_edge" | null;
+  probability_supported: boolean;
+  score_kind: "heuristic_score" | "calibrated_probability";
 }
 
 function tierToUnits(tier: ConvictionTier): 0 | 0.5 | 1 | 2 | 3 {
@@ -165,12 +167,14 @@ function buildDecision(opts: {
     winning_side,
     winning_team_name,
     win_probability: Math.round(win_probability * 10) / 10,
-    edge,
-    conviction_tier: tier,
-    recommended_units: tierToUnits(tier),
+    edge: null,
+    conviction_tier: "noBet",
+    recommended_units: 0,
     verdict_text: verdict || "",
-    grade_explanation,
-    pass_reason,
+    grade_explanation: `${sportLabel ? sportLabel + ": " : ""}${Math.round(win_probability)}/100 heuristic model score. Calibration is not yet supported, so edge and sizing are withheld.`,
+    pass_reason: "low_conviction",
+    probability_supported: false,
+    score_kind: "heuristic_score",
   };
 }
 
@@ -379,6 +383,11 @@ async function getTeamSchedule(teamId: string, sport = "nba") {
   }
 
   return bestEvents;
+}
+
+function withoutUnvalidatedEv(odds: any): any {
+  if (!odds || typeof odds !== "object") return odds;
+  return { ...odds, ev_percent: null, edge: null };
 }
 
 async function getTeamScheduleForSeason(teamId: string, sport: string, season: number) {
@@ -1530,8 +1539,11 @@ Deno.serve(async (req) => {
                 factorBreakdown: mlbResult.factorBreakdown,
                 writeup: mlbResult.writeup,
                 pitchers: mlbResult.pitchers,
-                odds,
+                odds: withoutUnvalidatedEv(odds),
                 decision,
+                score_kind: "heuristic_score",
+                calibration_status: "pending_queue_validation",
+                probability_supported: false,
                 ...analysis,
               });
             }
@@ -1622,8 +1634,11 @@ Deno.serve(async (req) => {
                 writeup: nhlResult.writeup,
                 goalies: nhlResult.goalies,
                 context: nhlResult.context,
-                odds,
+                odds: withoutUnvalidatedEv(odds),
                 decision,
+                score_kind: "heuristic_score",
+                calibration_status: "pending_queue_validation",
+                probability_supported: false,
                 ...analysis,
               });
             }
@@ -1683,7 +1698,7 @@ Deno.serve(async (req) => {
         confidence: modelConf,
         verdict: analysis.verdict || null,
         odds_at_time: odds?.bestOdds?.american ?? null,
-        ev_percent: odds?.ev_percent ?? null,
+        ev_percent: null,
         top_factors: (analysis.factorBreakdown || []).slice(0, 5),
       }).catch((err) => console.error("logSnapshot failed:", err));
 
@@ -1717,8 +1732,11 @@ Deno.serve(async (req) => {
         pace: { team1: pace1, team2: pace2 },
         previousSeasonFallbackUsed,
         previousSeasonNote,
-        odds,
+        odds: withoutUnvalidatedEv(odds),
         decision,
+        score_kind: "heuristic_score",
+        calibration_status: "pending_queue_validation",
+        probability_supported: false,
         ...analysis,
       });
     }

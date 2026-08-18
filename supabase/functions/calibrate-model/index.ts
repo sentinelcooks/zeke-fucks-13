@@ -1,209 +1,296 @@
-// supabase/functions/calibrate-model/index.ts
-//
-// Nightly (cron-driven) calibration job.
-//   1. Pull last 90 days of graded outcomes joined to prediction snapshots.
-//   2. Per (sport, bet_type): fit Platt when n≥200, else 10-bin isotonic.
-//   3. Compare Brier + log-loss to identity baseline; only activate if strictly better.
-//   4. Insert a new row into model_calibration and flip `active=true`.
-//
-// Invoke:
-//   POST /functions/v1/calibrate-model          → runs the job
-//   POST /functions/v1/calibrate-model?dry=1    → fits but does not activate
-//   POST /functions/v1/calibrate-model?sport=nba&bet_type=prop → one-off
-//
-// Closes the README roadmap item "Closed-loop weight tuning from outcomes".
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  fitPlatt,
-  fitIsotonic,
-  plattCalibrate,
-  isotonicCalibrate,
   brier,
-  logLoss,
   clamp01,
+  fitPlatt,
+  logLoss,
+  plattCalibrate,
 } from "../_shared/prob_math.ts";
+import {
+  calibrationActivationDecision,
+  chronologicalCalibrationSplit,
+  type TimestampedCalibrationSample,
+} from "../_shared/calibration_policy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-calibrate-model-secret",
 };
 
-interface Sample { score: number; label: number; }
+interface Sample extends TimestampedCalibrationSample {
+  sport: string;
+  bet_type: string;
+  identity: string;
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  const url = Deno.env.get("SUPABASE_URL")!;
-  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(url, key);
+  const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const calibrationSecret = Deno.env.get("CALIBRATE_MODEL_SECRET") ?? "";
+  const authorization = req.headers.get("authorization") ?? "";
+  const suppliedSecret = req.headers.get("x-calibrate-model-secret") ?? "";
+  const authorized =
+    (!!serviceRoleKey && authorization === `Bearer ${serviceRoleKey}`) ||
+    (!!calibrationSecret &&
+      (suppliedSecret === calibrationSecret || authorization === `Bearer ${calibrationSecret}`));
+  if (!authorized) return json({ error: "unauthorized" }, 401);
+  if (!url || !serviceRoleKey) return json({ error: "server_configuration_missing" }, 500);
 
-  const u = new URL(req.url);
-  const dry = u.searchParams.get("dry") === "1";
-  const onlySport = u.searchParams.get("sport");
-  const onlyBetType = u.searchParams.get("bet_type");
-  const lookbackDays = Number(u.searchParams.get("days") ?? "90");
+  const supabase = createClient(url, serviceRoleKey);
+  const requestUrl = new URL(req.url);
+  const dry = requestUrl.searchParams.get("dry") === "1";
+  const onlySport = requestUrl.searchParams.get("sport");
+  const onlyBetType = requestUrl.searchParams.get("bet_type");
+  const lookbackDays = Math.max(30, Math.min(730, Number(requestUrl.searchParams.get("days") ?? "365")));
 
   try {
     const since = new Date(Date.now() - lookbackDays * 86400 * 1000).toISOString();
-
-    // Pull outcomes + their predicted confidence. Schema expected:
-    //   outcomes(prediction_id, actual_result, created_at)
-    //   prediction_snapshots(id, sport, bet_type, predicted_confidence)
-    // Fallback path: grade-picks writes back into daily_picks.result with
-    // hit_rate available. We union both sources.
     const samples = await collectSamples(supabase, since, onlySport, onlyBetType);
-
-    // Group by (sport, bet_type).
     const groups = new Map<string, Sample[]>();
-    for (const s of samples) {
-      const k = `${s.sport}|${s.bet_type}`;
-      const arr = groups.get(k) ?? [];
-      arr.push({ score: s.score, label: s.label });
-      groups.set(k, arr);
+    for (const sample of samples) {
+      const key = `${sample.sport}|${sample.bet_type}`.toLowerCase();
+      const group = groups.get(key) ?? [];
+      group.push(sample);
+      groups.set(key, group);
     }
 
     const results: Record<string, unknown>[] = [];
-    for (const [k, data] of groups) {
-      const [sport, bet_type] = k.split("|");
-      if (data.length < 50) {
-        results.push({ sport, bet_type, n: data.length, skipped: "insufficient_samples" });
-        continue;
-      }
+    for (const [key, data] of groups) {
+      const [sport, bet_type] = key.split("|");
+      const { train, test } = chronologicalCalibrationSplit(data);
+      const trainScores = train.map((sample) => clamp01(sample.score));
+      const trainLabels = train.map((sample) => sample.label);
+      const testScores = test.map((sample) => clamp01(sample.score));
+      const testLabels = test.map((sample) => sample.label);
 
-      const scores = data.map((d) => clamp01(d.score));
-      const labels = data.map((d) => (d.label ? 1 : 0));
-
-      // Baseline (identity) metrics.
-      const bBaseline = brier(scores, labels);
-      const lBaseline = logLoss(scores, labels);
-
-      // Try Platt first when sample is large enough.
-      let method: "platt" | "isotonic" = data.length >= 200 ? "platt" : "isotonic";
       let params: Record<string, unknown> = {};
-      let calibrated: number[] = [];
+      let baselineBrier = Number.NaN;
+      let baselineLogLoss = Number.NaN;
+      let calibratedBrier = Number.NaN;
+      let calibratedLogLoss = Number.NaN;
 
-      if (method === "platt") {
-        const p = fitPlatt(scores, labels, 50);
-        params = { a: p.a, b: p.b };
-        calibrated = scores.map((x) => plattCalibrate(x, p));
-      } else {
-        const bins = fitIsotonic(scores, labels, 10);
-        params = { bins };
-        calibrated = scores.map((x) => isotonicCalibrate(x, bins));
+      if (trainScores.length > 0 && testScores.length > 0) {
+        const fitted = fitPlatt(trainScores, trainLabels, 50);
+        params = { a: fitted.a, b: fitted.b };
+        const calibrated = testScores.map((score) => plattCalibrate(score, fitted));
+        baselineBrier = brier(testScores, testLabels);
+        baselineLogLoss = logLoss(testScores, testLabels);
+        calibratedBrier = brier(calibrated, testLabels);
+        calibratedLogLoss = logLoss(calibrated, testLabels);
       }
 
-      const bCal = brier(calibrated, labels);
-      const lCal = logLoss(calibrated, labels);
-      const improved = bCal < bBaseline && lCal < lBaseline;
-
+      const decision = calibrationActivationDecision({
+        trainSamples: train.length,
+        testSamples: test.length,
+        baselineBrier,
+        calibratedBrier,
+        baselineLogLoss,
+        calibratedLogLoss,
+      });
       const row = {
         sport,
         bet_type,
-        method,
+        method: "platt" as const,
         params,
         n_samples: data.length,
-        brier_score: bCal,
-        log_loss: lCal,
-        baseline_brier: bBaseline,
-        baseline_log_loss: lBaseline,
-        active: improved && !dry,
+        train_samples: train.length,
+        test_samples: test.length,
+        brier_score: Number.isFinite(calibratedBrier) ? calibratedBrier : null,
+        log_loss: Number.isFinite(calibratedLogLoss) ? calibratedLogLoss : null,
+        baseline_brier: Number.isFinite(baselineBrier) ? baselineBrier : null,
+        baseline_log_loss: Number.isFinite(baselineLogLoss) ? baselineLogLoss : null,
+        holdout_brier: Number.isFinite(calibratedBrier) ? calibratedBrier : null,
+        holdout_log_loss: Number.isFinite(calibratedLogLoss) ? calibratedLogLoss : null,
+        holdout_baseline_brier: Number.isFinite(baselineBrier) ? baselineBrier : null,
+        holdout_baseline_log_loss: Number.isFinite(baselineLogLoss) ? baselineLogLoss : null,
+        evaluation_method: "chronological_holdout",
+        holdout_passed: decision.activate,
+        activation_reason: decision.reason,
+        data_start_at: data.length > 0
+          ? [...data].sort((a, b) => Date.parse(a.occurred_at) - Date.parse(b.occurred_at))[0].occurred_at
+          : null,
+        data_end_at: data.length > 0
+          ? [...data].sort((a, b) => Date.parse(b.occurred_at) - Date.parse(a.occurred_at))[0].occurred_at
+          : null,
+        active: decision.activate && !dry,
       };
 
       if (!dry) {
-        if (improved) {
-          // Flip existing active rows off for this (sport, bet_type).
-          await supabase
+        if (decision.activate) {
+          const { error: deactivateError } = await supabase
             .from("model_calibration")
             .update({ active: false })
             .eq("sport", sport)
             .eq("bet_type", bet_type)
             .eq("active", true);
+          if (deactivateError) throw deactivateError;
         }
-        const { error } = await supabase.from("model_calibration").insert(row);
-        if (error) console.warn("insert calibration error:", error.message);
+        const { error: insertError } = await supabase.from("model_calibration").insert(row);
+        if (insertError) throw insertError;
       }
-      results.push({ ...row, improved });
+      results.push(row);
     }
 
-    return new Response(JSON.stringify({ dry, lookbackDays, groups: results }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    return json({
+      dry,
+      lookbackDays,
+      evaluationMethod: "chronological_holdout",
+      sampleCount: samples.length,
+      groups: results,
     });
-  } catch (err) {
-    console.error("calibrate-model error:", err);
-    return new Response(JSON.stringify({ error: (err as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  } catch (error) {
+    console.error("calibrate-model error:", error);
+    return json({ error: error instanceof Error ? error.message : String(error) }, 500);
   }
 });
-
-// ─── Sample collection ─────────────────────────────────────────────
-// Combines: (a) prediction_snapshots + outcomes if present,
-//           (b) daily_picks rows with result IN ('hit','miss').
-// Every sample is (sport, bet_type, score∈[0,1], label∈{0,1}).
-
-type Row = { sport: string; bet_type: string; score: number; label: number };
 
 async function collectSamples(
   supabase: ReturnType<typeof createClient>,
   sinceIso: string,
   onlySport: string | null,
   onlyBetType: string | null,
-): Promise<Row[]> {
-  const rows: Row[] = [];
+): Promise<Sample[]> {
+  const rows: Sample[] = [];
 
-  // Path 1: outcomes + snapshots.
   try {
-    let q = supabase
+    const { data, error } = await supabase
       .from("outcomes")
-      .select("actual_result, prediction_snapshots!inner(sport, bet_type, predicted_confidence, created_at)")
+      .select(
+        "actual_result,created_at,prediction_snapshots!inner(sport,market_type,player_or_team,prop_type,line,direction,confidence,created_at)",
+      )
       .gte("created_at", sinceIso);
-    const { data } = await q;
-    for (const o of (data ?? []) as any[]) {
-      const snap = o.prediction_snapshots;
-      if (!snap) continue;
-      if (onlySport && snap.sport !== onlySport) continue;
-      if (onlyBetType && snap.bet_type !== onlyBetType) continue;
-      const score = numConf(snap.predicted_confidence);
-      const label = String(o.actual_result).toUpperCase() === "HIT" ? 1
-        : String(o.actual_result).toUpperCase() === "MISS" ? 0
-        : null;
-      if (score == null || label == null) continue;
-      rows.push({ sport: snap.sport, bet_type: snap.bet_type, score, label });
+    if (error) throw error;
+    for (const outcome of (data ?? []) as Record<string, unknown>[]) {
+      const snapshot = Array.isArray(outcome.prediction_snapshots)
+        ? outcome.prediction_snapshots[0]
+        : outcome.prediction_snapshots;
+      if (!snapshot || typeof snapshot !== "object") continue;
+      const snap = snapshot as Record<string, unknown>;
+      const sport = String(snap.sport ?? "").toLowerCase();
+      const betType = normalizeBetType(snap.market_type);
+      if (!sport || !betType || (onlySport && sport !== onlySport.toLowerCase())) continue;
+      if (onlyBetType && betType !== normalizeBetType(onlyBetType)) continue;
+      const score = numConf(snap.confidence);
+      const label = resultLabel(outcome.actual_result);
+      const occurredAt = String(snap.created_at ?? outcome.created_at ?? "");
+      if (score == null || label == null || !Number.isFinite(Date.parse(occurredAt))) continue;
+      rows.push({
+        sport,
+        bet_type: betType,
+        score,
+        label,
+        occurred_at: occurredAt,
+        identity: sampleIdentity({
+          sport,
+          betType,
+          occurredAt,
+          player: snap.player_or_team,
+          propType: snap.prop_type,
+          line: snap.line,
+          direction: snap.direction,
+        }),
+      });
     }
-  } catch (e) {
-    console.warn("outcomes path failed:", (e as Error).message);
+  } catch (error) {
+    console.warn("outcomes calibration source unavailable:", error instanceof Error ? error.message : error);
   }
 
-  // Path 2: daily_picks graded results (fallback / additional signal).
   try {
-    let q = supabase
+    let query = supabase
       .from("daily_picks")
-      .select("sport, bet_type, hit_rate, result, pick_date")
+      .select("sport,bet_type,player_name,prop_type,line,direction,hit_rate,result,pick_date,created_at,score_kind")
       .gte("pick_date", sinceIso.slice(0, 10))
-      .in("result", ["hit", "miss"]);
-    if (onlySport) q = q.eq("sport", onlySport);
-    if (onlyBetType) q = q.eq("bet_type", onlyBetType === "total" ? "over_under" : onlyBetType);
-    const { data } = await q;
-    for (const p of (data ?? []) as any[]) {
-      const score = numConf(p.hit_rate);
-      if (score == null) continue;
-      const label = p.result === "hit" ? 1 : 0;
-      const bet_type = p.bet_type === "over_under" ? "total" : (p.bet_type ?? "prop");
-      rows.push({ sport: p.sport, bet_type, score, label });
+      .in("result", ["hit", "miss"])
+      .eq("score_kind", "heuristic_score");
+    if (onlySport) query = query.eq("sport", onlySport.toLowerCase());
+    if (onlyBetType) {
+      const normalized = normalizeBetType(onlyBetType);
+      query = query.eq("bet_type", normalized === "total" ? "over_under" : normalized);
     }
-  } catch (e) {
-    console.warn("daily_picks path failed:", (e as Error).message);
+    const { data, error } = await query;
+    if (error) throw error;
+    for (const pick of (data ?? []) as Record<string, unknown>[]) {
+      const sport = String(pick.sport ?? "").toLowerCase();
+      const betType = normalizeBetType(pick.bet_type);
+      const score = numConf(pick.hit_rate);
+      const label = resultLabel(pick.result);
+      const occurredAt = String(pick.created_at ?? `${pick.pick_date}T12:00:00Z`);
+      if (!sport || !betType || score == null || label == null || !Number.isFinite(Date.parse(occurredAt))) continue;
+      rows.push({
+        sport,
+        bet_type: betType,
+        score,
+        label,
+        occurred_at: occurredAt,
+        identity: sampleIdentity({
+          sport,
+          betType,
+          occurredAt,
+          player: pick.player_name,
+          propType: pick.prop_type,
+          line: pick.line,
+          direction: pick.direction,
+        }),
+      });
+    }
+  } catch (error) {
+    console.warn("daily_picks calibration source unavailable:", error instanceof Error ? error.message : error);
   }
 
-  return rows;
+  const unique = new Map<string, Sample>();
+  for (const row of rows) unique.set(row.identity, row);
+  return [...unique.values()];
 }
 
-function numConf(v: unknown): number | null {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return null;
-  if (n <= 1) return clamp01(n);
-  if (n <= 100) return clamp01(n / 100);
+function sampleIdentity(input: {
+  sport: string;
+  betType: string;
+  occurredAt: string;
+  player: unknown;
+  propType: unknown;
+  line: unknown;
+  direction: unknown;
+}): string {
+  const normalize = (value: unknown) => String(value ?? "").trim().toLowerCase();
+  return [
+    input.occurredAt.slice(0, 10),
+    input.sport,
+    input.betType,
+    normalize(input.player),
+    normalize(input.propType),
+    normalize(input.line),
+    normalize(input.direction),
+  ].join("|");
+}
+
+function resultLabel(value: unknown): 0 | 1 | null {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "hit") return 1;
+  if (normalized === "miss") return 0;
+  return null;
+}
+
+function normalizeBetType(value: unknown): string {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "over_under") return "total";
+  return normalized || "prop";
+}
+
+function numConf(value: unknown): number | null {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  if (parsed >= 0 && parsed <= 1) return clamp01(parsed);
+  if (parsed > 1 && parsed <= 100) return clamp01(parsed / 100);
   return null;
 }

@@ -16,6 +16,11 @@ verify_jwt = false
 [functions.odds-snapshot]
 verify_jwt = false
 
+# Nightly calibration validates its own service-role/secret credentials and
+# rejects every fit that lacks sufficient chronological holdout evidence.
+[functions.calibrate-model]
+verify_jwt = false
+
 # Scanner pipeline endpoints validate configured service-role credentials in
 # function code. Gateway JWT verification must be disabled so Supabase's
 # opaque sb_secret_* service keys can reach that validation.

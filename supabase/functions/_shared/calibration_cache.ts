@@ -6,8 +6,20 @@
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { Calibration } from "./prob_math.ts";
+import { hasSupportedCalibration } from "./calibration_policy.ts";
 
-type CacheEntry = { value: Calibration; expiresAt: number };
+export interface CalibrationState {
+  calibration: Calibration;
+  supported: boolean;
+  status: "validated" | "missing" | "insufficient_evidence" | "invalid";
+  nSamples: number;
+  trainSamples: number;
+  testSamples: number;
+  fittedAt: string | null;
+  activationReason: string | null;
+}
+
+type CacheEntry = { value: CalibrationState; expiresAt: number };
 const cache = new Map<string, CacheEntry>();
 const TTL_MS = 5 * 60 * 1000;
 
@@ -25,10 +37,23 @@ function identity(): Calibration {
   return { method: "identity" };
 }
 
-export async function getCalibration(
+function unsupportedState(status: CalibrationState["status"]): CalibrationState {
+  return {
+    calibration: identity(),
+    supported: false,
+    status,
+    nSamples: 0,
+    trainSamples: 0,
+    testSamples: 0,
+    fittedAt: null,
+    activationReason: null,
+  };
+}
+
+export async function getCalibrationState(
   sport: string,
   betType: string,
-): Promise<Calibration> {
+): Promise<CalibrationState> {
   const k = `${sport}|${betType}`.toLowerCase();
   const now = Date.now();
   const hit = cache.get(k);
@@ -36,14 +61,14 @@ export async function getCalibration(
 
   const supabase = client();
   if (!supabase) {
-    const v = identity();
+    const v = unsupportedState("missing");
     cache.set(k, { value: v, expiresAt: now + TTL_MS });
     return v;
   }
   try {
     const { data, error } = await supabase
       .from("model_calibration")
-      .select("method, params")
+      .select("method,params,n_samples,train_samples,test_samples,holdout_passed,evaluation_method,fitted_at,activation_reason,active")
       .eq("sport", sport)
       .eq("bet_type", betType)
       .eq("active", true)
@@ -51,23 +76,44 @@ export async function getCalibration(
       .limit(1)
       .maybeSingle();
     if (error || !data) {
-      const v = identity();
+      const v = unsupportedState("missing");
       cache.set(k, { value: v, expiresAt: now + TTL_MS });
       return v;
     }
-    let v: Calibration = identity();
+    let calibration: Calibration = identity();
     if (data.method === "platt" && data.params?.a != null && data.params?.b != null) {
-      v = { method: "platt", params: { a: Number(data.params.a), b: Number(data.params.b) } };
+      calibration = { method: "platt", params: { a: Number(data.params.a), b: Number(data.params.b) } };
     } else if (data.method === "isotonic" && Array.isArray(data.params?.bins)) {
-      v = { method: "isotonic", params: { bins: data.params.bins } };
+      calibration = { method: "isotonic", params: { bins: data.params.bins } };
     }
+    const supported = calibration.method !== "identity" && hasSupportedCalibration(data);
+    const v: CalibrationState = {
+      calibration: supported ? calibration : identity(),
+      supported,
+      status: supported
+        ? "validated"
+        : calibration.method === "identity" ? "invalid" : "insufficient_evidence",
+      nSamples: Number(data.n_samples ?? 0),
+      trainSamples: Number(data.train_samples ?? 0),
+      testSamples: Number(data.test_samples ?? 0),
+      fittedAt: typeof data.fitted_at === "string" ? data.fitted_at : null,
+      activationReason:
+        typeof data.activation_reason === "string" ? data.activation_reason : null,
+    };
     cache.set(k, { value: v, expiresAt: now + TTL_MS });
     return v;
   } catch {
-    const v = identity();
+    const v = unsupportedState("missing");
     cache.set(k, { value: v, expiresAt: now + TTL_MS });
     return v;
   }
+}
+
+export async function getCalibration(
+  sport: string,
+  betType: string,
+): Promise<Calibration> {
+  return (await getCalibrationState(sport, betType)).calibration;
 }
 
 export function bustCalibrationCache(): void {

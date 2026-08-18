@@ -31,10 +31,14 @@ import {
 import { buildDailyPickRow, applyAnalyzerFinalizeInsertGuard } from "./daily_pick_rows.ts";
 import { enqueueGenericAnalyzerCandidates } from "./analyzer_queue.ts";
 import {
+  analyzerConfidenceRaw,
   buildAnalyzerRequest,
   selectAnalyzerPoolDiversifiedByBetType,
   teamMarketExclusivityKey,
 } from "./analyzer_routing.ts";
+import { getCalibrationState } from "./calibration_cache.ts";
+import { applyCalibration } from "./prob_math.ts";
+import { PROB_LEAN } from "./thresholds.ts";
 
 // App slate timezone — matches the public-display assumption in src/lib/gameDate.ts.
 const APP_TZ = "America/New_York";
@@ -1679,6 +1683,7 @@ export async function validateWithAnalyzer(
     away_team: play.away_team || null,
     sport: play.sport,
     bet_type: "player_prop",
+    american_odds: play.odds,
   };
 
   if (!analyzed) {
@@ -1790,9 +1795,7 @@ export async function validateWithAnalyzer(
     return null;
   }
 
-  const conf = normalizeConfidencePercent(
-    analyzed.canonical_confidence ?? analyzed.confidence ?? analyzed.displayConfidence ?? 0,
-  );
+  const conf = normalizeConfidencePercent(analyzerConfidenceRaw(analyzed));
 
   if (!conf || conf <= 0) {
     for (const tr of matchingTrace(traceResults, play)) {
@@ -1803,10 +1806,13 @@ export async function validateWithAnalyzer(
     return null;
   }
 
-  const canonicalVerdict = normalizeCanonicalVerdict(
-    analyzed.canonical_verdict ?? analyzed.verdict ?? analyzed.decision?.verdict,
-    conf,
-  );
+  const calibrationState = await getCalibrationState(play.sport, play.bet_type);
+  const rawAnalyzerScore = Math.max(0, Math.min(1, conf / 100));
+  const probabilitySupported = calibrationState.supported;
+  const calibratedScore = probabilitySupported
+    ? applyCalibration(rawAnalyzerScore, calibrationState.calibration)
+    : rawAnalyzerScore;
+  const canonicalVerdict = normalizeCanonicalVerdict(undefined, calibratedScore);
   for (const tr of matchingTrace(traceResults, play)) {
     tr.analyzer_confidence = Math.round(conf);
     tr.analyzer_verdict = canonicalVerdict;
@@ -1834,7 +1840,7 @@ export async function validateWithAnalyzer(
     return null;
   }
 
-  const projected = Math.max(0, Math.min(1, conf / 100));
+  const projected = calibratedScore;
   const implied = play.implied_prob;
   const edge = projected - implied;
 
@@ -1852,9 +1858,11 @@ export async function validateWithAnalyzer(
 
   const reasoningArr = Array.isArray(analyzed.reasoning) ? analyzed.reasoning : [];
 
-  const reasoning = reasoningArr.length
-    ? reasoningArr.slice(0, 3).join(" ")
-    : play.reasoning;
+  const reasoning = probabilitySupported
+    ? reasoningArr.length
+      ? reasoningArr.slice(0, 3).join(" ")
+      : play.reasoning
+    : `${play.player_name} ${play.direction} ${play.line} ${play.prop_type}: ${Math.round(rawAnalyzerScore * 100)}/100 heuristic model score. Calibration is not yet supported, so no probability, edge, or EV claim is made.`;
 
   // Merge analyzer-emitted ESPN/playoff diagnostics on top of the market-side
   // summary that was already attached in evaluatePlayerProps.
@@ -1901,7 +1909,7 @@ export async function validateWithAnalyzer(
   }
 
   // analyzer-finalize.v1: symmetric agreement (lower OR higher beyond 10pts is drift)
-  const analyzerConfidence = adjustedProjected;
+  const analyzerConfidence = rawAnalyzerScore;
   const diff = Math.abs(scannerConfidence - analyzerConfidence);
   const analyzerAgreement = diff <= 0.10 ? "agree" : "disagree";
   const analyzerDisagreementReason =
@@ -1950,8 +1958,17 @@ export async function validateWithAnalyzer(
     analyzer_called_at: new Date().toISOString(),
     confidenceSource: "analyzer",
     verdictSource: "analyzer",
-    canonical_confidence: Math.round(analyzerConfidence * 100),
+    canonical_confidence: Math.round(adjustedProjected * 100),
     canonical_verdict: canonicalVerdict,
+    raw_model_score: rawAnalyzerScore,
+    score_kind: probabilitySupported ? "calibrated_probability" : "heuristic_score",
+    calibration_status: calibrationState.status,
+    calibration_applied: probabilitySupported,
+    probability_supported: probabilitySupported,
+    calibration_n_samples: calibrationState.nSamples,
+    calibration_train_samples: calibrationState.trainSamples,
+    calibration_test_samples: calibrationState.testSamples,
+    calibration_fitted_at: calibrationState.fittedAt,
     analyzerAgreement,
     analyzerDisagreementReason,
     publishedSource: "analyzer",
@@ -1969,7 +1986,9 @@ export async function validateWithAnalyzer(
     ev_pct: (() => {
       const o = play.odds;
       const decimal = o > 0 ? o / 100 + 1 : 100 / -o + 1;
-      return (adjustedProjected * (decimal - 1) - (1 - adjustedProjected)) * 100;
+      return probabilitySupported
+        ? (adjustedProjected * (decimal - 1) - (1 - adjustedProjected)) * 100
+        : 0;
     })(),
     confidence: adjustedProjected,
     verdict: canonicalToScoredVerdict(canonicalVerdict),
@@ -2882,6 +2901,13 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
     let sportEdgeCount = 0;
     for (const p of sortedByQuality) {
       if (sportEdgeCount >= edgeCap) break;
+      const diagnostics = (p.model_diagnostics ?? {}) as Record<string, unknown>;
+      if (diagnostics.probability_supported !== true) {
+        diagnostics.final_edge_eligible = false;
+        diagnostics.edgeDowngradeReason = "calibration_not_supported";
+        p.model_diagnostics = diagnostics;
+        continue;
+      }
       if (phaseCGateEnabled && !hasAnalyzer && p.confidence < strictFloor) {
         // Mark fallback-gated in diagnostics so we can audit without affecting display
         if (p.model_diagnostics) {
@@ -2894,17 +2920,6 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
       sportEdgeCount++;
     }
 
-    // Fallback safety: if gate empties the edge slate for this sport, fall back to top-N
-    // with a diagnostic flag. Better to show scanner-only picks than an empty slate.
-    if (phaseCGateEnabled && edgeKeySet.size === 0 && sortedByQuality.length > 0) {
-      for (const p of sortedByQuality.slice(0, edgeCap)) {
-        edgeKeySet.add(tierKey(p));
-        if (p.model_diagnostics) {
-          (p.model_diagnostics as Record<string, unknown>).phaseCFallback = true;
-          (p.model_diagnostics as Record<string, unknown>).sourceContractVersion = "phase-c.v1.fallback";
-        }
-      }
-    }
   }
 
   const assignTier = (p: ScoredPlay): "edge" | "daily" | "value" | null => {
@@ -2920,7 +2935,7 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
             (p.model_diagnostics as Record<string, unknown>).phaseCDemoteReason = md.analyzerDisagreementReason ?? "analyzer_disagree";
           }
           // Demote to daily rather than dropping — the play may still have value
-          return p.confidence >= 0.70 ? "daily" : "value";
+          return p.confidence >= PROB_LEAN ? "daily" : "value";
         }
       }
       return "edge";
@@ -2929,7 +2944,7 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
       const gate = nbaGateCache.get(tierKey(p));
       if (gate?.hardSafetyFail) return null; // drop from all public surfaces
     }
-    if (p.confidence >= 0.70) return "daily";
+    if (p.confidence >= PROB_LEAN) return "daily";
     return "value";
   };
 
@@ -3020,7 +3035,7 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
         const pool = edgePoolDiagnostics.get(key);
         const preGateTier: "edge" | "daily" | "value" =
           sortedByQuality.indexOf(p) < edgeCap ? "edge"
-          : p.confidence >= 0.70 ? "daily"
+          : p.confidence >= PROB_LEAN ? "daily"
           : "value";
         const edgePoolSelectionReason =
           pool?.selected === true && tier !== "edge"

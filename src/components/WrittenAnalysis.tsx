@@ -62,6 +62,8 @@ interface WrittenAnalysisProps {
     opponent?: string;
   };
   recentGameValues?: number[];
+  scoreKind?: "heuristic_score" | "calibrated_probability" | string;
+  probabilitySupported?: boolean;
 }
 
 interface AnalysisSection {
@@ -122,6 +124,32 @@ function generateFallbackSections(data: WrittenAnalysisProps): AnalysisSection[]
   const direction = overUnder?.toUpperCase() || "OVER";
   const propLabel = displayPropLabel(propDisplay);
   const lineProp = line ? `${direction} ${line}${propLabel ? ` ${propLabel}` : ""}` : direction;
+  const probabilitySupported = data.probabilitySupported === true &&
+    data.scoreKind === "calibrated_probability";
+  if (!probabilitySupported) {
+    return [
+      {
+        title: "Model Score",
+        content: `${playerOrTeam} ${lineProp} received a ${confidence}/100 heuristic model score. This is not a validated win probability.`,
+      },
+      {
+        title: "Calibration Status",
+        content: "This market does not yet have sufficient chronological out-of-sample evidence to support probability or hit-rate claims.",
+      },
+      {
+        title: "Market Comparison",
+        content: "The sportsbook price is shown for context only. Sentinel will not call the difference an edge or calculate EV until calibration is validated.",
+      },
+      {
+        title: "Data Limits",
+        content: "Treat this analysis as directional research and verify lineups, injuries, role, and market movement before making any decision.",
+      },
+      {
+        title: "Risk",
+        content: "No unit sizing is recommended because the model score is not a supported probability.",
+      },
+    ];
+  }
   const evStr = typeof ev === "number" && ev !== 0 ? ` · +${ev.toFixed(1)}% EV` : "";
   const edgeStr = typeof edge === "number" && edge !== 0 ? ` · ${edge > 0 ? "+" : ""}${edge.toFixed(1)}% edge` : "";
 
@@ -234,6 +262,15 @@ function generateOverallSummary(props: WrittenAnalysisProps): { rating: "take" |
   const direction = overUnder?.toUpperCase() || "OVER";
   const propLabel = displayPropLabel(propDisplay);
   const pickLabel = line != null ? `${playerOrTeam} ${direction} ${line} ${propLabel || ""}`.trim() : playerOrTeam;
+  const probabilitySupported = props.probabilitySupported === true &&
+    props.scoreKind === "calibrated_probability";
+  if (!probabilitySupported) {
+    return {
+      rating: "fade",
+      unitSize: null,
+      summary: `${pickLabel} has a ${confidence}/100 heuristic model score, not a validated win probability. No edge, EV, or unit-sizing claim is supported yet.`,
+    };
+  }
 
   // ── SINGLE SOURCE OF TRUTH: if backend provided a decision, honor it. Never recompute. ──
   if (decision && decision.winning_team_name && type === "moneyline") {
@@ -378,6 +415,8 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
     ...props,
     confidence: confPct,
     verdict: normalizeVerdict(props.verdict, confPct),
+    probabilitySupported: props.probabilitySupported === true,
+    scoreKind: props.scoreKind ?? "heuristic_score",
   };
 
   const rawSummary = generateOverallSummary(resolvedProps);
@@ -438,6 +477,10 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
       if (attempts === 0) setLoading(true);
       else setRegenerating(true);
       try {
+        if (resolvedProps.probabilitySupported !== true || resolvedProps.scoreKind !== "calibrated_probability") {
+          if (!cancelled) setSections(generateFallbackSections(resolvedProps));
+          return;
+        }
         const { data, error } = await supabase.functions.invoke("ai-analysis", {
           headers: await premiumRequestHeaders(),
           body: {
@@ -462,6 +505,8 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
             h2hData: props.h2hData,
             recentGameValues: props.recentGameValues,
             last5: props.last5,
+            scoreKind: resolvedProps.scoreKind,
+            probabilitySupported: resolvedProps.probabilitySupported,
           },
         });
 
@@ -518,7 +563,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
 
     fetchAnalysis();
     return () => { cancelled = true; };
-  }, [props.playerOrTeam, props.confidence, props.verdict, props.type, overallSummary.rating, props.decision?.winning_team_name]);
+  }, [props.playerOrTeam, props.confidence, props.verdict, props.type, overallSummary.rating, props.decision?.winning_team_name, props.scoreKind, props.probabilitySupported]);
 
   const borderColor = confPct >= 70
     ? "border-nba-green/30"

@@ -1,5 +1,6 @@
-// Unified scoring + verdict tiering for the daily slate engine. v3-calibrated
-// qualityScore = calibratedProb * reliability * (1 + edge) * hitRateFactor
+// Unified scoring + verdict tiering for the daily slate engine.
+// Raw heuristic scores remain useful for candidate discovery, but public
+// probability/edge claims require validated chronological-holdout calibration.
 //
 // v3 changes (vs v2-strict-longshot-cap):
 //   • probability math lives in prob_math.ts (vig removal + calibration + shrinkage)
@@ -178,6 +179,7 @@ function canonicalVerdictForGate(p: ScoredPlay, confidencePercent: number): Cano
 export function evaluateNbaEdgeGate(p: ScoredPlay): NbaEdgeGateResult {
   const reasons: string[] = [];
   const md = (p.model_diagnostics ?? {}) as Record<string, unknown>;
+  if (md.probability_supported !== true) reasons.push("calibration_not_supported");
 
   const canonicalConfidence = Math.round(
     normalizeConfidencePercent(
@@ -308,6 +310,7 @@ export function evaluateNbaEdgeGate(p: ScoredPlay): NbaEdgeGateResult {
   const hardSafetyFail =
     reasons.includes("pass_verdict") ||
     reasons.includes("risky_verdict") ||
+    reasons.includes("calibration_not_supported") ||
     reasons.includes("market_quality_unusable") ||
     reasons.includes("extreme_juice") ||
     (reasons.includes("negative_ev") && reasons.includes("market_quality_low")) ||
@@ -775,10 +778,14 @@ export function buildReasoning(p: {
   confidence: number;
   ev_pct: number;
   reliability: number;
+  probability_supported?: boolean;
 }): string {
   const edgePct = (p.edge * 100).toFixed(1);
   const conf = (p.confidence * 100).toFixed(0);
   const relTag = p.reliability >= 0.9 ? "high-signal market" : p.reliability >= 0.7 ? "stable market" : "volatile market";
+  if (p.probability_supported !== true) {
+    return `${p.player_name} ${p.direction} ${p.line} ${p.prop_type}: ${conf}/100 heuristic model score (${relTag}). Calibration is not yet supported, so no probability, edge, or EV claim is made.`;
+  }
   if (p.bet_type === "moneyline") {
     return `Model gives ${p.player_name} a ${conf}% win probability (${relTag}) — ${edgePct}% edge, ${p.ev_pct.toFixed(1)}% EV.`;
   }
@@ -815,6 +822,9 @@ export interface ScoreInput {
   raw_confidence: number;
   // Optional explicit calibration; if omitted, identity is used.
   calibration?: Calibration;
+  // Must come from calibration_policy evidence, never inferred from the mere
+  // presence of calibration parameters.
+  calibrationSupported?: boolean;
   // Optional reliability override (otherwise derived from market table).
   reliability?: number;
 }
@@ -824,7 +834,9 @@ export function score(input: ScoreInput): ScoredPlay {
   const raw01 = clamp01(
     input.raw_confidence > 1 ? input.raw_confidence / 100 : input.raw_confidence,
   );
-  const calibrated = input.calibration
+  const probabilitySupported = input.calibrationSupported === true &&
+    input.calibration != null && input.calibration.method !== "identity";
+  const calibrated = probabilitySupported
     ? clamp01(applyCalibration(raw01, input.calibration))
     : raw01;
 
@@ -849,6 +861,7 @@ export function score(input: ScoreInput): ScoredPlay {
     confidence: calibrated,
     ev_pct: evPct,
     reliability,
+    probability_supported: probabilitySupported,
   });
 
   return {
@@ -878,6 +891,13 @@ export function score(input: ScoreInput): ScoredPlay {
     quality_score: qualityScore,
     verdict,
     reasoning,
+    model_diagnostics: {
+      score_kind: probabilitySupported ? "calibrated_probability" : "heuristic_score",
+      calibration_status: probabilitySupported ? "validated" : "insufficient_evidence",
+      calibration_applied: probabilitySupported,
+      probability_supported: probabilitySupported,
+      raw_model_score: raw01,
+    },
   };
 }
 
@@ -895,7 +915,8 @@ export function scorePrecomputed(
   const s = play.edge * play.confidence;
   const quality_score = computeQualityScore(play.confidence, play.edge, reliability);
   const verdict = tierVerdict(play.confidence, play.edge, reliability, play.bet_type, play.prop_type, play.direction, play.odds);
-  const reasoning = buildReasoning({ ...play, reliability });
+  const probabilitySupported = play.model_diagnostics?.probability_supported === true;
+  const reasoning = buildReasoning({ ...play, reliability, probability_supported: probabilitySupported });
   return {
     ...play,
     odds_opp: play.odds_opp ?? null,
@@ -930,7 +951,10 @@ export function rankAndDistribute(plays: ScoredPlay[]) {
   const sportCounts: Record<string, number> = {};
   let lowRelCount = 0;
   const freePicks: ScoredPlay[] = [];
-  for (const p of sorted) {
+  const edgeEligible = sorted.filter(
+    (p) => p.model_diagnostics?.probability_supported === true,
+  );
+  for (const p of edgeEligible) {
     if (freePicks.length >= FREE_PICKS_CAP) break;
     sportCounts[p.sport] = sportCounts[p.sport] || 0;
     if (sportCounts[p.sport] >= PER_SPORT_CAP) continue;
@@ -957,7 +981,7 @@ export function rankAndDistribute(plays: ScoredPlay[]) {
   }
   // Fallback: fill remaining slots ignoring the per-sport cap.
   if (todaysEdge.length < TODAYS_EDGE_CAP) {
-    for (const p of sorted) {
+    for (const p of edgeEligible) {
       if (todaysEdge.length >= TODAYS_EDGE_CAP) break;
       const k = keyOf(p);
       if (edgeKeys.has(k)) continue;

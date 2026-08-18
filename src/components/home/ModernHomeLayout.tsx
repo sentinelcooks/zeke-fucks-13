@@ -430,6 +430,9 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       p =>
         isTodayGamePick(p as any) &&
         isEdgeHistoryPick(p as any) &&
+        p.score_kind === "calibrated_probability" &&
+        p.calibration_status === "validated" &&
+        typeof p.calibrated_probability === "number" &&
         !isResultFinal(p.result),
     );
     const edgeTier = dedupe(todayEdge);
@@ -462,6 +465,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
         let reason = "unknown";
         if (gd !== todayET) reason = `game_date(${gd}) != todayET(${todayET})`;
         else if (tier !== "edge") reason = `tier=${p.tier ?? "null"}`;
+        else if (p.score_kind !== "calibrated_probability" || p.calibration_status !== "validated") reason = "calibration_not_supported";
         else if (status === "empty_slate") reason = "status=empty_slate";
         else if (isResultFinal(p.result)) reason = `result=${p.result} (graded)`;
         console.log(reason, {
@@ -1022,6 +1026,9 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                                   line: pick.line,
                                   direction: pick.direction,
                                   model_diagnostics: pick.model_diagnostics ?? null,
+                                  score_kind: pick.score_kind,
+                                  calibration_status: pick.calibration_status,
+                                  calibrated_probability: pick.calibrated_probability,
                                 },
                               },
                             });

@@ -611,6 +611,9 @@ const NbaPropsPage = () => {
         line?: number | string | null;
         direction?: string | null;
         model_diagnostics?: Record<string, unknown> | null;
+        score_kind?: string | null;
+        calibration_status?: string | null;
+        calibrated_probability?: number | null;
       };
     } | null;
 
@@ -754,6 +757,9 @@ const NbaPropsPage = () => {
               _savedCanonicalOnly: true,
               _savedMarket: view.market,
               _savedAvgValue: view.avg_value,
+              score_kind: view.score_kind,
+              calibration_status: view.calibration_status,
+              probability_supported: view.probability_supported,
             };
 
             if (!analyzerPayload) {
@@ -2211,6 +2217,8 @@ const NbaPropsPage = () => {
                   overUnder={results.over_under}
                   line={results.line}
                   propDisplay={formatDisplayPropType(results.prop_display || propType)}
+                  scoreKind={results.score_kind}
+                  probabilitySupported={results.probability_supported === true}
                 />
               </motion.div>
 
@@ -2344,6 +2352,7 @@ const NbaPropsPage = () => {
                   savedOdds={results._savedCanonicalOnly === true ? (results.odds ?? null) : null}
                   savedBook={results._savedCanonicalOnly === true ? (results._savedMarket?.bestBook ?? null) : null}
                   savedImpliedProbability={results._savedCanonicalOnly === true ? (results._savedMarket?.impliedProbability ?? null) : null}
+                  probabilitySupported={results.probability_supported === true}
                 />
               </Section>
 
@@ -2515,6 +2524,8 @@ const NbaPropsPage = () => {
                 withoutTeammatesData={results.without_teammates_analysis}
                 paceContext={results.pace_context}
                 savedSnapshot={results._savedSnapshot}
+                scoreKind={results.score_kind}
+                probabilitySupported={results.probability_supported === true}
               />
 
               {/* Correlated Props */}

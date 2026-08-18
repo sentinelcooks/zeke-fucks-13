@@ -37,6 +37,7 @@ describe("score() pipeline", () => {
       raw_confidence: 70, // percent form
     });
     expect(s.confidence).toBeCloseTo(0.7, 6);
+    expect(s.model_diagnostics?.probability_supported).toBe(false);
   });
 
   it("applies Platt calibration when supplied", () => {
@@ -50,6 +51,7 @@ describe("score() pipeline", () => {
       odds: -110,
       raw_confidence: 0.5,
       calibration: { method: "platt", params: { a: 2, b: -1 } },
+      calibrationSupported: true,
     });
     // sigmoid(2*0.5 - 1) = sigmoid(0) = 0.5
     expect(s.confidence).toBeCloseTo(0.5, 6);
@@ -65,7 +67,7 @@ describe("tierVerdict", () => {
     expect(tierVerdict(0.65, 0.03, 0.7, "moneyline", "", "home", +300)).toBe("Pass");
   });
   it("0.70 / 3% edge / 0.70 rel → Strong", () => {
-    expect(tierVerdict(0.70, 0.03, 0.75, "prop", "points", "over", -110)).toBe("Strong");
+    expect(tierVerdict(0.72, 0.03, 0.75, "prop", "points", "over", -110)).toBe("Strong");
   });
   it("below floor → Pass", () => {
     expect(tierVerdict(0.55, 0.01, 0.5, "prop", "points", "over", -110)).toBe("Pass");
@@ -86,7 +88,7 @@ describe("getMarketReliability", () => {
 
 describe("rankAndDistribute", () => {
   function make(sport: string, conf: number, edge: number, rel = 0.8, odds = -110) {
-    return score({
+    const scored = score({
       sport,
       bet_type: "prop",
       player_name: `P-${sport}-${conf}`,
@@ -98,6 +100,14 @@ describe("rankAndDistribute", () => {
       raw_confidence: 0.5 + edge, // -> conf = 0.5+edge when identity-calibrated
       reliability: rel,
     });
+    scored.model_diagnostics = {
+      ...(scored.model_diagnostics ?? {}),
+      score_kind: "calibrated_probability",
+      calibration_status: "validated",
+      calibration_applied: true,
+      probability_supported: true,
+    };
+    return scored;
   }
 
   it("fills Today's Edge up to 5 from Strong picks", () => {
@@ -134,5 +144,22 @@ describe("rankAndDistribute", () => {
     const { dailyPicks, todaysEdge } = rankAndDistribute(plays);
     expect(dailyPicks.length).toBe(0);
     expect(todaysEdge.length).toBe(0);
+  });
+
+  it("never promotes an unsupported heuristic score to Today's Edge", () => {
+    const play = score({
+      sport: "mlb",
+      bet_type: "prop",
+      player_name: "Pitcher",
+      prop_type: "pitcher_strikeouts",
+      line: 6.5,
+      direction: "over",
+      odds: -110,
+      odds_opp: -110,
+      raw_confidence: 0.8,
+    });
+    const { todaysEdge } = rankAndDistribute([play]);
+    expect(todaysEdge).toHaveLength(0);
+    expect(play.reasoning).toContain("heuristic model score");
   });
 });

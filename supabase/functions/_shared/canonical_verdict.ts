@@ -1,3 +1,5 @@
+import { PROB_FLOOR, PROB_LEAN, PROB_STRONG } from "./thresholds.ts";
+
 export type CanonicalVerdict = "STRONG" | "LEAN" | "RISKY" | "PASS";
 export type ScoredVerdict = "Strong" | "Lean" | "Pass";
 
@@ -18,10 +20,10 @@ export function normalizeConfidence01(input: unknown, fallback = 0): number {
 }
 
 export function verdictFromConfidence(input: unknown): CanonicalVerdict {
-  const confidence = normalizeConfidencePercent(input, 0);
-  if (confidence >= 72) return "STRONG";
-  if (confidence >= 58) return "LEAN";
-  if (confidence >= 42) return "RISKY";
+  const confidence = normalizeConfidence01(input, 0);
+  if (confidence >= PROB_STRONG) return "STRONG";
+  if (confidence >= PROB_LEAN) return "LEAN";
+  if (confidence >= PROB_FLOOR) return "RISKY";
   return "PASS";
 }
 

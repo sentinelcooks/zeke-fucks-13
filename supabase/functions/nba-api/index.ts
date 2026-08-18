@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { callAI, AIProviderError, ANTI_GENERIC_INSTRUCTION } from "../_shared/ai-provider.ts";
 import { normalizeNbaTeam } from "../_shared/nba_teams.ts";
-import { normalizeCanonicalVerdict, normalizeConfidencePercent } from "../_shared/canonical_verdict.ts";
+import { normalizeCanonicalVerdict, normalizeConfidencePercent, verdictFromConfidence } from "../_shared/canonical_verdict.ts";
 import { normalizeDirection, normalizeNbaPropType } from "../_shared/prop_normalization.ts";
 import { requirePremiumAccess } from "../_shared/premium-access.ts";
 
@@ -65,7 +65,10 @@ function validateDataQuality(playerData: any, injuryData: any, gameData: any): D
     playerData?.season_hit_rate?.sample ??
     null;
 
-  if (seasonGames !== null && seasonGames < 5) {
+  if (seasonGames === null) {
+    flags.push("MISSING_SAMPLE_SIZE");
+    penalty += 12;
+  } else if (seasonGames < 5) {
     flags.push("INSUFFICIENT_SAMPLE");
     penalty += 15;
   } else if (seasonGames !== null && seasonGames < 15) {
@@ -75,20 +78,27 @@ function validateDataQuality(playerData: any, injuryData: any, gameData: any): D
 
   const lineupStatus = gameData?.lineupStatus ?? gameData?.lineup_status ?? null;
   const lineupConfirmed = lineupStatus === "confirmed";
-  if (lineupStatus !== null && !lineupConfirmed) {
+  if (lineupStatus === null) {
+    flags.push("LINEUP_STATUS_MISSING");
+    penalty += 5;
+  } else if (!lineupConfirmed) {
     flags.push("LINEUP_UNCONFIRMED");
     penalty += 5;
   }
 
-  let injuryFresh = true;
+  let injuryFresh = false;
   const injuryUpdatedAt = injuryData?.lastUpdated ?? injuryData?.last_updated ?? null;
   if (injuryUpdatedAt) {
-    const age = Date.now() - new Date(injuryUpdatedAt).getTime();
-    injuryFresh = age < 4 * 60 * 60 * 1000;
+    const updatedAtMs = new Date(injuryUpdatedAt).getTime();
+    const age = Date.now() - updatedAtMs;
+    injuryFresh = Number.isFinite(updatedAtMs) && age >= 0 && age < 4 * 60 * 60 * 1000;
     if (!injuryFresh) {
       flags.push("STALE_INJURY_DATA");
       penalty += 3;
     }
+  } else {
+    flags.push("INJURY_TIMESTAMP_MISSING");
+    penalty += 5;
   }
 
   const hasSeason = playerData?.season_hit_rate?.rate ?? playerData?.seasonHitRate ?? null;
@@ -103,7 +113,7 @@ function validateDataQuality(playerData: any, injuryData: any, gameData: any): D
 
   const sampleSize: DataQualityReport["sampleSize"] =
     seasonGames === null
-      ? "sufficient"
+      ? "insufficient"
       : seasonGames < 5
         ? "insufficient"
         : seasonGames < 15
@@ -132,6 +142,12 @@ function dataQualityWarnings(q: DataQualityReport, sampleSize: number | null): s
     out.push("⚠️ Injury data may be stale — verify before betting");
   if (q.flags.includes("NO_HISTORICAL_DATA"))
     out.push("⚠️ No historical data available — model is estimating");
+  if (q.flags.includes("LINEUP_STATUS_MISSING"))
+    out.push("Lineup status is unavailable — model score reduced");
+  if (q.flags.includes("INJURY_TIMESTAMP_MISSING"))
+    out.push("Injury data timestamp is unavailable — model score reduced");
+  if (q.flags.includes("MISSING_SAMPLE_SIZE"))
+    out.push("Verified sample size is unavailable — model score reduced");
   return out;
 }
 
@@ -158,83 +174,33 @@ function americanToImpliedProb(odds: number): number {
   return odds > 0 ? 100 / (odds + 100) : -odds / (-odds + 100);
 }
 
-function americanToDecimal(odds: number): number {
-  if (!odds) return 1;
-  return odds > 0 ? 1 + odds / 100 : 1 + 100 / -odds;
-}
-
 // Two-way no-vig: pass both sides' implied prob; we only have one side here so
 // approximate vig by assuming a 5% market hold split symmetrically.
-function removeVig(implied: number): number {
-  // Simple normalization assuming a typical 5% hold (book holds ~5% on 2-way).
-  // True devig would require both sides; for one-sided we shrink by half-hold.
-  const HALF_HOLD = 0.025;
-  return Math.max(0.01, Math.min(0.99, implied - HALF_HOLD));
-}
-
-function applyJuicePenalty(confidence: number, americanOdds: number): { adjusted: number; penalty: number } {
-  if (!americanOdds) return { adjusted: confidence, penalty: 0 };
-  let penalty = 0;
-  if (americanOdds <= -200) penalty = 12;
-  else if (americanOdds <= -170) penalty = 8;
-  else if (americanOdds <= -150) penalty = 5;
-  else if (americanOdds <= -130) penalty = 3;
-  return { adjusted: Math.max(0, confidence - penalty), penalty };
-}
-
 function buildDecisionOutput(
   prediction: PredictionOutput,
   americanOdds: number | null | undefined,
-  stake = 100,
+  _stake = 100,
 ): DecisionOutput {
-  let impliedProbability: number | null = null;
-  let ev: number | null = null;
-  let evPercent: number | null = null;
-  let verdict: DecisionOutput["verdict"] = "PASS";
-  let unitSize = 0;
-  let juicePenalty = 0;
-  let displayConfidence = prediction.confidence;
+  const validOdds = americanOdds !== null && americanOdds !== undefined &&
+    Number.isFinite(americanOdds) && americanOdds !== 0;
+  const canonical = verdictFromConfidence(prediction.confidence);
+  const verdict: DecisionOutput["verdict"] = canonical === "RISKY" ? "SLIGHT" : canonical;
 
-  if (americanOdds !== null && americanOdds !== undefined && Number.isFinite(americanOdds) && americanOdds !== 0) {
-    const rawImplied = americanToImpliedProb(americanOdds);
-    impliedProbability = removeVig(rawImplied);
-    const decimal = americanToDecimal(americanOdds);
-    const winAmt = stake * (decimal - 1);
-    const p = prediction.confidence / 100;
-    ev = p * winAmt - (1 - p) * stake;
-    evPercent = (ev / stake) * 100;
-
-    const juice = applyJuicePenalty(prediction.confidence, americanOdds);
-    displayConfidence = juice.adjusted;
-    juicePenalty = juice.penalty;
-
-    if (displayConfidence >= 70 && evPercent >= 5) verdict = "STRONG";
-    else if (displayConfidence >= 60 && evPercent >= 2) verdict = "LEAN";
-    else if (displayConfidence >= 55 && evPercent > 0) verdict = "SLIGHT";
-    else verdict = "PASS";
-
-    if (verdict === "STRONG" && evPercent >= 8) unitSize = 2;
-    else if (verdict === "STRONG" || (verdict === "LEAN" && evPercent >= 5)) unitSize = 1.5;
-    else if (verdict === "LEAN" || verdict === "SLIGHT") unitSize = 1;
-    else unitSize = 0;
-  } else {
+  if (!validOdds) {
     // No odds available — verdict from confidence alone
-    if (prediction.confidence >= 70) verdict = "STRONG";
-    else if (prediction.confidence >= 60) verdict = "LEAN";
-    else if (prediction.confidence >= 55) verdict = "SLIGHT";
-    else verdict = "PASS";
+    // Odds are optional; calibration and EV are handled by the queue worker.
   }
 
   return {
     prediction,
     odds: americanOdds ?? null,
-    impliedProbability,
-    ev,
-    evPercent,
+    impliedProbability: validOdds ? americanToImpliedProb(americanOdds) : null,
+    ev: null,
+    evPercent: null,
     verdict,
-    unitSize,
-    juicePenaltyApplied: juicePenalty,
-    displayConfidence,
+    unitSize: 0,
+    juicePenaltyApplied: 0,
+    displayConfidence: prediction.confidence,
   };
 }
 
@@ -4535,12 +4501,19 @@ serve(async (req) => {
         console.error("Prediction/Decision layer failed:", e?.message);
       }
 
-      const canonicalConfidence = Math.round(normalizeConfidencePercent(result.confidence));
-      const canonicalVerdict = normalizeCanonicalVerdict(result.verdict ?? result.decision?.verdict, canonicalConfidence);
+      const effectiveScore = result.prediction?.confidence ?? result.confidence;
+      const canonicalConfidence = Math.round(normalizeConfidencePercent(effectiveScore));
+      const canonicalVerdict = normalizeCanonicalVerdict(undefined, canonicalConfidence);
       result.confidence = canonicalConfidence;
       result.verdict = canonicalVerdict;
       result.canonical_confidence = canonicalConfidence;
       result.canonical_verdict = canonicalVerdict;
+      result.score_kind = "heuristic_score";
+      result.calibration_status = "pending_queue_validation";
+      result.probability_supported = false;
+      result.ev = null;
+      result.ev_percent = null;
+      result.unit_size = 0;
 
       return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }

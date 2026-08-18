@@ -539,6 +539,8 @@ const FreePropsPage = () => {
                   sport={prop.sport}
                   withoutTeammatesData={results.without_teammates}
                   paceContext={results.pace_context}
+                  scoreKind={results.score_kind}
+                  probabilitySupported={results.probability_supported === true}
                 />
 
 

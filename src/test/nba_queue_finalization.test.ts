@@ -40,6 +40,7 @@ function makePlay(overrides: Partial<ScoredPlay> = {}): ScoredPlay {
     event_id: "evt_queue",
     commence_time: "2026-05-07T23:00:00Z",
     game_date: "2026-05-07",
+    ...overrides,
     model_diagnostics: {
       analyzer_skipped_reason: "analyzer_call_budget_exceeded",
       canonical_confidence: Math.round(confidence * 100),
@@ -48,9 +49,12 @@ function makePlay(overrides: Partial<ScoredPlay> = {}): ScoredPlay {
       marketDataQuality: "medium",
       marketDepth: "normal",
       opponentResolutionStatus: "resolved",
+      score_kind: "calibrated_probability",
+      calibration_status: "validated",
+      calibration_applied: true,
+      probability_supported: true,
       ...(overrides.model_diagnostics ?? {}),
     },
-    ...overrides,
   };
 }
 
@@ -180,6 +184,26 @@ describe("NBA queue finalization", () => {
     expect(result.finalTier).toBe("daily");
     expect(result.diagnostics.edge_pool_selection_reason).toBe("edge_cap_full");
   });
+
+  it("does not promote an uncalibrated analyzer score as an edge pick", () => {
+    const result = buildNbaQueueFinalization({
+      finalized: makePlay({
+        model_diagnostics: {
+          score_kind: "heuristic_score",
+          calibration_status: "insufficient_evidence",
+          calibration_applied: false,
+          probability_supported: false,
+        },
+      }),
+      baseDiagnostics: null,
+      currentEdgeCount: 0,
+      edgeCap: 5,
+    });
+
+    expect(result.canPromote).toBe(false);
+    expect(result.promotionBlocker).toBe("calibration_not_supported");
+    expect(result.finalTier).not.toBe("edge");
+  });
 });
 
 describe("generic queue finalization", () => {
@@ -229,7 +253,7 @@ describe("generic queue finalization", () => {
     });
 
     expect(result.canPromote).toBe(false);
-    expect(result.finalTier).toBe("value");
+    expect(result.finalTier).toBe("daily");
     expect(result.promotionBlocker).toBe("edge_below_lean_min");
     expect(result.diagnostics.edgeDowngradeReason).toBe("edge_below_lean_min");
   });

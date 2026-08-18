@@ -41,6 +41,7 @@ function makePlay(overrides: Partial<ScoredPlay> = {}): ScoredPlay {
     event_id: "evt_1",
     commence_time: "2026-05-06T23:00:00Z",
     game_date: "2026-05-06",
+    ...overrides,
     model_diagnostics: {
       canonical_confidence: Math.round(confidence * 100),
       canonical_verdict: "LEAN",
@@ -52,9 +53,12 @@ function makePlay(overrides: Partial<ScoredPlay> = {}): ScoredPlay {
       sourceContractVersion: "analyzer-finalize.v1",
       analyzer_payload: { player: "Mike Conley", prop_type: "3-pointers" },
       analyzer_response_snapshot: { confidence: Math.round(confidence * 100), verdict: "Lean" },
+      score_kind: "calibrated_probability",
+      calibration_status: "validated",
+      calibration_applied: true,
+      probability_supported: true,
       ...(overrides.model_diagnostics ?? {}),
     },
-    ...overrides,
   };
 }
 
@@ -243,11 +247,12 @@ describe("NBA daily pick canonical diagnostics", () => {
       modelUsed: "nba-api/analyze",
     });
 
-    expect(row.model_diagnostics).toMatchObject({
+    expect(row?.model_diagnostics).toMatchObject({
       canonical_confidence: 72,
       canonical_verdict: "LEAN",
       stored_confidence: 72,
       stored_verdict: "LEAN",
+      probability_supported: true,
     });
   });
 });
