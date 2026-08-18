@@ -34,6 +34,25 @@ const NBA_TEAMS: Record<string, string> = {
   "Washington Wizards": "wsh",
 };
 
+const WNBA_TEAMS: Record<string, string> = {
+  "Atlanta Dream": "atl",
+  "Chicago Sky": "chi",
+  "Connecticut Sun": "con",
+  "Dallas Wings": "dal",
+  "Golden State Valkyries": "gs",
+  "Indiana Fever": "ind",
+  "Las Vegas Aces": "lv",
+  "Los Angeles Sparks": "la",
+  "LA Sparks": "la",
+  "Minnesota Lynx": "min",
+  "New York Liberty": "ny",
+  "Phoenix Mercury": "phx",
+  "Portland Fire": "por",
+  "Seattle Storm": "sea",
+  "Toronto Tempo": "tor",
+  "Washington Mystics": "wsh",
+};
+
 const MLB_TEAMS: Record<string, string> = {
   "Arizona Diamondbacks": "ari",
   "Atlanta Braves": "atl",
@@ -141,11 +160,21 @@ const NFL_TEAMS: Record<string, string> = {
   "Washington Commanders": "wsh",
 };
 
-export function getTeamLogoUrl(teamName: string, sport: "nba" | "mlb" | "nhl" | "nfl"): string {
-  const map = sport === "nba" ? NBA_TEAMS : sport === "mlb" ? MLB_TEAMS : sport === "nhl" ? NHL_TEAMS : NFL_TEAMS;
+export type TeamLogoSport = "nba" | "wnba" | "mlb" | "nhl" | "nfl";
+
+export function getTeamLogoUrl(teamName: string, sport: TeamLogoSport): string {
+  const map = sport === "nba"
+    ? NBA_TEAMS
+    : sport === "wnba"
+      ? WNBA_TEAMS
+      : sport === "mlb"
+        ? MLB_TEAMS
+        : sport === "nhl"
+          ? NHL_TEAMS
+          : NFL_TEAMS;
   const abbr = map[teamName];
   if (!abbr) return "";
 
-  const sportPath = sport === "nba" ? "nba" : sport === "mlb" ? "mlb" : sport === "nhl" ? "nhl" : "nfl";
+  const sportPath = sport;
   return `https://a.espncdn.com/combiner/i?img=/i/teamlogos/${sportPath}/500/${abbr}.png&h=40&w=40`;
 }

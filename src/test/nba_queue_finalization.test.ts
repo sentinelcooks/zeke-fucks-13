@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildNbaQueueFinalization } from "../../supabase/functions/_shared/nba_queue_finalization";
+import {
+  buildGenericQueueFinalization,
+  buildNbaQueueFinalization,
+} from "../../supabase/functions/_shared/nba_queue_finalization";
 import type { ScoredPlay } from "../../supabase/functions/_shared/edge_scoring";
 
 function makePlay(overrides: Partial<ScoredPlay> = {}): ScoredPlay {
@@ -176,5 +179,58 @@ describe("NBA queue finalization", () => {
     expect(result.promotionBlocker).toBe("edge_cap_full");
     expect(result.finalTier).toBe("daily");
     expect(result.diagnostics.edge_pool_selection_reason).toBe("edge_cap_full");
+  });
+});
+
+describe("generic queue finalization", () => {
+  it("promotes an analyzer-backed 68% Lean with at least 2% positive edge", () => {
+    const result = buildGenericQueueFinalization({
+      finalized: makePlay({
+        sport: "mlb",
+        confidence: 0.68,
+        projected_prob: 0.68,
+        implied_prob: 0.656,
+        edge: 0.024,
+        reliability: 0.75,
+        verdict: "Lean",
+        model_diagnostics: {
+          canonical_confidence: 68,
+          canonical_verdict: "LEAN",
+        },
+      }),
+      baseDiagnostics: null,
+      currentEdgeCount: 0,
+      edgeCap: 4,
+    });
+
+    expect(result.canPromote).toBe(true);
+    expect(result.finalTier).toBe("edge");
+    expect(result.promotionBlocker).toBeNull();
+  });
+
+  it("does not promote a Lean whose analyzer probability has no market edge", () => {
+    const result = buildGenericQueueFinalization({
+      finalized: makePlay({
+        sport: "mlb",
+        confidence: 0.65,
+        projected_prob: 0.65,
+        implied_prob: 0.71,
+        edge: 0,
+        reliability: 0.75,
+        verdict: "Lean",
+        model_diagnostics: {
+          canonical_confidence: 65,
+          canonical_verdict: "LEAN",
+        },
+      }),
+      baseDiagnostics: null,
+      currentEdgeCount: 0,
+      edgeCap: 4,
+    });
+
+    expect(result.canPromote).toBe(false);
+    expect(result.finalTier).toBe("value");
+    expect(result.promotionBlocker).toBe("edge_below_lean_min");
+    expect(result.diagnostics.edgeDowngradeReason).toBe("edge_below_lean_min");
   });
 });

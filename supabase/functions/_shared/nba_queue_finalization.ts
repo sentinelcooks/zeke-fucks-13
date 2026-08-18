@@ -8,6 +8,11 @@ import {
   normalizeConfidencePercent,
   type CanonicalVerdict,
 } from "./canonical_verdict.ts";
+import {
+  EDGE_LEAN_MIN,
+  PROB_LEAN,
+  RELIABILITY_LEAN_MIN,
+} from "./thresholds.ts";
 
 export type NbaQueueFinalTier = "edge" | "daily" | "value";
 
@@ -49,11 +54,12 @@ function promotionBlockerFor(args: {
 
 // For sports other than NBA the NBA edge gate would always fail (it requires
 // NBA-only diagnostic fields like marketDataQuality / opponentResolutionStatus
-// and applies NBA heavy-juice thresholds). MLB/NHL/UFC picks never carry those
+// and applies NBA heavy-juice thresholds). WNBA/MLB/NHL/UFC picks never carry those
 // fields, so every queue row was being demoted to daily/value and tier='edge'
 // was permanently empty for those sports. This finalizer mirrors the non-NBA
-// branch in sport_scan.ts (top-N within edge cap, no NBA gate) but operates
-// per-row using the running edge count the worker maintains.
+// branch in sport_scan.ts but operates per-row using the running edge count
+// the worker maintains. It preserves the shared Lean thresholds instead of
+// applying NBA's 70% edge minimum to every sport.
 export function buildGenericQueueFinalization(args: {
   baseDiagnostics: Record<string, unknown> | null | undefined;
   currentEdgeCount: number;
@@ -68,8 +74,12 @@ export function buildGenericQueueFinalization(args: {
   let promotionBlocker: string | null = null;
   if (canonicalVerdict !== "STRONG" && canonicalVerdict !== "LEAN") {
     promotionBlocker = "verdict_not_strong_or_lean";
-  } else if (hitRate < 70) {
-    promotionBlocker = "confidence_below_edge_min";
+  } else if (args.finalized.confidence < PROB_LEAN) {
+    promotionBlocker = "confidence_below_lean_min";
+  } else if (args.finalized.edge < EDGE_LEAN_MIN) {
+    promotionBlocker = "edge_below_lean_min";
+  } else if ((args.finalized.reliability ?? 0) < RELIABILITY_LEAN_MIN) {
+    promotionBlocker = "reliability_below_lean_min";
   } else if (args.currentEdgeCount >= args.edgeCap) {
     promotionBlocker = "edge_cap_full";
   }
@@ -93,6 +103,7 @@ export function buildGenericQueueFinalization(args: {
   diagnostics.edge_pool_selection_reason = canPromote
     ? "selected_from_queue_generic"
     : promotionBlocker;
+  diagnostics.edgeDowngradeReason = promotionBlocker;
   diagnostics.evPct = Math.round(args.finalized.ev_pct * 100) / 100;
   diagnostics.modelEdge = Math.round(args.finalized.edge * 10000) / 10000;
   diagnostics.queue_processed_at = (args.now ?? new Date()).toISOString();

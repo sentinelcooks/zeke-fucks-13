@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
 
   // 2. Invoke per-sport scanners SEQUENTIALLY to avoid AI Gateway rate limits
   console.log("Dispatching per-sport scanners sequentially...");
-  const sports = ["nba", "mlb", "nhl", "ufc"];
+  const sports = ["nba", "wnba", "mlb", "nhl", "ufc"];
   const perSport: Record<string, any> = {};
   for (const s of sports) {
     try {

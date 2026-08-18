@@ -1,7 +1,7 @@
 // Per-sport scan: fetch events/props, prefilter, run analyzer validation,
-// and write surviving candidates to daily_picks tiered as 'edge' (>=0.70)
-// or 'daily' (otherwise). No '_pending' rows are written.
-// Used by slate-scanner-{nba,mlb,nhl,ufc} so each sport runs in its own
+// and write analyzer-finalized candidates to daily_picks using the shared
+// Strong/Lean edge math. No '_pending' rows are written.
+// Used by slate-scanner-{nba,wnba,mlb,nhl,ufc} so each sport runs in its own
 // edge invocation (isolated wall-time budget).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
@@ -30,6 +30,11 @@ import {
 } from "./canonical_verdict.ts";
 import { buildDailyPickRow, applyAnalyzerFinalizeInsertGuard } from "./daily_pick_rows.ts";
 import { enqueueGenericAnalyzerCandidates } from "./analyzer_queue.ts";
+import {
+  buildAnalyzerRequest,
+  selectAnalyzerPoolDiversifiedByBetType,
+  teamMarketExclusivityKey,
+} from "./analyzer_routing.ts";
 
 // App slate timezone — matches the public-display assumption in src/lib/gameDate.ts.
 const APP_TZ = "America/New_York";
@@ -57,6 +62,7 @@ function todayET(): string {
 
 const SPORT_KEYS: Record<string, string> = {
   nba: "basketball_nba",
+  wnba: "basketball_wnba",
   mlb: "baseball_mlb",
   nhl: "icehockey_nhl",
   ufc: "mma_mixed_martial_arts",
@@ -67,6 +73,7 @@ const SPORT_KEYS: Record<string, string> = {
 // MLB/NHL candidate. Tuned per sport.
 const ANALYZER_MIN_CONF: Record<string, number> = {
   nba: 0.65,
+  wnba: 0.58,
   mlb: 0.45,
   nhl: 0.50,
   ufc: 0.50,
@@ -77,18 +84,20 @@ const ANALYZER_MIN_CONF: Record<string, number> = {
 // NBA, so a uniform 0.62 gate filtered every non-NBA candidate to zero.
 const PREFILTER_MIN_CONF: Record<string, number> = {
   nba: 0.62,
+  // WNBA game-line candidates start from a conservative market prior and
+  // are promoted only after moneyline-api returns canonical confidence/EV.
+  wnba: 0.45,
   mlb: 0.45,
   nhl: 0.50,
   ufc: 0.50,
 };
 
 // Sport → analyzer function path. nba-api/analyze is multi-sport: it dispatches
-// internally to mlb-model/analyze and nhl-model/analyze for 20-factor team
-// context. ANALYZER_LIMIT below caps per-sport concurrency so MLB/NHL traffic
-// does not starve NBA. A null entry means "no analyzer endpoint exists" and
-// such rows MUST NOT be inserted into Today's Edge / Picks (analyzer-required).
+// This is the default player-prop analyzer. Queue routing overrides it per
+// candidate for moneylines, spreads, and totals via analyzer_routing.ts.
 const ANALYZER_ENDPOINT: Record<string, string | null> = {
   nba: "nba-api/analyze",
+  wnba: "nba-api/analyze",
   ufc: "ufc-api/analyze",
   mlb: "nba-api/analyze",
   nhl: "nba-api/analyze",
@@ -97,6 +106,7 @@ const ANALYZER_ENDPOINT: Record<string, string | null> = {
 // Per-sport analyzer concurrency. Bounded to keep AI Gateway pressure low.
 const ANALYZER_LIMIT: Record<string, number> = {
   nba: 3,
+  wnba: 2,
   mlb: 2,
   nhl: 2,
   ufc: 1,
@@ -108,6 +118,7 @@ const DIAGNOSTIC_SAMPLE_LIMIT = 25;
 // Per-sport edge cap (top-N by quality_score get tier='edge' inside this scan).
 const EDGE_CAP_PER_SPORT: Record<string, number> = {
   nba: 5,
+  wnba: 4,
   mlb: 4,
   nhl: 3,
   ufc: 2,
@@ -522,7 +533,9 @@ const NHL_MAP: Record<string, string> = {
 function mapMarketToProp(sport: string, rawMarketKey: string): string | null {
   const key = rawMarketKey.replace(/_alternate$/, "");
 
-  if (sport === "nba") return NBA_MAP[key] ? normalizeNbaPropType(NBA_MAP[key]) : null;
+  if (sport === "nba" || sport === "wnba") {
+    return NBA_MAP[key] ? normalizeNbaPropType(NBA_MAP[key]) : null;
+  }
   if (sport === "mlb") return MLB_MAP[key] ?? null;
   if (sport === "nhl") return NHL_MAP[key] ?? null;
 
@@ -773,6 +786,7 @@ async function fnPost(path: string, body: any, timeoutMs = analyzerTimeoutMs()):
 // ── Roster name resolver (same as orchestrator pre-split) ──
 const ESPN_SPORT_PATH: Record<string, { sport: string; league: string }> = {
   nba: { sport: "basketball", league: "nba" },
+  wnba: { sport: "basketball", league: "wnba" },
   mlb: { sport: "baseball", league: "mlb" },
   nhl: { sport: "hockey", league: "nhl" },
 };
@@ -1067,18 +1081,24 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
     oddsMap.set(matchupKey(ev.away_team, ev.home_team), ev);
   }
 
-  // MLB currently does not have reliable player props on the free/current Odds API setup.
-  // This fallback creates conservative, market-based game-line candidates from h2h/spreads/totals.
-  // Non-prop plays skip nba-api/analyze and can still populate Free Picks / Today's Edge.
-  const gameLineMinEdge = sport === "mlb" ? 0.006 : 0.035;
-  const gameLineBump = sport === "mlb" ? 0.045 : 0.03;
-  const moneylineHomeBump = sport === "mlb" ? 0.05 : 0.04;
-  const moneylineAwayBump = sport === "mlb" ? 0.04 : 0.02;
+  // MLB and WNBA use a permissive market-derived discovery prior so real
+  // h2h/spread/total lines reach their canonical sport model. This is not
+  // the publish decision: the analyzer worker recomputes probability/EV and
+  // applies the shared Strong/Lean thresholds before any public row is saved.
+  const usesTeamLineDiscoveryPrior = sport === "mlb" || sport === "wnba";
+  const gameLineMinEdge = usesTeamLineDiscoveryPrior ? 0.006 : 0.035;
+  const gameLineBump = usesTeamLineDiscoveryPrior ? 0.045 : 0.03;
+  const moneylineHomeBump = usesTeamLineDiscoveryPrior ? 0.05 : 0.04;
+  const moneylineAwayBump = usesTeamLineDiscoveryPrior ? 0.04 : 0.02;
 
   const candidateMap = new Map<string, ScoredPlay>();
 
   function addCandidate(play: ScoredPlay) {
-    const key = [
+    // Moneylines, spreads, and totals are mutually exclusive recommendations:
+    // only one side for each event + market may enter the analyzer queue.
+    // The fallback identity retains the existing per-selection behavior for
+    // malformed/legacy rows whose event and matchup cannot be resolved.
+    const key = teamMarketExclusivityKey(play) ?? [
       play.sport,
       play.bet_type,
       play.player_name,
@@ -1086,12 +1106,20 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
       play.prop_type,
       play.direction,
       play.line,
-      play.odds,
     ].join("|");
 
     const existing = candidateMap.get(key);
 
-    if (!existing || play.confidence > existing.confidence || play.ev_pct > existing.ev_pct) {
+    const playRank = play.quality_score ?? play.score ?? play.edge * play.confidence;
+    const existingRank = existing
+      ? existing.quality_score ?? existing.score ?? existing.edge * existing.confidence
+      : Number.NEGATIVE_INFINITY;
+    const shouldReplace = !existing ||
+      playRank > existingRank ||
+      (playRank === existingRank && play.edge > existing.edge) ||
+      (playRank === existingRank && play.edge === existing.edge && play.ev_pct > existing.ev_pct);
+
+    if (shouldReplace) {
       candidateMap.set(key, play);
     }
   }
@@ -1102,8 +1130,8 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
 
     if (!ev?.bookmakers?.length) continue;
 
-    // Use all books, not only the first book. MLB free props are missing, so
-    // this gives the game-line fallback enough candidates to work with.
+    // Use all books, not only the first book, so market-line discovery has
+    // enough candidates for the diversified analyzer pool.
     for (const bm of ev.bookmakers || []) {
       for (const mkt of bm.markets || []) {
         if (mkt.key === "h2h") {
@@ -2222,16 +2250,18 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
   const analyzerPool = sport === "nba"
     ? selectNbaAnalyzerPoolDiversified(prefiltered, analyzerPoolCap)
     : (() => {
-      const sorted = [...prefiltered].sort((a, b) => b.edge - a.edge);
-      return {
-        selected: sorted.slice(0, analyzerPoolCap),
-        excluded: sorted
-          .slice(analyzerPoolCap)
+        const diversified = selectAnalyzerPoolDiversifiedByBetType(
+          prefiltered,
+          analyzerPoolCap,
+        );
+        return {
+          selected: diversified.selected,
+          excluded: diversified.excluded
           .map((p) => candidateDiagnostic(p, "analyzer_pool_cap_exceeded")),
-        truncated: sorted.length > analyzerPoolCap,
-        ranks: undefined as Map<string, AnalyzerPoolRankInfo> | undefined,
-      };
-    })();
+          truncated: diversified.truncated,
+          ranks: undefined as Map<string, AnalyzerPoolRankInfo> | undefined,
+        };
+      })();
   const top = analyzerPool.selected;
 
   // ── Discovery-only short-circuit ──────────────────────────────────────
@@ -2261,8 +2291,8 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
   let duplicateUpdateCount = 0;
 
   if (options.inlineAnalyze !== true) {
-    const today_str = new Date().toISOString().slice(0, 10);
-    const endpoint = ANALYZER_ENDPOINT[sport] ?? "nba-api/analyze";
+    const today_str = todayET();
+    const fallbackEndpoint = ANALYZER_ENDPOINT[sport] ?? "nba-api/analyze";
 
     const entries = top.map((p) => {
       const md = (p.model_diagnostics ?? {}) as Record<string, unknown>;
@@ -2293,22 +2323,14 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
         total_line: p.total_line ?? null,
         reasoning: p.reasoning ?? null,
       };
-      const analyzer_payload = {
-        player: p.player_name,
-        prop_type: p.prop_type,
-        line: p.line,
-        over_under: normalizeDirection(p.direction),
-        opponent: p.opponent || "",
-        team: p.team || null,
-        home_team: p.home_team || null,
-        away_team: p.away_team || null,
-        sport,
-        bet_type: "player_prop",
-      };
+      const route = buildAnalyzerRequest(
+        { ...p, sport, direction: normalizeDirection(p.direction) },
+        fallbackEndpoint,
+      );
       return {
         play: p,
-        analyzerEndpoint: endpoint,
-        analyzerPayload: analyzer_payload,
+        analyzerEndpoint: route.endpoint ?? fallbackEndpoint,
+        analyzerPayload: route.payload,
         candidatePayload: candidate_payload,
         intendedTier,
         preGateTier,
@@ -2513,7 +2535,7 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
               },
             },
           });
-          const today_str = new Date().toISOString().slice(0, 10);
+          const today_str = todayET();
           const entries = queueFirstCandidates.map((p) => {
             const intendedTier =
               ((p.model_diagnostics ?? {}) as Record<string, unknown>).intended_tier as
@@ -2548,22 +2570,14 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
               total_line: p.total_line ?? null,
               reasoning: p.reasoning ?? null,
             };
-            const analyzer_payload = {
-              player: p.player_name,
-              prop_type: p.prop_type,
-              line: p.line,
-              over_under: normalizeDirection(p.direction),
-              opponent: p.opponent || "",
-              team: p.team || null,
-              home_team: p.home_team || null,
-              away_team: p.away_team || null,
-              sport,
-              bet_type: "player_prop",
-            };
+            const route = buildAnalyzerRequest(
+              { ...p, sport, direction: normalizeDirection(p.direction) },
+              endpoint,
+            );
             return {
               play: p,
-              analyzerEndpoint: endpoint,
-              analyzerPayload: analyzer_payload,
+              analyzerEndpoint: route.endpoint ?? endpoint,
+              analyzerPayload: route.payload,
               candidatePayload: candidate_payload,
               intendedTier,
               preGateTier,
@@ -2919,7 +2933,7 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
     return "value";
   };
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayET();
 
   let droppedNoGameDate = 0;
   let nbaHardSafetyDropped = 0;
@@ -3305,21 +3319,14 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
                 total_line: p.total_line ?? null,
                 reasoning: p.reasoning ?? null,
               };
-              const analyzer_payload = analyzer_body ?? {
-                player: p.player_name,
-                prop_type: p.prop_type,
-                line: p.line,
-                over_under: normalizeDirection(p.direction),
-                opponent: p.opponent || "",
-                team: p.team || null,
-                home_team: p.home_team || null,
-                away_team: p.away_team || null,
-                sport,
-                bet_type: "player_prop",
-              };
+              const route = buildAnalyzerRequest(
+                { ...p, sport, direction: normalizeDirection(p.direction) },
+                endpoint,
+              );
+              const analyzer_payload = analyzer_body ?? route.payload;
               return {
                 play: p,
-                analyzerEndpoint: endpoint,
+                analyzerEndpoint: route.endpoint ?? endpoint,
                 analyzerPayload: analyzer_payload,
                 candidatePayload: candidate_payload,
                 intendedTier,

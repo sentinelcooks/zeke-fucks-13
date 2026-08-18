@@ -42,8 +42,12 @@ import {
   normalizeConfidencePercent,
   canonicalToScoredVerdict,
 } from "./canonical_verdict.ts";
-import type { ScoredPlay } from "./edge_scoring.ts";
+import { getMarketReliability, type ScoredPlay } from "./edge_scoring.ts";
 import { parseRetryAfterMs } from "./sport_scan.ts";
+import {
+  analyzerConfidenceRaw,
+  analyzerEndpointForCandidate,
+} from "./analyzer_routing.ts";
 
 // Game-day in America/New_York. The scanner side already computes game_date
 // via toETDate() but the analyzer worker used to slice the first 10 chars of
@@ -70,23 +74,11 @@ function workerToETDate(iso: string | null | undefined): string | null {
 // ──────────────────────────────────────────────────────────────────────
 const EDGE_CAP_PER_SPORT: Record<string, number> = {
   nba: 5,
+  wnba: 4,
   mlb: 4,
   nhl: 3,
   ufc: 2,
 };
-
-// nba-api/analyze is the unified analyzer entrypoint for every sport in
-// scope here. mlb/nhl fan out internally to the per-sport context models.
-const CANONICAL_ANALYZER_ENDPOINT: Record<string, string> = {
-  nba: "nba-api/analyze",
-  mlb: "nba-api/analyze",
-  nhl: "nba-api/analyze",
-  ufc: "ufc-api/analyze",
-};
-
-function canonicalEndpointForSport(sport: string, fallback: string): string {
-  return CANONICAL_ANALYZER_ENDPOINT[sport] ?? fallback;
-}
 
 const APP_TZ = "America/New_York";
 function todayET(): string {
@@ -168,9 +160,7 @@ function rejectReasonsForAnalyzerResponse(ar: unknown): string[] {
     reasons.push("analyzer_no_pick");
   }
   if (obj.playerIsOut === true) reasons.push("player_out");
-  const conf = Number(
-    obj.canonical_confidence ?? obj.confidence ?? obj.displayConfidence ?? NaN,
-  );
+  const conf = analyzerConfidenceRaw(obj);
   if (!Number.isFinite(conf) || conf <= 0) reasons.push("analyzer_missing_confidence");
   return reasons;
 }
@@ -190,12 +180,7 @@ function buildScoredPlayFromQueueRow(
   ar: Record<string, unknown>,
 ): ScoredPlay {
   const c = row.candidate_payload as Record<string, unknown>;
-  const confPercent = normalizeConfidencePercent(
-    (ar.canonical_confidence as number | undefined) ??
-      (ar.confidence as number | undefined) ??
-      (ar.displayConfidence as number | undefined) ??
-      0,
-  );
+  const confPercent = normalizeConfidencePercent(analyzerConfidenceRaw(ar));
   const conf01 = confPercent / 100;
   const canonicalVerdict = normalizeCanonicalVerdict(
     (ar.canonical_verdict as string | undefined) ?? (ar.verdict as string | undefined),
@@ -211,7 +196,7 @@ function buildScoredPlayFromQueueRow(
     canonical_verdict: canonicalVerdict,
     analyzer_payload: row.analyzer_payload,
     analyzer_response_snapshot: ar,
-    analyzer_confidence_raw: ar.confidence ?? ar.canonical_confidence ?? null,
+    analyzer_confidence_raw: analyzerConfidenceRaw(ar),
     analyzer_verdict_raw: ar.verdict ?? ar.canonical_verdict ?? null,
     analyzer_confidence_percent: Math.round(confPercent),
     analyzer_called_at: analyzerCalledAt,
@@ -219,6 +204,9 @@ function buildScoredPlayFromQueueRow(
     queue_row_id: row.id,
   };
   const odds = Number(c.odds ?? -110);
+  const betType = String(c.bet_type ?? "prop") as ScoredPlay["bet_type"];
+  const propType = String(c.prop_type ?? "");
+  const direction = String(c.direction ?? "");
   const impliedRaw = odds > 0 ? 100 / (odds + 100) : -odds / (-odds + 100);
   const edge = Math.max(0, conf01 - impliedRaw);
   const analyzerReasoning =
@@ -229,17 +217,17 @@ function buildScoredPlayFromQueueRow(
   const scannerReasoning = typeof c.reasoning === "string" ? c.reasoning : "";
   return {
     sport: row.sport,
-    bet_type: (String(c.bet_type ?? "prop") as ScoredPlay["bet_type"]) ?? "prop",
+    bet_type: betType,
     player_name: String(c.player_name ?? ""),
     team: (c.team as string | null) ?? null,
     opponent: (c.opponent as string | null) ?? null,
     home_team: (c.home_team as string | null) ?? null,
     away_team: (c.away_team as string | null) ?? null,
-    prop_type: String(c.prop_type ?? ""),
+    prop_type: propType,
     line: Number(c.line ?? 0),
     spread_line: (c.spread_line as number | null) ?? null,
     total_line: (c.total_line as number | null) ?? null,
-    direction: String(c.direction ?? ""),
+    direction,
     odds,
     projected_prob: conf01,
     implied_prob: impliedRaw,
@@ -248,7 +236,7 @@ function buildScoredPlayFromQueueRow(
     ev_pct: computeEvPct(conf01, odds),
     confidence: conf01,
     raw_confidence: (c.raw_confidence as number | null) ?? conf01,
-    reliability: 0.75,
+    reliability: getMarketReliability(betType, propType, direction, odds),
     score: edge * conf01,
     quality_score: edge * conf01,
     verdict: canonicalToScoredVerdict(canonicalVerdict),
@@ -570,7 +558,12 @@ async function processRow(args: {
     return { outcome: "expired" };
   }
 
-  const endpoint = canonicalEndpointForSport(row.sport, row.analyzer_endpoint);
+  const candidate = row.candidate_payload as Record<string, unknown>;
+  const endpoint = analyzerEndpointForCandidate(
+    row.sport,
+    String(candidate.bet_type ?? "prop"),
+    row.analyzer_endpoint,
+  ) ?? row.analyzer_endpoint;
 
   let resp: { status: number; body: unknown; headers: Headers; duration_ms: number };
   try {

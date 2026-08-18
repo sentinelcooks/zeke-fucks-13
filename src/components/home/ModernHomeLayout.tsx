@@ -63,6 +63,70 @@ interface DailyPick {
   model_diagnostics?: Record<string, unknown> | null;
 }
 
+function canonicalGameMarket(betType?: string): string | null {
+  const normalized = String(betType ?? "").toLowerCase();
+  if (normalized === "over_under") return "total";
+  return ["moneyline", "spread", "total"].includes(normalized) ? normalized : null;
+}
+
+function normalizedIdentity(value: string | null | undefined): string {
+  return String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function todayPickDedupeKey(pick: DailyPick): string {
+  const gameMarket = canonicalGameMarket(pick.bet_type);
+  if (gameMarket) {
+    const eventIdentity = pick.event_id
+      ? `event:${normalizedIdentity(pick.event_id)}`
+      : `matchup:${normalizedIdentity(pick.away_team || pick.opponent)}@${normalizedIdentity(pick.home_team || pick.team)}:${getGameDate(pick) ?? ""}`;
+    return `game|${pick.sport}|${eventIdentity}|${gameMarket}`;
+  }
+
+  return pick.event_id
+    ? `${pick.event_id}|${pick.player_name}|${pick.prop_type}|${pick.direction}|${pick.line}`
+    : `${pick.sport}|${getGameDate(pick) ?? ""}|${pick.home_team ?? pick.team ?? ""}|${pick.away_team ?? pick.opponent ?? ""}|${pick.player_name}|${pick.prop_type}|${pick.direction}|${pick.line}`;
+}
+
+function comparePickQuality(left: DailyPick, right: DailyPick): number {
+  const leftConfidence = normalizeConfidencePercent(left.confidence ?? left.hit_rate ?? 0);
+  const rightConfidence = normalizeConfidencePercent(right.confidence ?? right.hit_rate ?? 0);
+  if (leftConfidence !== rightConfidence) return leftConfidence - rightConfidence;
+
+  const leftEdge = Number(left.model_diagnostics?.modelEdge ?? 0);
+  const rightEdge = Number(right.model_diagnostics?.modelEdge ?? 0);
+  if (Number.isFinite(leftEdge) && Number.isFinite(rightEdge) && leftEdge !== rightEdge) {
+    return leftEdge - rightEdge;
+  }
+
+  const decimalOdds = (odds: string | null) => {
+    const american = Number(String(odds ?? "").replace(/[^\d-]/g, ""));
+    if (!Number.isFinite(american) || american === 0) return 0;
+    return american > 0 ? 1 + american / 100 : 1 + 100 / Math.abs(american);
+  };
+  return decimalOdds(left.odds) - decimalOdds(right.odds);
+}
+
+function selectedTeamForGameLogo(pick: DailyPick): string {
+  const market = canonicalGameMarket(pick.bet_type);
+  if (market === "spread" || market === "moneyline") {
+    if (pick.team) return pick.team;
+    if (pick.direction === "home") return pick.home_team ?? "";
+    if (pick.direction === "away") return pick.away_team ?? "";
+  }
+  return pick.home_team || pick.team || pick.away_team || pick.opponent || "";
+}
+
+function teamInitials(team: string, sport: string): string {
+  const initials = team
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word[0])
+    .join("")
+    .slice(0, 3)
+    .toUpperCase();
+  return initials || sport.slice(0, 3).toUpperCase();
+}
+
 const stagger = (i: number) => ({
   initial: { opacity: 0, y: 12 },
   animate: { opacity: 1, y: 0 },
@@ -344,15 +408,17 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     // Event-identity dedupe so the same logical pick can't appear twice
     // because the scanner inserted a fresh copy on a later run.
     const dedupe = (arr: DailyPick[]): DailyPick[] => {
-      const seen = new Set<string>();
-      return arr.filter(p => {
-        const k = (p as any).event_id
-          ? `${(p as any).event_id}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`
-          : `${p.sport}|${getGameDate(p as any) ?? ""}|${p.home_team ?? p.team ?? ""}|${p.away_team ?? p.opponent ?? ""}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`;
-        if (seen.has(k)) return false;
-        seen.add(k);
-        return true;
+      const winners = new Map<string, { pick: DailyPick; firstIndex: number }>();
+      arr.forEach((pick, index) => {
+        const key = todayPickDedupeKey(pick);
+        const existing = winners.get(key);
+        if (!existing || comparePickQuality(pick, existing.pick) > 0) {
+          winners.set(key, { pick, firstIndex: existing?.firstIndex ?? index });
+        }
       });
+      return [...winners.values()]
+        .sort((left, right) => left.firstIndex - right.firstIndex)
+        .map(({ pick }) => pick);
     };
 
     // Today's Edge: allowlist — tier === "edge", status !== "empty_slate",
@@ -670,59 +736,63 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       : resultRaw === "push"
                       ? { label: "PUSH", color: "hsl(45 90% 55%)" }
                       : { label: "PENDING", color: "hsl(220 15% 65%)" };
+                  const logoTeam = isGameBet ? selectedTeamForGameLogo(pick) : "";
+                  const sportRaw = (pick.sport || "nba").toLowerCase();
+                  const supportedLogoSports = ["nba", "wnba", "mlb", "nhl", "nfl"];
+                  const logoSport = supportedLogoSports.includes(sportRaw)
+                    ? sportRaw as "nba" | "wnba" | "mlb" | "nhl" | "nfl"
+                    : null;
+                  const gameLogo = logoSport && logoTeam
+                    ? getTeamLogoUrl(logoTeam, logoSport)
+                    : "";
                   return (
                   <motion.div
                     key={`${pick.id}-${i}`}
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.1 + i * 0.06 }}
-                    className="w-[85%] max-w-[320px] min-w-0 shrink-0 snap-start flex flex-col relative overflow-hidden"
+                    className="w-[88%] max-w-[332px] min-w-0 shrink-0 snap-start flex flex-col relative overflow-hidden"
                     style={{
-                      background: 'linear-gradient(165deg, hsl(250 20% 12%), hsl(250 22% 9%))',
+                      background: 'radial-gradient(circle at 0% 0%, hsla(190,90%,55%,0.08), transparent 38%), linear-gradient(165deg, hsl(250 20% 12%), hsl(250 22% 9%))',
                       border: '1px solid hsl(250 20% 18% / 0.6)',
                       borderTop: `2px solid ${isGameBet ? '#22d3ee' : '#7c6ff7'}`,
                       borderRadius: 18,
-                      padding: 22,
-                      boxShadow: '0 4px 24px -4px rgba(0,0,0,0.4)',
-                      gap: 10,
+                      padding: 18,
+                      boxShadow: '0 12px 34px -16px rgba(0,0,0,0.78), inset 0 1px 0 rgba(255,255,255,0.025)',
+                      gap: 12,
                     }}
                   >
 
                     {/* HEADER ROW */}
                     <div className="relative z-10" style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                      {/* Left: Image or Sport Icon */}
+                      {/* Left: Recommended team logo or player headshot */}
                       <div style={{
-                        width: 52, height: 52, borderRadius: 12, overflow: 'hidden',
-                        border: '1px solid #252340', flexShrink: 0,
-                        background: '#252340',
+                        width: 56, height: 56, borderRadius: 15, overflow: 'hidden',
+                        border: `1px solid ${isGameBet ? 'rgba(34,211,238,0.28)' : '#302b58'}`,
+                        flexShrink: 0, position: 'relative',
+                        background: isGameBet
+                          ? 'radial-gradient(circle at 50% 35%, rgba(34,211,238,0.16), transparent 68%), #201d38'
+                          : '#252340',
+                        boxShadow: isGameBet ? 'inset 0 1px 0 rgba(255,255,255,0.05)' : 'none',
                       }}>
                         {isGameBet ? (() => {
                           const sportRaw = (pick.sport || 'nba').toLowerCase();
-                          const supported = ['nba', 'mlb', 'nhl', 'nfl'];
-                          const sportKey = (supported.includes(sportRaw) ? sportRaw : null) as 'nba' | 'mlb' | 'nhl' | 'nfl' | null;
-                          const awayLogo = sportKey ? getTeamLogoUrl(pick.away_team || pick.opponent || '', sportKey) : '';
-                          const homeLogo = sportKey ? getTeamLogoUrl(pick.home_team || pick.team || '', sportKey) : '';
-                          if (sportKey && (awayLogo || homeLogo)) {
+                          const supported = ['nba', 'wnba', 'mlb', 'nhl', 'nfl'];
+                          const sportKey = (supported.includes(sportRaw) ? sportRaw : null) as 'nba' | 'wnba' | 'mlb' | 'nhl' | 'nfl' | null;
+                          const selectedLogo = sportKey ? getTeamLogoUrl(logoTeam, sportKey) : '';
+                          if (sportKey && selectedLogo) {
                             return (
                               <div style={{
                                 width: '100%', height: '100%',
-                                display: 'flex', flexDirection: 'column',
+                                display: 'flex',
                                 alignItems: 'center', justifyContent: 'center',
-                                gap: 3, padding: 4,
+                                padding: 5,
                               }}>
-                                {awayLogo && (
+                                {selectedLogo && (
                                   <img
-                                    src={awayLogo}
-                                    alt={pick.away_team || ''}
-                                    style={{ width: 22, height: 22, objectFit: 'contain' }}
-                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                  />
-                                )}
-                                {homeLogo && (
-                                  <img
-                                    src={homeLogo}
-                                    alt={pick.home_team || ''}
-                                    style={{ width: 22, height: 22, objectFit: 'contain' }}
+                                    src={selectedLogo}
+                                    alt={`${logoTeam} logo`}
+                                    style={{ width: 42, height: 42, objectFit: 'contain', filter: 'drop-shadow(0 5px 8px rgba(0,0,0,0.34))' }}
                                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                   />
                                 )}
@@ -862,12 +932,12 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                         <div className="relative z-10" style={{
                           display: 'inline-flex', alignItems: 'center', gap: 6,
                           background: `rgba(${r},${g},${b},0.15)`, border: `1px solid rgba(${r},${g},${b},0.3)`,
-                          borderRadius: 20, padding: '4px 12px', alignSelf: 'flex-start',
+                          borderRadius: 20, padding: '5px 12px', alignSelf: 'flex-start', maxWidth: '100%',
                         }}>
                           <div style={{ width: 6, height: 6, borderRadius: '50%', background: dotColor }} />
                           <span style={{
                             fontSize: 10, fontWeight: 700, letterSpacing: 1.5,
-                            color: dotColor, textTransform: 'uppercase',
+                            color: dotColor, textTransform: 'uppercase', lineHeight: 1.35,
                           }}>{badgeText}</span>
                         </div>
                       );
@@ -876,10 +946,10 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     {/* STAT + ODDS ROW */}
                     <div className="relative z-10" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
                       <span style={{
-                        background: '#252340', color: '#f0eeff',
+                        background: 'linear-gradient(90deg, #282643, #222039)', color: '#f0eeff',
                         borderRadius: 20, padding: '6px 14px',
                         fontSize: 13, fontWeight: 600,
-                        border: '1px solid #352f60',
+                        border: '1px solid #3a3562',
                         flex: '1 1 auto', minWidth: 0,
                       }}>
                         {isGameBet
@@ -900,7 +970,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     {/* AI NARRATIVE */}
                     {pick.reasoning && (
                       <p className="relative z-10" style={{
-                        fontStyle: 'italic', fontSize: 12, color: '#8b87b8',
+                        fontStyle: 'italic', fontSize: 12, color: '#aaa6cf',
                         lineHeight: 1.6, overflow: 'hidden',
                         display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
                         marginBottom: 0,

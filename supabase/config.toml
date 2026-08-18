@@ -20,6 +20,9 @@ verify_jwt = false
 [functions.slate-scanner-nba]
 verify_jwt = false
 
+[functions.slate-scanner-wnba]
+verify_jwt = false
+
 [functions.slate-scanner-mlb]
 verify_jwt = false
 
@@ -38,6 +41,9 @@ verify_jwt = false
 # Queue drainers are invoked by the scanner cron helper with the same opaque
 # service credential and enforce requireServiceRoleAccess before any work.
 [functions.analyzer-worker-nba]
+verify_jwt = false
+
+[functions.analyzer-worker-wnba]
 verify_jwt = false
 
 [functions.analyzer-worker-mlb]

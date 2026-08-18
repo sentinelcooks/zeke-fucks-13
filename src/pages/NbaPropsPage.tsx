@@ -1236,19 +1236,6 @@ const NbaPropsPage = () => {
         )}
 
         {/* ── Props Mode ── */}
-        {mode === "props" && sport === "mlb" && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-medium text-nba-yellow" style={{ background: 'hsla(43, 96%, 56%, 0.08)', border: '1px solid hsla(43, 96%, 56%, 0.15)' }}>
-            <span>⚠️</span>
-            <span>MLB data uses last season as baseline. Projections will improve as the current season progresses.</span>
-          </div>
-        )}
-
-        {mode === "props" && sport === "wnba" && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-medium text-nba-yellow" style={{ background: 'hsla(43, 96%, 56%, 0.08)', border: '1px solid hsla(43, 96%, 56%, 0.15)' }}>
-            <span>WNBA markets can be thinner than NBA. Sentinel shows available odds and only scores props when enough player data is available.</span>
-          </div>
-        )}
-
         {/* ── UFC MATCHUP INPUT ── */}
         {mode === "props" && sport === "ufc" && (
           <motion.div
