@@ -107,9 +107,16 @@ export type Database = {
       daily_picks: {
         Row: {
           avg_value: number | null
+          actual_value: number | null
           away_team: string | null
           bet_type: string
+          calibrated_probability: number | null
+          calibration_status: string
           clv: number | null
+          clv_method: string | null
+          closing_captured_at: string | null
+          closing_line: number | null
+          closing_line_source: string | null
           closing_odds: string | null
           commence_time: string | null
           confidence: number | null
@@ -119,6 +126,7 @@ export type Database = {
           event_id: string | null
           game_date: string | null
           graded_at: string | null
+          grading_source: string | null
           hit_rate: number
           home_team: string | null
           id: string
@@ -130,13 +138,18 @@ export type Database = {
           model_version: string | null
           odds: string | null
           opening_odds: string | null
+          opening_captured_at: string | null
+          opening_line: number | null
           opponent: string | null
           pick_date: string
+          prediction_recorded_at: string | null
           player_name: string
           profit_units: number | null
           prop_type: string
           reasoning: string | null
           result: string | null
+          score_kind: string
+          selected_book: string | null
           sport: string
           spread_line: number | null
           stake_units: number | null
@@ -148,9 +161,16 @@ export type Database = {
         }
         Insert: {
           avg_value?: number | null
+          actual_value?: number | null
           away_team?: string | null
           bet_type?: string
+          calibrated_probability?: number | null
+          calibration_status?: string
           clv?: number | null
+          clv_method?: string | null
+          closing_captured_at?: string | null
+          closing_line?: number | null
+          closing_line_source?: string | null
           closing_odds?: string | null
           commence_time?: string | null
           confidence?: number | null
@@ -160,6 +180,7 @@ export type Database = {
           event_id?: string | null
           game_date?: string | null
           graded_at?: string | null
+          grading_source?: string | null
           hit_rate?: number
           home_team?: string | null
           id?: string
@@ -171,13 +192,18 @@ export type Database = {
           model_version?: string | null
           odds?: string | null
           opening_odds?: string | null
+          opening_captured_at?: string | null
+          opening_line?: number | null
           opponent?: string | null
           pick_date?: string
+          prediction_recorded_at?: string | null
           player_name: string
           profit_units?: number | null
           prop_type: string
           reasoning?: string | null
           result?: string | null
+          score_kind?: string
+          selected_book?: string | null
           sport?: string
           spread_line?: number | null
           stake_units?: number | null
@@ -189,9 +215,16 @@ export type Database = {
         }
         Update: {
           avg_value?: number | null
+          actual_value?: number | null
           away_team?: string | null
           bet_type?: string
+          calibrated_probability?: number | null
+          calibration_status?: string
           clv?: number | null
+          clv_method?: string | null
+          closing_captured_at?: string | null
+          closing_line?: number | null
+          closing_line_source?: string | null
           closing_odds?: string | null
           commence_time?: string | null
           confidence?: number | null
@@ -201,6 +234,7 @@ export type Database = {
           event_id?: string | null
           game_date?: string | null
           graded_at?: string | null
+          grading_source?: string | null
           hit_rate?: number
           home_team?: string | null
           id?: string
@@ -212,13 +246,18 @@ export type Database = {
           model_version?: string | null
           odds?: string | null
           opening_odds?: string | null
+          opening_captured_at?: string | null
+          opening_line?: number | null
           opponent?: string | null
           pick_date?: string
+          prediction_recorded_at?: string | null
           player_name?: string
           profit_units?: number | null
           prop_type?: string
           reasoning?: string | null
           result?: string | null
+          score_kind?: string
+          selected_book?: string | null
           sport?: string
           spread_line?: number | null
           stake_units?: number | null
@@ -661,6 +700,45 @@ export type Database = {
           line?: number | null
           market?: string
           price?: number | null
+          snapshot_at?: string
+          sport?: string
+        }
+        Relationships: []
+      }
+      market_odds_snapshots: {
+        Row: {
+          book: string
+          commence_time: string | null
+          event_id: string
+          line: number | null
+          market: string
+          outcome_description: string
+          outcome_name: string
+          price: number
+          snapshot_at: string
+          sport: string
+        }
+        Insert: {
+          book: string
+          commence_time?: string | null
+          event_id: string
+          line?: number | null
+          market: string
+          outcome_description?: string
+          outcome_name: string
+          price: number
+          snapshot_at?: string
+          sport: string
+        }
+        Update: {
+          book?: string
+          commence_time?: string | null
+          event_id?: string
+          line?: number | null
+          market?: string
+          outcome_description?: string
+          outcome_name?: string
+          price?: number
           snapshot_at?: string
           sport?: string
         }

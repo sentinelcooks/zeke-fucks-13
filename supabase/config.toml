@@ -11,6 +11,11 @@ project_id = "rizijiwjfavvjcdqtguk"
 [functions.grade-picks]
 verify_jwt = false
 
+# Captures authenticated outcome-level market closes. Function code requires
+# the service-role bearer (or ODDS_SNAPSHOT_SECRET) before consuming quota.
+[functions.odds-snapshot]
+verify_jwt = false
+
 # Scanner pipeline endpoints validate configured service-role credentials in
 # function code. Gateway JWT verification must be disabled so Supabase's
 # opaque sb_secret_* service keys can reach that validation.

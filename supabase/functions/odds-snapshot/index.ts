@@ -11,7 +11,8 @@ import { getMasterClient } from "../_shared/masterClient.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-odds-snapshot-secret",
 };
 
 function json(body: unknown, status = 200) {
@@ -24,6 +25,7 @@ function json(body: unknown, status = 200) {
 const SPORT_KEYS: Record<string, string> = {
   nhl: "icehockey_nhl",
   nba: "basketball_nba",
+  wnba: "basketball_wnba",
   mlb: "baseball_mlb",
 };
 
@@ -31,13 +33,33 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const url = new URL(req.url);
-  const sport = url.pathname.split("/").filter(Boolean).pop() || "nhl";
-  const oddsSport = SPORT_KEYS[sport] || SPORT_KEYS.nhl;
+  const pathSport = url.pathname.split("/").filter(Boolean).pop() || "";
+  let bodySport = "";
+  if (req.method === "POST") {
+    try {
+      const body = await req.clone().json();
+      bodySport = typeof body?.sport === "string" ? body.sport.toLowerCase() : "";
+    } catch {
+      bodySport = "";
+    }
+  }
+  const requestedSport = (url.searchParams.get("sport") || bodySport || pathSport || "nhl").toLowerCase();
+  const sport = SPORT_KEYS[requestedSport] ? requestedSport : "nhl";
+  const oddsSport = SPORT_KEYS[sport];
+
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const snapshotSecret = Deno.env.get("ODDS_SNAPSHOT_SECRET") ?? "";
+  const authorization = req.headers.get("authorization") ?? "";
+  const suppliedSecret = req.headers.get("x-odds-snapshot-secret") ?? "";
+  const authorized =
+    (!!serviceRoleKey && authorization === `Bearer ${serviceRoleKey}`) ||
+    (!!snapshotSecret && (suppliedSecret === snapshotSecret || authorization === `Bearer ${snapshotSecret}`));
+  if (!authorized) return json({ error: "unauthorized" }, 401);
 
   // Local client for odds_history (per-project history table).
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    serviceRoleKey,
   );
   // Master client for the rotation pool (odds_api_keys / app_config),
   // shared with the Admin Dashboard.
@@ -113,6 +135,7 @@ Deno.serve(async (req) => {
   // Track unique books seen for cost calc
   const allBooks = new Set<string>();
   const rows: any[] = [];
+  const outcomeRows: any[] = [];
   const snapshot_at = new Date().toISOString();
   for (const ev of events) {
     for (const bm of ev.bookmakers || []) {
@@ -131,6 +154,21 @@ Deno.serve(async (req) => {
           line: homeOutcome?.point ?? null,
           snapshot_at,
         });
+        for (const outcome of outcomes) {
+          if (!outcome?.name || !Number.isFinite(Number(outcome.price))) continue;
+          outcomeRows.push({
+            event_id: String(ev.id),
+            sport,
+            book: bm.key,
+            market: mkt.key,
+            outcome_name: String(outcome.name),
+            outcome_description: outcome.description ? String(outcome.description) : "",
+            price: Number(outcome.price),
+            line: Number.isFinite(Number(outcome.point)) ? Number(outcome.point) : null,
+            commence_time: ev.commence_time ?? null,
+            snapshot_at,
+          });
+        }
       }
     }
   }
@@ -140,6 +178,13 @@ Deno.serve(async (req) => {
       onConflict: "game_id,book,market,snapshot_at",
     });
     if (error) console.error("odds_history insert failed:", error.message);
+  }
+
+  if (outcomeRows.length > 0) {
+    const { error } = await supabase.from("market_odds_snapshots").upsert(outcomeRows, {
+      onConflict: "event_id,book,market,outcome_name,outcome_description,snapshot_at",
+    });
+    if (error) console.error("market_odds_snapshots insert failed:", error.message);
   }
 
   // Update key usage (skip non-DB sources)
@@ -168,7 +213,8 @@ Deno.serve(async (req) => {
   return json({
     ok: true,
     sport,
-    snapshots_written: rows.length,
+    snapshots_written: outcomeRows.length,
+    legacy_snapshots_written: rows.length,
     books_seen: allBooks.size,
     requests_remaining: remaining,
   });

@@ -1,5 +1,18 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { normalizeNbaPropType } from "../_shared/prop_normalization.ts";
+import {
+  espnSportPath,
+  getMlbPlayerStat as getVerifiedMlbPlayerStat,
+  gradeGameBet as gradeVerifiedGameBet,
+  gradeOverUnder as gradeVerifiedOverUnder,
+  marketKeyForPick,
+  MLB_PROP_TO_STAT as VERIFIED_MLB_PROP_TO_STAT,
+  probabilityClvPercentagePoints,
+  profitUnits as verifiedProfitUnits,
+  selectClosingSnapshot,
+  type EspnGradingSport,
+  type MarketOddsSnapshot,
+} from "../_shared/pick_grading.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,24 +22,6 @@ const corsHeaders = {
 
 // Mirrors src/lib/odds.ts + admin-onboarding/index.ts profitUnits — kept in sync
 // so cron-graded rows compute profit identically to manually-graded ones.
-const parseAmericanOdds = (odds: unknown): number | null => {
-  if (odds === null || odds === undefined || odds === "") return null;
-  const n = Number(String(odds).trim().replace(/^\+/, ""));
-  return Number.isFinite(n) && n !== 0 ? n : null;
-};
-const americanToDecimal = (a: number) => (a > 0 ? 1 + a / 100 : 1 + 100 / Math.abs(a));
-const profitUnits = (odds: unknown, result: string | null, stake = 1): number | null => {
-  const r = (result || "").toLowerCase();
-  if (r === "push") return 0;
-  const win = r === "hit" || r === "win";
-  const loss = r === "miss" || r === "loss";
-  if (!win && !loss) return null;
-  if (loss) return -stake;
-  const a = parseAmericanOdds(odds);
-  if (a === null) return null;
-  return stake * (americanToDecimal(a) - 1);
-};
-
 // Keys are the canonical output of normalizeNbaPropType (see
 // _shared/prop_normalization.ts). Combo props sum the listed stats — the
 // loop at the use-site adds each box-score key into actualValue, so
@@ -45,43 +40,6 @@ const PROP_TO_STAT: Record<string, string[]> = {
   "pts+ast": ["points", "assists"],
   "reb+ast": ["rebounds", "assists"],
   "stl+blk": ["steals", "blocks"],
-};
-
-type MlbStatKey =
-  | "hits"
-  | "rbi"
-  | "home_runs"
-  | "runs"
-  | "total_bases"
-  | "strikeouts_pit"
-  | "strikeouts_bat"
-  | "walks"
-  | "stolen_bases";
-
-const MLB_PROP_TO_STAT: Record<string, MlbStatKey> = {
-  hits: "hits",
-  hit: "hits",
-  mlb_hits: "hits",
-  rbi: "rbi",
-  rbis: "rbi",
-  mlb_rbi: "rbi",
-  hr: "home_runs",
-  home_runs: "home_runs",
-  mlb_hr: "home_runs",
-  runs: "runs",
-  mlb_runs: "runs",
-  tb: "total_bases",
-  total_bases: "total_bases",
-  mlb_total_bases: "total_bases",
-  k: "strikeouts_pit",
-  ks: "strikeouts_pit",
-  strikeouts: "strikeouts_pit",
-  mlb_strikeouts: "strikeouts_pit",
-  bb: "walks",
-  walks: "walks",
-  mlb_walks: "walks",
-  sb: "stolen_bases",
-  stolen_bases: "stolen_bases",
 };
 
 type NhlStatKey = "sog" | "assists" | "points" | "goals" | "saves";
@@ -187,13 +145,10 @@ interface ScoreboardGame {
 }
 
 async function fetchScoreboard(
-  sport: "nba" | "mlb" | "nhl",
+  sport: EspnGradingSport,
   dateStr: string,
 ): Promise<ScoreboardGame[]> {
-  const path =
-    sport === "nba" ? "basketball/nba" :
-    sport === "mlb" ? "baseball/mlb"   :
-    "hockey/nhl";
+  const path = espnSportPath(sport);
   const url = `https://site.api.espn.com/apis/site/v2/sports/${path}/scoreboard?dates=${compactDate(dateStr)}`;
   const resp = await fetch(url);
   if (!resp.ok) return [];
@@ -238,7 +193,7 @@ function findGameForPick(pick: Pick, games: ScoreboardGame[]): ScoreboardGame | 
   return null;
 }
 
-function gradeGameBet(pick: Pick, g: ScoreboardGame): "hit" | "miss" | "push" | null {
+function legacyGradeGameBet(pick: Pick, g: ScoreboardGame): "hit" | "miss" | "push" | null {
   if (!g.final) return null;
   const betType = (pick.bet_type || "").toLowerCase();
   const dir = (pick.direction || "").toLowerCase();
@@ -286,8 +241,9 @@ function gradeGameBet(pick: Pick, g: ScoreboardGame): "hit" | "miss" | "push" | 
   return null;
 }
 
-async function gradeNbaProps(
+async function gradeBasketballProps(
   supabase: ReturnType<typeof createClient>,
+  sport: "nba" | "wnba",
   picks: Pick[],
   scoreDate: string,
   ctx: GradeCtx,
@@ -296,7 +252,7 @@ async function gradeNbaProps(
 
   const dateStr = compactDate(scoreDate);
   const scoreboardResp = await fetch(
-    `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${dateStr}`,
+    `https://site.api.espn.com/apis/site/v2/sports/${espnSportPath(sport)}/scoreboard?dates=${dateStr}`,
   );
   if (!scoreboardResp.ok) {
     for (const p of picks) {
@@ -325,7 +281,7 @@ async function gradeNbaProps(
   for (const e of events) {
     if (e.state === "post") {
       completedGameIds.push(e.id);
-      ctx.finalGamesFound.add(`nba:${e.id}`);
+      ctx.finalGamesFound.add(`${sport}:${e.id}`);
     }
   }
   if (completedGameIds.length === 0) {
@@ -353,7 +309,7 @@ async function gradeNbaProps(
     completedGameIds.map(async (gid) => {
       try {
         const boxResp = await fetch(
-          `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=${gid}`,
+          `https://site.api.espn.com/apis/site/v2/sports/${espnSportPath(sport)}/summary?event=${gid}`,
         );
         if (!boxResp.ok) return;
         const box = await boxResp.json();
@@ -443,7 +399,12 @@ async function gradeNbaProps(
     let actualValue = 0;
     for (const key of statKeys) actualValue += stats[key] || 0;
 
-    const result = gradeOverUnder(pick.direction || "", actualValue, Number(pick.line));
+    const result = gradeVerifiedOverUnder(pick.direction || "", actualValue, Number(pick.line));
+    if (!result) {
+      skippedNoData++;
+      recordSkip(ctx, pick, "invalid_direction", { date_used: scoreDate });
+      continue;
+    }
 
     const ok = await writeGrade(
       supabase,
@@ -453,8 +414,8 @@ async function gradeNbaProps(
         actualValue,
         line: Number(pick.line),
         direction: pick.direction ?? null,
-        source: "espn:nba",
-        sport: "nba",
+        source: `espn:${sport}`,
+        sport,
         betType: (pick.bet_type || "prop").toLowerCase(),
       },
       ctx,
@@ -547,12 +508,12 @@ function findPlayerEntries(
   return { entries: [], reason: "player_not_found" };
 }
 
-function getMlbPlayerStat(
+function legacyGetMlbPlayerStat(
   summary: any,
   playerName: string,
   propType: string,
 ): { found: boolean; actual: number | null; reason?: string } {
-  const key = MLB_PROP_TO_STAT[(propType || "").toLowerCase()];
+  const key = VERIFIED_MLB_PROP_TO_STAT[(propType || "").toLowerCase()];
   if (!key) return { found: false, actual: null, reason: "unsupported_prop" };
 
   const index = indexSummary(summary);
@@ -705,7 +666,7 @@ function emptyCounters(): PropGradeCounters {
   };
 }
 
-function gradeOverUnder(
+function legacyGradeOverUnder(
   direction: string,
   actual: number,
   line: number,
@@ -849,7 +810,12 @@ async function gradePlayerPropsForSport(
         recordSkip(ctx, pick, "no_data", { date_used: dateStr });
         continue;
       }
-      const result = gradeOverUnder(pick.direction || "", actual, line);
+      const result = gradeVerifiedOverUnder(pick.direction || "", actual, line);
+      if (!result) {
+        counters.skippedNoData++;
+        recordSkip(ctx, pick, "invalid_direction", { date_used: dateStr });
+        continue;
+      }
       const ok = await writeGrade(
         supabase,
         {
@@ -895,6 +861,7 @@ interface PerPickDiag {
     | "player_not_found"
     | "ambiguous_player"
     | "unsupported_prop"
+    | "invalid_direction"
     | "no_data"
     | "update_failed";
   espn_state: string | null;
@@ -938,6 +905,58 @@ interface GradeWritePayload {
   reason?: string | null;
 }
 
+interface ClosingLineCapture {
+  odds: number;
+  line: number | null;
+  capturedAt: string;
+  book: string;
+  source: "selected_book" | "consensus_median";
+  clv: number | null;
+}
+
+async function loadClosingLine(
+  supabase: ReturnType<typeof createClient>,
+  pick: Pick,
+): Promise<ClosingLineCapture | null> {
+  const market = marketKeyForPick(pick.bet_type || "");
+  if (!market || !pick.event_id || !pick.commence_time) return null;
+
+  const { data, error } = await supabase
+    .from("market_odds_snapshots")
+    .select("book,market,outcome_name,outcome_description,price,line,snapshot_at")
+    .eq("event_id", String(pick.event_id))
+    .eq("sport", String(pick.sport || "").toLowerCase())
+    .eq("market", market)
+    .lte("snapshot_at", String(pick.commence_time))
+    .order("snapshot_at", { ascending: false })
+    .limit(250);
+
+  if (error) {
+    // A migration may not be applied yet during a staged rollout. Grading is
+    // still correct; the missing verified close is explicitly recorded.
+    console.warn(`[GradePicks] closing snapshot query failed pick=${pick.id}: ${error.message}`);
+    return null;
+  }
+
+  const selection = selectClosingSnapshot(
+    (data ?? []) as MarketOddsSnapshot[],
+    pick,
+    pick.selected_book ?? null,
+  );
+  if (!selection.snapshot || selection.source === "unavailable") return null;
+  return {
+    odds: selection.snapshot.price,
+    line: selection.snapshot.line ?? null,
+    capturedAt: selection.snapshot.snapshot_at,
+    book: selection.snapshot.book,
+    source: selection.source,
+    clv: probabilityClvPercentagePoints(
+      pick.opening_odds ?? pick.odds,
+      selection.snapshot.price,
+    ),
+  };
+}
+
 async function writeGrade(
   supabase: ReturnType<typeof createClient>,
   payload: GradeWritePayload,
@@ -946,8 +965,9 @@ async function writeGrade(
   const { pick, result, actualValue, line, direction, source, sport, betType, reason } = payload;
   const stake = Number(pick.stake_units);
   const stakeUnits = Number.isFinite(stake) && stake > 0 ? stake : 1;
-  const profit = profitUnits(pick.odds, result, stakeUnits);
+  const profit = verifiedProfitUnits(pick.odds, result, stakeUnits);
   const gradedAt = new Date().toISOString();
+  const closing = ctx.dryRun ? null : await loadClosingLine(supabase, pick);
 
   const existingDiag =
     pick.model_diagnostics && typeof pick.model_diagnostics === "object"
@@ -965,6 +985,21 @@ async function writeGrade(
       sport,
       bet_type: betType,
       reason: reason ?? null,
+      closing_line: closing
+        ? {
+          source: closing.source,
+          book: closing.book,
+          captured_at: closing.capturedAt,
+          odds: closing.odds,
+          line: closing.line,
+          clv_method: "american_implied_probability_percentage_points",
+        }
+        : {
+          source: "unavailable",
+          reason: marketKeyForPick(pick.bet_type || "")
+            ? "no_verified_pre_commence_snapshot"
+            : "unsupported_market",
+        },
     },
   };
 
@@ -992,10 +1027,22 @@ async function writeGrade(
     result,
     profit_units: profit,
     graded_at: gradedAt,
+    grading_source: source,
+    opening_odds: pick.opening_odds ?? pick.odds ?? null,
+    opening_line: pick.opening_line ?? pick.line ?? null,
+    opening_captured_at: pick.opening_captured_at ?? pick.created_at ?? null,
     model_diagnostics: nextDiag,
   };
   if (actualValue !== undefined && actualValue !== null) {
-    update.avg_value = actualValue;
+    update.actual_value = actualValue;
+  }
+  if (closing) {
+    update.closing_odds = closing.odds > 0 ? `+${closing.odds}` : String(closing.odds);
+    update.closing_line = closing.line;
+    update.closing_captured_at = closing.capturedAt;
+    update.closing_line_source = `${closing.source}:${closing.book}`;
+    update.clv = closing.clv;
+    update.clv_method = "american_implied_probability_percentage_points";
   }
 
   const { error } = await supabase
@@ -1051,10 +1098,31 @@ function recordSkip(
 
 function isPlayerProp(pick: Pick): boolean {
   const betType = (pick.bet_type || "").toLowerCase();
-  if (["moneyline", "spread", "total"].includes(betType)) return false;
+  if (["moneyline", "spread", "total", "over_under"].includes(betType)) return false;
   if (betType === "prop") return true;
   // Fall back: treat picks with player_name + prop_type as props.
   return !!(pick.player_name && pick.prop_type);
+}
+
+async function gradeBasketballSportProps(
+  supabase: ReturnType<typeof createClient>,
+  sport: "nba" | "wnba",
+  picks: Pick[],
+  ctx: GradeCtx,
+): Promise<{ graded: number; skippedNoData: number }> {
+  const byDate: Record<string, Pick[]> = {};
+  for (const pick of picks) {
+    const primaryDate = gradingDatesForPick(pick)[0];
+    (byDate[primaryDate] ||= []).push(pick);
+  }
+  let graded = 0;
+  let skippedNoData = 0;
+  for (const [date, datePicks] of Object.entries(byDate)) {
+    const result = await gradeBasketballProps(supabase, sport, datePicks, date, ctx);
+    graded += result.graded;
+    skippedNoData += result.skippedNoData;
+  }
+  return { graded, skippedNoData };
 }
 
 Deno.serve(async (req) => {
@@ -1145,11 +1213,12 @@ Deno.serve(async (req) => {
     // Narrow column list + hard limit avoid statement timeouts caused by
     // pulling the model_diagnostics jsonb for every pending row.
     const GRADE_COLUMNS = [
-      "id", "sport", "pick_date", "commence_time", "game_date",
+      "id", "sport", "pick_date", "created_at", "commence_time", "game_date",
       "home_team", "away_team", "team", "opponent",
       "player_name", "prop_type", "line", "direction",
       "bet_type", "spread_line", "total_line",
-      "event_id", "odds", "stake_units",
+      "event_id", "odds", "opening_odds", "opening_line", "opening_captured_at",
+      "selected_book", "stake_units",
       "result", "tier", "status", "avg_value", "model_diagnostics",
     ].join(",");
 
@@ -1285,7 +1354,7 @@ Deno.serve(async (req) => {
       for (const [date, datePicks] of Object.entries(byDate)) {
         const stillPending = datePicks.filter((p) => remaining.has(p.id));
         if (stillPending.length === 0) continue;
-        const r1 = await gradeNbaProps(supabase, stillPending, date, ctx);
+        const r1 = await gradeBasketballProps(supabase, "nba", stillPending, date, ctx);
         nbaGraded += r1.graded;
 
         // Legacy fallback (rows missing game_date): try next calendar day.
@@ -1309,7 +1378,7 @@ Deno.serve(async (req) => {
             }
           }
           for (const [nd, ndPicks] of Object.entries(groupedNext)) {
-            const r2 = await gradeNbaProps(supabase, ndPicks, nd, ctx);
+            const r2 = await gradeBasketballProps(supabase, "nba", ndPicks, nd, ctx);
             nbaGraded += r2.graded;
             nbaSkippedNoData += r2.skippedNoData;
           }
@@ -1327,21 +1396,42 @@ Deno.serve(async (req) => {
     }
 
     // ── MLB / NHL: split into player props vs game bets.
-    for (const sport of ["mlb", "nhl"] as const) {
+    const wnbaProps = (bySport.wnba ?? []).filter(isPlayerProp);
+    if (wnbaProps.length > 0) {
+      const wnbaResult = await gradeBasketballSportProps(
+        supabase,
+        "wnba",
+        wnbaProps,
+        ctx,
+      );
+      totalGraded += wnbaResult.graded;
+      skippedNoData += wnbaResult.skippedNoData;
+      sportSummary.wnba = {
+        total: bySport.wnba.length,
+        graded: wnbaResult.graded,
+        skipped_no_data: wnbaResult.skippedNoData,
+        props: wnbaProps.length,
+        game_bets: 0,
+      };
+    }
+
+    // WNBA props are graded above through the league-specific basketball
+    // endpoint. Its game markets share the generic scoreboard grader.
+    for (const sport of ["mlb", "nhl", "wnba"] as const) {
       const sportPicks = bySport[sport];
       if (!sportPicks?.length) continue;
 
-      const props = sportPicks.filter(isPlayerProp);
+      const props = sport === "wnba" ? [] : sportPicks.filter(isPlayerProp);
       const games = sportPicks.filter((p) => !isPlayerProp(p));
 
       let propCounters = emptyCounters();
-      if (props.length > 0) {
+      if (props.length > 0 && sport !== "wnba") {
         propCounters = await gradePlayerPropsForSport(
           supabase,
           sport,
           props,
-          sport === "mlb" ? getMlbPlayerStat : getNhlPlayerStat,
-          sport === "mlb" ? MLB_PROP_TO_STAT : NHL_PROP_TO_STAT,
+          sport === "mlb" ? getVerifiedMlbPlayerStat : getNhlPlayerStat,
+          sport === "mlb" ? VERIFIED_MLB_PROP_TO_STAT : NHL_PROP_TO_STAT,
           ctx,
         );
       }
@@ -1360,7 +1450,7 @@ Deno.serve(async (req) => {
 
       for (const pick of games) {
         const betType = (pick.bet_type || "").toLowerCase();
-        if (!["moneyline", "spread", "total"].includes(betType)) {
+        if (!["moneyline", "spread", "total", "over_under"].includes(betType)) {
           gameUnsupported++;
           recordSkip(ctx, pick, "unsupported_prop", { date_used: gradingDatesForPick(pick)[0] ?? null });
           continue;
@@ -1378,12 +1468,13 @@ Deno.serve(async (req) => {
           if (!g) continue;
           foundGame = g;
           dateUsed = d;
-          const r = gradeGameBet(pick, g);
+          if (!g.final) continue;
+          foundFinal = true;
+          const r = gradeVerifiedGameBet(pick, g);
           if (r) {
             graded = r;
-            foundFinal = true;
-            break;
           }
+          break;
         }
 
         if (graded && foundGame) {
@@ -1398,7 +1489,8 @@ Deno.serve(async (req) => {
               actualValue: null,
               line:
                 betType === "spread" ? Number(pick.spread_line ?? pick.line)
-                  : betType === "total" ? Number(pick.total_line ?? pick.line)
+                  : betType === "total" || betType === "over_under"
+                    ? Number(pick.total_line ?? pick.line)
                   : null,
               direction: pick.direction ?? null,
               source: `espn:${sport}`,
@@ -1412,7 +1504,19 @@ Deno.serve(async (req) => {
             continue;
           }
           gameGraded++;
-        } else if (foundGame && !foundFinal) {
+        } else if (foundGame && foundFinal) {
+          gameNoData++;
+          const direction = String(pick.direction ?? "").toLowerCase();
+          const invalidDirection =
+            (betType === "total" || betType === "over_under") &&
+            direction !== "over" && direction !== "under";
+          recordSkip(ctx, pick, invalidDirection ? "invalid_direction" : "no_data", {
+            date_used: dateUsed,
+            espn_state: foundGame.state ?? null,
+            found_in_scoreboard: true,
+            teams: `${foundGame.home}@${foundGame.away}`,
+          });
+        } else if (foundGame) {
           gameNotFinal++;
           recordSkip(ctx, pick, "not_final", {
             date_used: dateUsed,
@@ -1434,16 +1538,22 @@ Deno.serve(async (req) => {
       skippedAmbiguousPlayer += propCounters.skippedAmbiguousPlayer;
       skippedNoEvent += propCounters.skippedNoEvent;
 
+      const priorSportSummary = sportSummary[sport] ?? {};
       sportSummary[sport] = {
+        ...priorSportSummary,
         total: sportPicks.length,
-        graded: propCounters.graded + gameGraded,
-        skipped_not_final: propCounters.skippedNotFinal + gameNotFinal,
-        skipped_no_data: propCounters.skippedNoData + gameNoData,
+        graded: Number(priorSportSummary.graded ?? 0) + propCounters.graded + gameGraded,
+        skipped_not_final:
+          Number(priorSportSummary.skipped_not_final ?? 0) +
+          propCounters.skippedNotFinal + gameNotFinal,
+        skipped_no_data:
+          Number(priorSportSummary.skipped_no_data ?? 0) +
+          propCounters.skippedNoData + gameNoData,
         skipped_unsupported_prop: propCounters.skippedUnsupportedProp + gameUnsupported,
         skipped_player_not_found: propCounters.skippedPlayerNotFound,
         skipped_ambiguous_player: propCounters.skippedAmbiguousPlayer,
         skipped_no_event: propCounters.skippedNoEvent,
-        props: props.length,
+        props: sport === "wnba" ? Number(priorSportSummary.props ?? 0) : props.length,
         game_bets: games.length,
       };
     }

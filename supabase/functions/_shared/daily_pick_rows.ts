@@ -19,6 +19,7 @@ export interface DailyPickRowInput {
   status?: string | null;
   sourceFunction: string;
   modelUsed?: string | null;
+  modelVersion?: string | null;
   reasoning?: string | null;
   avgValue?: number | null;
   runId?: string | null;
@@ -164,6 +165,7 @@ export function buildDailyPickRow({
   status = null,
   sourceFunction,
   modelUsed = null,
+  modelVersion = null,
   reasoning,
   avgValue,
   runId = null,
@@ -190,6 +192,11 @@ export function buildDailyPickRow({
       ? raw.model_diagnostics as Record<string, unknown>
       : {};
   const playDiag = (play.model_diagnostics ?? {}) as Record<string, unknown>;
+  const calibrationApplied = playDiag.calibration_applied === true;
+  const scoreKind = calibrationApplied ? "calibrated_probability" : "heuristic_score";
+  const resolvedModelVersion =
+    modelVersion ??
+    (typeof playDiag.model_version === "string" ? playDiag.model_version : null);
   const modelDiagnostics = {
     ...rawDiagnostics,
     ...playDiag,
@@ -223,6 +230,9 @@ export function buildDailyPickRow({
     sport: play.sport,
     source_function: sourceFunction,
     model_used: modelUsed,
+    model_version: resolvedModelVersion,
+    score_kind: scoreKind,
+    calibration_status: calibrationApplied ? "applied" : "not_calibrated",
     runId: runId ?? (playDiag.runId as string | null | undefined) ?? null,
   };
 
@@ -265,9 +275,16 @@ export function buildDailyPickRow({
     }
   }
 
+  const createdAt = new Date().toISOString();
+  const selectedBook =
+    (typeof raw?.book === "string" ? raw.book : null) ??
+    (typeof raw?.bookmaker === "string" ? raw.bookmaker : null) ??
+    (typeof raw?.best_book === "string" ? raw.best_book : null) ??
+    (typeof playDiag.selected_book === "string" ? playDiag.selected_book : null);
+
   return {
     id: crypto.randomUUID(),
-    created_at: new Date().toISOString(),
+    created_at: createdAt,
     pick_date: pickDate,
     event_id: play.event_id ?? raw?.event_id ?? null,
     commence_time: play.commence_time ?? raw?.commence_time ?? null,
@@ -286,6 +303,10 @@ export function buildDailyPickRow({
     avg_value: avgValue ?? (typeof raw?.avg_value === "number" ? raw.avg_value : play.ev_pct),
     reasoning: reasoning ?? (typeof raw?.reasoning === "string" ? raw.reasoning : play.reasoning),
     odds: formatOdds(raw?.odds, play.odds),
+    opening_odds: formatOdds(raw?.odds, play.odds),
+    opening_line: play.line,
+    opening_captured_at: createdAt,
+    selected_book: selectedBook,
     result: "pending",
     bet_type: play.bet_type === "total" ? "over_under" : play.bet_type,
     spread_line: play.spread_line ?? null,
@@ -295,6 +316,14 @@ export function buildDailyPickRow({
     tier,
     status,
     model_used: modelUsed,
+    model_version: resolvedModelVersion,
+    score_kind: scoreKind,
+    calibration_status: calibrationApplied ? "applied" : "not_calibrated",
+    calibrated_probability:
+      calibrationApplied && typeof playDiag.calibrated_probability === "number"
+        ? playDiag.calibrated_probability
+        : null,
+    prediction_recorded_at: createdAt,
     model_diagnostics: modelDiagnostics,
     run_id: runId ?? null,
   };
