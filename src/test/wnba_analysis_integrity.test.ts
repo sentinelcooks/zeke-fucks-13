@@ -386,6 +386,8 @@ describe("WNBA game-market selection and Edge gate", () => {
         probability_supported: true,
         score_kind: "calibrated_probability",
         calibration_status: "validated",
+        edge_evidence_validated: true,
+        evaluation_status: "validated",
       },
     };
     const result = buildWnbaQueueFinalization({

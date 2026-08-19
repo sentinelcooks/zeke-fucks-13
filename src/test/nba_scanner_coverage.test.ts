@@ -56,6 +56,8 @@ function makeNbaCandidate(overrides: Partial<ScoredPlay> = {}): ScoredPlay {
       calibration_status: "validated",
       calibration_applied: true,
       probability_supported: true,
+      edge_evidence_validated: true,
+      evaluation_status: "validated",
       ...(overrides.model_diagnostics ?? {}),
     },
   };

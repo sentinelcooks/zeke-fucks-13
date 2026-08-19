@@ -57,6 +57,8 @@ function makePlay(overrides: Partial<ScoredPlay> = {}): ScoredPlay {
       calibration_status: "validated",
       calibration_applied: true,
       probability_supported: true,
+      edge_evidence_validated: true,
+      evaluation_status: "validated",
       ...(overrides.model_diagnostics ?? {}),
     },
   };
@@ -253,6 +255,8 @@ describe("NBA daily pick canonical diagnostics", () => {
       stored_confidence: 72,
       stored_verdict: "LEAN",
       probability_supported: true,
+      edge_evidence_validated: true,
+      evaluation_status: "validated",
     });
   });
 });

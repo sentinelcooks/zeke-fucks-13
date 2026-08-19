@@ -42,6 +42,12 @@ function probabilityIsSupported(play: ScoredPlay): boolean {
     diagnostics.calibration_status === "validated";
 }
 
+function evaluationIsSupported(play: ScoredPlay): boolean {
+  const diagnostics = (play.model_diagnostics ?? {}) as Record<string, unknown>;
+  return diagnostics.edge_evidence_validated === true &&
+    diagnostics.evaluation_status === "validated";
+}
+
 function promotionBlockerFor(args: {
   canonicalVerdict: CanonicalVerdict;
   hitRate: number;
@@ -49,13 +55,15 @@ function promotionBlockerFor(args: {
   currentEdgeCount: number;
   edgeCap: number;
   probabilitySupported: boolean;
+  evaluationSupported: boolean;
 }): string | null {
   if (!args.probabilitySupported) return "calibration_not_supported";
   if (args.canonicalVerdict !== "STRONG" && args.canonicalVerdict !== "LEAN") {
     return "verdict_not_strong_or_lean";
   }
   if (args.hitRate < 70) return "confidence_below_nba_edge_min";
-  if (!args.gate.ok) return "edge_gate_failed";
+  if (args.gate.reasons.some((reason) => reason !== "evaluation_not_validated")) return "edge_gate_failed";
+  if (!args.evaluationSupported) return "evaluation_not_validated";
   if (args.currentEdgeCount >= args.edgeCap) return "edge_cap_full";
   return null;
 }
@@ -88,6 +96,8 @@ export function buildGenericQueueFinalization(args: {
     promotionBlocker = "confidence_below_lean_min";
   } else if (args.finalized.edge < EDGE_LEAN_MIN) {
     promotionBlocker = "edge_below_lean_min";
+  } else if (!evaluationIsSupported(args.finalized)) {
+    promotionBlocker = "evaluation_not_validated";
   } else if (args.currentEdgeCount >= args.edgeCap) {
     promotionBlocker = "edge_cap_full";
   }
@@ -112,6 +122,7 @@ export function buildGenericQueueFinalization(args: {
     ? "selected_from_queue_generic"
     : promotionBlocker;
   diagnostics.edgeDowngradeReason = promotionBlocker;
+  diagnostics.shadow_edge_candidate = promotionBlocker === "evaluation_not_validated";
   diagnostics.evPct = Math.round(args.finalized.ev_pct * 100) / 100;
   diagnostics.modelEdge = Math.round(args.finalized.edge * 10000) / 10000;
   diagnostics.queue_processed_at = (args.now ?? new Date()).toISOString();
@@ -172,7 +183,8 @@ export function buildWnbaQueueFinalization(args: {
   const marketQuality = String(diagnostics.marketDataQuality ?? "").toLowerCase();
   const bookCount = Number(diagnostics.bookCount ?? 0);
   const betType = args.finalized.bet_type;
-  let wnbaBlocker: string | null = generic.promotionBlocker;
+  const evaluationPending = generic.promotionBlocker === "evaluation_not_validated";
+  let wnbaBlocker: string | null = evaluationPending ? null : generic.promotionBlocker;
 
   if (!wnbaBlocker && quality === "low") wnbaBlocker = "wnba_data_quality_low";
   if (!wnbaBlocker && diagnostics.injury_source_available !== true) {
@@ -218,6 +230,7 @@ export function buildWnbaQueueFinalization(args: {
   if (!wnbaBlocker && missing.includes("INJURY_SOURCE_UNAVAILABLE")) {
     wnbaBlocker = "wnba_injury_source_unavailable";
   }
+  if (!wnbaBlocker && evaluationPending) wnbaBlocker = "evaluation_not_validated";
 
   const canPromote = wnbaBlocker === null;
   const finalTier: NbaQueueFinalTier = canPromote
@@ -230,6 +243,7 @@ export function buildWnbaQueueFinalization(args: {
   diagnostics.edge_pool_selected = canPromote;
   diagnostics.edge_pool_selection_reason = canPromote ? "selected_from_queue_wnba" : wnbaBlocker;
   diagnostics.edgeDowngradeReason = wnbaBlocker;
+  diagnostics.shadow_edge_candidate = evaluationPending && wnbaBlocker === "evaluation_not_validated";
   diagnostics.wnba_edge_gate = {
     ok: canPromote,
     blocker: wnbaBlocker,
@@ -279,6 +293,7 @@ export function buildNbaQueueFinalization(args: {
     currentEdgeCount: args.currentEdgeCount,
     edgeCap: args.edgeCap,
     probabilitySupported: probabilityIsSupported(args.finalized),
+    evaluationSupported: evaluationIsSupported(args.finalized),
   });
   const canPromote = promotionBlocker === null;
   const finalTier: NbaQueueFinalTier = canPromote
@@ -313,6 +328,8 @@ export function buildNbaQueueFinalization(args: {
   diagnostics.evPct = Math.round(args.finalized.ev_pct * 100) / 100;
   diagnostics.modelEdge = Math.round(args.finalized.edge * 10000) / 10000;
   diagnostics.queue_processed_at = (args.now ?? new Date()).toISOString();
+  diagnostics.shadow_edge_candidate = promotionBlocker === "evaluation_not_validated" &&
+    gate.reasons.every((reason) => reason === "evaluation_not_validated");
 
   return {
     canPromote,

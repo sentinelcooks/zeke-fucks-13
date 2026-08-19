@@ -58,19 +58,30 @@ describe("chronological calibration evidence", () => {
     expect(hasSupportedCalibration({
       active: true,
       method: "platt",
+      model_version: "wnba-v1",
       train_samples: 500,
       test_samples: 0,
       holdout_passed: false,
       evaluation_method: null,
-    })).toBe(false);
+    }, "wnba-v1")).toBe(false);
 
     expect(hasSupportedCalibration({
       active: true,
       method: "platt",
+      model_version: "wnba-v1",
       train_samples: 200,
       test_samples: 50,
       holdout_passed: true,
       evaluation_method: "chronological_holdout",
-    })).toBe(true);
+    }, "wnba-v1")).toBe(true);
+    expect(hasSupportedCalibration({
+      active: true,
+      method: "platt",
+      model_version: "wnba-v1",
+      train_samples: 200,
+      test_samples: 50,
+      holdout_passed: true,
+      evaluation_method: "chronological_holdout",
+    }, "wnba-v2")).toBe(false);
   });
 });

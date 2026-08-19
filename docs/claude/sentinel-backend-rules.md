@@ -116,6 +116,12 @@ Flag: N+1 query patterns, duplicate fetches, stale cache risks, inconsistent tra
 ### Core principle
 Sentinel's value comes from output quality. When working on predictions, rankings, confidence, or analysis logic: make the scoring path explicit, isolate each feature contribution, avoid accidental double-counting, prevent leakage from future information.
 
+### Probability and edge evidence
+- Calibration is valid only for the exact immutable `model_version` that produced its raw scores.
+- Calibration and performance evaluation may use only automated, verified, pregame-timestamped grades.
+- User-entered outcomes and legacy rows without model versions are never calibration evidence.
+- A profitability or measurable-edge claim requires a persisted chronological evaluation report; insufficient evidence must remain explicitly labeled.
+
 ### Scoring audit checklist
 When analyzing model logic, always check for:
 

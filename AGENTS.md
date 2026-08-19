@@ -43,6 +43,7 @@ Before touching any backend, database, or AI logic, read the relevant sub-doc:
 5. **No blank or generic analysis outputs.** Every AI analysis must reference actual player/matchup/stat data passed in.
 6. **Inspect before editing.** Read the current file before writing to it.
 7. **List all files that will change before changing them.**
+8. **Version-bind calibration and evidence.** Never calibrate or claim edge across mixed model versions, user-entered outcomes, or post-start predictions.
 
 ## Key Paths
 

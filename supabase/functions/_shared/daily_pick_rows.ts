@@ -135,6 +135,9 @@ export function analyzerFinalizedRejectReason(args: {
   if (tier === "edge" && diagnostics.probability_supported !== true) {
     return "calibration_not_supported";
   }
+  if (tier === "edge" && diagnostics.edge_evidence_validated !== true) {
+    return "evaluation_not_validated";
+  }
   if (diagnostics.analyzer_payload === null || diagnostics.analyzer_payload === undefined) {
     return "missing_analyzer_payload";
   }

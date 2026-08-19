@@ -180,6 +180,7 @@ export function evaluateNbaEdgeGate(p: ScoredPlay): NbaEdgeGateResult {
   const reasons: string[] = [];
   const md = (p.model_diagnostics ?? {}) as Record<string, unknown>;
   if (md.probability_supported !== true) reasons.push("calibration_not_supported");
+  if (md.edge_evidence_validated !== true) reasons.push("evaluation_not_validated");
 
   const canonicalConfidence = Math.round(
     normalizeConfidencePercent(
@@ -952,7 +953,8 @@ export function rankAndDistribute(plays: ScoredPlay[]) {
   let lowRelCount = 0;
   const freePicks: ScoredPlay[] = [];
   const edgeEligible = sorted.filter(
-    (p) => p.model_diagnostics?.probability_supported === true,
+    (p) => p.model_diagnostics?.probability_supported === true &&
+      p.model_diagnostics?.edge_evidence_validated === true,
   );
   for (const p of edgeEligible) {
     if (freePicks.length >= FREE_PICKS_CAP) break;
@@ -972,7 +974,7 @@ export function rankAndDistribute(plays: ScoredPlay[]) {
   const keyOf = (p: ScoredPlay) =>
     `${p.sport}|${p.player_name}|${p.prop_type}|${p.direction}|${p.line}`;
 
-  for (const p of sorted) {
+  for (const p of edgeEligible) {
     if (todaysEdge.length >= TODAYS_EDGE_CAP) break;
     if ((edgeSportCount[p.sport] || 0) >= 2) continue;
     todaysEdge.push(p);

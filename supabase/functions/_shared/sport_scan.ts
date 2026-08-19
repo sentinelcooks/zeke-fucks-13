@@ -37,9 +37,14 @@ import {
   teamMarketExclusivityKey,
 } from "./analyzer_routing.ts";
 import { getCalibrationState } from "./calibration_cache.ts";
+import { getModelEvaluationState } from "./model_evaluation_cache.ts";
 import { applyCalibration } from "./prob_math.ts";
 import { PROB_LEAN } from "./thresholds.ts";
 import { selectWnbaConsensusMarkets } from "./wnba_model.ts";
+import {
+  buildGenericQueueFinalization,
+  buildWnbaQueueFinalization,
+} from "./nba_queue_finalization.ts";
 
 // App slate timezone — matches the public-display assumption in src/lib/gameDate.ts.
 const APP_TZ = "America/New_York";
@@ -1896,7 +1901,19 @@ export async function validateWithAnalyzer(
     return null;
   }
 
-  const calibrationState = await getCalibrationState(play.sport, play.bet_type);
+  const analysisDiagnostics = analyzed?.model_diagnostics && typeof analyzed.model_diagnostics === "object"
+    ? analyzed.model_diagnostics as Record<string, unknown>
+    : {};
+  const playDiagnostics = play.model_diagnostics ?? {};
+  const modelVersion = String(
+    analyzed?.model ??
+      analyzed?.model_version ??
+      analysisDiagnostics.model_version ??
+      playDiagnostics.model_version ??
+      "",
+  ).trim() || null;
+  const calibrationState = await getCalibrationState(play.sport, play.bet_type, modelVersion);
+  const evaluationState = await getModelEvaluationState(play.sport, play.bet_type, modelVersion);
   const rawAnalyzerScore = Math.max(0, Math.min(1, conf / 100));
   const probabilitySupported = calibrationState.supported;
   const calibratedScore = probabilitySupported
@@ -2051,6 +2068,7 @@ export async function validateWithAnalyzer(
     canonical_confidence: Math.round(adjustedProjected * 100),
     canonical_verdict: canonicalVerdict,
     raw_model_score: rawAnalyzerScore,
+    model_version: modelVersion,
     score_kind: probabilitySupported ? "calibrated_probability" : "heuristic_score",
     calibration_status: calibrationState.status,
     calibration_applied: probabilitySupported,
@@ -2059,6 +2077,12 @@ export async function validateWithAnalyzer(
     calibration_train_samples: calibrationState.trainSamples,
     calibration_test_samples: calibrationState.testSamples,
     calibration_fitted_at: calibrationState.fittedAt,
+    calibration_model_version: calibrationState.modelVersion,
+    edge_evidence_validated: evaluationState.validated,
+    evaluation_status: evaluationState.status,
+    evaluation_reasons: evaluationState.reasons,
+    evaluation_run_id: evaluationState.runId,
+    evaluation_evaluated_at: evaluationState.evaluatedAt,
     analyzerAgreement,
     analyzerDisagreementReason,
     publishedSource: "analyzer",
@@ -2912,7 +2936,7 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
 
   // ── NBA edge gate: compute results once, cache by tierKey ──
   // For NBA picks, run hard eligibility gates before deciding which go to edge.
-  // Non-NBA sports keep the original top-N-by-quality_score behavior unchanged.
+  // Non-NBA sports use their sport-aware safety/evidence gates before ranking.
   const nbaGateCache = new Map<string, NbaEdgeGateResult>();
   if (sport === "nba") {
     for (const p of eligible) {
@@ -2990,12 +3014,14 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
     const hasAnalyzer = (ANALYZER_ENDPOINT[sport] ?? null) !== null;
 
     let sportEdgeCount = 0;
+    let sportCandidateSlots = 0;
     for (const p of sortedByQuality) {
-      if (sportEdgeCount >= edgeCap) break;
+      if (sportCandidateSlots >= edgeCap) break;
       const diagnostics = (p.model_diagnostics ?? {}) as Record<string, unknown>;
       if (diagnostics.probability_supported !== true) {
         diagnostics.final_edge_eligible = false;
         diagnostics.edgeDowngradeReason = "calibration_not_supported";
+        diagnostics.shadow_edge_candidate = false;
         p.model_diagnostics = diagnostics;
         continue;
       }
@@ -3007,8 +3033,29 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
         }
         continue;
       }
+
+      const finalized = sport === "wnba"
+        ? buildWnbaQueueFinalization({
+          baseDiagnostics: diagnostics,
+          currentEdgeCount: sportEdgeCount,
+          edgeCap,
+          finalized: p,
+        })
+        : buildGenericQueueFinalization({
+          baseDiagnostics: diagnostics,
+          currentEdgeCount: sportEdgeCount,
+          edgeCap,
+          finalized: p,
+        });
+      p.model_diagnostics = finalized.diagnostics;
+      if (!finalized.canPromote) {
+        if (finalized.promotionBlocker === "evaluation_not_validated") sportCandidateSlots++;
+        continue;
+      }
+
       edgeKeySet.add(tierKey(p));
       sportEdgeCount++;
+      sportCandidateSlots++;
     }
 
   }

@@ -783,6 +783,48 @@ export type Database = {
         }
         Relationships: []
       }
+      model_evaluation_runs: {
+        Row: {
+          created_by: string
+          evaluated_at: string
+          id: string
+          included_rows: number
+          input_rows: number
+          methodology: string
+          period_end: string | null
+          period_start: string | null
+          release_status: string
+          report: Json
+          request_filters: Json
+        }
+        Insert: {
+          created_by?: string
+          evaluated_at?: string
+          id?: string
+          included_rows?: number
+          input_rows?: number
+          methodology: string
+          period_end?: string | null
+          period_start?: string | null
+          release_status: string
+          report: Json
+          request_filters?: Json
+        }
+        Update: {
+          created_by?: string
+          evaluated_at?: string
+          id?: string
+          included_rows?: number
+          input_rows?: number
+          methodology?: string
+          period_end?: string | null
+          period_start?: string | null
+          release_status?: string
+          report?: Json
+          request_filters?: Json
+        }
+        Relationships: []
+      }
       model_calibration: {
         Row: {
           activation_reason: string | null
@@ -803,6 +845,7 @@ export type Database = {
           id: string
           log_loss: number | null
           method: string
+          model_version: string | null
           n_samples: number
           params: Json
           sport: string
@@ -828,6 +871,7 @@ export type Database = {
           id?: string
           log_loss?: number | null
           method: string
+          model_version?: string | null
           n_samples?: number
           params: Json
           sport: string
@@ -853,6 +897,7 @@ export type Database = {
           id?: string
           log_loss?: number | null
           method?: string
+          model_version?: string | null
           n_samples?: number
           params?: Json
           sport?: string

@@ -106,6 +106,8 @@ describe("rankAndDistribute", () => {
       calibration_status: "validated",
       calibration_applied: true,
       probability_supported: true,
+      edge_evidence_validated: true,
+      evaluation_status: "validated",
     };
     return scored;
   }
@@ -161,5 +163,15 @@ describe("rankAndDistribute", () => {
     const { todaysEdge } = rankAndDistribute([play]);
     expect(todaysEdge).toHaveLength(0);
     expect(play.reasoning).toContain("heuristic model score");
+  });
+
+  it("keeps calibrated shadow candidates out of Today's Edge until forward evidence validates", () => {
+    const play = make("wnba", 0.70, 0.18, 0.8);
+    play.model_diagnostics = {
+      ...(play.model_diagnostics ?? {}),
+      edge_evidence_validated: false,
+      evaluation_status: "insufficient_evidence",
+    };
+    expect(rankAndDistribute([play]).todaysEdge).toHaveLength(0);
   });
 });

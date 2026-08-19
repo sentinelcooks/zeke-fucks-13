@@ -21,6 +21,11 @@ verify_jwt = false
 [functions.calibrate-model]
 verify_jwt = false
 
+# Service-only historical evaluation. The function validates the service-role
+# bearer itself so Vault-backed opaque keys can invoke it from cron.
+[functions.model-evaluation]
+verify_jwt = false
+
 [functions.refresh-mlb-park-factors]
 verify_jwt = false
 

@@ -32,6 +32,7 @@ import {
 } from "../_shared/sport_scan.ts";
 import { buildNbaQueueFinalization } from "../_shared/nba_queue_finalization.ts";
 import { getCalibrationState } from "../_shared/calibration_cache.ts";
+import { getModelEvaluationState } from "../_shared/model_evaluation_cache.ts";
 import { americanToImplied, applyCalibration, calcEvPct } from "../_shared/prob_math.ts";
 
 const corsHeaders = {
@@ -148,7 +149,12 @@ function payloadToScoredPlay(payload: Record<string, unknown>): ScoredPlay {
 }
 
 async function rescore(p: ScoredPlay): Promise<ScoredPlay> {
-  const calibrationState = await getCalibrationState("nba", p.bet_type);
+  const diagnostics = p.model_diagnostics ?? {};
+  const modelVersion = typeof diagnostics.model_version === "string"
+    ? diagnostics.model_version
+    : null;
+  const calibrationState = await getCalibrationState("nba", p.bet_type, modelVersion);
+  const evaluationState = await getModelEvaluationState("nba", p.bet_type, modelVersion);
   const rawScore = p.confidence;
   const confidence = calibrationState.supported
     ? applyCalibration(rawScore, calibrationState.calibration)
@@ -191,6 +197,12 @@ async function rescore(p: ScoredPlay): Promise<ScoredPlay> {
     calibration_n_samples: calibrationState.nSamples,
     calibration_train_samples: calibrationState.trainSamples,
     calibration_test_samples: calibrationState.testSamples,
+    calibration_model_version: calibrationState.modelVersion,
+    edge_evidence_validated: evaluationState.validated,
+    evaluation_status: evaluationState.status,
+    evaluation_reasons: evaluationState.reasons,
+    evaluation_run_id: evaluationState.runId,
+    evaluation_evaluated_at: evaluationState.evaluatedAt,
   };
   const canonical = (rescored.model_diagnostics ?? {})?.canonical_verdict as
     | string

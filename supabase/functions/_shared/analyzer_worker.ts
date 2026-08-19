@@ -45,6 +45,7 @@ import {
 } from "./canonical_verdict.ts";
 import { getMarketReliability, type ScoredPlay } from "./edge_scoring.ts";
 import { getCalibrationState, type CalibrationState } from "./calibration_cache.ts";
+import { getModelEvaluationState } from "./model_evaluation_cache.ts";
 import { americanToImplied, applyCalibration, calcEvPct } from "./prob_math.ts";
 import { parseRetryAfterMs } from "./sport_scan.ts";
 import {
@@ -203,6 +204,7 @@ function buildScoredPlayFromQueueRow(
   const merged: Record<string, unknown> = {
     ...md,
     ...analyzerDiagnostics,
+    model_version: analyzerDiagnostics.model_version ?? ar.model_version ?? ar.model ?? md.model_version ?? null,
     analyzer_prediction_data_quality: analyzerPrediction.dataQuality ?? null,
     wnba_data_quality: analyzerDiagnostics.wnba_data_quality ?? analyzerPrediction.dataQuality ?? md.wnba_data_quality ?? null,
     confidenceSource: "analyzer",
@@ -225,6 +227,7 @@ function buildScoredPlayFromQueueRow(
     calibration_test_samples: calibrationState.testSamples,
     calibration_fitted_at: calibrationState.fittedAt,
     calibration_activation_reason: calibrationState.activationReason,
+    calibration_model_version: calibrationState.modelVersion,
     queue_finalized: true,
     queue_row_id: row.id,
   };
@@ -695,12 +698,35 @@ async function processRow(args: {
   // Build scored play + recompute tier via the edge-gate-aware finalizer.
   const rawBetType = String(candidate.bet_type ?? "prop").toLowerCase();
   const calibrationBetType = rawBetType === "over_under" ? "total" : rawBetType;
-  const calibrationState = await getCalibrationState(row.sport, calibrationBetType);
+  const analyzerModelDiagnostics = ar?.model_diagnostics && typeof ar.model_diagnostics === "object"
+    ? ar.model_diagnostics as Record<string, unknown>
+    : {};
+  const candidateDiagnostics = candidate.model_diagnostics && typeof candidate.model_diagnostics === "object"
+    ? candidate.model_diagnostics as Record<string, unknown>
+    : {};
+  const modelVersion = String(
+    ar?.model ??
+      ar?.model_version ??
+      analyzerModelDiagnostics.model_version ??
+      candidate.model_version ??
+      candidateDiagnostics.model_version ??
+      "",
+  ).trim() || null;
+  const calibrationState = await getCalibrationState(row.sport, calibrationBetType, modelVersion);
+  const evaluationState = await getModelEvaluationState(row.sport, calibrationBetType, modelVersion);
   const scored = buildScoredPlayFromQueueRow(
     row,
     ar as Record<string, unknown>,
     calibrationState,
   );
+  scored.model_diagnostics = {
+    ...(scored.model_diagnostics ?? {}),
+    edge_evidence_validated: evaluationState.validated,
+    evaluation_status: evaluationState.status,
+    evaluation_reasons: evaluationState.reasons,
+    evaluation_run_id: evaluationState.runId,
+    evaluation_evaluated_at: evaluationState.evaluatedAt,
+  };
   // NBA picks go through the NBA-specific edge gate (heavy juice, market
   // quality, opponent resolution, playoff series). MLB/NHL/UFC picks carry
   // none of those diagnostics, so the NBA gate would always fail — that's

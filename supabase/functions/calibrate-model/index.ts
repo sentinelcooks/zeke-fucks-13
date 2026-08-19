@@ -11,6 +11,10 @@ import {
   chronologicalCalibrationSplit,
   type TimestampedCalibrationSample,
 } from "../_shared/calibration_policy.ts";
+import {
+  calibrationSampleEligibility,
+  type ModelEvaluationPick,
+} from "../_shared/model_evaluation.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,6 +25,7 @@ const corsHeaders = {
 interface Sample extends TimestampedCalibrationSample {
   sport: string;
   bet_type: string;
+  model_version: string;
   identity: string;
 }
 
@@ -49,25 +54,50 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(url, serviceRoleKey);
   const requestUrl = new URL(req.url);
-  const dry = requestUrl.searchParams.get("dry") === "1";
-  const onlySport = requestUrl.searchParams.get("sport");
-  const onlyBetType = requestUrl.searchParams.get("bet_type");
-  const lookbackDays = Math.max(30, Math.min(730, Number(requestUrl.searchParams.get("days") ?? "365")));
+  let requestBody: Record<string, unknown> = {};
+  try {
+    const parsed = await req.json();
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      requestBody = parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Empty bodies remain supported for scheduled and manual invocations.
+  }
+  const queryDry = requestUrl.searchParams.get("dry");
+  const dry = queryDry === "1" || (queryDry === null && requestBody.dry === true);
+  const onlySport = requestUrl.searchParams.get("sport") ??
+    (typeof requestBody.sport === "string" ? requestBody.sport : null);
+  const onlyBetType = requestUrl.searchParams.get("bet_type") ??
+    (typeof requestBody.bet_type === "string" ? requestBody.bet_type : null);
+  const requestedDays = requestUrl.searchParams.get("days") ?? requestBody.days ?? 365;
+  const parsedDays = Number(requestedDays);
+  const lookbackDays = Math.max(30, Math.min(730, Number.isFinite(parsedDays) ? parsedDays : 365));
 
   try {
     const since = new Date(Date.now() - lookbackDays * 86400 * 1000).toISOString();
     const samples = await collectSamples(supabase, since, onlySport, onlyBetType);
     const groups = new Map<string, Sample[]>();
+    const latestVersionByMarket = new Map<string, { modelVersion: string; occurredAt: string }>();
     for (const sample of samples) {
-      const key = `${sample.sport}|${sample.bet_type}`.toLowerCase();
+      const marketKey = `${sample.sport}|${sample.bet_type}`.toLowerCase();
+      const latest = latestVersionByMarket.get(marketKey);
+      if (!latest || Date.parse(sample.occurred_at) > Date.parse(latest.occurredAt)) {
+        latestVersionByMarket.set(marketKey, {
+          modelVersion: sample.model_version,
+          occurredAt: sample.occurred_at,
+        });
+      }
+      const key = `${marketKey}|${sample.model_version}`;
       const group = groups.get(key) ?? [];
       group.push(sample);
       groups.set(key, group);
     }
 
     const results: Record<string, unknown>[] = [];
-    for (const [key, data] of groups) {
-      const [sport, bet_type] = key.split("|");
+    for (const [, data] of groups) {
+      const sport = data[0].sport;
+      const bet_type = data[0].bet_type;
+      const model_version = data[0].model_version;
       const { train, test } = chronologicalCalibrationSplit(data);
       const trainScores = train.map((sample) => clamp01(sample.score));
       const trainLabels = train.map((sample) => sample.label);
@@ -90,7 +120,7 @@ Deno.serve(async (req) => {
         calibratedLogLoss = logLoss(calibrated, testLabels);
       }
 
-      const decision = calibrationActivationDecision({
+      const holdoutDecision = calibrationActivationDecision({
         trainSamples: train.length,
         testSamples: test.length,
         baselineBrier,
@@ -98,9 +128,14 @@ Deno.serve(async (req) => {
         baselineLogLoss,
         calibratedLogLoss,
       });
+      const latestVersion = latestVersionByMarket.get(`${sport}|${bet_type}`)?.modelVersion ?? null;
+      const decision = latestVersion === model_version
+        ? holdoutDecision
+        : { activate: false, reason: "superseded_model_version" };
       const row = {
         sport,
         bet_type,
+        model_version,
         method: "platt" as const,
         params,
         n_samples: data.length,
@@ -146,6 +181,7 @@ Deno.serve(async (req) => {
       dry,
       lookbackDays,
       evaluationMethod: "chronological_holdout",
+      source: "verified_daily_picks_only",
       sampleCount: samples.length,
       groups: results,
     });
@@ -162,57 +198,20 @@ async function collectSamples(
   onlyBetType: string | null,
 ): Promise<Sample[]> {
   const rows: Sample[] = [];
-
-  try {
-    const { data, error } = await supabase
-      .from("outcomes")
-      .select(
-        "actual_result,created_at,prediction_snapshots!inner(sport,market_type,player_or_team,prop_type,line,direction,confidence,created_at)",
-      )
-      .gte("created_at", sinceIso);
-    if (error) throw error;
-    for (const outcome of (data ?? []) as Record<string, unknown>[]) {
-      const snapshot = Array.isArray(outcome.prediction_snapshots)
-        ? outcome.prediction_snapshots[0]
-        : outcome.prediction_snapshots;
-      if (!snapshot || typeof snapshot !== "object") continue;
-      const snap = snapshot as Record<string, unknown>;
-      const sport = String(snap.sport ?? "").toLowerCase();
-      const betType = normalizeBetType(snap.market_type);
-      if (!sport || !betType || (onlySport && sport !== onlySport.toLowerCase())) continue;
-      if (onlyBetType && betType !== normalizeBetType(onlyBetType)) continue;
-      const score = numConf(snap.confidence);
-      const label = resultLabel(outcome.actual_result);
-      const occurredAt = String(snap.created_at ?? outcome.created_at ?? "");
-      if (score == null || label == null || !Number.isFinite(Date.parse(occurredAt))) continue;
-      rows.push({
-        sport,
-        bet_type: betType,
-        score,
-        label,
-        occurred_at: occurredAt,
-        identity: sampleIdentity({
-          sport,
-          betType,
-          occurredAt,
-          player: snap.player_or_team,
-          propType: snap.prop_type,
-          line: snap.line,
-          direction: snap.direction,
-        }),
-      });
-    }
-  } catch (error) {
-    console.warn("outcomes calibration source unavailable:", error instanceof Error ? error.message : error);
-  }
-
-  try {
-    let query = supabase
+  const pageSize = 1_000;
+  for (let from = 0; from < 50_000; from += pageSize) {
+    let query: any = supabase
       .from("daily_picks")
-      .select("sport,bet_type,player_name,prop_type,line,direction,hit_rate,result,pick_date,created_at,score_kind")
+      .select(
+        "id,sport,bet_type,player_name,prop_type,line,direction,hit_rate,result,pick_date,score_kind,model_version,model_diagnostics,odds,profit_units,stake_units,prediction_recorded_at,commence_time,graded_at,grading_source",
+      )
       .gte("pick_date", sinceIso.slice(0, 10))
       .in("result", ["hit", "miss"])
-      .eq("score_kind", "heuristic_score");
+      .not("grading_source", "is", null)
+      .not("prediction_recorded_at", "is", null)
+      .not("model_version", "is", null)
+      .order("prediction_recorded_at", { ascending: true })
+      .range(from, from + pageSize - 1);
     if (onlySport) query = query.eq("sport", onlySport.toLowerCase());
     if (onlyBetType) {
       const normalized = normalizeBetType(onlyBetType);
@@ -223,19 +222,47 @@ async function collectSamples(
     for (const pick of (data ?? []) as Record<string, unknown>[]) {
       const sport = String(pick.sport ?? "").toLowerCase();
       const betType = normalizeBetType(pick.bet_type);
-      const score = numConf(pick.hit_rate);
+      const diagnostics = pick.model_diagnostics && typeof pick.model_diagnostics === "object"
+        ? pick.model_diagnostics as Record<string, unknown>
+        : {};
+      const rawScore = numConf(
+        diagnostics.raw_model_score ??
+          (String(pick.score_kind ?? "") === "heuristic_score" ? pick.hit_rate : null),
+      );
       const label = resultLabel(pick.result);
-      const occurredAt = String(pick.created_at ?? `${pick.pick_date}T12:00:00Z`);
-      if (!sport || !betType || score == null || label == null || !Number.isFinite(Date.parse(occurredAt))) continue;
+      const occurredAt = String(pick.prediction_recorded_at ?? "");
+      const modelVersion = String(pick.model_version ?? "").trim();
+      const evaluationPick: ModelEvaluationPick = {
+        id: String(pick.id ?? ""),
+        sport,
+        betType,
+        propType: String(pick.prop_type ?? ""),
+        modelVersion,
+        result: String(pick.result ?? ""),
+        odds: pick.odds as string | number | null,
+        profitUnits: pick.profit_units == null ? null : Number(pick.profit_units),
+        stakeUnits: pick.stake_units == null ? null : Number(pick.stake_units),
+        confidence: numConf(pick.hit_rate),
+        rawModelScore: rawScore,
+        scoreKind: String(pick.score_kind ?? ""),
+        pickDate: String(pick.pick_date ?? ""),
+        predictionRecordedAt: occurredAt,
+        commenceTime: String(pick.commence_time ?? ""),
+        gradedAt: String(pick.graded_at ?? ""),
+        gradingSource: String(pick.grading_source ?? ""),
+      };
+      if (!sport || !betType || rawScore == null || label == null || !calibrationSampleEligibility(evaluationPick)) continue;
       rows.push({
         sport,
         bet_type: betType,
-        score,
+        model_version: modelVersion,
+        score: rawScore,
         label,
         occurred_at: occurredAt,
         identity: sampleIdentity({
           sport,
           betType,
+          modelVersion,
           occurredAt,
           player: pick.player_name,
           propType: pick.prop_type,
@@ -244,8 +271,7 @@ async function collectSamples(
         }),
       });
     }
-  } catch (error) {
-    console.warn("daily_picks calibration source unavailable:", error instanceof Error ? error.message : error);
+    if ((data ?? []).length < pageSize) break;
   }
 
   const unique = new Map<string, Sample>();
@@ -256,6 +282,7 @@ async function collectSamples(
 function sampleIdentity(input: {
   sport: string;
   betType: string;
+  modelVersion: string;
   occurredAt: string;
   player: unknown;
   propType: unknown;
@@ -267,6 +294,7 @@ function sampleIdentity(input: {
     input.occurredAt.slice(0, 10),
     input.sport,
     input.betType,
+    input.modelVersion,
     normalize(input.player),
     normalize(input.propType),
     normalize(input.line),

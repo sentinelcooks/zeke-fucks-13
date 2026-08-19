@@ -80,6 +80,7 @@ Access secrets via `Deno.env.get('SECRET_NAME')`. Never hardcode. Never pass the
 | `admin-onboarding` | Admin user setup |
 | `ai-analysis` | AI-powered prop/game analysis |
 | `calibrate-model` | Model calibration runs |
+| `model-evaluation` | Service-only chronological performance and release evidence |
 | `correlated-props` | Correlated prop detection |
 | `daily-picks` | Daily picks generation pipeline |
 | `free-props` | Free tier props endpoint |

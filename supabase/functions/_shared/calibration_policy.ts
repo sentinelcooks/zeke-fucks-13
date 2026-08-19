@@ -16,6 +16,7 @@ export interface CalibrationEvidence {
   test_samples?: number | null;
   holdout_passed?: boolean | null;
   evaluation_method?: string | null;
+  model_version?: string | null;
 }
 
 export interface CalibrationActivationMetrics {
@@ -71,8 +72,14 @@ export function calibrationActivationDecision(metrics: CalibrationActivationMetr
   return { activate: true, reason: "chronological_holdout_improved" };
 }
 
-export function hasSupportedCalibration(evidence: CalibrationEvidence | null | undefined): boolean {
+export function hasSupportedCalibration(
+  evidence: CalibrationEvidence | null | undefined,
+  expectedModelVersion: string | null | undefined,
+): boolean {
   if (!evidence) return false;
+  const expected = String(expectedModelVersion ?? "").trim();
+  const fitted = String(evidence.model_version ?? "").trim();
+  if (!expected || !fitted || expected !== fitted) return false;
   return evidence.active === true &&
     evidence.method !== "identity" &&
     evidence.holdout_passed === true &&

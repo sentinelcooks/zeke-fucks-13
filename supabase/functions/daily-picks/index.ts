@@ -619,6 +619,7 @@ function parseOdds(odds: string | null | undefined): number {
 import { score, scorePrecomputed, rankAndDistribute, type ScoredPlay } from "../_shared/edge_scoring.ts";
 import { americanToImplied, fairImpliedFromPair, calcEvPct, clamp01, applyCalibration } from "../_shared/prob_math.ts";
 import { getCalibrationState } from "../_shared/calibration_cache.ts";
+import { getModelEvaluationState } from "../_shared/model_evaluation_cache.ts";
 import { buildDailyPickRow, applyAnalyzerFinalizeInsertGuard } from "../_shared/daily_pick_rows.ts";
 import {
   canonicalToScoredVerdict,
@@ -893,10 +894,14 @@ Deno.serve(async (req) => {
     // available, removes the book's juice before computing edge.
     // Calibration rows are cached 5 minutes per (sport, bet_type).
     const calibrationBySport = new Map<string, any>();
-    async function calFor(sport: string, betType: string) {
-      const k = `${sport}|${betType}`;
+    async function calFor(sport: string, betType: string, modelVersion: string | null) {
+      const k = `${sport}|${betType}|${modelVersion ?? "missing"}`;
       if (!calibrationBySport.has(k)) {
-        calibrationBySport.set(k, await getCalibrationState(sport, betType));
+        const [calibration, evaluation] = await Promise.all([
+          getCalibrationState(sport, betType, modelVersion),
+          getModelEvaluationState(sport, betType, modelVersion),
+        ]);
+        calibrationBySport.set(k, { ...calibration, evaluation });
       }
       return calibrationBySport.get(k);
     }
@@ -907,7 +912,12 @@ Deno.serve(async (req) => {
       const oddsOpp = p.odds_opp != null ? parseOdds(p.odds_opp) : null;
       const betType = (p.bet_type === "over_under" ? "total" : p.bet_type) as
         "prop" | "moneyline" | "spread" | "total";
-      const calibrationState = await calFor(p.sport, betType);
+      const modelVersion = typeof p.model_version === "string"
+        ? p.model_version
+        : typeof p.model_diagnostics?.model_version === "string"
+          ? p.model_diagnostics.model_version
+          : null;
+      const calibrationState = await calFor(p.sport, betType, modelVersion);
       const canonicalVerdict =
         p.canonical_verdict != null
           ? normalizeCanonicalVerdict(p.canonical_verdict, p.hit_rate)
@@ -961,6 +971,12 @@ Deno.serve(async (req) => {
             calibration_n_samples: calibrationState.nSamples,
             calibration_train_samples: calibrationState.trainSamples,
             calibration_test_samples: calibrationState.testSamples,
+            calibration_model_version: calibrationState.modelVersion,
+            edge_evidence_validated: calibrationState.evaluation.validated,
+            evaluation_status: calibrationState.evaluation.status,
+            evaluation_reasons: calibrationState.evaluation.reasons,
+            evaluation_run_id: calibrationState.evaluation.runId,
+            evaluation_evaluated_at: calibrationState.evaluation.evaluatedAt,
           },
         });
         scored.verdict = canonicalToScoredVerdict(
@@ -969,8 +985,7 @@ Deno.serve(async (req) => {
         scoredPlays.push(scored);
         continue;
       }
-      scoredPlays.push(
-        score({
+      const scored = score({
           sport: p.sport,
           bet_type: betType,
           player_name: p.player_name,
@@ -988,8 +1003,18 @@ Deno.serve(async (req) => {
           raw_confidence: Number(p.hit_rate || 0),
           calibration: calibrationState.calibration,
           calibrationSupported: calibrationState.supported,
-        }),
-      );
+        });
+      scored.model_diagnostics = {
+        ...(scored.model_diagnostics ?? {}),
+        model_version: modelVersion,
+        calibration_model_version: calibrationState.modelVersion,
+        edge_evidence_validated: calibrationState.evaluation.validated,
+        evaluation_status: calibrationState.evaluation.status,
+        evaluation_reasons: calibrationState.evaluation.reasons,
+        evaluation_run_id: calibrationState.evaluation.runId,
+        evaluation_evaluated_at: calibrationState.evaluation.evaluatedAt,
+      };
+      scoredPlays.push(scored);
     }
 
     const { todaysEdge, dailyPicks: dailyRanked, freePicks } = rankAndDistribute(scoredPlays);

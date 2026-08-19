@@ -53,6 +53,8 @@ function makePlay(overrides: Partial<ScoredPlay> = {}): ScoredPlay {
       calibration_status: "validated",
       calibration_applied: true,
       probability_supported: true,
+      edge_evidence_validated: true,
+      evaluation_status: "validated",
       ...(overrides.model_diagnostics ?? {}),
     },
   };
@@ -203,6 +205,25 @@ describe("NBA queue finalization", () => {
     expect(result.canPromote).toBe(false);
     expect(result.promotionBlocker).toBe("calibration_not_supported");
     expect(result.finalTier).not.toBe("edge");
+  });
+
+  it("stores an otherwise eligible pick as a shadow candidate until evaluation validates", () => {
+    const result = buildNbaQueueFinalization({
+      finalized: makePlay({
+        model_diagnostics: {
+          edge_evidence_validated: false,
+          evaluation_status: "insufficient_evidence",
+        },
+      }),
+      baseDiagnostics: null,
+      currentEdgeCount: 0,
+      edgeCap: 5,
+    });
+
+    expect(result.canPromote).toBe(false);
+    expect(result.promotionBlocker).toBe("evaluation_not_validated");
+    expect(result.diagnostics.shadow_edge_candidate).toBe(true);
+    expect(result.finalTier).toBe("daily");
   });
 });
 

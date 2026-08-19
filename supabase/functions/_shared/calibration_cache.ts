@@ -1,6 +1,7 @@
 // supabase/functions/_shared/calibration_cache.ts
 //
-// 5-minute in-memory cache of the active calibration row per (sport, bet_type).
+// 5-minute in-memory cache of the active calibration row per
+// (sport, bet_type, model_version).
 // If the table doesn't exist yet, or no row has active=true, returns an
 // identity calibration so production never breaks on a cold DB.
 
@@ -17,6 +18,7 @@ export interface CalibrationState {
   testSamples: number;
   fittedAt: string | null;
   activationReason: string | null;
+  modelVersion: string | null;
 }
 
 type CacheEntry = { value: CalibrationState; expiresAt: number };
@@ -37,7 +39,10 @@ function identity(): Calibration {
   return { method: "identity" };
 }
 
-function unsupportedState(status: CalibrationState["status"]): CalibrationState {
+function unsupportedState(
+  status: CalibrationState["status"],
+  activationReason: string | null = null,
+): CalibrationState {
   return {
     calibration: identity(),
     supported: false,
@@ -46,18 +51,27 @@ function unsupportedState(status: CalibrationState["status"]): CalibrationState 
     trainSamples: 0,
     testSamples: 0,
     fittedAt: null,
-    activationReason: null,
+    activationReason,
+    modelVersion: null,
   };
 }
 
 export async function getCalibrationState(
   sport: string,
   betType: string,
+  modelVersion: string | null | undefined,
 ): Promise<CalibrationState> {
-  const k = `${sport}|${betType}`.toLowerCase();
+  const normalizedModelVersion = String(modelVersion ?? "").trim();
+  const k = `${sport}|${betType}|${normalizedModelVersion}`.toLowerCase();
   const now = Date.now();
   const hit = cache.get(k);
   if (hit && hit.expiresAt > now) return hit.value;
+
+  if (!normalizedModelVersion) {
+    const v = unsupportedState("missing", "model_version_missing");
+    cache.set(k, { value: v, expiresAt: now + TTL_MS });
+    return v;
+  }
 
   const supabase = client();
   if (!supabase) {
@@ -68,9 +82,10 @@ export async function getCalibrationState(
   try {
     const { data, error } = await supabase
       .from("model_calibration")
-      .select("method,params,n_samples,train_samples,test_samples,holdout_passed,evaluation_method,fitted_at,activation_reason,active")
+      .select("method,params,n_samples,train_samples,test_samples,holdout_passed,evaluation_method,fitted_at,activation_reason,active,model_version")
       .eq("sport", sport)
       .eq("bet_type", betType)
+      .eq("model_version", normalizedModelVersion)
       .eq("active", true)
       .order("fitted_at", { ascending: false })
       .limit(1)
@@ -86,7 +101,7 @@ export async function getCalibrationState(
     } else if (data.method === "isotonic" && Array.isArray(data.params?.bins)) {
       calibration = { method: "isotonic", params: { bins: data.params.bins } };
     }
-    const supported = calibration.method !== "identity" && hasSupportedCalibration(data);
+    const supported = calibration.method !== "identity" && hasSupportedCalibration(data, normalizedModelVersion);
     const v: CalibrationState = {
       calibration: supported ? calibration : identity(),
       supported,
@@ -99,6 +114,7 @@ export async function getCalibrationState(
       fittedAt: typeof data.fitted_at === "string" ? data.fitted_at : null,
       activationReason:
         typeof data.activation_reason === "string" ? data.activation_reason : null,
+      modelVersion: typeof data.model_version === "string" ? data.model_version : null,
     };
     cache.set(k, { value: v, expiresAt: now + TTL_MS });
     return v;
@@ -112,8 +128,9 @@ export async function getCalibrationState(
 export async function getCalibration(
   sport: string,
   betType: string,
+  modelVersion: string | null | undefined,
 ): Promise<Calibration> {
-  return (await getCalibrationState(sport, betType)).calibration;
+  return (await getCalibrationState(sport, betType, modelVersion)).calibration;
 }
 
 export function bustCalibrationCache(): void {
