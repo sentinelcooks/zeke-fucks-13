@@ -45,6 +45,10 @@ Deno.serve(async (req) => {
 
   const daysRaw = Number(body.days ?? 365);
   const days = Number.isFinite(daysRaw) ? Math.max(30, Math.min(730, Math.floor(daysRaw))) : 365;
+  const maxRowsRaw = Number(body.max_rows ?? 5_000);
+  const maxRows = Number.isFinite(maxRowsRaw)
+    ? Math.max(1_000, Math.min(20_000, Math.floor(maxRowsRaw)))
+    : 5_000;
   const persist = body.persist === true;
   const sport = String(body.sport ?? "").trim().toLowerCase() || null;
   const betType = normalizedBetType(body.bet_type) || null;
@@ -53,7 +57,8 @@ Deno.serve(async (req) => {
   const pageSize = 1_000;
 
   try {
-    for (let from = 0; from < 50_000; from += pageSize) {
+    for (let from = 0; from < maxRows; from += pageSize) {
+      const through = Math.min(from + pageSize - 1, maxRows - 1);
       const baseQuery = access.admin
         .from("daily_picks")
         .select(
@@ -61,8 +66,9 @@ Deno.serve(async (req) => {
         )
         .gte("prediction_recorded_at", since)
         .in("result", ["hit", "miss", "push"])
-        .order("prediction_recorded_at", { ascending: true })
-        .range(from, from + pageSize - 1);
+        .order("prediction_recorded_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, through);
       const sportQuery = sport ? baseQuery.eq("sport", sport) : baseQuery;
       const query = betType
         ? sportQuery.eq("bet_type", betType === "total" ? "over_under" : betType)
@@ -104,6 +110,12 @@ Deno.serve(async (req) => {
       };
     });
     const report = evaluateModelPicks(picks);
+    const inputTruncated = rows.length >= maxRows;
+    if (inputTruncated) {
+      report.limitations.push(
+        `Input was capped at the newest ${maxRows} resolved predictions for bounded execution.`,
+      );
+    }
     const status = releaseStatus(report);
     let runId: string | null = null;
 
@@ -114,7 +126,7 @@ Deno.serve(async (req) => {
           period_start: report.overall.periodStart,
           period_end: report.overall.periodEnd,
           methodology: report.methodology,
-          request_filters: { days, sport, bet_type: betType },
+          request_filters: { days, sport, bet_type: betType, max_rows: maxRows, input_truncated: inputTruncated },
           input_rows: report.inputRows,
           included_rows: report.includedRows,
           release_status: status,
@@ -126,7 +138,15 @@ Deno.serve(async (req) => {
       runId = String(data.id);
     }
 
-    return json({ ok: true, persisted: persist, runId, releaseStatus: status, report });
+    return json({
+      ok: true,
+      persisted: persist,
+      runId,
+      releaseStatus: status,
+      maxRows,
+      inputTruncated,
+      report,
+    });
   } catch (error) {
     console.error("model-evaluation error:", error);
     return json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 500);

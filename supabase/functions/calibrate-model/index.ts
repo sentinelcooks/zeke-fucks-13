@@ -72,10 +72,14 @@ Deno.serve(async (req) => {
   const requestedDays = requestUrl.searchParams.get("days") ?? requestBody.days ?? 365;
   const parsedDays = Number(requestedDays);
   const lookbackDays = Math.max(30, Math.min(730, Number.isFinite(parsedDays) ? parsedDays : 365));
+  const requestedMaxRows = requestUrl.searchParams.get("max_rows") ?? requestBody.max_rows ?? 5_000;
+  const parsedMaxRows = Number(requestedMaxRows);
+  const maxRows = Math.max(1_000, Math.min(20_000, Number.isFinite(parsedMaxRows) ? Math.floor(parsedMaxRows) : 5_000));
 
   try {
     const since = new Date(Date.now() - lookbackDays * 86400 * 1000).toISOString();
-    const samples = await collectSamples(supabase, since, onlySport, onlyBetType);
+    const collection = await collectSamples(supabase, since, onlySport, onlyBetType, maxRows);
+    const samples = collection.samples;
     const groups = new Map<string, Sample[]>();
     const latestVersionByMarket = new Map<string, { modelVersion: string; occurredAt: string }>();
     for (const sample of samples) {
@@ -180,6 +184,9 @@ Deno.serve(async (req) => {
     return json({
       dry,
       lookbackDays,
+      maxRows,
+      inputRows: collection.scannedRows,
+      inputTruncated: collection.inputTruncated,
       evaluationMethod: "chronological_holdout",
       source: "verified_daily_picks_only",
       sampleCount: samples.length,
@@ -196,10 +203,13 @@ async function collectSamples(
   sinceIso: string,
   onlySport: string | null,
   onlyBetType: string | null,
-): Promise<Sample[]> {
+  maxRows: number,
+): Promise<{ samples: Sample[]; scannedRows: number; inputTruncated: boolean }> {
   const rows: Sample[] = [];
+  let scannedRows = 0;
   const pageSize = 1_000;
-  for (let from = 0; from < 50_000; from += pageSize) {
+  for (let from = 0; from < maxRows; from += pageSize) {
+    const through = Math.min(from + pageSize - 1, maxRows - 1);
     let query: any = supabase
       .from("daily_picks")
       .select(
@@ -210,8 +220,9 @@ async function collectSamples(
       .not("grading_source", "is", null)
       .not("prediction_recorded_at", "is", null)
       .not("model_version", "is", null)
-      .order("prediction_recorded_at", { ascending: true })
-      .range(from, from + pageSize - 1);
+      .order("prediction_recorded_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, through);
     if (onlySport) query = query.eq("sport", onlySport.toLowerCase());
     if (onlyBetType) {
       const normalized = normalizeBetType(onlyBetType);
@@ -219,6 +230,7 @@ async function collectSamples(
     }
     const { data, error } = await query;
     if (error) throw error;
+    scannedRows += (data ?? []).length;
     for (const pick of (data ?? []) as Record<string, unknown>[]) {
       const sport = String(pick.sport ?? "").toLowerCase();
       const betType = normalizeBetType(pick.bet_type);
@@ -276,7 +288,11 @@ async function collectSamples(
 
   const unique = new Map<string, Sample>();
   for (const row of rows) unique.set(row.identity, row);
-  return [...unique.values()];
+  return {
+    samples: [...unique.values()],
+    scannedRows,
+    inputTruncated: scannedRows >= maxRows,
+  };
 }
 
 function sampleIdentity(input: {

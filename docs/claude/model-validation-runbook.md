@@ -38,6 +38,11 @@ Every run reports:
 - a latest chronological holdout containing at least 50 resolved bets; and
 - explicit exclusions and limitations.
 
+Scheduled runs evaluate the newest 5,000 resolved immutable predictions by
+default. If that cap is reached, the persisted report records
+`input_truncated=true` and states the limit explicitly. Manual runs may request
+up to 20,000 rows with `max_rows`.
+
 `releaseStatus=validated` is evidence, not a promise of future profitability.
 Any other status prohibits an edge/profitability claim.
 
