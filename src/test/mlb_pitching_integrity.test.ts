@@ -14,7 +14,9 @@ import {
 import {
   isMlbPitchingProp,
   normalizeMlbPropType,
+  validateMlbPropLine,
 } from "../../supabase/functions/_shared/prop_normalization";
+import { applyGenericQualityPenalty } from "../../supabase/functions/_shared/model_confidence";
 
 describe("MLB prop routing integrity", () => {
   it("routes ambiguous strikeouts from the verified player role", () => {
@@ -23,6 +25,48 @@ describe("MLB prop routing integrity", () => {
     expect(normalizeMlbPropType("pitcher strikeouts", "batter")).toBe("pitcher_strikeouts");
     expect(isMlbPitchingProp("pitcher_strikeouts")).toBe(true);
     expect(isMlbPitchingProp("batter_strikeouts")).toBe(false);
+  });
+
+  it("rejects impossible manual-analyzer lines before they reach the model", () => {
+    const impossibleEarnedRuns = validateMlbPropLine("earned_runs", 700);
+
+    expect(validateMlbPropLine("earned_runs", 2.5)).toMatchObject({ valid: true });
+    expect(validateMlbPropLine("earned_runs", 9.5)).toMatchObject({ valid: true });
+    expect(validateMlbPropLine("earned_runs", 15)).toMatchObject({ valid: false });
+    expect(impossibleEarnedRuns).toMatchObject({
+      valid: false,
+      code: "INVALID_MLB_PROP_LINE",
+      propType: "earned_runs",
+    });
+    if (!impossibleEarnedRuns.valid) {
+      expect(impossibleEarnedRuns.error).toContain("not a realistic single-game MLB Earned Runs line");
+    }
+    expect(validateMlbPropLine("outs_recorded", 27)).toMatchObject({ valid: true });
+    expect(validateMlbPropLine("outs_recorded", 27.5)).toMatchObject({ valid: false });
+  });
+
+  it("does not apply the generic data-quality penalty twice to verified MLB props", () => {
+    expect(applyGenericQualityPenalty({
+      rawConfidence: 69,
+      confidencePenalty: 12,
+      sport: "mlb",
+      model: "mlb-verified-context-props-v2",
+    })).toEqual({
+      confidence: 69,
+      appliedPenalty: 0,
+      skippedDuplicatePenalty: true,
+    });
+
+    expect(applyGenericQualityPenalty({
+      rawConfidence: 69,
+      confidencePenalty: 12,
+      sport: "nba",
+      model: "nba-player-props",
+    })).toEqual({
+      confidence: 57,
+      appliedPenalty: 12,
+      skippedDuplicatePenalty: false,
+    });
   });
 
   it("keeps pitching and batting rows from substituting for each other", () => {

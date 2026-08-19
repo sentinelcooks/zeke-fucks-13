@@ -69,7 +69,7 @@ const RESULT_CONFIG: Record<string, { icon: typeof CheckCircle2; color: string; 
 
 type TrackerTab = "plays" | "picks" | "parlays";
 type ResultFilter = "all" | "win" | "loss" | "pending";
-type SportFilter = "all" | "nba" | "mlb" | "nhl" | "ufc";
+type SportFilter = "all" | "nba" | "wnba" | "mlb" | "nhl" | "ufc";
 
 /* ── Vision-styled input ── */
 function VisionInput({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
@@ -759,7 +759,7 @@ const ProfitTrackerPage = () => {
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <VisionSelect label="Sport" value={form.sport} onChange={(e) => setForm({ ...form, sport: e.target.value, bet_type: "", player_or_fighter: "", method: "", roundNumber: "", roundResult: "" })}>
-                          <option value="nba">NBA</option><option value="mlb">MLB</option><option value="nhl">NHL</option>
+                          <option value="nba">NBA</option><option value="wnba">WNBA</option><option value="mlb">MLB</option><option value="nhl">NHL</option>
                           <option value="ufc">UFC</option><option value="other">Other</option>
                         </VisionSelect>
                         <PlayerAutocomplete sport={form.sport} value={form.player_or_fighter} onChange={(v) => setForm({ ...form, player_or_fighter: v })} betType={form.bet_type} />
@@ -909,7 +909,7 @@ const ProfitTrackerPage = () => {
                   ))}
                 </div>
                 <div className="flex items-center gap-1 flex-wrap">
-                  {(["all", "nba", "mlb", "nhl", "ufc"] as SportFilter[]).map((f) => (
+                  {(["all", "nba", "wnba", "mlb", "nhl", "ufc"] as SportFilter[]).map((f) => (
                     <button key={f} onClick={() => setPlaysSportFilter(f)}
                       className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
                         playsSportFilter === f ? "bg-accent/15 text-accent" : "text-muted-foreground/60 hover:text-foreground/80"
@@ -1081,7 +1081,7 @@ const ProfitTrackerPage = () => {
                   ))}
                 </div>
                 <div className="flex items-center gap-1 flex-wrap">
-                  {(["all", "nba", "mlb", "nhl", "ufc"] as SportFilter[]).map((f) => (
+                  {(["all", "nba", "wnba", "mlb", "nhl", "ufc"] as SportFilter[]).map((f) => (
                     <button key={f} onClick={() => setSportFilter(f)}
                       className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
                         sportFilter === f ? "bg-accent/15 text-accent" : "text-muted-foreground/60 hover:text-foreground/80"

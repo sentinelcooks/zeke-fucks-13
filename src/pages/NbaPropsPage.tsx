@@ -9,7 +9,7 @@ import mlbLogo from "@/assets/mlb-logo.png";
 import nhlLogo from "@/assets/logo-nhl.png";
 import ufcLogo from "@/assets/ufc-logo.png";
 import { Search, Loader2, Target, TrendingUp, TrendingDown, Crosshair, Shield, Hand, RotateCcw, Zap, Trophy, ChevronDown, Sparkles, X, BarChart3, Activity, Swords, Link2, Timer, Clock, Layers, Flame, CircleDot, Hash, Gauge, Info, Plus, Trash2, DollarSign } from "lucide-react";
-import { searchPlayers, getTeams, analyzeProp, searchUfcFighters, analyzeUfcMatchup } from "@/services/api";
+import { searchPlayers, getTeams, analyzeProp, searchUfcFighters, analyzeUfcMatchup, validateMlbPropLine } from "@/services/api";
 import { supabase } from "@/integrations/supabase/client";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AddToSlipSheet } from "@/components/AddToSlipSheet";
@@ -33,6 +33,7 @@ import { formatPropType } from "@/lib/formatPickLabel";
 import { normalizeConfidencePercent, normalizeVerdict } from "@/lib/matchupGrade";
 import { isSavedPickPayload, mapSavedPickToView, type SavedDailyPickRow } from "@/lib/savedPick";
 import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
+import { isSportTemporarilyHidden } from "@/lib/sportAvailability";
 
 import { Bar } from "react-chartjs-2";
 import {
@@ -181,6 +182,8 @@ const NHL_PROP_TYPES = NHL_PROP_CATEGORIES.flatMap((c) => c.props);
 
 type PropsSport = "nba" | "wnba" | "mlb" | "nhl" | "ufc";
 type LinesSport = "nba" | "wnba" | "mlb" | "nhl" | "ncaab";
+const DEFAULT_PROPS_SPORT: PropsSport = "wnba";
+const DEFAULT_LINES_SPORT: LinesSport = "wnba";
 
 function Section({ title, children, defaultOpen = true, icon }: { title: string; children: React.ReactNode; defaultOpen?: boolean; icon?: React.ReactNode }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -451,7 +454,11 @@ const NbaPropsPage = () => {
     if (m === "lines" || m === "props") setMode(m);
   }, [searchParams]);
   useEffect(() => {
-    if (searchParams.get("mode") === "lines" && linesNavigationState?.sport) {
+    if (
+      searchParams.get("mode") === "lines"
+      && linesNavigationState?.sport
+      && !isSportTemporarilyHidden(linesNavigationState.sport)
+    ) {
       setLinesSport(linesNavigationState.sport);
     }
   }, [location.key, searchParams, linesNavigationState?.sport]);
@@ -460,9 +467,11 @@ const NbaPropsPage = () => {
   const resultsRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<"props" | "lines">(searchParams.get("mode") === "lines" ? "lines" : "props");
   const [linesSport, setLinesSport] = useState<LinesSport>(
-    linesNavigationState?.sport ?? "nba",
+    linesNavigationState?.sport && !isSportTemporarilyHidden(linesNavigationState.sport)
+      ? linesNavigationState.sport
+      : DEFAULT_LINES_SPORT,
   );
-  const [sport, setSport] = useState<PropsSport>("nba");
+  const [sport, setSport] = useState<PropsSport>(DEFAULT_PROPS_SPORT);
   const [player, setPlayer] = useState("");
   const [propType, setPropType] = useState("points");
   const [opponent, setOpponent] = useState("");
@@ -617,11 +626,14 @@ const NbaPropsPage = () => {
     } | null;
 
     if (navState?.autoAnalyze && navState.player && !autoAnalyzedRef.current) {
+      const requestedSport = (navState.sport || DEFAULT_PROPS_SPORT).toLowerCase();
+      if (isSportTemporarilyHidden(requestedSport)) return;
+
       autoAnalyzedRef.current = true;
       autoAnalyzePrefillRef.current = true;
       autoScrollToResultsRef.current = true;
 
-      const s = (navState.sport || "nba") as PropsSport;
+      const s = requestedSport as PropsSport;
       const nextPropType = normalizePickPropType(navState.prop_type, s);
       // Accept full team names — resolve to abbreviation using loaded teams, or pass as-is
       const rawOpponent = navState.opponent || "";
@@ -1051,6 +1063,14 @@ const NbaPropsPage = () => {
     if (!effPlayer) { setError("Enter a player name"); return; }
     const lineNum = parseFloat(effLine);
     if (isNaN(lineNum) || lineNum <= 0) { setError("Enter a valid line value"); return; }
+    if (sport === "mlb") {
+      const lineValidation = validateMlbPropLine(effPropType, lineNum);
+      if (!lineValidation.valid) {
+        setResults(null);
+        setError(lineValidation.error);
+        return;
+      }
+    }
 
     const cacheKey = `${sport}|${effPlayer}|${effPropType}|${lineNum}|${effOverUnder}|${opponent || ""}`;
     const cached = analysisCacheRef.current.get(cacheKey);
@@ -1067,7 +1087,10 @@ const NbaPropsPage = () => {
     try {
       const data = await analyzeProp({ player: effPlayer, prop_type: effPropType, line: lineNum, over_under: effOverUnder, opponent: opponent || undefined, sport });
       if (analyzeRequestIdRef.current !== localId) return;
-      if (data.error) setError(data.error);
+      if (data.error) {
+        setResults(null);
+        setError(data.error);
+      }
       else {
         setResults(data);
         analysisCacheRef.current.set(cacheKey, data);
@@ -1105,6 +1128,8 @@ const NbaPropsPage = () => {
   const sportLabel = sport === "ufc" ? "UFC" : sport === "mlb" ? "MLB" : sport === "nhl" ? "NHL" : sport === "wnba" ? "WNBA" : "NBA";
   const sportEmoji = sport === "wnba" ? "W" : sport === "ufc" ? "🥊" : sport === "mlb" ? "⚾" : sport === "nhl" ? "🏒" : "🏀";
 
+  const hasHiddenLinesNavigation = isSportTemporarilyHidden(linesNavigationState?.sport);
+
   return (
     <div className="flex flex-col min-h-full relative">
       {/* Ambient orbs */}
@@ -1116,7 +1141,7 @@ const NbaPropsPage = () => {
 
         {/* ── Sport Toggle (always visible) ── */}
         {mode === "props" ? (
-        <div className="grid w-full max-w-full grid-cols-6 gap-1.5 rounded-2xl p-1.5 sm:grid-cols-5" style={{
+        <div className="grid w-full max-w-full grid-cols-3 gap-1.5 rounded-2xl p-1.5" style={{
           background: 'hsla(228, 25%, 7%, 0.8)',
           border: '1px solid hsla(228, 30%, 18%, 0.3)',
           backdropFilter: 'blur(12px)',
@@ -1137,14 +1162,14 @@ const NbaPropsPage = () => {
             { value: "ufc" as const, label: "UFC", color: "#3a1518", icon: (active: boolean) => (
               <img src={ufcLogo} alt="UFC" className={`h-5 w-5 object-contain shrink-0 ${active ? '' : 'opacity-70'}`} />
             )},
-          ].map((s) => {
+          ].filter((s) => !isSportTemporarilyHidden(s.value)).map((s) => {
             const active = sport === s.value;
             return (
               <motion.button
                 key={s.value}
                 onClick={() => setSport(s.value)}
                 whileTap={{ scale: 0.96 }}
-                className={`${s.value === "nhl" || s.value === "ufc" ? "col-span-3" : "col-span-2"} flex min-h-[46px] w-full items-center justify-center gap-1.5 rounded-xl px-2.5 py-2.5 text-[12px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden whitespace-nowrap sm:col-span-1 sm:min-h-[48px] sm:gap-2 sm:px-3 sm:text-[13px] ${
+                className={`flex min-h-[46px] w-full items-center justify-center gap-1.5 rounded-xl px-2.5 py-2.5 text-[12px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden whitespace-nowrap sm:min-h-[48px] sm:gap-2 sm:px-3 sm:text-[13px] ${
                   active ? "text-white" : "text-muted-foreground/55 hover:text-muted-foreground/50"
                 }`}
                 style={active ? {
@@ -1159,7 +1184,7 @@ const NbaPropsPage = () => {
           })}
         </div>
         ) : (
-        <div className="grid w-full max-w-full grid-cols-4 gap-1.5 rounded-2xl p-1.5" style={{
+        <div className="grid w-full max-w-full grid-cols-2 gap-1.5 rounded-2xl p-1.5" style={{
           background: 'hsla(228, 25%, 7%, 0.8)',
           border: '1px solid hsla(228, 30%, 18%, 0.3)',
           backdropFilter: 'blur(12px)',
@@ -1169,12 +1194,12 @@ const NbaPropsPage = () => {
             { value: "wnba", label: "WNBA", color: "#E03A3E", logo: wnbaLogo, logoClass: "" },
             { value: "mlb", label: "MLB", color: "#002D72", logo: mlbLogo, logoClass: "" },
             { value: "nhl", label: "NHL", color: "#111111", logo: nhlLogo, logoClass: "" },
-          ].map((s) => {
+          ].filter((s) => !isSportTemporarilyHidden(s.value)).map((s) => {
             const active = linesSport === s.value;
             return (
               <motion.button
                 key={s.value}
-                onClick={() => setLinesSport(s.value as any)}
+                onClick={() => setLinesSport(s.value as LinesSport)}
                 whileTap={{ scale: 0.96 }}
                 className={`flex min-h-[46px] w-full items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[12px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden whitespace-nowrap sm:min-h-[48px] sm:gap-2 sm:px-3 sm:text-[13px] ${
                   active ? "text-white" : "text-muted-foreground/55 hover:text-muted-foreground/50"
@@ -1234,9 +1259,9 @@ const NbaPropsPage = () => {
             key={`${location.key}-${linesSport}`}
             embeddedSport={linesSport as any}
             hideSportToggle
-            initialTeam1={linesNavigationState?.home_team}
-            initialTeam2={linesNavigationState?.away_team}
-            autoAnalyze={linesNavigationState?.autoAnalyze}
+            initialTeam1={hasHiddenLinesNavigation ? undefined : linesNavigationState?.home_team}
+            initialTeam2={hasHiddenLinesNavigation ? undefined : linesNavigationState?.away_team}
+            autoAnalyze={hasHiddenLinesNavigation ? false : linesNavigationState?.autoAnalyze}
           />
         )}
 
@@ -2211,13 +2236,18 @@ const NbaPropsPage = () => {
 
               <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.15, type: "spring" }}>
                 <VerdictBadge
-                  confidence={results.confidence}
+                  confidence={sport === "mlb" && Number.isFinite(Number(results.season_hit_rate?.rate))
+                    ? Number(results.season_hit_rate.rate)
+                    : results.confidence}
                   verdict={results.verdict}
                   overUnder={results.over_under}
                   line={results.line}
                   propDisplay={formatDisplayPropType(results.prop_display || propType)}
                   scoreKind={results.score_kind}
                   probabilitySupported={results.probability_supported === true}
+                  displayMode={sport === "mlb" && Number.isFinite(Number(results.season_hit_rate?.rate))
+                    ? "historical_hit_rate"
+                    : "model_score"}
                 />
               </motion.div>
 
@@ -2330,6 +2360,33 @@ const NbaPropsPage = () => {
                     <HitRateRing rate={results.last_10?.rate || 0} hits={results.last_10?.hits || 0} total={results.last_10?.total || 0} label="L10" delay={0.1} />
                     <HitRateRing rate={results.last_5?.rate || 0} hits={results.last_5?.hits || 0} total={results.last_5?.total || 0} label="L5" delay={0.2} />
                     <HitRateRing rate={h2h.rate || 0} hits={h2h.hits || 0} total={h2h.total || 0} label={`vs ${h2h.opponent || results.next_game?.opponent_name || "OPP"}`} delay={0.3} />
+                  </div>
+                </Section>
+              )}
+
+              {sport === "mlb" && Array.isArray(results.mlb_factors) && results.mlb_factors.length > 0 && (
+                <Section title="Model Factors" defaultOpen={false} icon={<Activity className="w-3.5 h-3.5" />}>
+                  <div className="space-y-2">
+                    {[...results.mlb_factors]
+                      .filter((factor: any) => Number(factor?.weight) > 0)
+                      .sort((a: any, b: any) => Number(b.weight) - Number(a.weight))
+                      .map((factor: any) => (
+                        <div key={factor.name || factor.label} className="rounded-lg px-3 py-2.5" style={{ background: 'hsla(228, 20%, 10%, 0.55)' }}>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-[10px] font-bold text-foreground/80">{factor.label || factor.name}</span>
+                            <span className="text-[10px] font-black tabular-nums text-accent">{Math.round(Number(factor.score) || 0)}/100</span>
+                          </div>
+                          <div className="mt-1 flex items-start justify-between gap-3">
+                            <span className="text-[9px] leading-relaxed text-muted-foreground/55">{factor.detail || "Verified model input"}</span>
+                            <span className="shrink-0 text-[8px] font-bold uppercase tracking-wider text-muted-foreground/40">{Math.round((Number(factor.weight) || 0) * 100)}% wt</span>
+                          </div>
+                        </div>
+                      ))}
+                    {Number.isFinite(Number(results.mlb_data_quality?.shrinkFactor)) && (
+                      <p className="px-1 pt-1 text-[9px] leading-relaxed text-muted-foreground/55">
+                        Verified-context quality adjustment: {Math.round(Number(results.mlb_data_quality.shrinkFactor) * 100)}%. Missing inputs pull the heuristic toward 50 once; they are not subtracted again.
+                      </p>
+                    )}
                   </div>
                 </Section>
               )}

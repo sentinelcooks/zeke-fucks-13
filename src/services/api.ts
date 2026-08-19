@@ -7,6 +7,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateDeviceFingerprint } from "@/utils/fingerprint";
 import { getFunctionUrl, getSupabaseAnonKey } from "@/services/supabaseFunctionUrl";
 import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
+import { validateMlbPropLine } from "../../supabase/functions/_shared/prop_normalization";
+
+export { validateMlbPropLine };
 
 function getStoredSessionToken(): string {
   const remember = localStorage.getItem("primal-remember") === "true";
@@ -101,6 +104,18 @@ export interface AnalyzeRequest {
 // configs (NBA/MLB/NHL) and for MLB additionally invokes mlb-model. Saved-pick
 // callers branch upstream and never reach this function.
 export async function analyzeProp(data: AnalyzeRequest) {
+  if (data.sport?.toLowerCase() === "mlb") {
+    const lineValidation = validateMlbPropLine(data.prop_type, data.line);
+    if (!lineValidation.valid) {
+      return {
+        error: lineValidation.error,
+        code: lineValidation.code,
+        sport: "mlb",
+        prop_type: lineValidation.propType,
+        line: data.line,
+      };
+    }
+  }
   return await callEdgeFunction("nba-api", "analyze", data as Record<string, unknown>, "POST");
 }
 

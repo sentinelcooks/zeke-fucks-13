@@ -14,6 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchNbaOdds } from "@/services/oddsApi";
+import { isSportTemporarilyHidden } from "@/lib/sportAvailability";
 import { getTeamLogoUrl } from "@/utils/teamLogos";
 import { toast } from "sonner";
 import {
@@ -103,10 +104,11 @@ const SPORT_LOGO_SIZE: Record<SportFilter, string> = {
 };
 
 const GAMES_SPORT_OPTIONS: readonly GamesSportFilter[] = ["nba", "wnba", "mlb", "nhl", "ufc"];
-const DEFAULT_GAMES_SPORT: GamesSportFilter = GAMES_SPORT_OPTIONS[0];
+const VISIBLE_GAMES_SPORT_OPTIONS = GAMES_SPORT_OPTIONS.filter((sport) => !isSportTemporarilyHidden(sport));
+const DEFAULT_GAMES_SPORT: GamesSportFilter = VISIBLE_GAMES_SPORT_OPTIONS[0] ?? GAMES_SPORT_OPTIONS[0];
 
 function isGamesSportFilter(value: unknown): value is GamesSportFilter {
-  return typeof value === "string" && GAMES_SPORT_OPTIONS.includes(value as GamesSportFilter);
+  return typeof value === "string" && VISIBLE_GAMES_SPORT_OPTIONS.includes(value as GamesSportFilter);
 }
 
 const CARD_ORDER = ["Main Card", "Prelims", "Early Prelims"];
@@ -1184,7 +1186,7 @@ const GamesPage = () => {
           className="flex w-full max-w-full p-1 rounded-xl overflow-x-auto overscroll-x-contain scrollbar-hide gap-1"
           style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}
         >
-          {GAMES_SPORT_OPTIONS.map((s) => {
+          {VISIBLE_GAMES_SPORT_OPTIONS.map((s) => {
             const isActive = sport === s;
             const color = SPORT_COLOR[s];
             return (

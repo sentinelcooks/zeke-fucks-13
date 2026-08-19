@@ -40,11 +40,24 @@ export function DeviceVerificationProvider({ children }: { children: ReactNode }
   const lastCheckedUser = useRef<string | null>(null);
 
   const verify = useCallback(async () => {
+    const platform = getMobilePlatform();
+
+    // Account sharing protection is enforced for installed phone apps only.
+    // Web sessions (including local development) must not be blocked by the
+    // native device registry or by an unavailable device Edge Function.
+    if (platform === "web") {
+      setDevices([]);
+      setDeviceLimit(2);
+      setActiveDeviceCount(0);
+      setErrorMessage(null);
+      setStatus("allowed");
+      return;
+    }
+
     setStatus("checking");
     setErrorMessage(null);
     try {
       const deviceId = await getOrCreateMobileDeviceId();
-      const platform = getMobilePlatform();
       const deviceLabel = getMobileDeviceLabel();
       const { data, error } = await supabase.functions.invoke("verify-phone-device", {
         body: { deviceId, platform, deviceLabel },

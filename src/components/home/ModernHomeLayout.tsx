@@ -21,6 +21,11 @@ import { todayInTZ, getGameDate, isTodayGamePick, isResultFinal } from "@/lib/ga
 import { formatPropType } from "@/lib/formatPickLabel";
 import { resolveDisplayName } from "@/lib/displayName";
 import { normalizeConfidencePercent, normalizeVerdict, verdictColorHex } from "@/lib/matchupGrade";
+import {
+  modelScorePercent,
+  selectTodaysEdgePicks,
+  type EdgePresentation,
+} from "@/lib/todaysEdgeSelection";
 
 interface Play {
   id: string;
@@ -61,6 +66,11 @@ interface DailyPick {
   game_date?: string | null;
   model_used?: string | null;
   model_diagnostics?: Record<string, unknown> | null;
+  score_kind?: string | null;
+  calibration_status?: string | null;
+  calibrated_probability?: number | null;
+  edgePresentation?: EdgePresentation;
+  edgeWarning?: string | null;
 }
 
 function canonicalGameMarket(betType?: string): string | null {
@@ -155,7 +165,7 @@ function timeAgo(dateStr: string) {
   return `Updated ${hours}h ago`;
 }
 
-function CountUp({ target, duration = 1200 }: { target: number; duration?: number }) {
+function CountUp({ target, duration = 1200, suffix = "%" }: { target: number; duration?: number; suffix?: string }) {
   const [value, setValue] = useState(0);
   useEffect(() => {
     if (target <= 0) { setValue(target); return; }
@@ -171,7 +181,7 @@ function CountUp({ target, duration = 1200 }: { target: number; duration?: numbe
     }, interval);
     return () => clearInterval(timer);
   }, [target, duration]);
-  return <>{value}%</>;
+  return <>{value}{suffix}</>;
 }
 
 function getConfidenceColor(rate: number): string {
@@ -182,7 +192,7 @@ function getConfidenceLabel(rate: number): string {
   return normalizeVerdict(undefined, rate);
 }
 
-function ConfidenceRing({ rate }: { rate: number }) {
+function ConfidenceRing({ rate, isModelScore = false }: { rate: number; isModelScore?: boolean }) {
   const r = 32;
   const circ = 2 * Math.PI * r;
   const offset = circ - (rate / 100) * circ;
@@ -200,10 +210,15 @@ function ConfidenceRing({ rate }: { rate: number }) {
           transition={{ duration: 1.5, ease: "easeOut", delay: 0.3 }}
         />
       </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="font-bold tabular-nums" style={{ fontSize: 18, fontWeight: 700, color }}>
-          <CountUp target={Math.round(rate)} />
+          <CountUp target={Math.round(rate)} suffix={isModelScore ? "" : "%"} />
         </span>
+        {isModelScore && (
+          <span style={{ fontSize: 6.5, fontWeight: 800, letterSpacing: 0.7, color: '#8b87b8' }}>
+            MODEL SCORE
+          </span>
+        )}
       </div>
     </div>
   );
@@ -426,23 +441,25 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     // Yesterday's Edge on the next day; keeping them out of today's rail
     // prevents yesterday's manually-graded leftovers from masquerading as
     // today's slate when their game_date happens to align.
-    const todayEdge = merged.filter(
-      p =>
-        isTodayGamePick(p as any) &&
-        isEdgeHistoryPick(p as any) &&
-        p.score_kind === "calibrated_probability" &&
-        p.calibration_status === "validated" &&
-        typeof p.calibrated_probability === "number" &&
-        !isResultFinal(p.result),
-    );
-    const edgeTier = dedupe(todayEdge);
-
-    // Daily Picks rail keeps the stricter active-today guard + odds sanity.
     const activeToday = merged.filter(
       p => oddsOk(p.odds) && p.tier !== "pass" && isActiveTodayPick(p as any)
     );
+
+    // Genuine calibrated Edge rows always win. If MLB or WNBA has no
+    // validated Edge, use up to four analyzer-backed shadow candidates for
+    // that sport. They remain tier=daily and render as model scores, never
+    // as win probabilities.
+    const edgeSelection = selectTodaysEdgePicks(activeToday, 4);
+    const edgeTier = dedupe(edgeSelection.picks as DailyPick[]);
+
+    // Keep every other active Daily Pick, but remove fallback cards already
+    // surfaced above so the same play does not appear in both rails.
     const dailyTier = dedupe(
-      activeToday.filter(p => p.tier !== "edge" && isPicksHistoryPick(p as any))
+      activeToday.filter(
+        p => p.tier !== "edge" &&
+          isPicksHistoryPick(p as any) &&
+          !edgeSelection.fallbackIds.has(p.id),
+      )
     );
 
     if (import.meta.env.DEV) {
@@ -481,7 +498,10 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
           confidence: (p as any).confidence,
         });
       }
-      console.log(`[TodaysEdge] daily-tier rail: ${dailyTier.length}`);
+      console.log(
+        `[TodaysEdge] validated=${edgeTier.filter(p => p.edgePresentation === "validated").length} ` +
+          `fallback=${edgeSelection.fallbackIds.size} daily-tier=${dailyTier.length}`,
+      );
       console.groupEnd();
     }
 
@@ -721,8 +741,9 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               <div className="flex gap-3 pb-2">
                 {todayPicks.map((pick, i) => {
                   const isGameBet = pick.bet_type && pick.bet_type !== 'prop';
-                  const rawConf = pick.confidence ?? pick.hit_rate ?? 0;
-                  const confPercent = Math.round(normalizeConfidencePercent(rawConf));
+                  const isFallbackEdge = pick.edgePresentation === "fallback";
+                  const isLineupsPending = isFallbackEdge && pick.edgeWarning === "lineups_pending";
+                  const confPercent = Math.round(modelScorePercent(pick));
                   const canonicalVerdict = normalizeVerdict(pick.verdict, confPercent);
                   const diagnostics = pick.model_diagnostics ?? {};
                   const sourceContractVersion = String(diagnostics.sourceContractVersion ?? "");
@@ -883,6 +904,28 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                               {pick.bet_type === 'moneyline' ? 'ML' : pick.bet_type === 'spread' ? 'SPREAD' : 'O/U'}
                             </span>
                           )}
+                          {isFallbackEdge && (
+                            <span style={{
+                              display: 'inline-block',
+                              background: 'hsla(45,93%,58%,0.12)', color: 'hsl(45 93% 58%)',
+                              fontSize: 8, fontWeight: 800, letterSpacing: 0.8,
+                              borderRadius: 20, padding: '2px 7px',
+                              border: '1px solid hsla(45,93%,58%,0.28)',
+                            }}>
+                              UNCALIBRATED MODEL LEAN
+                            </span>
+                          )}
+                          {isLineupsPending && (
+                            <span style={{
+                              display: 'inline-block',
+                              background: 'hsla(30,100%,55%,0.12)', color: 'hsl(30 100% 62%)',
+                              fontSize: 8, fontWeight: 800, letterSpacing: 0.8,
+                              borderRadius: 20, padding: '2px 7px',
+                              border: '1px solid hsla(30,100%,55%,0.28)',
+                            }}>
+                              LINEUPS PENDING
+                            </span>
+                          )}
                         </div>
                         {!isGameBet && (
                           <p style={{
@@ -909,7 +952,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
 
                       {/* Right: Confidence Ring */}
                       <div style={{ width: 80, height: 80, flexShrink: 0 }}>
-                        <ConfidenceRing rate={confPercent} />
+                        <ConfidenceRing rate={confPercent} isModelScore={isFallbackEdge} />
                       </div>
                     </div>
 
@@ -970,6 +1013,15 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                         <div style={{ fontSize: 14, fontWeight: 600, color: '#f0eeff', whiteSpace: 'nowrap' }}>{pick.odds ? formatOddsFn(pick.odds) : "—"}</div>
                       </div>
                     </div>
+
+                    {isFallbackEdge && (
+                      <p className="relative z-10" style={{
+                        fontSize: 9.5, color: 'hsl(45 90% 62%)', lineHeight: 1.45,
+                        marginBottom: -5,
+                      }}>
+                        Model lean only. The score and any simulation figures below are not validated win probabilities.
+                      </p>
+                    )}
 
                     {/* AI NARRATIVE */}
                     {pick.reasoning && (

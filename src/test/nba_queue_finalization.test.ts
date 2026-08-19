@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildGenericQueueFinalization,
   buildNbaQueueFinalization,
+  buildWnbaQueueFinalization,
 } from "../../supabase/functions/_shared/nba_queue_finalization";
 import type { ScoredPlay } from "../../supabase/functions/_shared/edge_scoring";
 
@@ -228,6 +229,75 @@ describe("NBA queue finalization", () => {
 });
 
 describe("generic queue finalization", () => {
+  it("marks a qualified uncalibrated MLB analyzer result as a shadow candidate only", () => {
+    const result = buildGenericQueueFinalization({
+      finalized: makePlay({
+        sport: "mlb",
+        confidence: 0.68,
+        projected_prob: 0.68,
+        edge: 0,
+        ev_pct: 0,
+        verdict: "Lean",
+        model_diagnostics: {
+          canonical_confidence: 68,
+          canonical_verdict: "LEAN",
+          confidenceSource: "analyzer",
+          analyzer_response_snapshot: { verdict: "LEAN", confidence: 68 },
+          probability_supported: false,
+          score_kind: "heuristic_score",
+          calibration_status: "not_calibrated",
+          calibration_applied: false,
+          edge_evidence_validated: false,
+          evaluation_status: "insufficient_evidence",
+        },
+      }),
+      baseDiagnostics: null,
+      currentEdgeCount: 0,
+      edgeCap: 4,
+    });
+
+    expect(result.canPromote).toBe(false);
+    expect(result.finalTier).toBe("daily");
+    expect(result.promotionBlocker).toBe("calibration_not_supported");
+    expect(result.diagnostics).toMatchObject({
+      shadow_edge_candidate: true,
+      shadow_edge_reason: "calibration_not_supported",
+      shadow_edge_rejection_reason: null,
+      shadow_edge_warning: null,
+    });
+  });
+
+  it("does not mark low-score or risky MLB analyzer results as fallback candidates", () => {
+    const diagnostics = {
+      confidenceSource: "analyzer",
+      analyzer_response_snapshot: { ok: true },
+      probability_supported: false,
+      score_kind: "heuristic_score",
+      calibration_status: "not_calibrated",
+    };
+    const low = buildGenericQueueFinalization({
+      finalized: makePlay({
+        sport: "mlb", confidence: 0.55, projected_prob: 0.55, edge: 0,
+        verdict: "Lean",
+        model_diagnostics: { ...diagnostics, canonical_confidence: 55, canonical_verdict: "LEAN" },
+      }),
+      baseDiagnostics: null, currentEdgeCount: 0, edgeCap: 4,
+    });
+    const risky = buildGenericQueueFinalization({
+      finalized: makePlay({
+        sport: "mlb", confidence: 0.75, projected_prob: 0.75, edge: 0,
+        verdict: "Risky",
+        model_diagnostics: { ...diagnostics, canonical_confidence: 75, canonical_verdict: "RISKY" },
+      }),
+      baseDiagnostics: null, currentEdgeCount: 0, edgeCap: 4,
+    });
+
+    expect(low.diagnostics.shadow_edge_candidate).toBe(false);
+    expect(low.diagnostics.shadow_edge_rejection_reason).toBe("confidence_below_lean_min");
+    expect(risky.diagnostics.shadow_edge_candidate).toBe(false);
+    expect(risky.diagnostics.shadow_edge_rejection_reason).toBe("verdict_not_strong_or_lean");
+  });
+
   it("promotes an analyzer-backed 68% Lean with at least 2% positive edge", () => {
     const result = buildGenericQueueFinalization({
       finalized: makePlay({
@@ -277,5 +347,78 @@ describe("generic queue finalization", () => {
     expect(result.finalTier).toBe("daily");
     expect(result.promotionBlocker).toBe("edge_below_lean_min");
     expect(result.diagnostics.edgeDowngradeReason).toBe("edge_below_lean_min");
+  });
+});
+
+describe("WNBA fallback finalization", () => {
+  const uncalibratedAnalyzerDiagnostics = {
+    canonical_confidence: 65,
+    canonical_verdict: "LEAN",
+    confidenceSource: "analyzer",
+    analyzer_response_snapshot: { verdict: "LEAN", confidence: 65 },
+    probability_supported: false,
+    score_kind: "heuristic_score",
+    calibration_status: "not_calibrated",
+    calibration_applied: false,
+    edge_evidence_validated: false,
+    evaluation_status: "insufficient_evidence",
+  };
+
+  it("allows an uncalibrated WNBA team-market fallback with a lineup warning", () => {
+    const result = buildWnbaQueueFinalization({
+      finalized: makePlay({
+        sport: "wnba", bet_type: "spread", prop_type: "spread",
+        player_name: "Minnesota Lynx @ Golden State Valkyries",
+        confidence: 0.65, projected_prob: 0.65, edge: 0, ev_pct: 0,
+        verdict: "Lean", model_diagnostics: uncalibratedAnalyzerDiagnostics,
+      }),
+      baseDiagnostics: {
+        wnba_data_quality: "medium",
+        injury_source_available: true,
+        matchup_confirmed: true,
+        selected_side_confirmed: true,
+        lineup_status: "unconfirmed",
+        marketDataQuality: "high",
+        bookCount: 8,
+      },
+      currentEdgeCount: 0,
+      edgeCap: 4,
+    });
+
+    expect(result.canPromote).toBe(false);
+    expect(result.finalTier).toBe("daily");
+    expect(result.diagnostics).toMatchObject({
+      shadow_edge_candidate: true,
+      shadow_edge_reason: "calibration_not_supported",
+      shadow_edge_warning: "lineups_pending",
+    });
+  });
+
+  it("keeps WNBA player props blocked until the lineup and starter are confirmed", () => {
+    const result = buildWnbaQueueFinalization({
+      finalized: makePlay({
+        sport: "wnba", bet_type: "prop", prop_type: "points",
+        confidence: 0.65, projected_prob: 0.65, edge: 0, ev_pct: 0,
+        verdict: "Lean", model_diagnostics: uncalibratedAnalyzerDiagnostics,
+      }),
+      baseDiagnostics: {
+        wnba_data_quality: "high",
+        injury_source_available: true,
+        lineup_status: "unconfirmed",
+        player_starting: null,
+        player_availability: "not_listed",
+        minutes_restriction: false,
+        current_season_sample: 20,
+        marketDataQuality: "high",
+        bookCount: 8,
+      },
+      currentEdgeCount: 0,
+      edgeCap: 4,
+    });
+
+    expect(result.canPromote).toBe(false);
+    expect(result.diagnostics.shadow_edge_candidate).toBe(false);
+    expect(result.diagnostics.shadow_edge_rejection_reason).toBe("wnba_starting_lineup_unconfirmed");
+    expect(result.diagnostics.shadow_edge_warning).toBeNull();
   });
 });

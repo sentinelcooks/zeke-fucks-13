@@ -8,6 +8,7 @@ import {
   normalizeDirection,
   normalizeMlbPropType,
   normalizeNbaPropType,
+  validateMlbPropLine,
 } from "../_shared/prop_normalization.ts";
 import {
   fetchMlbGameIntelligence,
@@ -25,6 +26,7 @@ import {
   type WnbaTeamMetrics,
 } from "../_shared/wnba_model.ts";
 import { requirePremiumAccess } from "../_shared/premium-access.ts";
+import { applyGenericQualityPenalty } from "../_shared/model_confidence.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -3653,6 +3655,17 @@ async function analyzeProp(
   const mlbRole = cfg.searchLeague === "mlb" && isMlbPitcherPosition(player.position) ? "pitcher" : "batter";
   if (cfg.searchLeague === "mlb") {
     propType = normalizeMlbPropType(propType, mlbRole);
+    const lineValidation = validateMlbPropLine(propType, line);
+    if (!lineValidation.valid) {
+      return {
+        error: lineValidation.error,
+        code: lineValidation.code,
+        sport: "mlb",
+        prop_type: propType,
+        line,
+        player,
+      };
+    }
     if (isMlbPitchingProp(propType) && mlbRole !== "pitcher") {
       return { error: `${player.full_name} is not listed as a pitcher; pitching props cannot use a batting profile.`, player };
     }
@@ -4750,7 +4763,13 @@ serve(async (req) => {
         const dq = validateDataQuality(result, injuryWrapper, gameWrapper);
 
         const rawConfidence = Number(result.confidence) || 0;
-        const penalizedConfidence = Math.max(0, Math.min(100, rawConfidence - dq.confidencePenalty));
+        const qualityAdjustment = applyGenericQualityPenalty({
+          rawConfidence,
+          confidencePenalty: dq.confidencePenalty,
+          sport: reqSport,
+          model: result.model,
+        });
+        const penalizedConfidence = qualityAdjustment.confidence;
 
         const factors: FactorBreakdown[] = (result.mlb_factors || result.factorBreakdown || []).map((f: any) => ({
           name: f.name || f.label || "factor",
@@ -4789,6 +4808,8 @@ serve(async (req) => {
         result.decision = decision;
         result.dataQuality = dq;
         result.flags = dq.flags;
+        result.generic_quality_penalty_applied = qualityAdjustment.appliedPenalty;
+        result.generic_quality_penalty_skipped_as_duplicate = qualityAdjustment.skippedDuplicatePenalty;
 
         logSnapshot({
           sport: prediction.sport,

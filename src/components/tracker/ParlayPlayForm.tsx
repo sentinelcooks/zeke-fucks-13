@@ -152,7 +152,7 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
                   <select value={leg.sport} onChange={(e) => updateLeg(idx, "sport", e.target.value)}
                     className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground outline-none appearance-none"
                     style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
-                    <option value="nba">NBA</option><option value="mlb">MLB</option><option value="nhl">NHL</option>
+                    <option value="nba">NBA</option><option value="wnba">WNBA</option><option value="mlb">MLB</option><option value="nhl">NHL</option>
                     <option value="ufc">UFC</option><option value="other">Other</option>
                   </select>
                 </div>

@@ -48,6 +48,37 @@ function evaluationIsSupported(play: ScoredPlay): boolean {
     diagnostics.evaluation_status === "validated";
 }
 
+const EVIDENCE_ONLY_BLOCKERS = new Set([
+  "calibration_not_supported",
+  "evaluation_not_validated",
+]);
+
+function analyzerEvidenceIsPresent(play: ScoredPlay): boolean {
+  const diagnostics = (play.model_diagnostics ?? {}) as Record<string, unknown>;
+  return diagnostics.confidenceSource === "analyzer" &&
+    diagnostics.analyzer_response_snapshot !== null &&
+    typeof diagnostics.analyzer_response_snapshot === "object";
+}
+
+function genericShadowQualityBlocker(args: {
+  canonicalVerdict: CanonicalVerdict;
+  finalized: ScoredPlay;
+}): string | null {
+  if (!analyzerEvidenceIsPresent(args.finalized)) return "analyzer_evidence_missing";
+  if (args.canonicalVerdict !== "STRONG" && args.canonicalVerdict !== "LEAN") {
+    return "verdict_not_strong_or_lean";
+  }
+  if (args.finalized.confidence < PROB_LEAN) return "confidence_below_lean_min";
+  if (!Number.isFinite(args.finalized.odds) || Math.abs(args.finalized.odds) >= 1000) {
+    return "odds_out_of_range";
+  }
+  return null;
+}
+
+function evidenceOnlyBlocker(blocker: string | null): boolean {
+  return blocker !== null && EVIDENCE_ONLY_BLOCKERS.has(blocker);
+}
+
 function promotionBlockerFor(args: {
   canonicalVerdict: CanonicalVerdict;
   hitRate: number;
@@ -109,6 +140,12 @@ export function buildGenericQueueFinalization(args: {
       : "value";
 
   const diagnostics: Record<string, unknown> = { ...(args.baseDiagnostics ?? {}) };
+  const shadowQualityBlocker = genericShadowQualityBlocker({
+    canonicalVerdict,
+    finalized: args.finalized,
+  });
+  const shadowEdgeCandidate = evidenceOnlyBlocker(promotionBlocker) &&
+    shadowQualityBlocker === null;
   delete diagnostics.analyzer_skipped_reason;
   diagnostics.canonical_confidence = hitRate;
   diagnostics.canonical_verdict = canonicalVerdict;
@@ -122,7 +159,12 @@ export function buildGenericQueueFinalization(args: {
     ? "selected_from_queue_generic"
     : promotionBlocker;
   diagnostics.edgeDowngradeReason = promotionBlocker;
-  diagnostics.shadow_edge_candidate = promotionBlocker === "evaluation_not_validated";
+  diagnostics.shadow_edge_candidate = shadowEdgeCandidate;
+  diagnostics.shadow_edge_reason = shadowEdgeCandidate ? promotionBlocker : null;
+  diagnostics.shadow_edge_rejection_reason = shadowEdgeCandidate
+    ? null
+    : shadowQualityBlocker ?? promotionBlocker;
+  diagnostics.shadow_edge_warning = null;
   diagnostics.evPct = Math.round(args.finalized.ev_pct * 100) / 100;
   diagnostics.modelEdge = Math.round(args.finalized.edge * 10000) / 10000;
   diagnostics.queue_processed_at = (args.now ?? new Date()).toISOString();
@@ -183,54 +225,69 @@ export function buildWnbaQueueFinalization(args: {
   const marketQuality = String(diagnostics.marketDataQuality ?? "").toLowerCase();
   const bookCount = Number(diagnostics.bookCount ?? 0);
   const betType = args.finalized.bet_type;
-  const evaluationPending = generic.promotionBlocker === "evaluation_not_validated";
-  let wnbaBlocker: string | null = evaluationPending ? null : generic.promotionBlocker;
+  const evaluateSafety = (allowPendingTeamLineups: boolean, requireTeamSamples: boolean) => {
+    let blocker: string | null = null;
+    let warning: string | null = null;
 
-  if (!wnbaBlocker && quality === "low") wnbaBlocker = "wnba_data_quality_low";
-  if (!wnbaBlocker && diagnostics.injury_source_available !== true) {
-    wnbaBlocker = "wnba_injury_source_unavailable";
-  }
-  if (!wnbaBlocker && (!Number.isFinite(bookCount) || bookCount < 3 || !["medium", "high"].includes(marketQuality))) {
-    wnbaBlocker = "wnba_market_depth_insufficient";
-  }
+    if (quality === "low") blocker = "wnba_data_quality_low";
+    if (!blocker && diagnostics.injury_source_available !== true) {
+      blocker = "wnba_injury_source_unavailable";
+    }
+    if (!blocker && (!Number.isFinite(bookCount) || bookCount < 3 || !["medium", "high"].includes(marketQuality))) {
+      blocker = "wnba_market_depth_insufficient";
+    }
 
-  if (betType === "prop") {
-    const currentSample = Number(diagnostics.current_season_sample ?? 0);
-    if (!wnbaBlocker && diagnostics.lineup_status !== "confirmed") {
-      wnbaBlocker = "wnba_starting_lineup_unconfirmed";
+    if (betType === "prop") {
+      const currentSample = Number(diagnostics.current_season_sample ?? 0);
+      if (!blocker && diagnostics.lineup_status !== "confirmed") {
+        blocker = "wnba_starting_lineup_unconfirmed";
+      }
+      if (!blocker && diagnostics.player_starting !== true) {
+        blocker = "wnba_player_not_starting";
+      }
+      if (!blocker && ["questionable", "day-to-day", "out", "doubtful"].includes(String(diagnostics.player_availability ?? "").toLowerCase())) {
+        blocker = "wnba_player_availability_risk";
+      }
+      if (!blocker && diagnostics.minutes_restriction === true) {
+        blocker = "wnba_minutes_restriction";
+      }
+      if (!blocker && currentSample < 10) {
+        blocker = "wnba_current_sample_below_10";
+      }
+    } else {
+      const samples = diagnostics.current_season_samples as Record<string, unknown> | null | undefined;
+      if (!blocker && diagnostics.matchup_confirmed !== true) {
+        blocker = "wnba_matchup_unconfirmed";
+      }
+      if (!blocker && diagnostics.lineup_status !== "confirmed") {
+        if (allowPendingTeamLineups && diagnostics.lineup_status === "unconfirmed") {
+          warning = "lineups_pending";
+        } else {
+          blocker = "wnba_starting_lineups_unconfirmed";
+        }
+      }
+      if (!blocker && diagnostics.selected_side_confirmed !== true) {
+        blocker = "wnba_selected_side_unverified";
+      }
+      if (!blocker && requireTeamSamples &&
+        (Number(samples?.selected ?? 0) < 5 || Number(samples?.opponent ?? 0) < 5)) {
+        blocker = "wnba_team_sample_below_5";
+      }
     }
-    if (!wnbaBlocker && diagnostics.player_starting === false) {
-      wnbaBlocker = "wnba_player_not_starting";
-    }
-    if (!wnbaBlocker && ["questionable", "day-to-day", "out", "doubtful"].includes(String(diagnostics.player_availability ?? "").toLowerCase())) {
-      wnbaBlocker = "wnba_player_availability_risk";
-    }
-    if (!wnbaBlocker && diagnostics.minutes_restriction === true) {
-      wnbaBlocker = "wnba_minutes_restriction";
-    }
-    if (!wnbaBlocker && currentSample < 10) {
-      wnbaBlocker = "wnba_current_sample_below_10";
-    }
-  } else {
-    const samples = diagnostics.current_season_samples as Record<string, unknown> | null | undefined;
-    if (!wnbaBlocker && diagnostics.matchup_confirmed !== true) {
-      wnbaBlocker = "wnba_matchup_unconfirmed";
-    }
-    if (!wnbaBlocker && diagnostics.lineup_status !== "confirmed") {
-      wnbaBlocker = "wnba_starting_lineups_unconfirmed";
-    }
-    if (!wnbaBlocker && diagnostics.selected_side_confirmed !== true) {
-      wnbaBlocker = "wnba_selected_side_unverified";
-    }
-    if (!wnbaBlocker && (Number(samples?.selected ?? 0) < 5 || Number(samples?.opponent ?? 0) < 5)) {
-      wnbaBlocker = "wnba_team_sample_below_5";
-    }
-  }
 
-  if (!wnbaBlocker && missing.includes("INJURY_SOURCE_UNAVAILABLE")) {
-    wnbaBlocker = "wnba_injury_source_unavailable";
+    if (!blocker && missing.includes("INJURY_SOURCE_UNAVAILABLE")) {
+      blocker = "wnba_injury_source_unavailable";
+    }
+    return { blocker, warning };
+  };
+
+  const realSafety = evaluateSafety(false, true);
+  const fallbackSafety = evaluateSafety(true, false);
+  const genericEvidenceBlocker = evidenceOnlyBlocker(generic.promotionBlocker);
+  let wnbaBlocker: string | null = generic.promotionBlocker;
+  if (generic.promotionBlocker === null || genericEvidenceBlocker) {
+    wnbaBlocker = realSafety.blocker ?? generic.promotionBlocker;
   }
-  if (!wnbaBlocker && evaluationPending) wnbaBlocker = "evaluation_not_validated";
 
   const canPromote = wnbaBlocker === null;
   const finalTier: NbaQueueFinalTier = canPromote
@@ -243,13 +300,22 @@ export function buildWnbaQueueFinalization(args: {
   diagnostics.edge_pool_selected = canPromote;
   diagnostics.edge_pool_selection_reason = canPromote ? "selected_from_queue_wnba" : wnbaBlocker;
   diagnostics.edgeDowngradeReason = wnbaBlocker;
-  diagnostics.shadow_edge_candidate = evaluationPending && wnbaBlocker === "evaluation_not_validated";
+  const shadowEdgeCandidate = generic.diagnostics.shadow_edge_candidate === true &&
+    fallbackSafety.blocker === null;
+  diagnostics.shadow_edge_candidate = shadowEdgeCandidate;
+  diagnostics.shadow_edge_reason = shadowEdgeCandidate ? generic.promotionBlocker : null;
+  diagnostics.shadow_edge_rejection_reason = shadowEdgeCandidate
+    ? null
+    : fallbackSafety.blocker ?? generic.diagnostics.shadow_edge_rejection_reason ?? wnbaBlocker;
+  diagnostics.shadow_edge_warning = shadowEdgeCandidate ? fallbackSafety.warning : null;
   diagnostics.wnba_edge_gate = {
     ok: canPromote,
     blocker: wnbaBlocker,
     data_quality: quality || null,
     market_quality: marketQuality || null,
     book_count: Number.isFinite(bookCount) ? bookCount : null,
+    fallback_eligible: shadowEdgeCandidate,
+    fallback_warning: shadowEdgeCandidate ? fallbackSafety.warning : null,
   };
 
   return {

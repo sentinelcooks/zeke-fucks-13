@@ -21,6 +21,7 @@ const UFC_FIGHTER_PLACEHOLDERS = ["Jon Jones", "Tom Aspinall", "Islam Makhachev"
 
 const PLAYER_PLACEHOLDER_BY_SPORT: Record<string, string> = {
   nba: "LeBron James",
+  wnba: "A'ja Wilson",
   mlb: "Shohei Ohtani",
   nhl: "Connor McDavid",
   nfl: "Patrick Mahomes",
@@ -28,6 +29,7 @@ const PLAYER_PLACEHOLDER_BY_SPORT: Record<string, string> = {
 
 const TEAM_PLACEHOLDER_BY_SPORT: Record<string, string> = {
   nba: "Los Angeles Lakers",
+  wnba: "Las Vegas Aces",
   mlb: "New York Yankees",
   nhl: "Edmonton Oilers",
   nfl: "Kansas City Chiefs",
@@ -35,6 +37,7 @@ const TEAM_PLACEHOLDER_BY_SPORT: Record<string, string> = {
 
 const MATCHUP_PLACEHOLDER_BY_SPORT: Record<string, string> = {
   nba: "Lakers vs Celtics",
+  wnba: "Aces vs Liberty",
   mlb: "Yankees vs Mets",
   nhl: "Bruins vs Rangers",
   nfl: "Chiefs vs Bills",
@@ -43,6 +46,7 @@ const MATCHUP_PLACEHOLDER_BY_SPORT: Record<string, string> = {
 
 const LINE_PLACEHOLDER_BY_SPORT: Record<string, string> = {
   nba: "25.5",
+  wnba: "20.5",
   mlb: "1.5",
   nhl: "0.5",
   nfl: "275.5",
@@ -78,7 +82,7 @@ export function getLinePlaceholder(sport: string, betType?: string): string {
     if (isUfcFightTotal(betType)) return "2.5";
     return "";
   }
-  if (sport === "nba") {
+  if (sport === "nba" || sport === "wnba") {
     const t = (betType || "").toLowerCase().trim();
     for (const [key, ph] of Object.entries(NBA_LINE_PLACEHOLDERS)) {
       if (t.includes(key)) return ph;
@@ -96,6 +100,11 @@ const TEAMS_BY_SPORT: Record<string, string[]> = {
     "Miami Heat", "Milwaukee Bucks", "Minnesota Timberwolves", "New Orleans Pelicans", "New York Knicks",
     "Oklahoma City Thunder", "Orlando Magic", "Philadelphia 76ers", "Phoenix Suns", "Portland Trail Blazers",
     "Sacramento Kings", "San Antonio Spurs", "Toronto Raptors", "Utah Jazz", "Washington Wizards",
+  ],
+  wnba: [
+    "Atlanta Dream", "Chicago Sky", "Connecticut Sun", "Dallas Wings", "Golden State Valkyries",
+    "Indiana Fever", "Las Vegas Aces", "Los Angeles Sparks", "Minnesota Lynx", "New York Liberty",
+    "Phoenix Mercury", "Portland Fire", "Seattle Storm", "Toronto Tempo", "Washington Mystics",
   ],
   mlb: [
     "Arizona Diamondbacks", "Atlanta Braves", "Baltimore Orioles", "Boston Red Sox", "Chicago Cubs",
@@ -140,7 +149,7 @@ export function PlayerAutocomplete({ sport, value, onChange, betType = "" }: Pla
   const allTeams: PlayerResult[] = isTeamMode
     ? (TEAMS_BY_SPORT[sport] || []).map(name => ({
         name,
-        headshot: getTeamLogoUrl(name, sport as "nba" | "mlb" | "nhl" | "nfl"),
+        headshot: getTeamLogoUrl(name, sport as "nba" | "wnba" | "mlb" | "nhl" | "nfl"),
         team: "",
       }))
     : [];

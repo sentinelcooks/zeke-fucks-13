@@ -12,6 +12,7 @@ import { todayInTZ, getGameDate } from "@/lib/gameDate";
 import { formatPropType } from "@/lib/formatPickLabel";
 import { pickMatchesCategory } from "@/lib/pickCategoryFilters";
 import { normalizeConfidencePercent, normalizeVerdict } from "@/lib/matchupGrade";
+import { isSportTemporarilyHidden } from "@/lib/sportAvailability";
 
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 
@@ -97,6 +98,16 @@ const PROP_FILTERS_BY_SPORT: Record<string, { value: string; label: string }[]> 
     { value: "blocks", label: "BLK" },
     { value: "pts+reb+ast", label: "PRA" },
   ],
+  wnba: [
+    { value: "all", label: "ALL" },
+    { value: "points", label: "PTS" },
+    { value: "rebounds", label: "REB" },
+    { value: "assists", label: "AST" },
+    { value: "3-pointers", label: "3PT" },
+    { value: "steals", label: "STL" },
+    { value: "blocks", label: "BLK" },
+    { value: "pts+reb+ast", label: "PRA" },
+  ],
   mlb: [
     { value: "all", label: "ALL" },
     { value: "hits", label: "HITS" },
@@ -146,7 +157,7 @@ const stagger = (i: number) => ({
   transition: { delay: i * 0.04, duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] },
 });
 
-type SportFilter = "all" | "nba" | "mlb" | "nhl" | "ufc";
+type SportFilter = "all" | "nba" | "wnba" | "mlb" | "nhl" | "ufc";
 type SortMode = "high" | "low";
 type TabType = "picks" | "100club" | "sgp" | "trends";
 
@@ -156,6 +167,7 @@ const TABS: { key: TabType; label: string; icon: typeof Zap }[] = [
   { key: "sgp", label: "SGP", icon: Star },
   { key: "trends", label: "Trends", icon: TrendingUp },
 ];
+const TEMPORARILY_HIDDEN_PICK_TABS = new Set<TabType>(["sgp", "trends"]);
 
 const FreePicksPage = () => {
   const [picks, setPicks] = useState<Pick[]>([]);
@@ -173,6 +185,10 @@ const FreePicksPage = () => {
 
   // Reset prop filter when sport changes
   useEffect(() => { setPropFilter("all"); }, [sportFilter]);
+
+  useEffect(() => {
+    if (TEMPORARILY_HIDDEN_PICK_TABS.has(activeTab)) setActiveTab("picks");
+  }, [activeTab]);
 
   // Fetch picks
   useEffect(() => {
@@ -271,10 +287,11 @@ const FreePicksPage = () => {
   // Normalize hit_rate (may be stored as decimal 0-1 or percent 0-100)
   const normHr = (hr: number) => Math.round(normalizeConfidencePercent(hr));
   const normalized = picks.map(p => ({ ...p, hit_rate: normHr(p.hit_rate) }));
+  const visiblePicks = normalized.filter(p => !isSportTemporarilyHidden(p.sport));
 
   // 100% Club = today's picks whose player hit this prop in all of their last 5 games.
   // Source: analyzer's last_5 stored under model_diagnostics.analyzer_response_snapshot.
-  const club100Picks = normalized.filter(p => {
+  const club100Picks = visiblePicks.filter(p => {
     const md = (p as any).model_diagnostics;
     const l5 = md?.analyzer_response_snapshot?.last_5 ?? md?.last_5;
     if (!l5) return false;
@@ -286,7 +303,7 @@ const FreePicksPage = () => {
   // Score: prefer confidence field (0-1), fall back to normalized hit_rate
   const scoreOf = (p: Pick) => normalizeConfidencePercent(p.confidence ?? p.hit_rate);
   // Apply sport/prop filters; tier gate already applied at query layer
-  let filtered = normalized.filter(p => (p as any).status !== "empty_slate");
+  let filtered = visiblePicks.filter(p => (p as any).status !== "empty_slate");
   if (sportFilter !== "all") filtered = filtered.filter(p => p.sport === sportFilter);
   filtered = filtered.filter(p => pickMatchesCategory(p, propFilter, sportFilter));
   filtered = [...filtered].sort((a, b) =>
@@ -296,7 +313,7 @@ const FreePicksPage = () => {
   const isStale = pickDate && pickDate !== todayInTZ();
   const formattedDate = pickDate ? new Date(pickDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
 
-  const totalCount = picks.length + trends.length + club100Picks.length + sgps.length;
+  const totalCount = visiblePicks.length + club100Picks.length;
 
   return (
     <div className="flex flex-col min-h-full relative">
@@ -309,10 +326,10 @@ const FreePicksPage = () => {
       <div className="px-4 pt-3 pb-2 space-y-2 relative z-10">
         {/* Main category tabs */}
         <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
-          {TABS.map((tab) => {
+          {TABS.filter((tab) => !TEMPORARILY_HIDDEN_PICK_TABS.has(tab.key)).map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.key;
-            const count = tab.key === "picks" ? picks.length
+            const count = tab.key === "picks" ? visiblePicks.length
               : tab.key === "100club" ? club100Picks.length
               : tab.key === "sgp" ? sgps.length
               : trends.length;
@@ -348,7 +365,9 @@ const FreePicksPage = () => {
         {activeTab === "picks" && (
           <>
             <div className="flex p-0.5 bg-secondary rounded-lg overflow-x-auto scrollbar-hide">
-              {(["all", "nba", "mlb", "nhl", "ufc"] as const).map((f) => (
+              {(["all", "nba", "wnba", "mlb", "nhl", "ufc"] as const)
+                .filter((f) => f === "all" || !isSportTemporarilyHidden(f))
+                .map((f) => (
                 <button
                   key={f}
                   onClick={() => setSportFilter(f)}

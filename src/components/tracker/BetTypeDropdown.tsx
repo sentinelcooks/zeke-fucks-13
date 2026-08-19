@@ -117,7 +117,7 @@ export function BetTypeDropdown({ sport, value, onChange }: BetTypeDropdownProps
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
-  const options = SPORT_BET_TYPES[sport] || SPORT_BET_TYPES.other;
+  const options = SPORT_BET_TYPES[sport === "wnba" ? "nba" : sport] || SPORT_BET_TYPES.other;
 
   const filterLower = filter.toLowerCase().trim();
   const filtered = filterLower

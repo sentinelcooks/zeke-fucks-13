@@ -154,7 +154,36 @@ const MLB_PROP_ALIASES: Record<string, string> = {
   stolen_bases: "stolen_bases",
   batter_stolen_bases: "stolen_bases",
   batter_strikeouts: "batter_strikeouts",
+  h_r_rbi: "h+r+rbi",
+  hits_runs: "hits+runs",
 };
+
+// Manual-analyzer input guardrails, not model weights or calibrated ranges.
+// These deliberately generous ceilings only reject lines that cannot represent
+// a plausible single-game MLB player-prop market (for example, 700 earned runs).
+const MLB_PROP_LINE_GUARDS: Record<string, { label: string; max: number }> = {
+  pitcher_strikeouts: { label: "Pitcher Strikeouts", max: 25 },
+  hits_allowed: { label: "Hits Allowed", max: 20 },
+  earned_runs: { label: "Earned Runs", max: 9.5 },
+  walks_allowed: { label: "Walks Allowed", max: 15 },
+  outs_recorded: { label: "Outs Recorded", max: 27 },
+  innings_pitched: { label: "Innings Pitched", max: 9 },
+  hits: { label: "Hits", max: 8 },
+  runs: { label: "Runs", max: 8 },
+  rbi: { label: "RBI", max: 12 },
+  home_runs: { label: "Home Runs", max: 5 },
+  doubles: { label: "Doubles", max: 5 },
+  total_bases: { label: "Total Bases", max: 24 },
+  walks: { label: "Walks", max: 8 },
+  stolen_bases: { label: "Stolen Bases", max: 6 },
+  batter_strikeouts: { label: "Batter Strikeouts", max: 8 },
+  "h+r+rbi": { label: "Hits + Runs + RBI", max: 24 },
+  "hits+runs": { label: "Hits + Runs", max: 16 },
+};
+
+export type MlbPropLineValidation =
+  | { valid: true; line: number; propType: string }
+  | { valid: false; line: number; propType: string; error: string; code: "INVALID_MLB_PROP_LINE" };
 
 export function isMlbPitcherPosition(position: string | null | undefined): boolean {
   return new Set(["P", "SP", "RP", "CP", "CL", "LHP", "RHP"])
@@ -177,6 +206,36 @@ export function normalizeMlbPropType(
     return role === "pitcher" ? "pitcher_strikeouts" : "batter_strikeouts";
   }
   return MLB_PROP_ALIASES[key] ?? key;
+}
+
+export function validateMlbPropLine(
+  propType: string | null | undefined,
+  line: number | string | null | undefined,
+): MlbPropLineValidation {
+  const normalizedPropType = normalizeMlbPropType(propType);
+  const numericLine = typeof line === "number" ? line : Number(line);
+  if (!Number.isFinite(numericLine) || numericLine <= 0) {
+    return {
+      valid: false,
+      line: numericLine,
+      propType: normalizedPropType,
+      error: "Enter a valid MLB prop line greater than 0.",
+      code: "INVALID_MLB_PROP_LINE",
+    };
+  }
+
+  const guard = MLB_PROP_LINE_GUARDS[normalizedPropType];
+  if (guard && numericLine > guard.max) {
+    return {
+      valid: false,
+      line: numericLine,
+      propType: normalizedPropType,
+      error: `${numericLine} is not a realistic single-game MLB ${guard.label} line. Enter a line of ${guard.max} or lower.`,
+      code: "INVALID_MLB_PROP_LINE",
+    };
+  }
+
+  return { valid: true, line: numericLine, propType: normalizedPropType };
 }
 
 export function isMlbPitchingProp(propType: string | null | undefined): boolean {
