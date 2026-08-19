@@ -1067,20 +1067,9 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
   }
   const games = Array.isArray(gamesRes.data) ? gamesRes.data : [];
 
-  stats.games = games.length;
-
-  if (games.length === 0) {
-    console.log(
-      `[${sport}] evaluateGameLines: 0 games from games-schedule (status=${gamesRes.status})`
-    );
-    return [];
-  }
-
-  const upcoming = games.filter(
+  let upcoming = games.filter(
     (g: any) => g.status !== "STATUS_FINAL" && g.status !== "STATUS_IN_PROGRESS"
   );
-
-  if (upcoming.length === 0) return [];
 
   const oddsRes = await fnFetch(
     `nba-odds/events?sport=${sport}&markets=h2h,spreads,totals`
@@ -1104,6 +1093,24 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
   const oddsEvents = oddsEventsRaw.filter(
     (ev: any) => ev?.commence_time && toETDate(ev.commence_time) === targetGameDate,
   );
+
+  if (upcoming.length === 0) {
+    upcoming = oddsEvents.filter(
+      (ev: any) => ev?.commence_time && new Date(ev.commence_time).getTime() > Date.now(),
+    );
+    stats.game_line_schedule_source = "odds_api_fallback";
+    console.warn(
+      `[${sport}] evaluateGameLines: games-schedule returned no upcoming games; ` +
+        `using ${upcoming.length} verified upcoming Odds API events`,
+    );
+  } else {
+    stats.game_line_schedule_source = "espn";
+  }
+
+  stats.games = games.length;
+  stats.scheduled_games = upcoming.length;
+
+  if (upcoming.length === 0) return [];
 
   console.log(
     `[${sport}] evaluateGameLines: ${upcoming.length} upcoming games, ` +
@@ -1406,9 +1413,21 @@ async function evaluatePlayerProps(
       (g: any) => g.status !== "STATUS_FINAL" && g.status !== "STATUS_IN_PROGRESS"
     );
 
-    stats.scheduled_games = upcomingGames.length;
-
-    upcoming = matchScheduledEvents(upcomingGames, events, teamNameKey);
+    if (upcomingGames.length > 0) {
+      stats.scheduled_games = upcomingGames.length;
+      stats.player_prop_schedule_source = "espn";
+      upcoming = matchScheduledEvents(upcomingGames, events, teamNameKey);
+    } else {
+      upcoming = events.filter(
+        (ev: any) => ev?.commence_time && new Date(ev.commence_time).getTime() > Date.now(),
+      );
+      stats.scheduled_games = upcoming.length;
+      stats.player_prop_schedule_source = "odds_api_fallback";
+      console.warn(
+        `[${sport}] evaluatePlayerProps: games-schedule returned no upcoming games; ` +
+          `using ${upcoming.length} verified upcoming Odds API events`,
+      );
+    }
   } else {
     stats.scheduled_games = events.length;
   }

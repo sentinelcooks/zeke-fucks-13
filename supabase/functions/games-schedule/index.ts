@@ -13,6 +13,42 @@ const ESPN_SPORT_MAP: Record<string, { sport: string; league: string }> = {
   americanfootball_nfl: { sport: "football", league: "nfl" },
 };
 
+// ESPN's legacy site.api host began returning HTTP 403 in August 2026 while
+// the current site.web.api host continued serving the same scoreboard schema.
+// Keep the legacy host only as a failover so a single ESPN host change cannot
+// silently empty every scheduled sport.
+const ESPN_SCOREBOARD_BASE_URLS = [
+  "https://site.web.api.espn.com/apis/site/v2",
+  "https://site.api.espn.com/apis/site/v2",
+];
+
+async function fetchEspnScoreboard(
+  mapping: { sport: string; league: string },
+  dateStr: string,
+): Promise<any | null> {
+  for (const baseUrl of ESPN_SCOREBOARD_BASE_URLS) {
+    const url = `${baseUrl}/sports/${mapping.sport}/${mapping.league}/scoreboard?dates=${dateStr}`;
+    try {
+      const resp = await fetch(url, {
+        headers: {
+          Accept: "application/json",
+        },
+      });
+      if (!resp.ok) {
+        console.warn(`ESPN scoreboard failed (${resp.status}) for ${baseUrl}`);
+        continue;
+      }
+
+      const data = await resp.json();
+      if (data) return data;
+    } catch (error) {
+      console.warn(`ESPN scoreboard request failed for ${baseUrl}:`, error);
+    }
+  }
+
+  return null;
+}
+
 function parseEspnEvents(data: any, sportKey: string): any[] {
   const games: any[] = [];
   for (const event of data?.events || []) {
@@ -67,10 +103,7 @@ async function fetchFromEspn(sportKey: string): Promise<any[] | null> {
       date.setDate(date.getDate() + d);
       const dateStr = date.toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
       promises.push(
-        fetch(
-          `https://site.api.espn.com/apis/site/v2/sports/${mapping.sport}/${mapping.league}/scoreboard?dates=${dateStr}`
-        )
-          .then((resp) => (resp.ok ? resp.json() : null))
+        fetchEspnScoreboard(mapping, dateStr)
           .then((data) => {
             if (!data) return;
             for (const g of parseEspnEvents(data, sportKey)) {
@@ -80,7 +113,6 @@ async function fetchFromEspn(sportKey: string): Promise<any[] | null> {
               }
             }
           })
-          .catch(() => {})
       );
     }
     await Promise.all(promises);

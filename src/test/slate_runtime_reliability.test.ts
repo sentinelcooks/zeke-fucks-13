@@ -152,4 +152,28 @@ describe("Odds API key-pool reliability", () => {
     expect(migration).toContain("'prop_event_limit', 4");
     expect(migration).toContain("'include_game_lines', v_batch = 0");
   });
+
+  it("uses ESPN's current scoreboard host before the legacy failover", () => {
+    const scheduleSource = readFileSync(
+      resolve(process.cwd(), "supabase/functions/games-schedule/index.ts"),
+      "utf8",
+    );
+
+    const currentHost = scheduleSource.indexOf("https://site.web.api.espn.com/apis/site/v2");
+    const legacyHost = scheduleSource.indexOf("https://site.api.espn.com/apis/site/v2");
+    expect(currentHost).toBeGreaterThanOrEqual(0);
+    expect(legacyHost).toBeGreaterThan(currentHost);
+    expect(scheduleSource).toContain("fetchEspnScoreboard(mapping, dateStr)");
+  });
+
+  it("falls back to verified Odds API events instead of emptying the slate", () => {
+    const scanSource = readFileSync(
+      resolve(process.cwd(), "supabase/functions/_shared/sport_scan.ts"),
+      "utf8",
+    );
+
+    expect(scanSource).toContain('stats.game_line_schedule_source = "odds_api_fallback"');
+    expect(scanSource).toContain('stats.player_prop_schedule_source = "odds_api_fallback"');
+    expect(scanSource).toContain("new Date(ev.commence_time).getTime() > Date.now()");
+  });
 });
