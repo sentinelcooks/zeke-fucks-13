@@ -21,6 +21,9 @@ verify_jwt = false
 [functions.calibrate-model]
 verify_jwt = false
 
+[functions.refresh-mlb-park-factors]
+verify_jwt = false
+
 # Scanner pipeline endpoints validate configured service-role credentials in
 # function code. Gateway JWT verification must be disabled so Supabase's
 # opaque sb_secret_* service keys can reach that validation.

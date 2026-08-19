@@ -2,7 +2,20 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { callAI, AIProviderError, ANTI_GENERIC_INSTRUCTION } from "../_shared/ai-provider.ts";
 import { normalizeNbaTeam } from "../_shared/nba_teams.ts";
 import { normalizeCanonicalVerdict, normalizeConfidencePercent, verdictFromConfidence } from "../_shared/canonical_verdict.ts";
-import { normalizeDirection, normalizeNbaPropType } from "../_shared/prop_normalization.ts";
+import {
+  isMlbPitcherPosition,
+  isMlbPitchingProp,
+  normalizeDirection,
+  normalizeMlbPropType,
+  normalizeNbaPropType,
+} from "../_shared/prop_normalization.ts";
+import {
+  fetchMlbGameIntelligence,
+  mlbStatValue,
+  parseMlbLabeledStatLine,
+  type MlbGameIntelligence,
+  type MlbStatLine,
+} from "../_shared/mlb_data.ts";
 import { requirePremiumAccess } from "../_shared/premium-access.ts";
 
 const corsHeaders = {
@@ -238,21 +251,12 @@ const MLB_PROP_WEIGHTS: Record<string, Record<string, number>> = {
     last_5_hot_cold: 0.10,
     h2h_vs_opponent: 0.08,
   },
-  pitcher_strikeouts: {
-    vs_opp_team_k_rate: 0.25,
-    last_5_hot_cold: 0.20,
-    vs_opp_team_ops: 0.20,
-    park_factor: 0.08,
-    weather_temp: 0.07,
-    lineup_handedness: 0.08,
-    h2h_vs_opponent: 0.07,
-    rest_days: 0.05,
-  },
+  pitcher_strikeouts: {},
 };
 
-function detectMlbPropCategory(propType: string | null | undefined): keyof typeof MLB_PROP_WEIGHTS {
+function detectMlbPropCategory(propType: string | null | undefined, isPitcher = false): keyof typeof MLB_PROP_WEIGHTS {
   const p = (propType || "").toLowerCase();
-  if (p.includes("strikeout") && (p.includes("pitcher") || p.includes("sp"))) return "pitcher_strikeouts";
+  if (isPitcher || (p.includes("strikeout") && (p.includes("pitcher") || p.includes("sp")))) return "pitcher_strikeouts";
   if (p.includes("strikeout") || p.match(/\bk\b|\bks\b/)) return "strikeouts";
   if (p.includes("total_base") || p.includes("total bases") || p.includes("tb")) return "total_bases";
   return "hits";
@@ -615,6 +619,7 @@ interface GameRow {
   walks: number;
   stolen_bases: number;
   at_bats: number;
+  mlb_line?: MlbStatLine;
   // NHL stats
   goals: number;
   nhl_assists: number;
@@ -767,14 +772,11 @@ async function getGameLog(playerId: string, season?: number, config?: EspnConfig
       const matchup = isHome ? `vs ${oppAbbr}` : `@ ${oppAbbr}`;
       const gameDate = eventInfo?.gameDate || "";
       const result = eventInfo?.result || eventInfo?.gameResult || "";
+      const mlbLine = cfg.searchLeague === "mlb"
+        ? parseMlbLabeledStatLine(topLabels, stats)
+        : undefined;
 
-      // Calculate total bases if not available
-      let tbVal = tbIdx >= 0 ? parseStat(stats[tbIdx]) : 0;
-      if (tbIdx < 0 && cfg.searchLeague === "mlb") {
-        const h = hIdx >= 0 ? parseStat(stats[hIdx]) : 0;
-        const hr = hrIdx >= 0 ? parseStat(stats[hrIdx]) : 0;
-        tbVal = h + hr * 3;
-      }
+      const tbVal = tbIdx >= 0 ? parseStat(stats[tbIdx]) : 0;
 
       // Parse TOI (time on ice) — ESPN formats as "MM:SS"
       let toiVal = 0;
@@ -821,6 +823,7 @@ async function getGameLog(playerId: string, season?: number, config?: EspnConfig
         walks: bbIdx >= 0 ? parseStat(stats[bbIdx]) : 0,
         stolen_bases: sbIdx >= 0 ? parseStat(stats[sbIdx]) : 0,
         at_bats: abIdx >= 0 ? parseStat(stats[abIdx]) : 0,
+        mlb_line: mlbLine,
         // NHL stats
         goals: gIdx >= 0 ? parseStat(stats[gIdx]) : 0,
         nhl_assists: aIdx >= 0 ? parseStat(stats[aIdx]) : 0,
@@ -1638,74 +1641,10 @@ function computeNhlScoringZones(games: GameRow[]) {
 
 // ── MLB Hit/Scoring Zones from Game Log (real data) ───────────────
 function computeMlbScoringZones(games: GameRow[]) {
-  if (!games.length) return [];
-
-  let totalHits = 0, totalHR = 0, totalTB = 0, totalWalks = 0;
-  let totalSB = 0, totalRuns = 0, totalRBI = 0, totalAB = 0;
-
-  for (const g of games) {
-    totalHits += g.hits || 0;
-    totalHR += g.home_runs || 0;
-    totalTB += g.total_bases || 0;
-    totalWalks += g.walks || 0;
-    totalSB += g.stolen_bases || 0;
-    totalRuns += g.runs || 0;
-    totalRBI += g.rbi || 0;
-    totalAB += g.at_bats || 0;
-  }
-
-  if (totalHits === 0 && totalWalks === 0 && totalHR === 0) return [];
-
-  // Estimate extra-base hits (doubles + triples) from total bases
-  // TB = 1*singles + 2*doubles + 3*triples + 4*HR
-  // extraBaseTB = TB - hits - 3*HR  =>  extra base hits ≈ extraBaseTB / 1.5
-  const extraBaseTB = Math.max(0, totalTB - totalHits - 3 * totalHR);
-  const estimatedExtraBaseHits = Math.round(extraBaseTB / 1.5);
-  const singles = Math.max(0, totalHits - totalHR - estimatedExtraBaseHits);
-
-  // Distribute extra-base hits across outfield zones (L/C/R)
-  const ofLeft = Math.round(estimatedExtraBaseHits * 0.35);
-  const ofCenter = Math.round(estimatedExtraBaseHits * 0.30);
-  const ofRight = estimatedExtraBaseHits - ofLeft - ofCenter;
-
-  const pct = (val: number, total: number) => total > 0 ? Math.round((val / total) * 1000) / 10 : 0;
-  const plateAppearances = totalAB + totalWalks;
-
-  const zones = [];
-
-  // Infield — singles
-  if (singles > 0) {
-    zones.push({ label: "Infield", percentage: pct(singles, plateAppearances), attempts: singles, cx: 50, cy: 62, r: 8 });
-  }
-
-  // Outfield Left
-  if (ofLeft > 0) {
-    zones.push({ label: "OF Left", percentage: pct(ofLeft, plateAppearances), attempts: ofLeft, cx: 20, cy: 35, r: 7 });
-  }
-
-  // Outfield Center
-  if (ofCenter > 0) {
-    zones.push({ label: "OF Center", percentage: pct(ofCenter, plateAppearances), attempts: ofCenter, cx: 50, cy: 25, r: 7 });
-  }
-
-  // Outfield Right
-  if (ofRight > 0) {
-    zones.push({ label: "OF Right", percentage: pct(ofRight, plateAppearances), attempts: ofRight, cx: 80, cy: 35, r: 7 });
-  }
-
-  // Over the Fence — home runs
-  if (totalHR > 0) {
-    zones.push({ label: "Over Fence", percentage: pct(totalHR, plateAppearances), attempts: totalHR, cx: 50, cy: 12, r: 7 });
-  }
-
-  // On Base — walks
-  if (totalWalks > 0) {
-    zones.push({ label: "Walks", percentage: pct(totalWalks, plateAppearances), attempts: totalWalks, cx: 15, cy: 80, r: 6 });
-  }
-
-  console.log(`MLB Scoring zones: ${totalHits}H ${totalHR}HR ${totalTB}TB ${totalWalks}BB, PA: ${plateAppearances}, Games: ${games.length}`);
-
-  return zones;
+  // ESPN game logs do not contain batted-ball coordinates. Do not fabricate a
+  // spray chart from aggregate hits or total bases.
+  void games;
+  return [];
 }
 
 
@@ -1724,7 +1663,11 @@ const PROP_DISPLAY: Record<string, string> = {
   "1q_3-pointers": "1st Quarter 3-Pointers Made",
   // MLB
   hits: "Hits", runs: "Runs", rbi: "RBI", home_runs: "Home Runs",
-  strikeouts: "Strikeouts", total_bases: "Total Bases", walks: "Walks",
+  strikeouts: "Strikeouts", pitcher_strikeouts: "Pitcher Strikeouts",
+  batter_strikeouts: "Batter Strikeouts", hits_allowed: "Hits Allowed",
+  earned_runs: "Earned Runs", walks_allowed: "Walks Allowed",
+  outs_recorded: "Outs Recorded", innings_pitched: "Innings Pitched",
+  doubles: "Doubles", total_bases: "Total Bases", walks: "Walks",
   stolen_bases: "Stolen Bases", "h+r+rbi": "Hits + Runs + RBI",
   "hits+runs": "Hits + Runs",
   // NHL
@@ -1821,6 +1764,14 @@ async function fetch1QStatsForGames(
 }
 
 function getStatValue(game: GameRow, propType: string): number {
+  if (game.mlb_line) {
+    const value = mlbStatValue(game.mlb_line, propType);
+    if (value !== null) return value;
+    if (
+      isMlbPitchingProp(propType) ||
+      ["batter_strikeouts", "hits", "runs", "rbi", "home_runs", "doubles", "total_bases", "walks", "stolen_bases", "h+r+rbi", "hits+runs"].includes(propType)
+    ) return Number.NaN;
+  }
   // 1Q props use dedicated quarter fields
   if (propType.startsWith("1q_")) {
     const base = propType.replace("1q_", "");
@@ -1859,7 +1810,15 @@ function getStatValue(game: GameRow, propType: string): number {
     case "runs": return game.runs;
     case "rbi": return game.rbi;
     case "home_runs": return game.home_runs;
+    case "doubles": return Number.NaN;
     case "strikeouts": return game.strikeouts;
+    case "pitcher_strikeouts": return Number.NaN;
+    case "batter_strikeouts": return Number.NaN;
+    case "hits_allowed": return Number.NaN;
+    case "earned_runs": return Number.NaN;
+    case "walks_allowed": return Number.NaN;
+    case "outs_recorded": return Number.NaN;
+    case "innings_pitched": return Number.NaN;
     case "total_bases": return game.total_bases;
     case "walks": return game.walks;
     case "stolen_bases": return game.stolen_bases;
@@ -1880,9 +1839,10 @@ function getStatValue(game: GameRow, propType: string): number {
 }
 
 function hitRate(values: number[], line: number, overUnder: string) {
-  if (!values.length) return { rate: 0, hits: 0, total: 0 };
-  const hits = values.filter(v => overUnder === "over" ? v > line : v < line).length;
-  return { rate: Math.round((hits / values.length) * 1000) / 10, hits, total: values.length };
+  const usable = values.filter(Number.isFinite);
+  if (!usable.length) return { rate: 0, hits: 0, total: 0 };
+  const hits = usable.filter(v => overUnder === "over" ? v > line : v < line).length;
+  return { rate: Math.round((hits / usable.length) * 1000) / 10, hits, total: usable.length };
 }
 
 // ── Recency-Weighted Hit Rate (exponential decay) ──
@@ -2301,13 +2261,16 @@ function computeLineCushion(args: {
 }
 
 function avg(values: number[]): number {
-  if (!values.length) return 0;
-  return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10;
+  const usable = values.filter(Number.isFinite);
+  if (!usable.length) return 0;
+  return Math.round((usable.reduce((a, b) => a + b, 0) / usable.length) * 10) / 10;
 }
 
 function minutesTrend(games: GameRow[], sport?: string) {
   const recent = games.slice(-10);
-  const vals = recent.map(g => sport === "mlb" ? (g.at_bats || 0) : sport === "nhl" ? (g.toi || 0) : g.min);
+  const vals = recent.map(g => sport === "mlb"
+    ? (g.mlb_line?.profile === "pitching" ? (g.mlb_line.outsRecorded ?? 0) : (g.at_bats || 0))
+    : sport === "nhl" ? (g.toi || 0) : g.min);
   if (vals.length < 4) {
     const a = avg(vals);
     return { avg_min: a, trend: "insufficient_data", recent_avg: a, early_avg: a };
@@ -2319,31 +2282,7 @@ function minutesTrend(games: GameRow[], sport?: string) {
   return { avg_min: avg(vals), trend: diff > 2 ? "up" : diff < -2 ? "down" : "stable", recent_avg: lateAvg, early_avg: earlyAvg };
 }
 
-// ── MLB Park Factors (static reference data) ───────────────
-const MLB_PARK_FACTORS: Record<string, number> = {
-  "Coors Field": 1.39, "Globe Life Field": 1.12, "Great American Ball Park": 1.11,
-  "Fenway Park": 1.09, "Guaranteed Rate Field": 1.08, "Wrigley Field": 1.06,
-  "Citizens Bank Park": 1.05, "Yankee Stadium": 1.04, "Citi Field": 1.02,
-  "Tropicana Field": 1.01, "Chase Field": 1.01, "Target Field": 1.00,
-  "Minute Maid Park": 0.99, "Dodger Stadium": 0.98, "Busch Stadium": 0.97,
-  "Progressive Field": 0.97, "Camden Yards": 0.97, "American Family Field": 0.96,
-  "PNC Park": 0.95, "Angel Stadium": 0.95, "Kauffman Stadium": 0.94,
-  "T-Mobile Park": 0.93, "Rogers Centre": 0.93, "loanDepot park": 0.92,
-  "Truist Park": 0.91, "Petco Park": 0.90, "Nationals Park": 0.95,
-  "Comerica Park": 0.93, "Oracle Park": 0.83, "Oakland Coliseum": 0.90,
-};
-
-function getMlbParkFactor(venueName: string): number {
-  if (!venueName) return 1.0;
-  for (const [k, v] of Object.entries(MLB_PARK_FACTORS)) {
-    if (venueName.toLowerCase().includes(k.toLowerCase().split(" ")[0])) return v;
-  }
-  return 1.0;
-}
-
-// ── MLB 20-Factor Player Prop Confidence Engine ─────────────
-// Replaces the generic calculateConfidence for MLB player props.
-// Uses 20 baseball-specific factors with pitcher/batter detection.
+// ── MLB verified-context player prop heuristic engine ────────
 
 interface MlbFactorResult {
   name: string;
@@ -2354,7 +2293,16 @@ interface MlbFactorResult {
 }
 
 interface MlbContextData {
-  // Game-level data (fetched from scoreboard)
+  intelligence?: MlbGameIntelligence;
+  playerSide?: "home" | "away";
+  opponentSide?: "home" | "away";
+  playerPitcher?: MlbGameIntelligence["pitchers"]["home"];
+  opposingPitcher?: MlbGameIntelligence["pitchers"]["home"];
+  opponentLineup?: MlbGameIntelligence["lineups"]["home"];
+  ownLineup?: MlbGameIntelligence["lineups"]["home"];
+  listedBatter?: MlbGameIntelligence["lineups"]["home"]["batters"][number] | null;
+  opponentTeam?: MlbGameIntelligence["teamStats"]["home"];
+  ownBullpen?: MlbGameIntelligence["bullpen"]["home"];
   venue?: string;
   weather?: { temperature?: number; wind?: { speed?: number; direction?: string } };
   gameTime?: string;
@@ -2362,7 +2310,7 @@ interface MlbContextData {
   oppBullpenERA?: number;
   oppTeamKRate?: number;
   oppTeamOPS?: number;
-  teamMomentum?: string[]; // last 5 W/L
+  teamMomentum?: string[];
   restDays?: number;
   playerHand?: string;
 }
@@ -2384,38 +2332,52 @@ const MLB_BATTER_WEIGHTS: Record<string, number> = {
   player_injury_status: 0.03,
   opp_bullpen_era: 0.03,
   season_avg_vs_line: 0.03,
-  batting_order_stability: 0.02,
-  day_night_split: 0.02,
+  batting_order_stability: 0.00,
+  day_night_split: 0.00,
   weather_temp: 0.01,
-  team_momentum: 0.01,
-  rest_days: 0.01,
+  team_momentum: 0.00,
+  rest_days: 0.00,
   mlb_variance_regression: 0.00, // applied post-calc
 };
 
-// Pitcher weights (for strikeouts)
-const MLB_PITCHER_WEIGHTS: Record<string, number> = {
-  season_hit_rate: 0.15,
-  prev_season_hit_rate: 0.05,
-  player_context_risk: 0.03,
-  last_10_trend: 0.12,
-  last_5_hot_cold: 0.08,
-  h2h_vs_opponent: 0.08,
-  home_away_split: 0.05,
-  vs_opp_team_k_rate: 0.08,
-  vs_opp_team_ops: 0.06,
-  lineup_handedness: 0.05,
-  park_factor: 0.03,
-  lineup_protection: 0.02,
-  player_injury_status: 0.03,
-  opp_bullpen_era: 0.00,
-  season_avg_vs_line: 0.04,
-  batting_order_stability: 0.02,
-  day_night_split: 0.02,
-  weather_temp: 0.02,
-  team_momentum: 0.02,
-  rest_days: 0.04,
-  mlb_variance_regression: 0.00,
+const MLB_PITCHER_PROP_WEIGHTS: Record<string, Record<string, number>> = {
+  pitcher_strikeouts: {
+    season_hit_rate: 0.18, prev_season_hit_rate: 0.04, last_10_trend: 0.12, last_5_hot_cold: 0.08,
+    h2h_vs_opponent: 0.04, home_away_split: 0.04, vs_opp_team_k_rate: 0.14, vs_opp_team_ops: 0.07,
+    vs_opp_team_walk_rate: 0, lineup_handedness: 0.06, pitch_type_matchup: 0.08,
+    pitcher_workload: 0.08, bullpen_availability: 0.02, park_factor: 0, weather_temp: 0,
+    player_injury_status: 0.02,
+  },
+  hits_allowed: {
+    season_hit_rate: 0.20, prev_season_hit_rate: 0.04, last_10_trend: 0.12, last_5_hot_cold: 0.08,
+    h2h_vs_opponent: 0.04, home_away_split: 0.04, vs_opp_team_k_rate: 0.06, vs_opp_team_ops: 0.14,
+    vs_opp_team_walk_rate: 0, lineup_handedness: 0.08, pitch_type_matchup: 0.06,
+    pitcher_workload: 0.08, bullpen_availability: 0.03, park_factor: 0.05, weather_temp: 0.03,
+    player_injury_status: 0.02,
+  },
+  earned_runs: {
+    season_hit_rate: 0.18, prev_season_hit_rate: 0.04, last_10_trend: 0.10, last_5_hot_cold: 0.08,
+    h2h_vs_opponent: 0.04, home_away_split: 0.04, vs_opp_team_k_rate: 0.04, vs_opp_team_ops: 0.17,
+    vs_opp_team_walk_rate: 0.05, lineup_handedness: 0.08, pitch_type_matchup: 0.05,
+    pitcher_workload: 0.06, bullpen_availability: 0.04, park_factor: 0.07, weather_temp: 0.04,
+    player_injury_status: 0.02,
+  },
+  walks_allowed: {
+    season_hit_rate: 0.22, prev_season_hit_rate: 0.05, last_10_trend: 0.14, last_5_hot_cold: 0.10,
+    h2h_vs_opponent: 0.04, home_away_split: 0.05, vs_opp_team_k_rate: 0, vs_opp_team_ops: 0.05,
+    vs_opp_team_walk_rate: 0.18, lineup_handedness: 0.06, pitch_type_matchup: 0,
+    pitcher_workload: 0.07, bullpen_availability: 0.02, park_factor: 0, weather_temp: 0,
+    player_injury_status: 0.02,
+  },
+  outs_recorded: {
+    season_hit_rate: 0.18, prev_season_hit_rate: 0.04, last_10_trend: 0.10, last_5_hot_cold: 0.06,
+    h2h_vs_opponent: 0.03, home_away_split: 0.03, vs_opp_team_k_rate: 0.08, vs_opp_team_ops: 0.11,
+    vs_opp_team_walk_rate: 0.05, lineup_handedness: 0.06, pitch_type_matchup: 0.06,
+    pitcher_workload: 0.18, bullpen_availability: 0.07, park_factor: 0.03, weather_temp: 0,
+    player_injury_status: 0.02,
+  },
 };
+MLB_PITCHER_PROP_WEIGHTS.innings_pitched = MLB_PITCHER_PROP_WEIGHTS.outs_recorded;
 
 function scoreMlbFactor(val: number, line: number, ou: string): number {
   // Generic: how well does val compare to line for the given direction
@@ -2437,122 +2399,309 @@ function scoreMlbHitRate(rate: number): number {
   return Math.max(0, Math.min(100, rate));
 }
 
-async function fetchMlbGameContext(
-  teamAbbr: string,
-  oppAbbr: string,
-  playerId: string,
-  cfg: EspnConfig,
-): Promise<MlbContextData> {
-  const ctx: MlbContextData = {};
-  
-  try {
-    // Fetch scoreboard for game context
-    const sbResp = await fetch(`${cfg.base}/scoreboard`);
-    const sbData = await sbResp.json();
-    
-    for (const event of sbData?.events || []) {
-      const comp = event?.competitions?.[0];
-      if (!comp) continue;
-      const competitors = comp.competitors || [];
-      const homeTeam = competitors.find((c: any) => c.homeAway === "home");
-      const awayTeam = competitors.find((c: any) => c.homeAway === "away");
-      
-      const homeAbbr = homeTeam?.team?.abbreviation?.toUpperCase();
-      const awayAbbr = awayTeam?.team?.abbreviation?.toUpperCase();
-      const tUpper = teamAbbr.toUpperCase();
-      const oUpper = oppAbbr.toUpperCase();
-      
-      if ((homeAbbr === tUpper || awayAbbr === tUpper) || 
-          (homeAbbr === oUpper || awayAbbr === oUpper)) {
-        ctx.venue = comp.venue?.fullName || "";
-        ctx.weather = comp.weather || undefined;
-        ctx.gameTime = event.date || "";
-        
-        // Get opposing SP
-        const isHome = homeAbbr === tUpper;
-        const oppComp = isHome ? awayTeam : homeTeam;
-        const probable = oppComp?.probables?.[0];
-        if (probable) {
-          const spStats = probable.statistics || [];
-          const era = spStats.find((s: any) => s.name === "ERA" || s.abbreviation === "ERA");
-          const k9 = spStats.find((s: any) => s.name === "K/9" || s.abbreviation === "K/9" || s.name === "strikeoutsPerNineInnings");
-          const whip = spStats.find((s: any) => s.name === "WHIP" || s.abbreviation === "WHIP");
-          ctx.opposingSP = {
-            name: probable.athlete?.displayName || "TBD",
-            era: parseFloat(era?.value || era?.displayValue || "4.50") || 4.50,
-            k9: parseFloat(k9?.value || k9?.displayValue || "8.0") || 8.0,
-            whip: parseFloat(whip?.value || whip?.displayValue || "1.30") || 1.30,
-          };
-        }
-        break;
-      }
-    }
-    
-    // Fetch player handedness
-    try {
-      const pResp = await fetch(`${cfg.core}/athletes/${playerId}`);
-      const pData = await pResp.json();
-      ctx.playerHand = pData?.hand?.abbreviation || pData?.batHand?.abbreviation || "R";
-      // Try to get throwing hand for pitchers
-      if (pData?.throwHand?.abbreviation) {
-        ctx.playerHand = pData.throwHand.abbreviation;
-      }
-    } catch {}
-    
-    // Fetch opponent team stats for bullpen ERA, K rate, OPS
-    if (oppAbbr) {
-      try {
-        const teamsResp = await fetch(`${cfg.base}/teams?limit=50`);
-        const teamsData = await teamsResp.json();
-        const allTeams = teamsData?.sports?.[0]?.leagues?.[0]?.teams || [];
-        let oppTeamId = "";
-        for (const t of allTeams) {
-          if ((t.team?.abbreviation || t.abbreviation || "").toUpperCase() === oppAbbr.toUpperCase()) {
-            oppTeamId = String(t.team?.id || t.id);
-            break;
-          }
-        }
-        if (oppTeamId) {
-          const [statsResp, schedResp] = await Promise.all([
-            fetch(`${cfg.base}/teams/${oppTeamId}/statistics`),
-            fetch(`${cfg.base}/teams/${oppTeamId}/schedule`),
-          ]);
-          
-          if (statsResp.ok) {
-            const statsData = await statsResp.json();
-            const stats: Record<string, number> = {};
-            for (const cat of statsData.splits?.categories || []) {
-              for (const s of cat.stats || []) {
-                stats[s.name] = parseFloat(s.value) || 0;
-              }
-            }
-            ctx.oppBullpenERA = stats.ERA || stats.bullpenERA || 4.00;
-            ctx.oppTeamKRate = stats.strikeoutRate || stats.strikeouts || 22;
-            ctx.oppTeamOPS = stats.OPS || stats.ops || 0.710;
-          }
-          
-          if (schedResp.ok) {
-            const schedData = await schedResp.json();
-            const events = schedData.events || [];
-            const completed = events.filter((e: any) => e.competitions?.[0]?.status?.type?.name === "STATUS_FINAL").slice(-5);
-            ctx.teamMomentum = completed.map((ev: any) => {
-              const tc = ev.competitions[0].competitors?.find((c: any) => String(c.team?.id || c.id) === oppTeamId);
-              return tc?.winner ? "W" : "L";
-            });
-            // Rest days
-            if (completed.length > 0) {
-              const lastDate = new Date(completed[completed.length - 1].date);
-              ctx.restDays = Math.floor((Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
-            }
-          }
-        }
-      } catch {}
-    }
-  } catch (e) {
-    console.error("MLB context fetch error:", e);
+function normalizeMlbPlayerName(value: unknown): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[.'’\-]/g, " ")
+    .replace(/\b(jr|sr|ii|iii|iv)\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function fetchVerifiedMlbGameContext(args: {
+  teamAbbr: string;
+  opponentAbbr: string;
+  playerName: string;
+  isPitcher: boolean;
+  gameDate?: string | null;
+}): Promise<MlbContextData> {
+  const intelligence = await fetchMlbGameIntelligence({
+    teamAbbr: args.teamAbbr,
+    opponentAbbr: args.opponentAbbr,
+    gameDate: args.gameDate,
+    focusPitcherName: args.isPitcher ? args.playerName : null,
+    includePitchTypes: args.isPitcher,
+  });
+  const teamAbbr = args.teamAbbr.toUpperCase();
+  if (intelligence.home.abbreviation !== teamAbbr && intelligence.away.abbreviation !== teamAbbr) {
+    throw new Error(`Verified MLB game does not contain player team ${teamAbbr}`);
   }
-  
-  return ctx;
+  const playerSide: "home" | "away" = intelligence.home.abbreviation === teamAbbr ? "home" : "away";
+  const opponentSide: "home" | "away" = playerSide === "home" ? "away" : "home";
+  const playerPitcher = intelligence.pitchers[playerSide];
+  const opposingPitcher = intelligence.pitchers[opponentSide];
+  const opponentLineup = intelligence.lineups[opponentSide];
+  const opponentTeam = intelligence.teamStats[opponentSide];
+  const ownBullpen = intelligence.bullpen[playerSide];
+  const ownLineup = intelligence.lineups[playerSide];
+  const listedPlayer = ownLineup.batters.find((batter) =>
+    normalizeMlbPlayerName(batter.name) === normalizeMlbPlayerName(args.playerName)
+  );
+  const weather = intelligence.weather;
+  return {
+    intelligence,
+    playerSide,
+    opponentSide,
+    playerPitcher,
+    opposingPitcher,
+    opponentLineup,
+    opponentTeam,
+    ownBullpen,
+    ownLineup,
+    listedBatter: listedPlayer || null,
+    venue: intelligence.venue.name || undefined,
+    weather: weather ? {
+      temperature: weather.temperatureF ?? undefined,
+      wind: { speed: weather.windMph ?? undefined, direction: weather.windDirection ?? undefined },
+    } : undefined,
+    gameTime: intelligence.gameDate,
+    opposingSP: opposingPitcher?.season ? {
+      name: opposingPitcher.name,
+      era: opposingPitcher.season.era,
+      k9: opposingPitcher.season.k9,
+      whip: opposingPitcher.season.whip,
+      hand: opposingPitcher.hand || undefined,
+    } : undefined,
+    oppBullpenERA: opponentTeam.bullpenEra ?? undefined,
+    oppTeamKRate: (opponentLineup.confirmed ? opponentLineup.strikeoutRate : null)
+      ?? opponentTeam.splitVsPitcherHand?.strikeoutRate
+      ?? opponentTeam.strikeoutRate
+      ?? undefined,
+    oppTeamOPS: (opponentLineup.confirmed ? opponentLineup.ops : null)
+      ?? opponentTeam.splitVsPitcherHand?.ops
+      ?? opponentTeam.ops
+      ?? undefined,
+    restDays: playerPitcher?.workload.daysRest ?? undefined,
+    playerHand: args.isPitcher ? playerPitcher?.hand || undefined : listedPlayer?.batSide || undefined,
+  };
+}
+
+function directionalMlbScore(overScore: number, direction: string): number {
+  const clamped = Math.max(0, Math.min(100, overScore));
+  return direction === "under" ? 100 - clamped : clamped;
+}
+
+function calculateVerifiedMlbPitcherScore(data: any, weights: Record<string, number>) {
+  const reasoning: string[] = [];
+  const factors: MlbFactorResult[] = [];
+  const direction = data.over_under;
+  const line = Number(data.line);
+  const propType = String(data.prop_type || "");
+  const isStrikeoutProp = propType === "pitcher_strikeouts";
+  const isWalkProp = propType === "walks_allowed";
+  const isOutsProp = propType === "outs_recorded" || propType === "innings_pitched";
+  const isRunPreventionProp = propType === "hits_allowed" || propType === "earned_runs";
+  const currentGames: GameRow[] = data.current_season_games || [];
+  const previousGames: GameRow[] = data.prev_season_games || [];
+  const currentValues = currentGames.map((game) => getStatValue(game, data.prop_type)).filter(Number.isFinite);
+  const previousValues = previousGames.map((game) => getStatValue(game, data.prop_type)).filter(Number.isFinite);
+  const addRateFactor = (name: string, label: string, values: number[], weight: number) => {
+    if (!weight || values.length < 3) return;
+    const rate = hitRate(values, line, direction);
+    factors.push({ name, label, score: scoreMlbHitRate(rate.rate), weight, detail: `${rate.rate}% (${rate.hits}/${rate.total}), avg ${avg(values)}` });
+  };
+
+  addRateFactor("season_hit_rate", "Current Season Results", currentValues, weights.season_hit_rate);
+  addRateFactor("prev_season_hit_rate", `${new Date().getFullYear() - 1} Results`, previousValues, weights.prev_season_hit_rate);
+  addRateFactor("last_10_trend", "Last 10 Starts", currentValues.slice(-10), weights.last_10_trend);
+  addRateFactor("last_5_hot_cold", "Last 5 Starts", currentValues.slice(-5), weights.last_5_hot_cold);
+
+  const h2hValues = (data.head_to_head?.games || [])
+    .map((game: any) => Number(game.stat_value))
+    .filter(Number.isFinite);
+  addRateFactor("h2h_vs_opponent", `vs ${data.head_to_head?.opponent || "Opponent"}`, h2hValues, weights.h2h_vs_opponent);
+  const homeAwayValues = currentGames
+    .filter((game) => data.home_away?.location === "home" ? game.isHome : !game.isHome)
+    .map((game) => getStatValue(game, data.prop_type))
+    .filter(Number.isFinite);
+  addRateFactor("home_away_split", `${String(data.home_away?.location || "Venue").toUpperCase()} Split`, homeAwayValues, weights.home_away_split);
+
+  const injuries = data.player_injuries || [];
+  if (injuries.length > 0) {
+    const status = String(injuries[0]?.status || "").toLowerCase();
+    if (["out", "doubtful", "injured list", "il"].some((token) => status.includes(token))) {
+      return {
+        confidence: 0,
+        reasoning: [`Player status is ${String(injuries[0]?.status || "unavailable")}; pitching prop blocked.`],
+        factors: [],
+        prevSeasonUsed: previousValues.length > 0,
+        consensusFloorApplied: false,
+        playerIsOut: true,
+        dataQuality: { missing: ["PLAYER_UNAVAILABLE"], shrinkFactor: 0 },
+      };
+    }
+    factors.push({ name: "player_injury_status", label: "Pitcher Availability", score: 35, weight: weights.player_injury_status, detail: String(injuries[0]?.status || "Status concern") });
+  } else if (weights.player_injury_status > 0) {
+    factors.push({ name: "player_injury_status", label: "Pitcher Availability", score: 50, weight: weights.player_injury_status, detail: "No active injury listing" });
+  }
+
+  const ctx: MlbContextData = data.mlb_context || {};
+  const intelligence = ctx.intelligence;
+  const missing = [...(intelligence?.missing || [])].filter((flag) => {
+    if (flag === "CURRENT_PARK_FACTOR_MISSING") return weights.park_factor > 0;
+    if (flag === "WEATHER_MISSING") return weights.weather_temp > 0;
+    if (flag === "PITCH_TYPE_MATCHUP_INSUFFICIENT") return weights.pitch_type_matchup > 0;
+    return true;
+  });
+  const profile = ctx.playerPitcher;
+  const playerName = normalizeMlbPlayerName(data.player?.full_name);
+  const profileMatches = Boolean(profile && normalizeMlbPlayerName(profile.name) === playerName);
+  if (!profileMatches) {
+    missing.push("PITCHER_NOT_CONFIRMED_AS_PROBABLE_STARTER");
+  }
+  const lineup = ctx.opponentLineup;
+  const team = ctx.opponentTeam;
+  const splitK = team?.splitVsPitcherHand?.strikeoutRate ?? null;
+  const lineupK = lineup?.confirmed ? lineup.strikeoutRate : null;
+  const kRate = lineupK ?? splitK ?? team?.strikeoutRate ?? null;
+  if (weights.vs_opp_team_k_rate > 0 && kRate !== null && Number.isFinite(kRate)) {
+    const overScore = isStrikeoutProp || isOutsProp
+      ? 50 + (kRate - 22) * 3
+      : 50 + (22 - kRate) * 3;
+    factors.push({
+      name: "vs_opp_team_k_rate",
+      label: lineupK !== null ? "Confirmed Lineup K Rate" : splitK !== null ? `Team K Rate vs ${profile?.hand || "Pitcher"}` : "Opponent Team K Rate",
+      score: directionalMlbScore(overScore, direction),
+      weight: weights.vs_opp_team_k_rate,
+      detail: `${kRate.toFixed(1)}% (${lineupK !== null ? "confirmed lineup" : splitK !== null ? `${team?.splitVsPitcherHand?.plateAppearances} PA hand split` : "season team rate"})`,
+    });
+  } else if (weights.vs_opp_team_k_rate > 0) missing.push("OPPONENT_K_RATE_MISSING");
+
+  const lineupOps = lineup?.confirmed ? lineup.ops : null;
+  const splitOps = team?.splitVsPitcherHand?.ops ?? null;
+  const opponentOps = lineupOps ?? splitOps ?? team?.ops ?? null;
+  if (weights.vs_opp_team_ops > 0 && opponentOps !== null && Number.isFinite(opponentOps)) {
+    const overScore = isStrikeoutProp || isOutsProp
+      ? 50 + (0.710 - opponentOps) * 150
+      : 50 + (opponentOps - 0.710) * 150;
+    factors.push({ name: "vs_opp_team_ops", label: "Opponent OPS Matchup", score: directionalMlbScore(overScore, direction), weight: weights.vs_opp_team_ops, detail: `${opponentOps.toFixed(3)} OPS` });
+  } else if (weights.vs_opp_team_ops > 0) missing.push("OPPONENT_OPS_MISSING");
+
+  const lineupWalkRate = lineup?.confirmed ? lineup.walkRate : null;
+  const splitWalkRate = team?.splitVsPitcherHand?.walkRate ?? null;
+  const opponentWalkRate = lineupWalkRate ?? splitWalkRate ?? team?.walkRate ?? null;
+  if (weights.vs_opp_team_walk_rate > 0 && opponentWalkRate !== null && Number.isFinite(opponentWalkRate)) {
+    const overScore = isOutsProp ? 50 + (8.5 - opponentWalkRate) * 4 : 50 + (opponentWalkRate - 8.5) * 4;
+    factors.push({
+      name: "vs_opp_team_walk_rate",
+      label: lineupWalkRate !== null ? "Confirmed Lineup Walk Rate" : "Opponent Walk Rate",
+      score: directionalMlbScore(overScore, direction),
+      weight: weights.vs_opp_team_walk_rate,
+      detail: `${opponentWalkRate.toFixed(1)}%`,
+    });
+  } else if (weights.vs_opp_team_walk_rate > 0) missing.push("OPPONENT_WALK_RATE_MISSING");
+
+  if (weights.lineup_handedness > 0 && lineup?.confirmed) {
+    const lineupMetric = isStrikeoutProp
+      ? lineupK
+      : isWalkProp ? lineupWalkRate : lineupOps;
+    const splitMetric = isStrikeoutProp
+      ? splitK
+      : isWalkProp ? splitWalkRate : splitOps;
+    if (lineupMetric !== null && splitMetric !== null) {
+    const rawDifferenceScore = 50 + (lineupMetric - splitMetric) * (isStrikeoutProp || isWalkProp ? 3 : 150);
+    const overScore = isOutsProp ? 100 - rawDifferenceScore : rawDifferenceScore;
+    const hand = profile?.hand || "unknown";
+    factors.push({
+      name: "lineup_handedness",
+      label: "Confirmed Lineup / Handedness",
+      score: directionalMlbScore(overScore, direction),
+      weight: weights.lineup_handedness,
+      detail: `${lineup.handedness.left}L/${lineup.handedness.right}R/${lineup.handedness.switch}S vs ${hand}HP; lineup metric ${lineupMetric.toFixed(3)} vs hand split ${splitMetric.toFixed(3)}`,
+    });
+    } else missing.push("CONFIRMED_LINEUP_HANDEDNESS_MISSING");
+  } else if (weights.lineup_handedness > 0) missing.push("CONFIRMED_LINEUP_HANDEDNESS_MISSING");
+
+  const pitchType = intelligence?.pitchTypeMatchup;
+  if (pitchType && weights.pitch_type_matchup > 0) {
+    const overScore = isRunPreventionProp ? 100 - pitchType.score : pitchType.score;
+    factors.push({
+      name: "pitch_type_matchup",
+      label: "Pitch-Type Matchup",
+      score: directionalMlbScore(overScore, direction),
+      weight: weights.pitch_type_matchup,
+      detail: `${pitchType.opponentWhiffRateOnMix.toFixed(1)}% whiff on mix vs ${pitchType.opponentOverallWhiffRate.toFixed(1)}% overall (${pitchType.pitcherPitches} pitcher pitches, ${pitchType.opponentSwings} opponent swings)`,
+    });
+  } else if (weights.pitch_type_matchup > 0) missing.push("PITCH_TYPE_MATCHUP_INSUFFICIENT");
+
+  if (profile && profile.workload.avgPitchesLast3 !== null && profile.workload.avgOutsLast3 !== null) {
+    const rest = profile.workload.daysRest;
+    const pitchScore = profile.workload.avgPitchesLast3 >= 90 ? 60 : profile.workload.avgPitchesLast3 >= 75 ? 50 : 35;
+    const outsScore = profile.workload.avgOutsLast3 >= 18 ? 60 : profile.workload.avgOutsLast3 >= 15 ? 50 : 35;
+    const restScore = rest === null ? 50 : rest < 4 ? 30 : rest <= 6 ? 58 : 52;
+    const overScore = (pitchScore + outsScore + restScore) / 3;
+    factors.push({
+      name: "pitcher_workload",
+      label: "Pitcher Workload / Leash",
+      score: directionalMlbScore(overScore, direction),
+      weight: weights.pitcher_workload,
+      detail: `L3 ${profile.workload.avgPitchesLast3} pitches, ${profile.workload.avgOutsLast3} outs; ${rest ?? "unknown"} full rest day(s)`,
+    });
+  } else missing.push("PITCHER_WORKLOAD_MISSING");
+
+  if (ctx.ownBullpen?.freshnessScore !== null && ctx.ownBullpen?.freshnessScore !== undefined) {
+    const overScore = 100 - ctx.ownBullpen.freshnessScore;
+    factors.push({
+      name: "bullpen_availability",
+      label: "Bullpen Availability",
+      score: directionalMlbScore(overScore, direction),
+      weight: weights.bullpen_availability,
+      detail: `${ctx.ownBullpen.taxedRelievers.length} taxed reliever(s); ${ctx.ownBullpen.pitchesYesterday} bullpen pitches yesterday`,
+    });
+  }
+
+  const park = intelligence?.parkFactor;
+  if (park && weights.park_factor > 0) {
+    const runEnvironmentScore = 50 + (park.runFactor - 1) * 100;
+    const overScore = isOutsProp ? 100 - runEnvironmentScore : runEnvironmentScore;
+    factors.push({ name: "park_factor", label: "Current Park Run Factor", score: directionalMlbScore(overScore, direction), weight: weights.park_factor, detail: `${park.runFactor.toFixed(3)} (${park.homeGames} home / ${park.roadGames} road games, as of ${park.asOf})` });
+  } else if (weights.park_factor > 0) missing.push("CURRENT_PARK_FACTOR_MISSING");
+
+  const weather = intelligence?.weather;
+  const roofClosed = String(weather?.roofType || "").toLowerCase().includes("closed");
+  if (weights.weather_temp > 0 && weather?.temperatureF !== null && weather?.temperatureF !== undefined && !roofClosed) {
+    const runEnvironmentScore = weather.temperatureF >= 85 ? 60 : weather.temperatureF <= 55 ? 42 : 50;
+    const overScore = isOutsProp ? 100 - runEnvironmentScore : runEnvironmentScore;
+    factors.push({ name: "weather_temp", label: "Verified Game Weather", score: directionalMlbScore(overScore, direction), weight: weights.weather_temp, detail: `${weather.temperatureF}F, ${weather.windMph ?? "?"} mph ${weather.windDirection || "direction unknown"}` });
+  } else if (weights.weather_temp > 0 && !roofClosed) missing.push("WEATHER_MISSING");
+
+  let weightedSum = 0;
+  let totalWeight = 0;
+  for (const factor of factors) {
+    if (!Number.isFinite(factor.score) || !Number.isFinite(factor.weight) || factor.weight <= 0) continue;
+    weightedSum += factor.score * factor.weight;
+    totalWeight += factor.weight;
+  }
+  if (totalWeight < 0.45 || !profileMatches || !profile) {
+    return {
+      confidence: 0,
+      reasoning: ["Verified pitching context is incomplete; no pitcher score was issued.", ...missing.map((flag) => `Missing: ${flag}`)],
+      factors,
+      prevSeasonUsed: previousValues.length > 0,
+      consensusFloorApplied: false,
+      dataQuality: { missing: [...new Set(missing)], shrinkFactor: 0 },
+    };
+  }
+
+  let score = weightedSum / totalWeight;
+  let shrinkFactor = 1;
+  if (currentValues.length < 5) shrinkFactor *= 0.80;
+  if (!lineup?.confirmed) shrinkFactor *= 0.85;
+  if (weights.pitch_type_matchup > 0 && !pitchType) shrinkFactor *= 0.95;
+  if (!profile.recent || profile.recent.starts < 3) shrinkFactor *= 0.80;
+  score = 50 + (score - 50) * shrinkFactor;
+  const confidence = Math.max(0, Math.min(100, Math.round(score)));
+  reasoning.push(`MLB heuristic score: ${confidence}/100 from ${factors.filter((factor) => factor.weight > 0).length} verified factors.`);
+  if (missing.length) reasoning.push(`Data-quality shrink ${shrinkFactor.toFixed(2)}; unavailable inputs: ${[...new Set(missing)].join(", ")}.`);
+  return {
+    confidence,
+    reasoning,
+    factors,
+    prevSeasonUsed: previousValues.length > 0,
+    consensusFloorApplied: false,
+    dataQuality: { missing: [...new Set(missing)], shrinkFactor },
+  };
 }
 
 async function calculateMlbPropConfidence(data: any): Promise<{
@@ -2562,6 +2711,7 @@ async function calculateMlbPropConfidence(data: any): Promise<{
   prevSeasonUsed: boolean;
   consensusFloorApplied: boolean;
   playerIsOut?: boolean;
+  dataQuality?: { missing: string[]; shrinkFactor: number };
 }> {
   const reasoning: string[] = [];
   const factors: MlbFactorResult[] = [];
@@ -2569,20 +2719,26 @@ async function calculateMlbPropConfidence(data: any): Promise<{
   
   // Detect pitcher vs batter
   const position = (data.player?.position || "").toUpperCase();
-  const isPitcher = ["SP", "RP", "CP", "CL", "P"].includes(position);
-  const baseWeights = isPitcher ? MLB_PITCHER_WEIGHTS : MLB_BATTER_WEIGHTS;
+  const isPitcher = isMlbPitcherPosition(position);
+  if (isPitcher) {
+    const pitcherWeights = MLB_PITCHER_PROP_WEIGHTS[propType] || MLB_PITCHER_PROP_WEIGHTS.pitcher_strikeouts;
+    return calculateVerifiedMlbPitcherScore(data, pitcherWeights);
+  }
+  const baseWeights = MLB_BATTER_WEIGHTS;
   // Apply prop-category specific weight overrides on top of base weights
-  const propCategory = detectMlbPropCategory(propType);
+  const propCategory = detectMlbPropCategory(propType, isPitcher);
   const categoryOverrides = MLB_PROP_WEIGHTS[propCategory] || {};
   const weights: Record<string, number> = { ...baseWeights, ...categoryOverrides };
-  const roleLabel = isPitcher ? "Pitcher" : "Batter";
-  reasoning.push(`⚾ MLB 20-Factor ${roleLabel} Model [${propCategory}] — ${data.player?.full_name || "Unknown"}`);
+  const roleLabel = "Batter";
+  reasoning.push(`⚾ MLB verified-factor ${roleLabel} model [${propCategory}] — ${data.player?.full_name || "Unknown"}`);
   
   // Previous season blending
   const currentGames = data.current_season_games || [];
   const prevGames = data.prev_season_games || [];
   const currentCount = currentGames.length;
   const prevCount = prevGames.length;
+  const currentSeasonLabel = new Date().getFullYear();
+  const previousSeasonLabel = currentSeasonLabel - 1;
   let prevSeasonUsed = false;
   
   // Graduated season blending — smooth curve from 30% to 95% based on games played
@@ -2590,7 +2746,7 @@ async function calculateMlbPropConfidence(data: any): Promise<{
   let weightPrev = 1 - weightCurrent;
   
   // Player Context Risk detection
-  let contextRiskScore = 55; // neutral default
+  let contextRiskScore = 50;
   let contextRiskDetail = "No risk flags detected";
   let contextRiskFlag = "";
   
@@ -2612,15 +2768,15 @@ async function calculateMlbPropConfidence(data: any): Promise<{
       const teamAppearedInPrev = prevTeams.has(playerTeam);
       if (!teamAppearedInPrev && prevTeams.size > 0) {
         contextRiskScore = 35;
-        contextRiskDetail = "Player changed teams — 2024 data less relevant";
+        contextRiskDetail = `Player changed teams — ${previousSeasonLabel} data less relevant`;
         contextRiskFlag = "team_change";
       }
     }
     
     // Detect extended absence (30+ day gap beyond normal offseason)
     if (!contextRiskFlag && currentCount > 0) {
-      const currentDates = currentGames.map((g: GameRow) => new Date((g as Record<string, unknown>).game_date as string || "").getTime()).filter((d: number) => !isNaN(d)).sort((a: number, b: number) => a - b);
-      const prevDates = prevGames.map((g: GameRow) => new Date((g as Record<string, unknown>).game_date as string || "").getTime()).filter((d: number) => !isNaN(d)).sort((a: number, b: number) => a - b);
+      const currentDates = currentGames.map((g: GameRow) => new Date(g.date || "").getTime()).filter((d: number) => !isNaN(d)).sort((a: number, b: number) => a - b);
+      const prevDates = prevGames.map((g: GameRow) => new Date(g.date || "").getTime()).filter((d: number) => !isNaN(d)).sort((a: number, b: number) => a - b);
       if (currentDates.length > 0 && prevDates.length > 0) {
         const firstCurrent = currentDates[0];
         const lastPrev = prevDates[prevDates.length - 1];
@@ -2640,7 +2796,7 @@ async function calculateMlbPropConfidence(data: any): Promise<{
       const isMidSeason = now.getMonth() >= 4 && now.getDate() >= 15; // After May 15
       if (isMidSeason && prevCount >= 100 && currentCount < 5) {
         contextRiskScore = 30;
-        contextRiskDetail = `Sample size collapse — ${prevCount} games in 2024 but only ${currentCount} in 2025`;
+        contextRiskDetail = `Sample size collapse — ${prevCount} games in ${previousSeasonLabel} but only ${currentCount} in ${currentSeasonLabel}`;
         contextRiskFlag = "sample_collapse";
       }
     }
@@ -2650,17 +2806,17 @@ async function calculateMlbPropConfidence(data: any): Promise<{
       const originalPrev = weightPrev;
       weightPrev = weightPrev * 0.5;
       weightCurrent = 1 - weightPrev;
-      reasoning.push(`📊 Season blend: ${Math.round(weightCurrent * 100)}% 2025 (${currentCount}G) / ${Math.round(weightPrev * 100)}% 2024 (${prevCount}G)`);
-      reasoning.push(`⚠️ Context risk: ${contextRiskDetail} — reducing 2024 weight (${Math.round(originalPrev * 100)}% → ${Math.round(weightPrev * 100)}%)`);
+      reasoning.push(`📊 Season blend: ${Math.round(weightCurrent * 100)}% ${currentSeasonLabel} (${currentCount}G) / ${Math.round(weightPrev * 100)}% ${previousSeasonLabel} (${prevCount}G)`);
+      reasoning.push(`⚠️ Context risk: ${contextRiskDetail} — reducing ${previousSeasonLabel} weight (${Math.round(originalPrev * 100)}% → ${Math.round(weightPrev * 100)}%)`);
     } else {
-      reasoning.push(`📊 Season blend: ${Math.round(weightCurrent * 100)}% 2025 (${currentCount}G) / ${Math.round(weightPrev * 100)}% 2024 (${prevCount}G)`);
+      reasoning.push(`📊 Season blend: ${Math.round(weightCurrent * 100)}% ${currentSeasonLabel} (${currentCount}G) / ${Math.round(weightPrev * 100)}% ${previousSeasonLabel} (${prevCount}G)`);
     }
   }
   
   // Helper to compute blended values
   const allGames = data.all_games || currentGames;
-  const statValues = allGames.map((g: GameRow) => getStatValue(g, propType));
-  const prevStatValues = prevGames.map((g: GameRow) => getStatValue(g, propType));
+  const statValues = allGames.map((g: GameRow) => getStatValue(g, propType)).filter(Number.isFinite);
+  const prevStatValues = prevGames.map((g: GameRow) => getStatValue(g, propType)).filter(Number.isFinite);
   
   // ── FACTOR 1: Season Hit Rate (current) ──
   const seasonHR = data.season_hit_rate;
@@ -2677,14 +2833,14 @@ async function calculateMlbPropConfidence(data: any): Promise<{
     const prevAvg = avg(prevStatValues);
     const score = scoreMlbHitRate(prevHR.rate);
     const wName = isPitcher ? "prev_season_hit_rate" : "prev_season_hit_rate";
-    factors.push({ name: wName, label: "2024 Season Hit Rate", score, weight: weights.prev_season_hit_rate, detail: `${prevHR.rate}% (${prevHR.hits}/${prevHR.total}, avg ${prevAvg})` });
-    reasoning.push(`2024 season: ${prevHR.rate}% hit rate (avg ${prevAvg} in ${prevStatValues.length} games)`);
-  } else {
-    factors.push({ name: "prev_season_hit_rate", label: "2024 Season Hit Rate", score: 50, weight: weights.prev_season_hit_rate, detail: "No previous season data" });
+    factors.push({ name: wName, label: `${previousSeasonLabel} Season Hit Rate`, score, weight: weights.prev_season_hit_rate, detail: `${prevHR.rate}% (${prevHR.hits}/${prevHR.total}, avg ${prevAvg})` });
+    reasoning.push(`${previousSeasonLabel} season: ${prevHR.rate}% hit rate (avg ${prevAvg} in ${prevStatValues.length} games)`);
   }
   
   // ── FACTOR 2b: Player Context Risk ──
-  factors.push({ name: "player_context_risk", label: "Player Context Risk", score: contextRiskScore, weight: weights.player_context_risk || 0.03, detail: contextRiskDetail });
+  if (contextRiskFlag && weights.player_context_risk > 0) {
+    factors.push({ name: "player_context_risk", label: "Player Context Risk", score: contextRiskScore, weight: weights.player_context_risk, detail: contextRiskDetail });
+  }
   
 
   const l10 = data.last_10;
@@ -2715,13 +2871,11 @@ async function calculateMlbPropConfidence(data: any): Promise<{
     if (prevH2H?.total > 0) {
       const blended = Math.round(h2h.rate * weightCurrent + prevH2H.rate * weightPrev);
       h2hScore = scoreMlbHitRate(blended);
-      detail += ` | 2024: ${prevH2H.rate}% (${prevH2H.total}G) → blended ${blended}%`;
+      detail += ` | ${previousSeasonLabel}: ${prevH2H.rate}% (${prevH2H.total}G) → blended ${blended}%`;
     }
     factors.push({ name: "h2h_vs_opponent", label: `vs ${h2h.opponent || "Opponent"}`, score: h2hScore, weight: weights.h2h_vs_opponent, detail });
     if (h2h.rate >= 70) reasoning.push(`Dominates vs ${h2h.opponent}: ${h2h.rate}%`);
     else if (h2h.rate < 35) reasoning.push(`⚠️ Struggles vs ${h2h.opponent}: ${h2h.rate}%`);
-  } else {
-    factors.push({ name: "h2h_vs_opponent", label: "vs Opponent", score: 50, weight: weights.h2h_vs_opponent, detail: "No H2H data" });
   }
   
   // ── FACTOR 6: Home/Away Split ──
@@ -2730,81 +2884,57 @@ async function calculateMlbPropConfidence(data: any): Promise<{
     const score = scoreMlbHitRate(ha.rate);
     factors.push({ name: "home_away_split", label: `${(ha.location || "").toUpperCase()} Split`, score, weight: weights.home_away_split, detail: `${ha.rate}% (${ha.hits}/${ha.total})` });
     if (ha.rate >= 65) reasoning.push(`${(ha.location || "").toUpperCase()} split favorable: ${ha.rate}%`);
-  } else {
-    factors.push({ name: "home_away_split", label: "Home/Away Split", score: 50, weight: weights.home_away_split, detail: "Unknown" });
   }
   
   // ── MLB CONTEXT FACTORS (7-20) ──
   const ctx: MlbContextData = data.mlb_context || {};
   
-  // Factor 7: vs Opposing SP ERA (batters) / vs Opp Team K-Rate (pitchers)
-  if (isPitcher) {
-    const oppKRate = ctx.oppTeamKRate || 22;
-    // Higher K rate for opponent = easier Ks for pitcher
-    const score = Math.max(0, Math.min(100, 50 + (oppKRate - 22) * 3));
-    factors.push({ name: "vs_opp_team_k_rate", label: "vs Opp Team K-Rate", score, weight: weights.vs_opp_team_k_rate || 0.08, detail: `Opp K-rate: ${oppKRate.toFixed(1)}%` });
-    if (oppKRate > 25) reasoning.push(`✅ Opponent strikes out a lot (${oppKRate.toFixed(1)}%)`);
-  } else {
-    const spEra = ctx.opposingSP?.era || 4.50;
-    // Higher ERA = easier for batter = higher score
+  // Factor 7: verified opposing starter ERA
+  const spEra = ctx.opposingSP?.era;
+  if (spEra !== undefined) {
     const score = Math.max(0, Math.min(100, 50 + (spEra - 4.20) * 15));
-    const spName = ctx.opposingSP?.name || "TBD";
-    factors.push({ name: "vs_opposing_sp_era", label: `vs ${spName} ERA`, score, weight: weights.vs_opposing_sp_era || 0.06, detail: `ERA: ${spEra.toFixed(2)}` });
-    if (spEra >= 5.0) reasoning.push(`✅ Facing weak SP ${spName} (${spEra.toFixed(2)} ERA)`);
-    else if (spEra <= 3.0) reasoning.push(`⚠️ Facing elite SP ${spName} (${spEra.toFixed(2)} ERA)`);
+    const spName = ctx.opposingSP?.name || "Verified starter";
+    factors.push({ name: "vs_opposing_sp_era", label: `vs ${spName} ERA`, score, weight: weights.vs_opposing_sp_era, detail: `ERA: ${spEra.toFixed(2)}` });
+    reasoning.push(`Opposing starter ${spName}: ${spEra.toFixed(2)} ERA.`);
   }
   
-  // Factor 8: vs Opposing SP K/9 (batters) / vs Opp Team OPS (pitchers)
-  if (isPitcher) {
-    const oppOPS = ctx.oppTeamOPS || 0.710;
-    // Lower OPS = worse offense = easier for pitcher
-    const score = Math.max(0, Math.min(100, 50 + (0.710 - oppOPS) * 150));
-    factors.push({ name: "vs_opp_team_ops", label: "vs Opp Team OPS", score, weight: weights.vs_opp_team_ops || 0.06, detail: `Opp OPS: ${oppOPS.toFixed(3)}` });
-  } else {
-    const spK9 = ctx.opposingSP?.k9 || 8.0;
-    // Lower K/9 = easier for batter
+  // Factor 8: verified opposing starter K/9
+  const spK9 = ctx.opposingSP?.k9;
+  if (spK9 !== undefined) {
     const score = Math.max(0, Math.min(100, 50 + (8.5 - spK9) * 8));
-    factors.push({ name: "vs_opposing_sp_k9", label: "vs SP K/9", score, weight: weights.vs_opposing_sp_k9 || 0.05, detail: `K/9: ${spK9.toFixed(1)}` });
-    if (spK9 >= 10) reasoning.push(`⚠️ SP has elite K/9 (${spK9.toFixed(1)})`);
+    factors.push({ name: "vs_opposing_sp_k9", label: "vs SP K/9", score, weight: weights.vs_opposing_sp_k9, detail: `K/9: ${spK9.toFixed(1)}` });
   }
   
   // Factor 9: Platoon Advantage (L/R)
-  if (isPitcher) {
-    // Lineup handedness composition — approximate as neutral
-    factors.push({ name: "lineup_handedness", label: "Lineup Handedness", score: 52, weight: weights.lineup_handedness || 0.05, detail: "Mixed lineup" });
-  } else {
-    const playerHand = ctx.playerHand || "R";
-    const spHand = ctx.opposingSP?.hand || "R";
-    // Opposite hand = advantage
-    const hasPlatoon = playerHand !== spHand;
-    const score = hasPlatoon ? 65 : 40;
-    factors.push({ name: "platoon_advantage", label: "L/R Platoon", score, weight: weights.platoon_advantage || 0.05, detail: `${playerHand} batter vs ${spHand} pitcher${hasPlatoon ? " ✅" : ""}` });
-    if (hasPlatoon) reasoning.push(`✅ Platoon advantage: ${playerHand} vs ${spHand}`);
+  const playerHand = ctx.playerHand;
+  const spHand = ctx.opposingSP?.hand;
+  if (playerHand && spHand) {
+    const hasPlatoon = playerHand === "S" || playerHand !== spHand;
+    const score = hasPlatoon ? 62 : 42;
+    factors.push({ name: "platoon_advantage", label: "Verified L/R Platoon", score, weight: weights.platoon_advantage, detail: `${playerHand} batter vs ${spHand} pitcher` });
   }
   
   // Factor 10: Park Factor
-  const venueName = ctx.venue || "";
-  const pf = getMlbParkFactor(venueName);
-  {
+  const parkRecord = ctx.intelligence?.parkFactor;
+  if (parkRecord && weights.park_factor > 0) {
+    const pf = parkRecord.runFactor;
     let score = 50;
     if (ou === "over") score = Math.max(0, Math.min(100, pf * 50));
     else score = Math.max(0, Math.min(100, (2 - pf) * 50));
-    factors.push({ name: "park_factor", label: "Park Factor", score, weight: weights.park_factor || 0.04, detail: `${venueName || "Unknown"}: ${pf.toFixed(2)}` });
-    if (pf >= 1.08) reasoning.push(`🏟️ Hitter-friendly park (${pf.toFixed(2)})`);
-    else if (pf <= 0.92) reasoning.push(`🏟️ Pitcher-friendly park (${pf.toFixed(2)})`);
+    factors.push({ name: "park_factor", label: "Current Park Run Factor", score, weight: weights.park_factor, detail: `${ctx.intelligence?.venue.name || "Venue"}: ${pf.toFixed(3)} (${parkRecord.homeGames}/${parkRecord.roadGames} game samples)` });
   }
   
   // Factor 11: Lineup Protection (Teammate Injuries)
   const sigInj = (data.teammate_injuries || []).filter((i: any) => ["out", "doubtful"].includes(i.status?.toLowerCase()));
-  {
-    const score = sigInj.length === 0 ? 55 : sigInj.length <= 2 ? 45 : 35;
-    factors.push({ name: "lineup_protection", label: "Lineup Protection", score, weight: weights.lineup_protection || 0.03, detail: `${sigInj.length} key teammates out` });
+  if (weights.lineup_protection > 0) {
+    const score = sigInj.length === 0 ? 50 : sigInj.length <= 2 ? 45 : 35;
+    factors.push({ name: "lineup_protection", label: "Lineup Protection", score, weight: weights.lineup_protection, detail: `${sigInj.length} key teammates out` });
   }
   
   // Factor 12: Player Injury Status
   const pInj = data.player_injuries || [];
-  {
-    let score = 60; // healthy baseline
+  if (weights.player_injury_status > 0) {
+    let score = 50;
     if (pInj.length > 0) {
       const status = pInj[0].status?.toLowerCase();
       if (["out", "doubtful"].includes(status)) {
@@ -2816,83 +2946,58 @@ async function calculateMlbPropConfidence(data: any): Promise<{
         reasoning.push(`⚠️ Player is ${status.toUpperCase()} — monitor status`);
       }
     }
-    factors.push({ name: "player_injury_status", label: "Health Status", score, weight: weights.player_injury_status || 0.03, detail: pInj.length > 0 ? pInj[0].status : "Healthy" });
+    factors.push({ name: "player_injury_status", label: "Health Status", score, weight: weights.player_injury_status, detail: pInj.length > 0 ? pInj[0].status : "No active injury listing" });
   }
   
   // Factor 13: Opponent Bullpen ERA
-  if (!isPitcher) {
-    const bpEra = ctx.oppBullpenERA || 4.00;
+  const bpEra = ctx.oppBullpenERA;
+  if (bpEra !== undefined && weights.opp_bullpen_era > 0) {
     const score = Math.max(0, Math.min(100, 50 + (bpEra - 4.00) * 12));
-    factors.push({ name: "opp_bullpen_era", label: "Opp Bullpen ERA", score, weight: weights.opp_bullpen_era || 0.03, detail: `${bpEra.toFixed(2)}` });
+    factors.push({ name: "opp_bullpen_era", label: "Verified Opp Bullpen ERA", score, weight: weights.opp_bullpen_era, detail: `${bpEra.toFixed(2)}` });
   }
   
   // Factor 14: Season Average vs Line Distance
-  {
-    const seasonAvg = data.season_hit_rate?.avg ?? 0;
+  const seasonAvg = Number(data.season_hit_rate?.avg);
+  if (weights.season_avg_vs_line > 0 && Number.isFinite(seasonAvg)) {
     const score = scoreMlbFactor(seasonAvg, line, ou);
-    factors.push({ name: "season_avg_vs_line", label: "Avg vs Line", score, weight: weights.season_avg_vs_line || 0.03, detail: `Avg ${seasonAvg} vs ${line} line (${ou})` });
+    factors.push({ name: "season_avg_vs_line", label: "Avg vs Line", score, weight: weights.season_avg_vs_line, detail: `Avg ${seasonAvg} vs ${line} line (${ou})` });
     if (ou === "over" && seasonAvg > line * 1.3) reasoning.push(`📊 Season avg (${seasonAvg}) well above ${line} line`);
     else if (ou === "over" && seasonAvg < line * 0.85) reasoning.push(`⚠️ Season avg (${seasonAvg}) below ${line} line`);
   }
   
-  // Factor 15: Batting Order Position Stability (inferred from AB count consistency)
-  {
-    const recent = allGames.slice(-10);
-    if (recent.length >= 5) {
-      // Use at-bat/appearance count variance as a proxy
-      const abs = recent.map((g: GameRow) => g.hits + g.walks + g.strikeouts); // approximate PA
-      const avgAB = avg(abs);
-      const variance = abs.reduce((s: number, v: number) => s + Math.pow(v - avgAB, 2), 0) / abs.length;
-      const isStable = variance < 2;
-      const score = isStable ? 60 : 40;
-      factors.push({ name: "batting_order_stability", label: "Order Stability", score, weight: weights.batting_order_stability || 0.02, detail: isStable ? "Stable lineup spot" : "Lineup position varies" });
-    } else {
-      factors.push({ name: "batting_order_stability", label: "Order Stability", score: 50, weight: weights.batting_order_stability || 0.02, detail: "Insufficient data" });
-    }
-  }
-  
-  // Factor 16: Day/Night Split
-  {
-    const gameTimeStr = ctx.gameTime || "";
-    const isDayGame = gameTimeStr ? new Date(gameTimeStr).getHours() < 17 : false;
-    // Filter games by day/night
-    const dayNightGames = allGames.filter((g: GameRow) => {
-      if (!g.date) return false;
-      const h = new Date(g.date).getHours();
-      return isDayGame ? h < 17 : h >= 17;
-    });
-    const dnVals = dayNightGames.map((g: GameRow) => getStatValue(g, propType));
-    const dnHR = hitRate(dnVals, line, ou);
-    const score = dnVals.length >= 3 ? scoreMlbHitRate(dnHR.rate) : 50;
-    factors.push({ name: "day_night_split", label: isDayGame ? "Day Game" : "Night Game", score, weight: weights.day_night_split || 0.02, detail: `${dnHR.rate}% in ${dnVals.length} ${isDayGame ? "day" : "night"} games` });
-  }
-  
   // Factor 17: Weather (Temperature)
-  {
-    const temp = ctx.weather?.temperature || 72;
+  if (weights.weather_temp > 0) {
+    const temp = ctx.weather?.temperature;
+    const roofClosed = String(ctx.intelligence?.weather?.roofType || "").toLowerCase().includes("closed");
+    if (temp !== undefined && !roofClosed) {
     let score = 50;
     if (ou === "over") {
       score = temp >= 85 ? 70 : temp >= 75 ? 60 : temp >= 65 ? 50 : temp >= 55 ? 40 : 30;
     } else {
       score = temp >= 85 ? 30 : temp >= 75 ? 40 : temp >= 65 ? 50 : temp >= 55 ? 60 : 70;
     }
-    factors.push({ name: "weather_temp", label: "Temperature", score, weight: weights.weather_temp || 0.01, detail: `${temp}°F` });
+    factors.push({ name: "weather_temp", label: "Temperature", score, weight: weights.weather_temp, detail: `${temp}°F` });
+    }
   }
-  
-  // Factor 18: Team Momentum (L5 W/L)
-  {
-    const momentum = ctx.teamMomentum || [];
-    const wins = momentum.filter(r => r === "W").length;
-    const score = momentum.length > 0 ? Math.max(0, Math.min(100, wins * 20)) : 50;
-    factors.push({ name: "team_momentum", label: "Team Momentum (L5)", score, weight: weights.team_momentum || 0.01, detail: momentum.join("") || "Unknown" });
+
+  const missing = [...(ctx.intelligence?.missing || [])];
+  if (ctx.ownLineup?.confirmed) {
+    if (!ctx.listedBatter) {
+      missing.push("PLAYER_NOT_IN_CONFIRMED_LINEUP");
+      return {
+        confidence: 0,
+        reasoning: ["Player is not in the confirmed starting lineup; no batter score was issued."],
+        factors,
+        prevSeasonUsed,
+        consensusFloorApplied: false,
+        dataQuality: { missing: [...new Set(missing)], shrinkFactor: 0 },
+      };
+    }
+    reasoning.push(`Confirmed batting order: ${ctx.listedBatter.order}.`);
+  } else {
+    missing.push("LINEUP_UNCONFIRMED");
   }
-  
-  // Factor 19: Rest Days
-  {
-    const rest = ctx.restDays ?? 1;
-    const score = rest === 0 ? 35 : rest === 1 ? 50 : rest >= 2 ? 55 : 50;
-    factors.push({ name: "rest_days", label: "Rest Days", score, weight: weights.rest_days || 0.01, detail: `${rest} day(s)` });
-  }
+  if (!ctx.opposingSP) missing.push("OPPOSING_STARTER_PROFILE_MISSING");
   
   // ── COMPUTE WEIGHTED CONFIDENCE ──
   let weightedSum = 0;
@@ -2911,6 +3016,16 @@ async function calculateMlbPropConfidence(data: any): Promise<{
   if (Math.abs(regressed - confidence) > 2) {
     reasoning.push(`⚾ Variance regression: ${confidence}% → ${regressed}% (baseball randomness adjustment)`);
     confidence = regressed;
+  }
+
+  let dataQualityShrink = 1;
+  if (statValues.length < 5) dataQualityShrink *= 0.85;
+  if (!ctx.ownLineup?.confirmed) dataQualityShrink *= 0.90;
+  if (!ctx.opposingSP) dataQualityShrink *= 0.85;
+  if (weights.park_factor > 0 && !ctx.intelligence?.parkFactor) dataQualityShrink *= 0.95;
+  confidence = Math.round(50 + (confidence - 50) * dataQualityShrink);
+  if (missing.length) {
+    reasoning.push(`Data-quality shrink ${dataQualityShrink.toFixed(2)}; unavailable inputs: ${[...new Set(missing)].join(", ")}.`);
   }
   
   // ── HIT RATE CONSENSUS FLOOR REMOVED ──
@@ -2934,12 +3049,19 @@ async function calculateMlbPropConfidence(data: any): Promise<{
   confidence = Math.max(0, Math.min(100, confidence));
   
   // Add verdict reasoning
-  if (confidence >= 72) reasoning.push(`✅ STRONG pick — confidence: ${confidence}%`);
-  else if (confidence >= 58) reasoning.push(`📊 LEAN — confidence: ${confidence}%`);
-  else if (confidence >= 42) reasoning.push(`⚠️ RISKY — confidence: ${confidence}%`);
-  else reasoning.push(`🚫 FADE — confidence: ${confidence}%`);
+  if (confidence >= 72) reasoning.push(`✅ STRONG heuristic score: ${confidence}/100`);
+  else if (confidence >= 58) reasoning.push(`📊 LEAN heuristic score: ${confidence}/100`);
+  else if (confidence >= 42) reasoning.push(`⚠️ RISKY heuristic score: ${confidence}/100`);
+  else reasoning.push(`🚫 PASS — heuristic score: ${confidence}/100`);
   
-  return { confidence, reasoning, factors, prevSeasonUsed, consensusFloorApplied };
+  return {
+    confidence,
+    reasoning,
+    factors,
+    prevSeasonUsed,
+    consensusFloorApplied,
+    dataQuality: { missing: [...new Set(missing)], shrinkFactor: dataQualityShrink },
+  };
 }
 
 // ── MLB AI Writeup for Player Props ─────────────────────────
@@ -2961,9 +3083,11 @@ async function generateMlbPropWriteup(
       .join("; ");
 
     const spInfo = ctx.opposingSP ? `vs ${ctx.opposingSP.name} (${ctx.opposingSP.era} ERA, ${ctx.opposingSP.k9} K/9)` : "";
-    const parkInfo = ctx.venue ? `at ${ctx.venue} (PF: ${getMlbParkFactor(ctx.venue).toFixed(2)})` : "";
+    const parkInfo = ctx.intelligence?.parkFactor
+      ? `at ${ctx.venue || "the listed venue"} (current-season run factor ${ctx.intelligence.parkFactor.runFactor.toFixed(3)})`
+      : ctx.venue ? `at ${ctx.venue} (current park factor unavailable)` : "";
 
-    const prompt = `You are a sharp MLB betting analyst. ${player} ${isPitcher ? "is pitching" : "is batting"} — prop: ${ou.toUpperCase()} ${line} ${propType}. ${spInfo}. ${parkInfo}. Key factors: ${topFactors}. Confidence: ${confidence}%. Write EXACTLY 2-3 sentences of direct, data-driven analysis. No hedging. Reference specific matchup advantages or red flags.`;
+    const prompt = `You are a sharp MLB betting analyst. ${player} ${isPitcher ? "is pitching" : "is batting"} — prop: ${ou.toUpperCase()} ${line} ${propType}. ${spInfo}. ${parkInfo}. Key factors: ${topFactors}. Non-probabilistic heuristic score: ${confidence}/100. Write EXACTLY 2-3 sentences of direct, data-driven analysis. Do not call the score a probability, win chance, or calibrated confidence. Reference only the supplied matchup facts.`;
 
     const result = await callAI({
       fnName: "nba-api",
@@ -3472,6 +3596,16 @@ async function analyzeProp(
 
   const playerId = matches[0].id;
   const player = await getPlayerInfo(playerId, cfg);
+  const mlbRole = cfg.searchLeague === "mlb" && isMlbPitcherPosition(player.position) ? "pitcher" : "batter";
+  if (cfg.searchLeague === "mlb") {
+    propType = normalizeMlbPropType(propType, mlbRole);
+    if (isMlbPitchingProp(propType) && mlbRole !== "pitcher") {
+      return { error: `${player.full_name} is not listed as a pitcher; pitching props cannot use a batting profile.`, player };
+    }
+    if (!isMlbPitchingProp(propType) && mlbRole === "pitcher") {
+      return { error: `${player.full_name} is listed as a pitcher; ${propType} requires a verified batting profile.`, player };
+    }
+  }
 
   // Fetch current + previous season for thin-season sports that benefit from a fallback baseline.
   const currentYear = new Date().getFullYear();
@@ -3528,6 +3662,21 @@ async function analyzeProp(
     ? prevSeasonGames.map(g => getStatValue(g, propType)).filter((v) => Number.isFinite(v))
     : [];
   const currentFiniteSample = statValues.filter((v) => Number.isFinite(v)).length;
+  if (cfg.searchLeague === "mlb" && currentFiniteSample < 3) {
+    return {
+      error: `Insufficient verified ${mlbRole === "pitcher" ? "pitching" : "batting"} game-log data for ${player.full_name}.`,
+      player,
+      sport: "mlb",
+      prop_type: propType,
+      line,
+      over_under: overUnder,
+      game_log: [],
+      confidence: 0,
+      verdict: "PASS",
+      reasoning: ["The requested stat is missing from the verified MLB profile or has fewer than three usable games."],
+      dataQuality: { quality: "estimated", flags: ["INSUFFICIENT_VERIFIED_MLB_SAMPLE"], sampleSize: "insufficient" },
+    };
+  }
   const totalWnbaFallbackSample = currentFiniteSample + prevSeasonStatValues.length;
   if (cfg.searchLeague === "wnba" && totalWnbaFallbackSample < 5) {
     return {
@@ -3554,8 +3703,10 @@ async function analyzeProp(
     // 1Q stats
     Q1_PTS: g.q1_pts, Q1_REB: g.q1_reb, Q1_AST: g.q1_ast, Q1_FG3M: g.q1_fg3m,
     // MLB
-    H: g.hits, R: g.runs, RBI: g.rbi, HR: g.home_runs,
-    K: g.strikeouts, TB: g.total_bases, BB: g.walks, SB: g.stolen_bases,
+    H: g.mlb_line?.hits ?? null, R: g.mlb_line?.runs ?? null, RBI: g.mlb_line?.rbi ?? null, HR: g.mlb_line?.homeRuns ?? null,
+    K: g.mlb_line?.strikeouts ?? null, TB: g.mlb_line?.totalBases ?? null, BB: g.mlb_line?.walks ?? null, SB: g.mlb_line?.stolenBases ?? null,
+    IP: g.mlb_line?.inningsPitched, OUTS: g.mlb_line?.outsRecorded,
+    ER: g.mlb_line?.earnedRuns, PC: g.mlb_line?.pitches,
     // NHL
     G: g.goals, A: g.nhl_assists, SOG: g.sog, PIM: g.pim,
     PM: g.plus_minus, PPG: g.ppg, TOI: g.toi,
@@ -3588,7 +3739,8 @@ async function analyzeProp(
   // Build recency games array for weighted hit rate
   const recencyGames = analysisGames
     .filter(g => g.date)
-    .map(g => ({ date: g.date, value: getStatValue(g, propType) }));
+    .map(g => ({ date: g.date, value: getStatValue(g, propType) }))
+    .filter((row) => Number.isFinite(row.value));
 
   const nextGame = await getNextGame(player.team_abbr, cfg);
 
@@ -3676,9 +3828,9 @@ async function analyzeProp(
       MIN: g.min, PTS: g.pts, REB: g.reb, AST: g.ast,
       FG3M: g.fg3m, STL: g.stl, BLK: g.blk,
       // MLB
-      H: g.hits, R: g.runs, RBI: g.rbi, HR: g.home_runs,
-      K: g.strikeouts, TB: g.total_bases, BB: g.walks, SB: g.stolen_bases,
-      AB: g.at_bats, IP: g.innings_pitched, ER: g.earned_runs,
+      H: g.mlb_line?.hits ?? null, R: g.mlb_line?.runs ?? null, RBI: g.mlb_line?.rbi ?? null, HR: g.mlb_line?.homeRuns ?? null,
+      K: g.mlb_line?.strikeouts ?? null, TB: g.mlb_line?.totalBases ?? null, BB: g.mlb_line?.walks ?? null, SB: g.mlb_line?.stolenBases ?? null,
+      AB: g.at_bats, IP: g.mlb_line?.inningsPitched, OUTS: g.mlb_line?.outsRecorded, ER: g.mlb_line?.earnedRuns, PC: g.mlb_line?.pitches,
       // NHL
       G: g.goals, A: g.nhl_assists, SOG: g.sog, PIM: g.pim,
       PM: g.plus_minus, PPG: g.ppg, TOI: g.toi,
@@ -3742,9 +3894,9 @@ async function analyzeProp(
       stat_value: prevH2hVals[i],
       MIN: g.min, PTS: g.pts, REB: g.reb, AST: g.ast,
       FG3M: g.fg3m, STL: g.stl, BLK: g.blk,
-      H: g.hits, R: g.runs, RBI: g.rbi, HR: g.home_runs,
-      K: g.strikeouts, TB: g.total_bases, BB: g.walks, SB: g.stolen_bases,
-      AB: g.at_bats, IP: g.innings_pitched, ER: g.earned_runs,
+      H: g.mlb_line?.hits ?? null, R: g.mlb_line?.runs ?? null, RBI: g.mlb_line?.rbi ?? null, HR: g.mlb_line?.homeRuns ?? null,
+      K: g.mlb_line?.strikeouts ?? null, TB: g.mlb_line?.totalBases ?? null, BB: g.mlb_line?.walks ?? null, SB: g.mlb_line?.stolenBases ?? null,
+      AB: g.at_bats, IP: g.mlb_line?.inningsPitched, OUTS: g.mlb_line?.outsRecorded, ER: g.mlb_line?.earnedRuns, PC: g.mlb_line?.pitches,
       G: g.goals, A: g.nhl_assists, SOG: g.sog, PIM: g.pim,
       PM: g.plus_minus, PPG: g.ppg, TOI: g.toi,
     }));
@@ -3807,13 +3959,19 @@ async function analyzeProp(
     console.error("Shooting/scoring splits error:", e);
   }
 
-  // ── MLB: Use 20-Factor Player Prop Engine ──
+  // ── MLB: Use the verified-context player prop engine ──
   if (cfg.searchLeague === "mlb") {
     // Fetch MLB-specific context (opposing SP, park, weather, team stats)
     const oppAbbrForCtx = h2hOpp || nextGame?.opponent_abbr || "";
     let mlbCtx: MlbContextData = {};
     try {
-      mlbCtx = await fetchMlbGameContext(player.team_abbr, oppAbbrForCtx, playerId, cfg);
+      mlbCtx = await fetchVerifiedMlbGameContext({
+        teamAbbr: player.team_abbr,
+        opponentAbbr: oppAbbrForCtx,
+        playerName: player.full_name,
+        isPitcher: isMlbPitcherPosition(player.position),
+        gameDate: nextGame?.date || null,
+      });
     } catch (e) {
       console.error("MLB context fetch failed:", e);
     }
@@ -3827,12 +3985,26 @@ async function analyzeProp(
       result.verdict = "PASS";
       return result;
     }
+    if (mlbResult.confidence === 0 && mlbResult.dataQuality?.shrinkFactor === 0) {
+      result.confidence = 0;
+      result.reasoning = mlbResult.reasoning;
+      result.mlb_factors = mlbResult.factors;
+      result.mlb_data_quality = mlbResult.dataQuality;
+      result.model = "mlb-verified-context-props-v2";
+      result.score_kind = "heuristic_score";
+      result.probability_supported = false;
+      result.verdict = "PASS";
+      return result;
+    }
     
     result.confidence = mlbResult.confidence;
     result.reasoning = mlbResult.reasoning;
     result.mlb_factors = mlbResult.factors;
+    result.mlb_data_quality = mlbResult.dataQuality || { missing: mlbCtx.intelligence?.missing || [], shrinkFactor: 1 };
     result.prev_season_used = mlbResult.prevSeasonUsed;
-    result.model = "mlb-20-factor-props";
+    result.model = "mlb-verified-context-props-v2";
+    result.score_kind = "heuristic_score";
+    result.probability_supported = false;
     
     if (mlbResult.confidence >= 72) result.verdict = "STRONG";
     else if (mlbResult.confidence >= 58) result.verdict = "LEAN";
@@ -4352,7 +4524,7 @@ serve(async (req) => {
                 });
                 if (modelResp.ok) {
                   const modelData = await modelResp.json();
-                  result.model = "mlb-20-factor";
+                   result.team_context_model = "mlb-verified-game-context-v2";
                   result.factorBreakdown = modelData.factorBreakdown;
                   result.model_writeup = modelData.writeup;
                   result.pitchers = modelData.pitchers;

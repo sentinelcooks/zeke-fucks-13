@@ -29,7 +29,7 @@ const MARKET_TO_PROP: Record<string, string> = {
   player_threes: "3-pointers", player_blocks: "blocks", player_steals: "steals",
   batter_hits: "hits", batter_runs_scored: "runs", batter_rbis: "rbi",
   batter_home_runs: "home_runs", batter_total_bases: "total_bases",
-  pitcher_strikeouts: "strikeouts",
+  pitcher_strikeouts: "pitcher_strikeouts",
   fighter_moneylines: "moneyline",
 };
 

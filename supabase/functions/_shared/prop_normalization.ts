@@ -120,6 +120,76 @@ export function normalizeNhlPropType(propType: string | null | undefined): strin
   return NHL_PROP_ALIASES[stripped] ?? stripped;
 }
 
+const MLB_PROP_ALIASES: Record<string, string> = {
+  pitcher_strikeouts: "pitcher_strikeouts",
+  pitcher_k: "pitcher_strikeouts",
+  pitcher_ks: "pitcher_strikeouts",
+  pitching_strikeouts: "pitcher_strikeouts",
+  hits_allowed: "hits_allowed",
+  pitcher_hits_allowed: "hits_allowed",
+  earned_runs: "earned_runs",
+  pitcher_earned_runs: "earned_runs",
+  walks_allowed: "walks_allowed",
+  pitcher_walks: "walks_allowed",
+  pitcher_walks_allowed: "walks_allowed",
+  outs: "outs_recorded",
+  pitcher_outs: "outs_recorded",
+  outs_recorded: "outs_recorded",
+  innings_pitched: "innings_pitched",
+  hits: "hits",
+  batter_hits: "hits",
+  runs: "runs",
+  batter_runs_scored: "runs",
+  rbi: "rbi",
+  rbis: "rbi",
+  batter_rbis: "rbi",
+  home_runs: "home_runs",
+  batter_home_runs: "home_runs",
+  doubles: "doubles",
+  batter_doubles: "doubles",
+  total_bases: "total_bases",
+  batter_total_bases: "total_bases",
+  walks: "walks",
+  batter_walks: "walks",
+  stolen_bases: "stolen_bases",
+  batter_stolen_bases: "stolen_bases",
+  batter_strikeouts: "batter_strikeouts",
+};
+
+export function isMlbPitcherPosition(position: string | null | undefined): boolean {
+  return new Set(["P", "SP", "RP", "CP", "CL", "LHP", "RHP"])
+    .has(String(position ?? "").trim().toUpperCase());
+}
+
+/**
+ * MLB's bare `strikeouts` key was historically ambiguous. New callers use an
+ * explicit key; legacy callers are resolved only after the player's role is
+ * known, so a batting row can never be evaluated as a pitching line.
+ */
+export function normalizeMlbPropType(
+  propType: string | null | undefined,
+  role?: "pitcher" | "batter" | null,
+): string {
+  const raw = String(propType ?? "").trim();
+  if (!raw) return "";
+  const key = compactKey(raw);
+  if (["strikeouts", "strikeout", "k", "ks", "so"].includes(key)) {
+    return role === "pitcher" ? "pitcher_strikeouts" : "batter_strikeouts";
+  }
+  return MLB_PROP_ALIASES[key] ?? key;
+}
+
+export function isMlbPitchingProp(propType: string | null | undefined): boolean {
+  return new Set([
+    "pitcher_strikeouts",
+    "hits_allowed",
+    "earned_runs",
+    "walks_allowed",
+    "outs_recorded",
+    "innings_pitched",
+  ]).has(normalizeMlbPropType(propType, "pitcher"));
+}
+
 export function normalizeDirection(direction: string | null | undefined): string {
   const d = String(direction ?? "").trim().toLowerCase();
   if (d.startsWith("u")) return "under";

@@ -492,6 +492,45 @@ export type Database = {
         }
         Relationships: []
       }
+      mlb_park_factors: {
+        Row: {
+          as_of: string
+          home_games: number
+          methodology_version: string
+          road_games: number
+          run_factor: number
+          season: number
+          source: string
+          updated_at: string
+          venue_id: number
+          venue_name: string
+        }
+        Insert: {
+          as_of: string
+          home_games: number
+          methodology_version?: string
+          road_games: number
+          run_factor: number
+          season: number
+          source: string
+          updated_at?: string
+          venue_id: number
+          venue_name: string
+        }
+        Update: {
+          as_of?: string
+          home_games?: number
+          methodology_version?: string
+          road_games?: number
+          run_factor?: number
+          season?: number
+          source?: string
+          updated_at?: string
+          venue_id?: number
+          venue_name?: string
+        }
+        Relationships: []
+      }
       mlb_predictions: {
         Row: {
           bet_type: string

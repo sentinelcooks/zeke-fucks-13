@@ -523,7 +523,7 @@ const MLB_MAP: Record<string, string> = {
   batter_walks: "walks",
   batter_stolen_bases: "stolen_bases",
   batter_hits_runs_rbis: "h+r+rbi",
-  pitcher_strikeouts: "strikeouts",
+  pitcher_strikeouts: "pitcher_strikeouts",
 };
 
 const NHL_MAP: Record<string, string> = {

@@ -35,7 +35,7 @@ const ESPN_SPORTS: Record<string, { sport: string; league: string }> = {
 };
 
 // ── Fetch real sportsbook line + odds (both directions) via nba-odds/player-odds ──
-// Send raw prop type (e.g. "strikeouts", "points") — nba-odds handles normalization.
+// Send canonical prop types (for example `pitcher_strikeouts` and `points`).
 // Returns the canonical (mode) line across books on the requested side, plus the
 // best opposite-side price at that same line so Phase C can de-vig with
 // fairImpliedFromPair.
@@ -470,7 +470,7 @@ async function getLineupPropSuggestions(
   // Only include prop types that the Odds API actually supports
   const sportPropTypes: Record<string, string> = {
     nba: "points, rebounds, assists, 3-pointers, steals, blocks, turnovers",
-    mlb: "pitcher strikeouts, hits, home_runs, total_bases, rbi, runs",
+    mlb: "pitcher_strikeouts, hits, home_runs, total_bases, rbi, runs",
     nhl: "goals, assists, points, shots_on_goal",
   };
 
@@ -603,7 +603,7 @@ async function rankGamesByAnticipation(
 // ── Supported prop types per sport (deterministic, both directions graded) ──
 const SPORT_PROP_TYPES: Record<string, string[]> = {
   nba: ["points", "rebounds", "assists", "3-pointers", "steals", "blocks", "turnovers"],
-  mlb: ["strikeouts", "hits", "home_runs", "total_bases", "rbi", "runs"],
+  mlb: ["pitcher_strikeouts", "hits", "home_runs", "total_bases", "rbi", "runs"],
   nhl: ["goals", "assists", "points", "shots_on_goal"],
 };
 

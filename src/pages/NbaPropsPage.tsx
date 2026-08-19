@@ -136,7 +136,7 @@ const MLB_PROP_CATEGORIES: PropCategory[] = [
   {
     category: "Pitching",
     props: [
-      { value: "strikeouts", label: "K", icon: Crosshair, desc: "Strikeouts" },
+      { value: "pitcher_strikeouts", label: "K", icon: Crosshair, desc: "Pitcher Strikeouts" },
       { value: "hits_allowed", label: "HA", icon: Shield, desc: "Hits Allowed" },
       { value: "earned_runs", label: "ER", icon: Flame, desc: "Earned Runs" },
       { value: "walks_allowed", label: "BBA", icon: Hand, desc: "Walks Allowed" },
@@ -148,7 +148,6 @@ const MLB_PROP_CATEGORIES: PropCategory[] = [
     props: [
       { value: "h+r+rbi", label: "H+R+RBI", icon: Trophy, desc: "Hits+Runs+RBI" },
       { value: "hits+runs", label: "H+R", icon: Layers, desc: "Hits + Runs" },
-      { value: "fantasy_score", label: "FPTS", icon: Flame, desc: "Fantasy Pts" },
     ],
   },
 ];
@@ -285,7 +284,7 @@ function GameChart({ data }: { data: any }) {
 
 function GamesTable({ games, line, overUnder, propType }: { games: any[]; line: number; overUnder: string; propType: string }) {
   const is1Q = propType.startsWith("1q_");
-  const MLB_HITTING = new Set(["hits","runs","rbi","home_runs","total_bases","walks","stolen_bases","h+r+rbi","hits+runs","fantasy_score"]);
+  const MLB_HITTING = new Set(["hits","runs","rbi","home_runs","doubles","total_bases","walks","stolen_bases","h+r+rbi","hits+runs"]);
   const MLB_PITCHING = new Set(["strikeouts","hits_allowed","earned_runs","walks_allowed","outs_recorded","pitcher_strikeouts"]);
   const NHL_PROPS = new Set(["goals","nhl_assists","nhl_points","sog","pim","ppg","toi","g+a"]);
   const isMlbHit = MLB_HITTING.has(propType);
