@@ -719,7 +719,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
           ) : (
             <div className="-mx-5 px-5 overflow-x-auto hide-scrollbar snap-x snap-mandatory">
               <div className="flex gap-3 pb-2">
-                {todayPicks.slice(0, 5).map((pick, i) => {
+                {todayPicks.map((pick, i) => {
                   const isGameBet = pick.bet_type && pick.bet_type !== 'prop';
                   const rawConf = pick.confidence ?? pick.hit_rate ?? 0;
                   const confPercent = Math.round(normalizeConfidencePercent(rawConf));
