@@ -72,9 +72,9 @@ Deno.serve(async (req) => {
   const requestedDays = requestUrl.searchParams.get("days") ?? requestBody.days ?? 365;
   const parsedDays = Number(requestedDays);
   const lookbackDays = Math.max(30, Math.min(730, Number.isFinite(parsedDays) ? parsedDays : 365));
-  const requestedMaxRows = requestUrl.searchParams.get("max_rows") ?? requestBody.max_rows ?? 5_000;
+  const requestedMaxRows = requestUrl.searchParams.get("max_rows") ?? requestBody.max_rows ?? 1_000;
   const parsedMaxRows = Number(requestedMaxRows);
-  const maxRows = Math.max(1_000, Math.min(20_000, Number.isFinite(parsedMaxRows) ? Math.floor(parsedMaxRows) : 5_000));
+  const maxRows = Math.max(1_000, Math.min(20_000, Number.isFinite(parsedMaxRows) ? Math.floor(parsedMaxRows) : 1_000));
 
   try {
     const since = new Date(Date.now() - lookbackDays * 86400 * 1000).toISOString();

@@ -45,11 +45,12 @@ Deno.serve(async (req) => {
 
   const daysRaw = Number(body.days ?? 365);
   const days = Number.isFinite(daysRaw) ? Math.max(30, Math.min(730, Math.floor(daysRaw))) : 365;
-  const maxRowsRaw = Number(body.max_rows ?? 5_000);
+  const maxRowsRaw = Number(body.max_rows ?? 1_000);
   const maxRows = Number.isFinite(maxRowsRaw)
     ? Math.max(1_000, Math.min(20_000, Math.floor(maxRowsRaw)))
-    : 5_000;
+    : 1_000;
   const persist = body.persist === true;
+  const includeReport = body.include_report === true || !persist;
   const sport = String(body.sport ?? "").trim().toLowerCase() || null;
   const betType = normalizedBetType(body.bet_type) || null;
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
@@ -145,7 +146,14 @@ Deno.serve(async (req) => {
       releaseStatus: status,
       maxRows,
       inputTruncated,
-      report,
+      evaluation: {
+        methodology: report.methodology,
+        inputRows: report.inputRows,
+        includedRows: report.includedRows,
+        periodStart: report.overall.periodStart,
+        periodEnd: report.overall.periodEnd,
+      },
+      report: includeReport ? report : undefined,
     });
   } catch (error) {
     console.error("model-evaluation error:", error);

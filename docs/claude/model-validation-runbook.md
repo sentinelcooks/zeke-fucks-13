@@ -38,10 +38,15 @@ Every run reports:
 - a latest chronological holdout containing at least 50 resolved bets; and
 - explicit exclusions and limitations.
 
-Scheduled runs evaluate the newest 5,000 resolved immutable predictions by
+Scheduled runs evaluate the newest 1,000 resolved immutable predictions by
 default. If that cap is reached, the persisted report records
 `input_truncated=true` and states the limit explicitly. Manual runs may request
 up to 20,000 rows with `max_rows`.
+
+Persisted model-evaluation requests return a compact execution summary by
+default while retaining the complete evidence report in
+`model_evaluation_runs`. Set `include_report=true` only for bounded interactive
+diagnostics that need the full response body.
 
 `releaseStatus=validated` is evidence, not a promise of future profitability.
 Any other status prohibits an edge/profitability claim.
