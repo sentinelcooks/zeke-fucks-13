@@ -45,6 +45,7 @@ import {
   buildGenericQueueFinalization,
   buildWnbaQueueFinalization,
 } from "./nba_queue_finalization.ts";
+import { matchScheduledEvents, selectEventBatch } from "./scan_batches.ts";
 
 // App slate timezone — matches the public-display assumption in src/lib/gameDate.ts.
 const APP_TZ = "America/New_York";
@@ -251,7 +252,7 @@ interface TraceResult {
   final_rejection_reason: string | null;
 }
 
-interface ScanSportOptions {
+export interface ScanSportOptions {
   diagnosticsOnly?: boolean;
   traceTargets?: TraceTarget[];
   // When true, run the legacy inline-analyzer flow (mapLimit through the
@@ -265,6 +266,12 @@ interface ScanSportOptions {
   // tag every enqueued candidate so the analyzer worker can flush
   // counters to scan_run_metrics atomically.
   runId?: string;
+  // Optional bounded player-prop event window used by the MLB/WNBA cron
+  // batches. Omitted limits preserve full-slate manual scan behavior.
+  propEventOffset?: number;
+  propEventLimit?: number;
+  includeGameLines?: boolean;
+  batchIndex?: number;
 }
 
 export interface AnalyzerErrorCandidate {
@@ -688,7 +695,7 @@ function safeLogUrl(url: string): string {
   return url.replace(/apikey=[^&]+/g, "apikey=REDACTED");
 }
 
-async function fnFetch(path: string): Promise<FetchResult> {
+async function fnFetch(path: string, timeoutMs = 30_000): Promise<FetchResult> {
   const headers = getInternalHeaders();
 
   if (!headers) {
@@ -702,11 +709,14 @@ async function fnFetch(path: string): Promise<FetchResult> {
 
   const url = buildFnUrl(path);
   console.log(`fnFetch calling: ${safeLogUrl(url)}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const r = await fetch(url, {
       method: "GET",
       headers,
+      signal: controller.signal,
     });
 
     const text = await r.text();
@@ -729,10 +739,19 @@ async function fnFetch(path: string): Promise<FetchResult> {
 
     return {
       ok: false,
-      status: 0,
-      data: null,
+      status: e instanceof DOMException && e.name === "AbortError" ? 504 : 0,
+      data: {
+        error: e instanceof DOMException && e.name === "AbortError"
+          ? `Internal function timed out after ${timeoutMs}ms`
+          : String(e),
+        code: e instanceof DOMException && e.name === "AbortError"
+          ? "internal_function_timeout"
+          : "internal_function_fetch_failed",
+      },
       size: 0,
     };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -1041,6 +1060,11 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
   }
 
   const gamesRes = await fnFetch(`games-schedule?sport=${sportKey}`);
+  if (!gamesRes.ok) {
+    throw new Error(
+      `[${sport}] games-schedule failed (HTTP ${gamesRes.status}): ${JSON.stringify(gamesRes.data).slice(0, 240)}`,
+    );
+  }
   const games = Array.isArray(gamesRes.data) ? gamesRes.data : [];
 
   stats.games = games.length;
@@ -1066,6 +1090,9 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
     console.error(
       `[${sport}] nba-odds/events game-lines error (HTTP ${oddsRes.status}):`,
       JSON.stringify(oddsRes.data).slice(0, 300)
+    );
+    throw new Error(
+      `[${sport}] game-line odds failed (HTTP ${oddsRes.status}): ${JSON.stringify(oddsRes.data).slice(0, 240)}`,
     );
   }
 
@@ -1320,6 +1347,7 @@ async function evaluatePlayerProps(
   sport: string,
   stats: any,
   traceResults: TraceResult[] = [],
+  options: Pick<ScanSportOptions, "propEventOffset" | "propEventLimit" | "batchIndex"> = {},
 ): Promise<ScoredPlay[]> {
   const sportKey = SPORT_KEYS[sport];
 
@@ -1341,6 +1369,9 @@ async function evaluatePlayerProps(
     console.error(
       `[${sport}] ${discoveryPath} props error (HTTP ${r.status}):`,
       JSON.stringify(r.data).slice(0, 300)
+    );
+    throw new Error(
+      `[${sport}] player-prop event discovery failed (HTTP ${r.status}): ${JSON.stringify(r.data).slice(0, 240)}`,
     );
   }
 
@@ -1364,6 +1395,11 @@ async function evaluatePlayerProps(
 
   if (sportKey) {
     const gamesRes = await fnFetch(`games-schedule?sport=${sportKey}`);
+    if (!gamesRes.ok) {
+      throw new Error(
+        `[${sport}] player-prop schedule failed (HTTP ${gamesRes.status}): ${JSON.stringify(gamesRes.data).slice(0, 240)}`,
+      );
+    }
     const games = Array.isArray(gamesRes.data) ? gamesRes.data : [];
 
     const upcomingGames = games.filter(
@@ -1372,23 +1408,26 @@ async function evaluatePlayerProps(
 
     stats.scheduled_games = upcomingGames.length;
 
-    const eventByMatchup = new Map<string, any>();
-
-    for (const ev of events) {
-      eventByMatchup.set(matchupKey(ev.home_team, ev.away_team), ev);
-      eventByMatchup.set(matchupKey(ev.away_team, ev.home_team), ev);
-    }
-
-    upcoming = upcomingGames
-      .map((g: any) =>
-        eventByMatchup.get(matchupKey(g.home_team, g.away_team))
-      )
-      .filter(Boolean);
+    upcoming = matchScheduledEvents(upcomingGames, events, teamNameKey);
   } else {
     stats.scheduled_games = events.length;
   }
 
+  upcoming = upcoming.sort((a: any, b: any) => {
+    const timeDiff = String(a?.commence_time ?? "").localeCompare(String(b?.commence_time ?? ""));
+    return timeDiff || String(a?.id ?? "").localeCompare(String(b?.id ?? ""));
+  });
+
+  stats.prop_events_total = upcoming.length;
+  stats.prop_event_offset = options.propEventOffset ?? 0;
+  stats.prop_event_limit = options.propEventLimit ?? null;
+  stats.batch_index = options.batchIndex ?? null;
+  upcoming = selectEventBatch(upcoming, {
+    propEventOffset: options.propEventOffset ?? 0,
+    propEventLimit: options.propEventLimit,
+  });
   stats.events = upcoming.length;
+  stats.prop_events_selected = upcoming.length;
 
   const plays: ScoredPlay[] = [];
   let propLineCount = 0;
@@ -1398,7 +1437,9 @@ async function evaluatePlayerProps(
   // endpoint has hit rate limits at chunk=5; 2 keeps us under the burst
   // threshold while preserving NBA/NHL throughput.
   const CHUNK = sport === "mlb" ? 2 : 5;
-  const eventProps: Array<{ ev: any; data: any }> = [];
+  const eventProps: Array<{ ev: any; data: any; ok: boolean; status: number }> = [];
+  let propCallsSucceeded = 0;
+  let propCallsFailed = 0;
 
   if (sport === "nhl") {
     stats.nhl_event_odds_calls_attempted = upcoming.length;
@@ -1414,9 +1455,16 @@ async function evaluatePlayerProps(
         fnFetch(`nba-odds/player-props?sport=${sport}&eventId=${ev.id}`).then((res) => ({
           ev,
           data: res.data,
+          ok: res.ok,
+          status: res.status,
         }))
       )
     );
+
+    for (const result of results) {
+      if (result.ok) propCallsSucceeded += 1;
+      else propCallsFailed += 1;
+    }
 
     if (sport === "nhl") {
       for (const { data } of results) {
@@ -1448,7 +1496,21 @@ async function evaluatePlayerProps(
     }
   }
 
-  for (const { ev, data } of eventProps) {
+  stats.prop_event_odds_calls_attempted = upcoming.length;
+  stats.prop_event_odds_calls_succeeded = propCallsSucceeded;
+  stats.prop_event_odds_calls_failed = propCallsFailed;
+
+  if (upcoming.length > 0 && propCallsSucceeded === 0) {
+    const failures = eventProps
+      .slice(0, 3)
+      .map(({ status, data }) => ({ status, code: data?.code, error: data?.error }));
+    throw new Error(
+      `[${sport}] every player-prop event request failed: ${JSON.stringify(failures).slice(0, 500)}`,
+    );
+  }
+
+  for (const { ev, data, ok } of eventProps) {
+    if (!ok) continue;
     if (!ev?.id) continue;
 
     const players = data?.players || {};
@@ -2311,10 +2373,14 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
   let props: ScoredPlay[] = [];
 
   try {
-    lines = await evaluateGameLines(sport, stats);
+    if (options.includeGameLines !== false) {
+      lines = await evaluateGameLines(sport, stats);
+    } else {
+      stats.game_lines_skipped_for_batch = true;
+    }
     stats.lines = lines.length;
 
-    props = await evaluatePlayerProps(sport, stats, traceResults);
+    props = await evaluatePlayerProps(sport, stats, traceResults, options);
   } catch (e) {
     console.error(`[${sport}] scan error:`, e);
 

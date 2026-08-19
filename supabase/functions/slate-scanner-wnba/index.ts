@@ -1,6 +1,7 @@
 import { scanSport } from "../_shared/sport_scan.ts";
 import { applyWaitToScanResult, buildWaitClient, parseWaitOptions } from "../_shared/scan_wait.ts";
 import { requireServiceRoleAccess } from "../_shared/premium-access.ts";
+import { parseScanBatchRequest } from "../_shared/scan_batches.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,9 +22,11 @@ Deno.serve(async (req) => {
 
     // Discovery-only by default. analyzer-worker-wnba drains the bounded
     // queue, matching the production NBA/MLB/NHL scanner architecture.
+    const batch = parseScanBatchRequest(body);
     const result = await scanSport("wnba", {
       inlineAnalyze: body.inline_analyze === true,
       runId: typeof body.run_id === "string" ? body.run_id : undefined,
+      ...batch,
     });
 
     if (waitOpts.wait) {
@@ -32,7 +35,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(JSON.stringify(result), {
-      status: 200,
+      status: result.error ? 503 : 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

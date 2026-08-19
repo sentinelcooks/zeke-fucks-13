@@ -1,6 +1,7 @@
 import { normalizeBookKey } from "../_shared/normalizeBookName.ts";
 import { getMasterClient } from "../_shared/masterClient.ts";
 import { requirePremiumAccess } from "../_shared/premium-access.ts";
+import { mapWithConcurrency } from "../_shared/scan_batches.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -111,11 +112,11 @@ function setCache(key: string, data: unknown) {
 
 // ── API Key Rotation (delegates to shared pool) ──
 // All rotation, status updates, recovery and structured-error handling live in
-// _shared/oddsKeyPool.ts. The adapter below preserves this function's legacy
-// return shape ({ resp, keyId } | null) plus the lastRetryAfterMs side-channel
-// that sport_scan reads after a 429.
+// _shared/oddsKeyPool.ts. It remains backed by the admin-uploaded mass key pool;
+// this adapter only preserves structured failures for callers and logs.
 import {
   fetchWithRotation as poolFetchWithRotation,
+  rotationFailureResponse,
   type RotationError,
 } from "../_shared/oddsKeyPool.ts";
 
@@ -123,24 +124,23 @@ async function fetchWithRotation(
   supabase: any,
   buildUrl: (apiKey: string) => string,
   maxRetries = 3,
-): Promise<{ resp: Response; keyId: string } | null> {
-  (fetchWithRotation as any).lastRetryAfterMs = 0;
-  (fetchWithRotation as any).lastError = null;
-  const out = await poolFetchWithRotation(supabase, buildUrl, { maxRetries });
+  signal?: AbortSignal,
+): Promise<{ resp: Response; keyId: string } | { error: RotationError }> {
+  const out = await poolFetchWithRotation(supabase, buildUrl, { maxRetries, signal });
   if ("error" in out) {
     const err = out.error as RotationError;
-    (fetchWithRotation as any).lastError = err;
-    if (err.kind === "rate_limited" && err.retryAfterMs) {
-      (fetchWithRotation as any).lastRetryAfterMs = err.retryAfterMs;
-    }
     if (err.kind === "no_usable_keys") {
-      console.error("[nba-odds] no_usable_keys — pool empty and no fallback");
+      console.error("[nba-odds] no_usable_keys — uploaded pool empty and no fallback");
     } else {
       console.warn(`[nba-odds] fetchWithRotation failed kind=${err.kind} status=${err.status ?? "?"}`);
     }
-    return null;
   }
   return out;
+}
+
+function rotationErrorJson(error: RotationError): Response {
+  const failure = rotationFailureResponse(error);
+  return json(failure.body, failure.status);
 }
 
 // ── Multi-region fetch: queries each region separately and merges bookmakers ──
@@ -165,18 +165,29 @@ async function fetchMultiRegion(
   supabase: any,
   buildUrl: (apiKey: string, region: string, bookmakers: string) => string,
   regionConfigs?: typeof REGION_CONFIGS,
-): Promise<{ mergedBookmakers: any[]; events: any[]; quota: { remaining: string | null; used: string | null } } | null> {
+  signal?: AbortSignal,
+): Promise<
+  | { data: { mergedBookmakers: any[]; events: any[]; quota: { remaining: string | null; used: string | null } }; error: null }
+  | { data: null; error: RotationError }
+> {
   const configs = regionConfigs || REGION_CONFIGS;
   const allBookmakers: any[] = [];
   let baseData: any = null;
   let lastQuota = { remaining: null as string | null, used: null as string | null };
+  let lastError: RotationError | null = null;
 
   for (const config of configs) {
-    const result = await fetchWithRotation(supabase, (apiKey) =>
-      buildUrl(apiKey, config.region, config.bookmakers)
+    const result = await fetchWithRotation(
+      supabase,
+      (apiKey) => buildUrl(apiKey, config.region, config.bookmakers),
+      3,
+      signal,
     );
 
-    if (!result) continue;
+    if ("error" in result) {
+      lastError = result.error;
+      continue;
+    }
     if (!result.resp.ok) {
       console.warn(`Region ${config.region} failed: ${result.resp.status}`);
       continue;
@@ -223,12 +234,15 @@ async function fetchMultiRegion(
     }
   }
 
-  if (!baseData) return null;
+  if (!baseData) return { data: null, error: lastError ?? { kind: "no_odds" } };
 
   return {
-    mergedBookmakers: mergeUniqueBookmakers([], allBookmakers),
-    events: Array.isArray(baseData) ? baseData : [baseData],
-    quota: lastQuota,
+    data: {
+      mergedBookmakers: mergeUniqueBookmakers([], allBookmakers),
+      events: Array.isArray(baseData) ? baseData : [baseData],
+      quota: lastQuota,
+    },
+    error: null,
   };
 }
 
@@ -339,7 +353,10 @@ async function fetchSingleEventPropsWithFallback(
   eventId: string,
   marketsCsv: string,
   propRegions: typeof REGION_CONFIGS,
-): Promise<{ eventData: any; bookmakers: any[]; quota: { remaining: string | null; used: string | null }; marketsSucceeded: string[]; marketsFailed: string[] } | null> {
+): Promise<
+  | { data: { eventData: any; bookmakers: any[]; quota: { remaining: string | null; used: string | null }; marketsSucceeded: string[]; marketsFailed: string[] }; error: null }
+  | { data: null; error: RotationError }
+> {
   const normalizedSport = (sport || "").toLowerCase();
   const markets = marketsCsv.split(",").map((m) => m.trim()).filter(Boolean);
 
@@ -355,37 +372,72 @@ async function fetchSingleEventPropsWithFallback(
   let lastQuota = { remaining: null as string | null, used: null as string | null };
   const marketsSucceeded: string[] = [];
   const marketsFailed: string[] = [];
+  let lastError: RotationError | null = null;
 
-  for (const group of marketGroups) {
-    const marketParam = group.join(",");
+  const groupResults = await mapWithConcurrency(
+    marketGroups,
+    normalizedSport === "mlb" ? 3 : 1,
+    async (group) => {
+      const marketParam = group.join(",");
 
-    const multiResult = await fetchMultiRegion(
-      supabase,
-      (apiKey, region, bookmakers) =>
-        `${ODDS_API_BASE}/sports/${sportKey}/events/${eventId}/odds?apiKey=${apiKey}&regions=${region}&oddsFormat=american&bookmakers=${bookmakers}&markets=${marketParam}`,
-      propRegions,
-    );
+      const multiResult = await fetchMultiRegion(
+        supabase,
+        (apiKey, region, bookmakers) =>
+          `${ODDS_API_BASE}/sports/${sportKey}/events/${eventId}/odds?apiKey=${apiKey}&regions=${region}&oddsFormat=american&bookmakers=${bookmakers}&markets=${marketParam}`,
+        propRegions,
+      );
 
-    if (!multiResult) {
+      return { group, marketParam, multiResult };
+    },
+  );
+
+  for (const { group, marketParam, multiResult } of groupResults) {
+    if (multiResult.error) {
       marketsFailed.push(marketParam);
+      if (
+        !lastError ||
+        multiResult.error.kind === "key_pool_unavailable" ||
+        (lastError.kind === "invalid_request" && multiResult.error.kind !== "invalid_request")
+      ) {
+        lastError = multiResult.error;
+      }
       continue;
     }
 
-    const data = multiResult.events[0] || {};
+    const data = multiResult.data.events[0] || {};
     eventData = eventData || data;
-    allBookmakers = mergeBookmakersWithMarkets(allBookmakers, data.bookmakers || multiResult.mergedBookmakers || []);
-    lastQuota = multiResult.quota;
+    allBookmakers = mergeBookmakersWithMarkets(allBookmakers, data.bookmakers || multiResult.data.mergedBookmakers || []);
+    lastQuota = multiResult.data.quota;
     marketsSucceeded.push(...group);
   }
 
-  if (!eventData && allBookmakers.length === 0) return null;
+  if (!eventData && allBookmakers.length === 0) {
+    if (!lastError || lastError.kind === "invalid_request" || lastError.kind === "no_odds") {
+      // Event-level props commonly return 422 before books post a market.
+      // That is an empty market, not a broken key pool or scanner failure.
+      return {
+        data: {
+          eventData: { id: eventId },
+          bookmakers: [],
+          quota: lastQuota,
+          marketsSucceeded,
+          marketsFailed,
+        },
+        error: null,
+      };
+    }
+    return { data: null, error: lastError };
+  }
 
   return {
-    eventData: eventData || { id: eventId },
-    bookmakers: allBookmakers,
-    quota: lastQuota,
-    marketsSucceeded,
-    marketsFailed,
+    data: {
+      eventData: eventData || { id: eventId },
+      bookmakers: allBookmakers,
+      quota: lastQuota,
+      marketsSucceeded,
+      marketsFailed,
+    },
+    error: null,
   };
 }
 
@@ -418,9 +470,9 @@ Deno.serve(async (req) => {
         `${ODDS_API_BASE}/sports/${sportKey}/events?apiKey=${apiKey}`,
       );
 
-      if (!result) {
-        console.log(JSON.stringify({ fn: "nba-odds", action: "event-ids", sport, status: "error", reason: "all_keys_exhausted" }));
-        return json({ error: "All API keys exhausted" }, 503);
+      if ("error" in result) {
+        console.log(JSON.stringify({ fn: "nba-odds", action: "event-ids", sport, status: "error", reason: result.error.kind }));
+        return rotationErrorJson(result.error);
       }
       if (!result.resp.ok) {
         const body = await result.resp.text().catch(() => "");
@@ -472,18 +524,19 @@ Deno.serve(async (req) => {
         regionConfigs,
       );
 
-      if (!multiResult) {
-        console.log(JSON.stringify({ fn: "nba-odds", action: "events", sport, status: "error", reason: "all_keys_exhausted" }));
-        return json({ error: "All API keys exhausted" }, 503);
+      if (multiResult.error) {
+        console.log(JSON.stringify({ fn: "nba-odds", action: "events", sport, status: "error", reason: multiResult.error.kind }));
+        return rotationErrorJson(multiResult.error);
       }
+      const regionData = multiResult.data;
 
       const responseData = {
-        events: multiResult.events,
-        quota: multiResult.quota,
+        events: regionData.events,
+        quota: regionData.quota,
         regions_queried: REGION_CONFIGS.map(c => c.region),
         sport,
       };
-      console.log(JSON.stringify({ fn: "nba-odds", action: "events", sport, eventsFound: multiResult.events.length, quotaRemaining: multiResult.quota.remaining, quotaUsed: multiResult.quota.used }));
+      console.log(JSON.stringify({ fn: "nba-odds", action: "events", sport, eventsFound: regionData.events.length, quotaRemaining: regionData.quota.remaining, quotaUsed: regionData.quota.used }));
       setCache(cacheKey, responseData);
       return json(responseData);
     }
@@ -522,17 +575,18 @@ Deno.serve(async (req) => {
         PROP_REGIONS,
       );
 
-      if (!propsResult) {
+      if (propsResult.error) {
         console.log(JSON.stringify({
           fn: "nba-odds", action: "player-props", sport, eventId,
-          status: "empty", reason: "all_regions_failed_or_unsupported",
+          status: "error", reason: propsResult.error.kind,
           requestedMarkets: markets.split(","),
         }));
-        return json({ error: "All API keys exhausted or markets unsupported" }, 503);
+        return rotationErrorJson(propsResult.error);
       }
+      const propsData = propsResult.data;
 
-      const playerMap = buildPlayerMap(propsResult.bookmakers, sport);
-      const eventData = propsResult.eventData || {};
+      const playerMap = buildPlayerMap(propsData.bookmakers, sport);
+      const eventData = propsData.eventData || {};
       const playerCount = Object.keys(playerMap).length;
       const parsedPropLines = countParsedPropLines(playerMap);
 
@@ -543,12 +597,12 @@ Deno.serve(async (req) => {
         sportKey,
         eventId,
         requestedMarkets: markets.split(","),
-        marketsSucceeded: propsResult.marketsSucceeded,
-        marketsFailed: propsResult.marketsFailed,
+        marketsSucceeded: propsData.marketsSucceeded,
+        marketsFailed: propsData.marketsFailed,
         players: playerCount,
         propLines: parsedPropLines,
-        bookmakers: propsResult.bookmakers.length,
-        quotaRemaining: propsResult.quota.remaining,
+        bookmakers: propsData.bookmakers.length,
+        quotaRemaining: propsData.quota.remaining,
       }));
 
       const responseData = {
@@ -557,12 +611,12 @@ Deno.serve(async (req) => {
         away_team: eventData.away_team,
         commence_time: eventData.commence_time,
         players: playerMap,
-        quota: propsResult.quota,
+        quota: propsData.quota,
         sources: PROP_REGIONS.map(c => c.region),
         sport,
         requested_markets: markets.split(","),
-        markets_succeeded: propsResult.marketsSucceeded,
-        markets_failed: propsResult.marketsFailed,
+        markets_succeeded: propsData.marketsSucceeded,
+        markets_failed: propsData.marketsFailed,
         parsed_players: playerCount,
         parsed_prop_lines: parsedPropLines,
       };
@@ -592,8 +646,8 @@ Deno.serve(async (req) => {
         const multiResult = await fetchMultiRegion(supabase, (apiKey, region, bookmakers) =>
           `${ODDS_API_BASE}/sports/${sportKey}/odds/?apiKey=${apiKey}&regions=${region}&oddsFormat=american&bookmakers=${bookmakers}&markets=h2h`
         );
-        if (!multiResult) return json({ error: "All API keys exhausted" }, 503);
-        eventsData = { events: multiResult.events, quota: multiResult.quota, sport };
+        if (multiResult.error) return rotationErrorJson(multiResult.error);
+        eventsData = { events: multiResult.data.events, quota: multiResult.data.quota, sport };
         setCache(eventsCacheKey, eventsData);
       }
 
@@ -733,16 +787,22 @@ Deno.serve(async (req) => {
             const multiResult = await fetchMultiRegion(supabase, (apiKey, region, bookmakers) =>
               `${ODDS_API_BASE}/sports/${sportKey}/events/${event.id}/odds?apiKey=${apiKey}&regions=${region}&oddsFormat=american&bookmakers=${bookmakers}&markets=${propMarkets}`,
               PROP_REGIONS,
+              controller.signal,
             );
 
             clearTimeout(timeoutId);
-            if (!multiResult) continue;
+            if (multiResult.error) {
+              if (multiResult.error.kind === "key_pool_unavailable") {
+                return rotationErrorJson(multiResult.error);
+              }
+              continue;
+            }
 
-            const playerMap = buildPlayerMap(multiResult.mergedBookmakers, sport);
-            const evData = multiResult.events[0] || {};
+            const playerMap = buildPlayerMap(multiResult.data.mergedBookmakers, sport);
+            const evData = multiResult.data.events[0] || {};
             propsData = {
               event_id: evData.id, home_team: evData.home_team, away_team: evData.away_team,
-              commence_time: evData.commence_time, players: playerMap, quota: multiResult.quota,
+              commence_time: evData.commence_time, players: playerMap, quota: multiResult.data.quota,
             };
             setCache(propsCacheKey, propsData);
           } catch (fetchErr) {
@@ -797,7 +857,7 @@ Deno.serve(async (req) => {
       const result = await fetchWithRotation(supabase, (apiKey) =>
         `${ODDS_API_BASE}/sports/?apiKey=${apiKey}`
       );
-      if (!result) return json({ error: "All API keys exhausted" }, 503);
+      if ("error" in result) return rotationErrorJson(result.error);
       const data = await result.resp.json();
       return json(data);
     }

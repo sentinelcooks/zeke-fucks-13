@@ -23,7 +23,7 @@
 //
 // Logs never include the raw key.
 
-import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const RECHECK_INTERVAL_HOURS = 6;
 const PROBE_URL = "https://api.the-odds-api.com/v4/sports/";
@@ -34,6 +34,7 @@ export const APP_CONFIG_ID = "app-config";
 export type KeyInfo = { id: string; key: string; source: "pool" | "app_config" | "env" };
 
 export type RotationErrorKind =
+  | "key_pool_unavailable"
   | "no_usable_keys"
   | "upstream_5xx"
   | "auth_error"
@@ -47,6 +48,91 @@ export type RotationError = {
   retryAfterMs?: number;
   detail?: string;
 };
+
+type PoolQueryError = {
+  code?: string | null;
+  message?: string | null;
+  details?: string | null;
+  hint?: string | null;
+};
+
+export class OddsKeyPoolUnavailableError extends Error {
+  readonly causeError: PoolQueryError;
+
+  constructor(label: string, causeError: PoolQueryError) {
+    super(`Odds API key pool query failed (${label}): ${causeError.message ?? causeError.code ?? "unknown error"}`);
+    this.name = "OddsKeyPoolUnavailableError";
+    this.causeError = causeError;
+  }
+}
+
+export function isTransientPoolDbError(error: PoolQueryError | null | undefined): boolean {
+  if (!error) return false;
+  if (["PGRST000", "PGRST001", "PGRST002", "08000", "08003", "08006", "08001", "08004"].includes(error.code ?? "")) {
+    return true;
+  }
+  const text = `${error.message ?? ""} ${error.details ?? ""}`.toLowerCase();
+  return /schema cache|connection|connect|timeout|timed out|temporar|database unavailable|too many connections/.test(text);
+}
+
+export async function withPoolQueryRetry<T>(
+  operation: () => PromiseLike<{ data: T; error: PoolQueryError | null }>,
+  options: {
+    label: string;
+    attempts?: number;
+    sleep?: (milliseconds: number) => Promise<unknown>;
+  },
+): Promise<T> {
+  const attempts = Math.max(1, options.attempts ?? 3);
+  const sleep = options.sleep ?? ((milliseconds: number) =>
+    new Promise((resolve) => setTimeout(resolve, milliseconds)));
+  let lastError: PoolQueryError | null = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const result = await operation();
+    if (!result.error) return result.data;
+    lastError = result.error;
+    if (!isTransientPoolDbError(result.error) || attempt === attempts) break;
+    await sleep(150 * attempt);
+  }
+
+  throw new OddsKeyPoolUnavailableError(options.label, lastError ?? { message: "unknown query failure" });
+}
+
+export function rotationFailureResponse(error: RotationError): {
+  status: number;
+  body: { error: string; code: RotationErrorKind; retryAfterMs?: number; detail?: string };
+} {
+  switch (error.kind) {
+    case "key_pool_unavailable":
+      return {
+        status: 503,
+        body: {
+          error: "Odds API key pool temporarily unavailable",
+          code: error.kind,
+          retryAfterMs: error.retryAfterMs ?? 2_000,
+        },
+      };
+    case "no_usable_keys":
+      return {
+        status: 503,
+        body: {
+          error: "No usable uploaded Odds API keys are currently available",
+          code: error.kind,
+        },
+      };
+    default:
+      return {
+        status: error.status && error.status >= 400 && error.status < 500 ? error.status : 502,
+        body: {
+          error: "Odds provider request failed",
+          code: error.kind,
+          ...(error.retryAfterMs ? { retryAfterMs: error.retryAfterMs } : {}),
+          ...(error.detail ? { detail: error.detail } : {}),
+        },
+      };
+  }
+}
 
 const INVALID_AUTH_BODY = /invalid api key|unauthori[sz]ed|forbidden/i;
 
@@ -75,45 +161,51 @@ async function probeKey(rawKey: string): Promise<Response> {
 // ── Selection ────────────────────────────────────────────────────────────────
 
 async function pickAvailable(supabase: SupabaseClient): Promise<KeyInfo | null> {
-  const { data } = await supabase
-    .from("odds_api_keys")
-    .select("id, api_key")
-    .eq("status", "available")
-    .order("last_used_at", { ascending: true, nullsFirst: true })
-    .limit(1)
-    .maybeSingle();
-  if (data) return { id: data.id, key: data.api_key, source: "pool" };
+  const data = await withPoolQueryRetry(
+    () => supabase.rpc("claim_available_odds_api_key").maybeSingle(),
+    { label: "claim available key" },
+  );
+  if (data) return { id: data.key_id, key: data.key_value, source: "pool" };
   return null;
 }
 
 async function pickRateLimitedReady(supabase: SupabaseClient): Promise<KeyInfo | null> {
-  const { data } = await supabase
-    .from("odds_api_keys")
-    .select("id, api_key")
-    .eq("status", "rate_limited")
-    .lt("rate_limited_until", nowIso())
-    .order("rate_limited_until", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const data = await withPoolQueryRetry(
+    () => supabase
+      .from("odds_api_keys")
+      .select("id, api_key")
+      .eq("status", "rate_limited")
+      .lt("rate_limited_until", nowIso())
+      .order("rate_limited_until", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    { label: "select cooled-down key" },
+  );
   if (!data) return null;
-  await supabase
-    .from("odds_api_keys")
-    .update({ status: "available", rate_limited_until: null })
-    .eq("id", data.id);
+  await withPoolQueryRetry(
+    () => supabase
+      .from("odds_api_keys")
+      .update({ status: "available", rate_limited_until: null })
+      .eq("id", data.id),
+    { label: "restore cooled-down key" },
+  );
   return { id: data.id, key: data.api_key, source: "pool" };
 }
 
 async function pickRecheckCandidate(supabase: SupabaseClient): Promise<KeyInfo | null> {
   const cutoff = new Date(Date.now() - RECHECK_INTERVAL_HOURS * 3600 * 1000).toISOString();
   // NOTE the parentheses — without them the OR short-circuits across statuses.
-  const { data } = await supabase
-    .from("odds_api_keys")
-    .select("id, api_key")
-    .in("status", ["exhausted_quota", "unknown"])
-    .or(`last_checked_at.is.null,last_checked_at.lt.${cutoff}`)
-    .order("last_checked_at", { ascending: true, nullsFirst: true })
-    .limit(1)
-    .maybeSingle();
+  const data = await withPoolQueryRetry(
+    () => supabase
+      .from("odds_api_keys")
+      .select("id, api_key")
+      .in("status", ["exhausted_quota", "unknown"])
+      .or(`last_checked_at.is.null,last_checked_at.lt.${cutoff}`)
+      .order("last_checked_at", { ascending: true, nullsFirst: true })
+      .limit(1)
+      .maybeSingle(),
+    { label: "select key recheck candidate" },
+  );
   if (!data) return null;
 
   // Probe synchronously. Only return the key if the probe recovers it; otherwise
@@ -126,24 +218,32 @@ async function pickRecheckCandidate(supabase: SupabaseClient): Promise<KeyInfo |
       return { id: data.id, key: data.api_key, source: "pool" };
     }
   } catch (e) {
-    await supabase
-      .from("odds_api_keys")
-      .update({
-        last_checked_at: nowIso(),
-        consecutive_errors: (await getConsecutive(supabase, data.id)) + 1,
-        last_error: `probe network error: ${String(e).slice(0, 200)}`,
-      })
-      .eq("id", data.id);
+    if (e instanceof OddsKeyPoolUnavailableError) throw e;
+    const consecutiveErrors = (await getConsecutive(supabase, data.id)) + 1;
+    await withPoolQueryRetry(
+      () => supabase
+        .from("odds_api_keys")
+        .update({
+          last_checked_at: nowIso(),
+          consecutive_errors: consecutiveErrors,
+          last_error: `probe network error: ${String(e).slice(0, 200)}`,
+        })
+        .eq("id", data.id),
+      { label: "record key probe failure" },
+    );
   }
   return null;
 }
 
 async function getConsecutive(supabase: SupabaseClient, id: string): Promise<number> {
-  const { data } = await supabase
-    .from("odds_api_keys")
-    .select("consecutive_errors")
-    .eq("id", id)
-    .maybeSingle();
+  const data = await withPoolQueryRetry(
+    () => supabase
+      .from("odds_api_keys")
+      .select("consecutive_errors")
+      .eq("id", id)
+      .maybeSingle(),
+    { label: "read key error count" },
+  );
   return data?.consecutive_errors ?? 0;
 }
 
@@ -157,11 +257,14 @@ export async function getNextApiKey(supabase: SupabaseClient): Promise<KeyInfo |
   const c = await pickRecheckCandidate(supabase);
   if (c) return c;
 
-  const { data: configData } = await supabase
-    .from("app_config")
-    .select("value")
-    .eq("key", "odds_api_key")
-    .maybeSingle();
+  const configData = await withPoolQueryRetry(
+    () => supabase
+      .from("app_config")
+      .select("value")
+      .eq("key", "odds_api_key")
+      .maybeSingle(),
+    { label: "read admin Odds API fallback" },
+  );
   if (configData?.value) return { id: APP_CONFIG_ID, key: configData.value, source: "app_config" };
 
   const envKey = Deno.env.get("ODDS_API_KEY");
@@ -288,15 +391,21 @@ async function applyOutcome(
     }
   }
 
-  await supabase.from("odds_api_keys").update(base).eq("id", keyId);
+  await withPoolQueryRetry(
+    () => supabase.from("odds_api_keys").update(base).eq("id", keyId),
+    { label: "update key outcome" },
+  );
 }
 
 async function getErrorCount(supabase: SupabaseClient, id: string): Promise<number> {
-  const { data } = await supabase
-    .from("odds_api_keys")
-    .select("error_count")
-    .eq("id", id)
-    .maybeSingle();
+  const data = await withPoolQueryRetry(
+    () => supabase
+      .from("odds_api_keys")
+      .select("error_count")
+      .eq("id", id)
+      .maybeSingle(),
+    { label: "read key lifetime error count" },
+  );
   return data?.error_count ?? 0;
 }
 
@@ -333,10 +442,13 @@ export async function setKeyStatus(
   }> = {},
 ): Promise<void> {
   if (isSentinel(keyId)) return;
-  await supabase
-    .from("odds_api_keys")
-    .update({ status, last_checked_at: nowIso(), ...extra })
-    .eq("id", keyId);
+  await withPoolQueryRetry(
+    () => supabase
+      .from("odds_api_keys")
+      .update({ status, last_checked_at: nowIso(), ...extra })
+      .eq("id", keyId),
+    { label: "set key status" },
+  );
 }
 
 /**
@@ -358,7 +470,16 @@ export async function fetchWithRotation(
   let lastError: RotationError | null = null;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const keyInfo = await getNextApiKey(supabase);
+    let keyInfo: KeyInfo | null;
+    try {
+      keyInfo = await getNextApiKey(supabase);
+    } catch (error) {
+      if (error instanceof OddsKeyPoolUnavailableError) {
+        console.error(`[oddsKeyPool] key_pool_unavailable: ${error.message}`);
+        return { error: { kind: "key_pool_unavailable", retryAfterMs: 2_000 } };
+      }
+      throw error;
+    }
     if (!keyInfo) {
       return { error: { kind: "no_usable_keys" } };
     }
@@ -373,16 +494,34 @@ export async function fetchWithRotation(
     try {
       resp = await fetch(buildUrl(keyInfo.key), { signal: opts.signal });
     } catch (e) {
-      await applyOutcome(supabase, keyInfo.id, {
-        status: "transient",
-        detail: `network: ${String(e).slice(0, 200)}`,
-      });
+      try {
+        await applyOutcome(supabase, keyInfo.id, {
+          status: "transient",
+          detail: `network: ${String(e).slice(0, 200)}`,
+        });
+      } catch (poolError) {
+        if (poolError instanceof OddsKeyPoolUnavailableError) {
+          return { error: { kind: "key_pool_unavailable", retryAfterMs: 2_000 } };
+        }
+        throw poolError;
+      }
       lastError = { kind: "upstream_5xx", detail: String(e).slice(0, 200) };
       continue;
     }
 
     const outcome = await classifyResponse(resp.clone());
-    await applyOutcome(supabase, keyInfo.id, outcome);
+    try {
+      await applyOutcome(supabase, keyInfo.id, outcome);
+    } catch (poolError) {
+      if (!(poolError instanceof OddsKeyPoolUnavailableError)) throw poolError;
+      if (outcome.status === "available" || outcome.status === "exhausted_quota") {
+        // Do not discard valid provider data solely because usage bookkeeping
+        // was briefly unavailable. The next selection will retry the pool.
+        console.error(`[oddsKeyPool] valid response returned but bookkeeping failed: ${poolError.message}`);
+      } else {
+        return { error: { kind: "key_pool_unavailable", retryAfterMs: 2_000 } };
+      }
+    }
 
     switch (outcome.status) {
       case "available":

@@ -1,4 +1,9 @@
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+function normalizeProjectUrl(url: string | undefined): string {
+  return (url ?? "").trim().replace(/\/+$/, "").toLowerCase();
+}
 
 /**
  * Returns the local Supabase client (the function's own project).
@@ -23,6 +28,13 @@ export function getLocalClient(): SupabaseClient {
 export async function getMasterClient(): Promise<SupabaseClient> {
   const masterUrl = Deno.env.get("MASTER_SUPABASE_URL");
   const masterKey = Deno.env.get("MASTER_SUPABASE_SERVICE_KEY");
+  const localUrl = Deno.env.get("SUPABASE_URL");
+  if (masterUrl && normalizeProjectUrl(masterUrl) === normalizeProjectUrl(localUrl)) {
+    // This is the common single-project deployment. Avoid an extra database
+    // schema-cache probe on every Odds API request; the real pool query still
+    // performs bounded retries and reports outages explicitly.
+    return getLocalClient();
+  }
   if (masterUrl && masterKey) {
     try {
       const client = createClient(masterUrl, masterKey);

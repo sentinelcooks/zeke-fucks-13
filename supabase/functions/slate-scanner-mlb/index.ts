@@ -1,6 +1,7 @@
 import { scanSport } from "../_shared/sport_scan.ts";
 import { applyWaitToScanResult, buildWaitClient, parseWaitOptions } from "../_shared/scan_wait.ts";
 import { requireServiceRoleAccess } from "../_shared/premium-access.ts";
+import { parseScanBatchRequest } from "../_shared/scan_batches.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,16 +22,18 @@ Deno.serve(async (req) => {
     // the queue in small chunks via cron — this is the fix for the HTTP 546
     // WORKER_RESOURCE_LIMIT that killed MLB's inline scan.
     const inlineAnalyze = body?.inline_analyze === true;
+    const batch = parseScanBatchRequest(body);
     const result = await scanSport("mlb", {
       inlineAnalyze,
       runId: typeof body?.run_id === "string" ? body.run_id : undefined,
+      ...batch,
     });
     if (waitOpts.wait) {
       const client = buildWaitClient();
       if (client) await applyWaitToScanResult(client, "mlb", result, waitOpts.timeoutMs);
     }
     return new Response(JSON.stringify(result), {
-      status: 200,
+      status: result.error ? 503 : 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
