@@ -23,6 +23,7 @@ export type AnalyzerCandidate = {
 export type AnalyzerPoolCandidate = {
   bet_type: string;
   edge: number;
+  quality_score?: number;
 };
 
 export function analyzerEndpointForCandidate(
@@ -200,7 +201,9 @@ export function selectAnalyzerPoolDiversifiedByBetType<T extends AnalyzerPoolCan
   minimumPerBetType = 6,
 ): { selected: T[]; excluded: T[]; truncated: boolean } {
   const boundedCap = Math.max(0, Math.floor(cap));
-  const sorted = [...candidates].sort((a, b) => b.edge - a.edge);
+  const sorted = [...candidates].sort((a, b) =>
+    (b.edge - a.edge) || ((b.quality_score ?? 0) - (a.quality_score ?? 0))
+  );
   if (boundedCap === 0) {
     return { selected: [], excluded: sorted, truncated: sorted.length > 0 };
   }

@@ -36,6 +36,7 @@ import {
 import {
   buildGenericQueueFinalization,
   buildNbaQueueFinalization,
+  buildWnbaQueueFinalization,
 } from "./nba_queue_finalization.ts";
 import {
   normalizeCanonicalVerdict,
@@ -193,8 +194,17 @@ function buildScoredPlayFromQueueRow(
   const canonicalVerdict = normalizeCanonicalVerdict(undefined, projectedProb);
   const analyzerCalledAt = new Date().toISOString();
   const md = (c.model_diagnostics ?? {}) as Record<string, unknown>;
+  const analyzerDiagnostics = ar.model_diagnostics && typeof ar.model_diagnostics === "object"
+    ? ar.model_diagnostics as Record<string, unknown>
+    : {};
+  const analyzerPrediction = ar.prediction && typeof ar.prediction === "object"
+    ? ar.prediction as Record<string, unknown>
+    : {};
   const merged: Record<string, unknown> = {
     ...md,
+    ...analyzerDiagnostics,
+    analyzer_prediction_data_quality: analyzerPrediction.dataQuality ?? null,
+    wnba_data_quality: analyzerDiagnostics.wnba_data_quality ?? analyzerPrediction.dataQuality ?? md.wnba_data_quality ?? null,
     confidenceSource: "analyzer",
     sourceContractVersion: "analyzer-finalize.v1",
     canonical_confidence: Math.round(projectedProb * 100),
@@ -226,6 +236,7 @@ function buildScoredPlayFromQueueRow(
   const edge = probabilitySupported ? Math.max(0, projectedProb - impliedRaw) : 0;
   const analyzerReasoning =
     (typeof ar.reasoning === "string" && ar.reasoning.trim()) ? ar.reasoning :
+    (Array.isArray(ar.reasoning) && ar.reasoning.length > 0) ? ar.reasoning.slice(0, 3).map(String).join(" ") :
     (typeof ar.analysis === "string" && ar.analysis.trim()) ? ar.analysis :
     (typeof ar.model_writeup === "string" && ar.model_writeup.trim()) ? ar.model_writeup :
     (typeof ar.writeup === "string" && ar.writeup.trim()) ? ar.writeup : "";
@@ -696,6 +707,13 @@ async function processRow(args: {
   // why tier='edge' was permanently empty for those sports. Route by sport.
   const finalization = row.sport === "nba"
     ? buildNbaQueueFinalization({
+        baseDiagnostics: scored.model_diagnostics ?? null,
+        currentEdgeCount: args.edgeCount,
+        edgeCap: args.edgeCap,
+        finalized: scored,
+      })
+    : row.sport === "wnba"
+    ? buildWnbaQueueFinalization({
         baseDiagnostics: scored.model_diagnostics ?? null,
         currentEdgeCount: args.edgeCount,
         edgeCap: args.edgeCap,

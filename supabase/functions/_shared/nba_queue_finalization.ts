@@ -156,6 +156,111 @@ export function buildGenericQueueFinalization(args: {
   };
 }
 
+export function buildWnbaQueueFinalization(args: {
+  baseDiagnostics: Record<string, unknown> | null | undefined;
+  currentEdgeCount: number;
+  edgeCap: number;
+  finalized: ScoredPlay;
+  now?: Date;
+}): NbaQueueFinalizationResult {
+  const generic = buildGenericQueueFinalization(args);
+  const diagnostics = { ...generic.diagnostics } as Record<string, unknown>;
+  const missing = Array.isArray(diagnostics.missing_inputs)
+    ? diagnostics.missing_inputs.map((value) => String(value))
+    : [];
+  const quality = String(diagnostics.wnba_data_quality ?? "").toLowerCase();
+  const marketQuality = String(diagnostics.marketDataQuality ?? "").toLowerCase();
+  const bookCount = Number(diagnostics.bookCount ?? 0);
+  const betType = args.finalized.bet_type;
+  let wnbaBlocker: string | null = generic.promotionBlocker;
+
+  if (!wnbaBlocker && quality === "low") wnbaBlocker = "wnba_data_quality_low";
+  if (!wnbaBlocker && diagnostics.injury_source_available !== true) {
+    wnbaBlocker = "wnba_injury_source_unavailable";
+  }
+  if (!wnbaBlocker && (!Number.isFinite(bookCount) || bookCount < 3 || !["medium", "high"].includes(marketQuality))) {
+    wnbaBlocker = "wnba_market_depth_insufficient";
+  }
+
+  if (betType === "prop") {
+    const currentSample = Number(diagnostics.current_season_sample ?? 0);
+    if (!wnbaBlocker && diagnostics.lineup_status !== "confirmed") {
+      wnbaBlocker = "wnba_starting_lineup_unconfirmed";
+    }
+    if (!wnbaBlocker && diagnostics.player_starting === false) {
+      wnbaBlocker = "wnba_player_not_starting";
+    }
+    if (!wnbaBlocker && ["questionable", "day-to-day", "out", "doubtful"].includes(String(diagnostics.player_availability ?? "").toLowerCase())) {
+      wnbaBlocker = "wnba_player_availability_risk";
+    }
+    if (!wnbaBlocker && diagnostics.minutes_restriction === true) {
+      wnbaBlocker = "wnba_minutes_restriction";
+    }
+    if (!wnbaBlocker && currentSample < 10) {
+      wnbaBlocker = "wnba_current_sample_below_10";
+    }
+  } else {
+    const samples = diagnostics.current_season_samples as Record<string, unknown> | null | undefined;
+    if (!wnbaBlocker && diagnostics.matchup_confirmed !== true) {
+      wnbaBlocker = "wnba_matchup_unconfirmed";
+    }
+    if (!wnbaBlocker && diagnostics.lineup_status !== "confirmed") {
+      wnbaBlocker = "wnba_starting_lineups_unconfirmed";
+    }
+    if (!wnbaBlocker && diagnostics.selected_side_confirmed !== true) {
+      wnbaBlocker = "wnba_selected_side_unverified";
+    }
+    if (!wnbaBlocker && (Number(samples?.selected ?? 0) < 5 || Number(samples?.opponent ?? 0) < 5)) {
+      wnbaBlocker = "wnba_team_sample_below_5";
+    }
+  }
+
+  if (!wnbaBlocker && missing.includes("INJURY_SOURCE_UNAVAILABLE")) {
+    wnbaBlocker = "wnba_injury_source_unavailable";
+  }
+
+  const canPromote = wnbaBlocker === null;
+  const finalTier: NbaQueueFinalTier = canPromote
+    ? "edge"
+    : generic.confidence >= PROB_LEAN
+      ? "daily"
+      : "value";
+  diagnostics.postGateTier = finalTier;
+  diagnostics.final_edge_eligible = canPromote;
+  diagnostics.edge_pool_selected = canPromote;
+  diagnostics.edge_pool_selection_reason = canPromote ? "selected_from_queue_wnba" : wnbaBlocker;
+  diagnostics.edgeDowngradeReason = wnbaBlocker;
+  diagnostics.wnba_edge_gate = {
+    ok: canPromote,
+    blocker: wnbaBlocker,
+    data_quality: quality || null,
+    market_quality: marketQuality || null,
+    book_count: Number.isFinite(bookCount) ? bookCount : null,
+  };
+
+  return {
+    ...generic,
+    canPromote,
+    diagnostics,
+    finalTier,
+    gate: {
+      ...generic.gate,
+      ok: canPromote,
+      reasons: wnbaBlocker ? [wnbaBlocker] : [],
+      hardSafetyFail: !!wnbaBlocker && [
+        "wnba_injury_source_unavailable",
+        "wnba_player_availability_risk",
+        "wnba_minutes_restriction",
+        "wnba_matchup_unconfirmed",
+        "wnba_starting_lineups_unconfirmed",
+        "wnba_selected_side_unverified",
+      ].includes(wnbaBlocker),
+      edge_gate_result: canPromote ? "passed" : "failed",
+    },
+    promotionBlocker: wnbaBlocker,
+  };
+}
+
 export function buildNbaQueueFinalization(args: {
   baseDiagnostics: Record<string, unknown> | null | undefined;
   currentEdgeCount: number;

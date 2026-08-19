@@ -248,13 +248,13 @@ export function buildDailyPickRow({
     runId: runId ?? (playDiag.runId as string | null | undefined) ?? null,
   };
 
-  // For NBA props we must store the *normalized* prop_type so manual Analyze
+  // For NBA/WNBA props we must store the *normalized* prop_type so manual Analyze
   // (which sends whatever prop_type is on the saved row) hits the same
   // analyzer key the scanner used. Other sports keep the raw value: NHL in
   // particular relies on the "nhl_points"/"nhl_assists" prefixed form
   // because nba-api/analyze's stat switch matches on those keys.
   const storedPropType =
-    play.sport === "nba" && play.bet_type === "prop"
+    (play.sport === "nba" || play.sport === "wnba") && play.bet_type === "prop"
       ? normalizeNbaPropType(play.prop_type)
       : play.prop_type;
 

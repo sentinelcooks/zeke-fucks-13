@@ -23,10 +23,16 @@ export interface InjuryReport {
   team2: NormalizedInjury[];
   fetchedAt: string;
   source: "espn-league-injuries";
+  sourceAvailable: boolean;
+  sourceUpdatedAt: string | null;
+  team1Matched: boolean;
+  team2Matched: boolean;
+  error: string | null;
 }
 
 const ESPN_BASES: Record<string, string> = {
   nba: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba",
+  wnba: "https://site.api.espn.com/apis/site/v2/sports/basketball/wnba",
   ncaab: "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball",
   mlb: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb",
   nhl: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl",
@@ -63,17 +69,60 @@ export function normalizeStatus(raw: string | undefined | null): NormalizedStatu
 }
 
 // Fetches league-wide injury data ONCE per call. NO module-level cache.
-async function fetchLeagueInjuries(sport: string): Promise<any[]> {
-  const base = ESPN_BASES[sport] || ESPN_BASES.nba;
+interface LeagueInjuryFetch {
+  teams: any[];
+  available: boolean;
+  updatedAt: string | null;
+  error: string | null;
+}
+
+async function fetchLeagueInjuries(sport: string): Promise<LeagueInjuryFetch> {
+  const base = ESPN_BASES[sport];
+  if (!base) {
+    return {
+      teams: [],
+      available: false,
+      updatedAt: null,
+      error: `unsupported_injury_sport:${sport}`,
+    };
+  }
   try {
     const resp = await fetch(`${base}/injuries`, {
       headers: { "User-Agent": "PrimalAnalytics/1.0" },
     });
-    if (!resp.ok) return [];
+    if (!resp.ok) {
+      return {
+        teams: [],
+        available: false,
+        updatedAt: null,
+        error: `espn_injuries_http_${resp.status}`,
+      };
+    }
     const data = await resp.json();
-    return data?.injuries || [];
-  } catch {
-    return [];
+    if (!Array.isArray(data?.injuries)) {
+      return {
+        teams: [],
+        available: false,
+        updatedAt: null,
+        error: "espn_injuries_shape_invalid",
+      };
+    }
+    const updatedAt = data?.timestamp && Number.isFinite(Date.parse(data.timestamp))
+      ? new Date(data.timestamp).toISOString()
+      : null;
+    return {
+      teams: data.injuries,
+      available: true,
+      updatedAt,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      teams: [],
+      available: false,
+      updatedAt: null,
+      error: error instanceof Error ? error.message : "espn_injuries_fetch_failed",
+    };
   }
 }
 
@@ -127,16 +176,29 @@ export async function fetchMatchupInjuries(
   team1: { id?: string; abbr?: string; name?: string },
   team2: { id?: string; abbr?: string; name?: string },
 ): Promise<InjuryReport> {
-  const fetchedAt = new Date().toISOString();
-  const allTeams = await fetchLeagueInjuries(sport);
-  const t1Entry = matchTeamEntry(allTeams, { teamId: team1.id, teamAbbr: team1.abbr, teamName: team1.name });
-  const t2Entry = matchTeamEntry(allTeams, { teamId: team2.id, teamAbbr: team2.abbr, teamName: team2.name });
+  const requestedAt = new Date().toISOString();
+  const league = await fetchLeagueInjuries(sport);
+  const fetchedAt = league.updatedAt ?? requestedAt;
+  const t1Entry = matchTeamEntry(league.teams, { teamId: team1.id, teamAbbr: team1.abbr, teamName: team1.name });
+  const t2Entry = matchTeamEntry(league.teams, { teamId: team2.id, teamAbbr: team2.abbr, teamName: team2.name });
   return {
     team1: t1Entry ? normalizeTeamInjuries(t1Entry, fetchedAt) : [],
     team2: t2Entry ? normalizeTeamInjuries(t2Entry, fetchedAt) : [],
     fetchedAt,
     source: "espn-league-injuries",
+    sourceAvailable: league.available,
+    sourceUpdatedAt: league.updatedAt,
+    team1Matched: !!t1Entry,
+    team2Matched: !team2.id && !team2.abbr && !team2.name ? false : !!t2Entry,
+    error: league.error,
   };
+}
+
+export async function fetchTeamInjuryReport(
+  sport: string,
+  team: { id?: string; abbr?: string; name?: string },
+): Promise<InjuryReport> {
+  return await fetchMatchupInjuries(sport, team, {});
 }
 
 // Convenience for single-team callers (nba-api props tab).
@@ -144,7 +206,7 @@ export async function fetchTeamInjuries(
   sport: string,
   team: { id?: string; abbr?: string; name?: string },
 ): Promise<NormalizedInjury[]> {
-  const report = await fetchMatchupInjuries(sport, team, {});
+  const report = await fetchTeamInjuryReport(sport, team);
   return report.team1;
 }
 

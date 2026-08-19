@@ -3,6 +3,14 @@ import { getMasterClient } from "../_shared/masterClient.ts";
 import { normalizeBookKey } from "../_shared/normalizeBookName.ts";
 import { selectBestBookLine, type BookLine, type Direction, type MarketType } from "../_shared/bestBookLine.ts";
 import { requirePremiumAccess } from "../_shared/premium-access.ts";
+import {
+  buildWnbaAvailability,
+  buildWnbaTeamMetrics,
+  deriveWnbaEfficiency,
+  fetchWnbaLineupContext,
+  scoreWnbaTeamMarket,
+  type WnbaAvailability,
+} from "../_shared/wnba_model.ts";
 
 /* ── Single Source of Truth: Decision Builder ──
  * Sport-agnostic. Used for moneyline / spread / total across all sports.
@@ -428,6 +436,52 @@ async function getTeamStats(teamId: string, sport = "nba") {
   }
 }
 
+async function getWnbaAvailability(
+  teamId: string,
+  injuries: NormalizedInjury[],
+  sourceAvailable: boolean,
+  teamMatched: boolean,
+  season: number,
+): Promise<WnbaAvailability> {
+  const minutesByPlayer: Record<string, number | null> = {};
+  if (injuries.length === 0) {
+    return buildWnbaAvailability([], minutesByPlayer, sourceAvailable, teamMatched);
+  }
+  try {
+    const rosterResponse = await fetch(`${ESPN_WNBA}/teams/${encodeURIComponent(teamId)}/roster`);
+    const roster = rosterResponse.ok ? await rosterResponse.json() : null;
+    const athletes = Array.isArray(roster?.athletes) ? roster.athletes.flatMap((entry: any) => entry?.items ?? [entry]) : [];
+    const requests = injuries.map(async (injury) => {
+      const athlete = athletes.find((entry: any) => {
+        const player = entry?.athlete ?? entry;
+        return String(player?.displayName ?? "").toLowerCase() === injury.name.toLowerCase();
+      });
+      const player = athlete?.athlete ?? athlete;
+      const id = String(player?.id ?? "");
+      if (!id) return { name: injury.name, minutes: null as number | null };
+      try {
+        const response = await fetch(
+          `https://sports.core.api.espn.com/v2/sports/basketball/leagues/wnba/seasons/${season}/types/2/athletes/${id}/statistics`,
+        );
+        if (!response.ok) return { name: injury.name, minutes: null as number | null };
+        const data = await response.json();
+        for (const category of data?.splits?.categories ?? []) {
+          const stat = (category?.stats ?? []).find((row: any) => row?.name === "avgMinutes");
+          const minutes = Number(stat?.value ?? stat?.displayValue);
+          if (Number.isFinite(minutes)) return { name: injury.name, minutes };
+        }
+      } catch {
+        // Missing minutes remain null and reduce data quality downstream.
+      }
+      return { name: injury.name, minutes: null as number | null };
+    });
+    for (const row of await Promise.all(requests)) minutesByPlayer[row.name.toLowerCase()] = row.minutes;
+  } catch {
+    for (const injury of injuries) minutesByPlayer[injury.name.toLowerCase()] = null;
+  }
+  return buildWnbaAvailability(injuries, minutesByPlayer, sourceAvailable, teamMatched);
+}
+
 async function getScoreboard(sport = "nba") {
   const base = getEspnBase(sport);
   const data = await fetchJSON(`${base}/scoreboard`);
@@ -435,7 +489,7 @@ async function getScoreboard(sport = "nba") {
 }
 
 // ── Resolve real scheduled venue (HOME/AWAY for tonight's matchup) ──
-async function resolveMatchupVenue(team1Id: string, team2Id: string, sport: string): Promise<{ gameId: string; team1IsHome: boolean; gameDate: string } | null> {
+async function resolveMatchupVenue(team1Id: string, team2Id: string, sport: string): Promise<{ gameId: string; team1IsHome: boolean; gameDate: string; venueCity: string | null } | null> {
   try {
     const base = getEspnBase(sport);
     const t1 = String(team1Id), t2 = String(team2Id);
@@ -451,7 +505,12 @@ async function resolveMatchupVenue(team1Id: string, team2Id: string, sport: stri
         if (ids.includes(t1) && ids.includes(t2)) {
           const home = comp.competitors.find((c: any) => c.homeAway === "home");
           const homeId = String(home?.id || home?.team?.id);
-          return { gameId: String(ev.id), team1IsHome: homeId === t1, gameDate: ev.date };
+          return {
+            gameId: String(ev.id),
+            team1IsHome: homeId === t1,
+            gameDate: ev.date,
+            venueCity: comp?.venue?.address?.city ?? null,
+          };
         }
       }
     }
@@ -1426,6 +1485,8 @@ Deno.serve(async (req) => {
       ]);
       let previousSeasonFallbackUsed = false;
       let previousSeasonNote: string | null = null;
+      let previousSchedule1: any[] = [];
+      let previousSchedule2: any[] = [];
       if (sport === "wnba") {
         const currentSeason = getSeasonForSport(sport);
         const previousSeason = currentSeason - 1;
@@ -1435,13 +1496,15 @@ Deno.serve(async (req) => {
           getTeamScheduleForSeason(team1.id, sport, previousSeason),
           getTeamScheduleForSeason(team2.id, sport, previousSeason),
         ]);
+        schedule1 = current1;
+        schedule2 = current2;
+        previousSchedule1 = previous1;
+        previousSchedule2 = previous2;
         const currentFinals1 = current1.filter((ev: any) => isFinalCompetition(ev?.competitions?.[0])).length;
         const currentFinals2 = current2.filter((ev: any) => isFinalCompetition(ev?.competitions?.[0])).length;
         if ((currentFinals1 < 8 || currentFinals2 < 8) && (previous1.length > 0 || previous2.length > 0)) {
-          schedule1 = [...current1, ...previous1];
-          schedule2 = [...current2, ...previous2];
           previousSeasonFallbackUsed = true;
-          previousSeasonNote = "Confidence is moderated because WNBA current-season sample is limited; previous-season form was included as a fallback.";
+          previousSeasonNote = "A prior-season WNBA baseline is available as a separately labeled, low-weight prior; it is not merged into current-season results.";
         }
       }
       const injuries1: NormalizedInjury[] = injuryReport.team1;
@@ -1461,6 +1524,125 @@ Deno.serve(async (req) => {
       // Fetch live odds for all sports — always read rotation pool from MASTER DB.
       const oddsDb = await getMasterClient();
       const oddsData = await fetchOddsForMatchup(team1.name, team2.name, sport, oddsDb);
+
+      if (sport === "wnba") {
+        const targetDate = venue?.gameDate ?? new Date().toISOString();
+        const season = getSeasonForSport("wnba", new Date(targetDate));
+        const metrics1 = buildWnbaTeamMetrics(schedule1, team1.id, targetDate);
+        const metrics2 = buildWnbaTeamMetrics(schedule2, team2.id, targetDate);
+        const previousMetrics1 = previousSchedule1.length
+          ? buildWnbaTeamMetrics(previousSchedule1, team1.id, targetDate)
+          : null;
+        const previousMetrics2 = previousSchedule2.length
+          ? buildWnbaTeamMetrics(previousSchedule2, team2.id, targetDate)
+          : null;
+        const [availability1, availability2, lineup1, lineup2] = await Promise.all([
+          getWnbaAvailability(
+            team1.id,
+            injuries1,
+            injuryReport.sourceAvailable,
+            injuryReport.team1Matched,
+            season,
+          ),
+          getWnbaAvailability(
+            team2.id,
+            injuries2,
+            injuryReport.sourceAvailable,
+            injuryReport.team2Matched,
+            season,
+          ),
+          fetchWnbaLineupContext(venue?.gameId ?? null, team1.abbr, ""),
+          fetchWnbaLineupContext(venue?.gameId ?? null, team2.abbr, ""),
+        ]);
+        const wnba = scoreWnbaTeamMarket({
+          market: bet_type as "moneyline" | "spread" | "total",
+          selectedTeamName: team1.name,
+          opponentTeamName: team2.name,
+          selectedMetrics: metrics1,
+          opponentMetrics: metrics2,
+          selectedPreviousMetrics: previousMetrics1,
+          opponentPreviousMetrics: previousMetrics2,
+          selectedEfficiency: deriveWnbaEfficiency(team1Stats, metrics1),
+          opponentEfficiency: deriveWnbaEfficiency(team2Stats, metrics2),
+          selectedAvailability: availability1,
+          opponentAvailability: availability2,
+          selectedIsHome: venue ? venue.team1IsHome : null,
+          spreadLine: bet_type === "spread" ? Number(spread_line) : null,
+          totalLine: bet_type === "total" ? parsedTotalLine : null,
+          direction: over_under ?? null,
+          targetVenueCity: venue?.venueCity ?? null,
+          selectedLineup: lineup1,
+          opponentLineup: lineup2,
+        });
+        const odds = buildOddsPayload(oddsData, bet_type, wnba.score, team1.name, team2.name, over_under);
+        const decisionFactors = wnba.factors.map((factor) => ({
+          label: factor.label,
+          team1Score: factor.score,
+          team2Score: 100 - factor.score,
+          weight: factor.weight * 100,
+        }));
+        const decision = buildDecision({
+          team1,
+          team2,
+          team1_pct: wnba.score,
+          verdict: wnba.verdict,
+          factorBreakdown: decisionFactors,
+          oddsAmerican: odds?.bestOdds?.american ?? null,
+          betType: bet_type,
+          overUnder: over_under,
+          sport: "wnba",
+        });
+        const status = buildAnalysisStatus(odds, wnba.factors, false);
+        return json({
+          bet_type,
+          sport,
+          model: "wnba-verified-team-markets-v1",
+          ...status,
+          marketType: bet_type,
+          selectedSide: pickSelectedSide(bet_type, over_under, spread_team, team1.name),
+          errors: [],
+          team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
+          team2: { ...team2, stats: team2Stats, homeAway: team2HomeAway },
+          matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue, venueCity: venue?.venueCity ?? null },
+          injuries: {
+            team1: injuries1,
+            team2: injuries2,
+            fetchedAt: injuryReport.fetchedAt,
+            sourceUpdatedAt: injuryReport.sourceUpdatedAt,
+            source: injuryReport.source,
+            sourceAvailable: injuryReport.sourceAvailable,
+            team1Matched: injuryReport.team1Matched,
+            team2Matched: injuryReport.team2Matched,
+          },
+          lineups: { team1: lineup1, team2: lineup2 },
+          factorBreakdown: wnba.factors,
+          model_diagnostics: {
+            ...wnba.diagnostics,
+            matchup_confirmed: !!venue,
+          },
+          projected_margin: wnba.projectedMargin,
+          projected_total: wnba.projectedTotal,
+          reasoning: wnba.reasoning,
+          factors: wnba.reasoning,
+          previousSeasonFallbackUsed,
+          previousSeasonNote,
+          odds: withoutUnvalidatedEv(odds),
+          decision,
+          prediction: {
+            confidence: wnba.score,
+            verdict: wnba.verdict,
+            dataQuality: wnba.diagnostics.wnba_data_quality,
+            factors: wnba.factors,
+          },
+          confidence: wnba.score,
+          team1_pct: wnba.score,
+          team2_pct: 100 - wnba.score,
+          verdict: wnba.verdict,
+          score_kind: "heuristic_score",
+          calibration_status: "pending_queue_validation",
+          probability_supported: false,
+        });
+      }
 
       // MLB: delegate to 20-factor model for superior analysis
       if (sport === "mlb") {

@@ -127,6 +127,15 @@ describe("analyzer market routing", () => {
 });
 
 describe("analyzer pool market diversity", () => {
+  it("uses quality to rank discovery candidates that do not claim a pre-analysis edge", () => {
+    const result = selectAnalyzerPoolDiversifiedByBetType([
+      { id: "thin-market", bet_type: "prop", edge: 0, quality_score: 1 },
+      { id: "deep-market", bet_type: "prop", edge: 0, quality_score: 5 },
+    ], 1);
+
+    expect(result.selected.map((candidate) => candidate.id)).toEqual(["deep-market"]);
+  });
+
   it("keeps props, moneylines, spreads, and totals in a prop-heavy slate", () => {
     const props = Array.from({ length: 100 }, (_, index) => ({
       id: `prop-${index}`,

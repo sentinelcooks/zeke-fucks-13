@@ -39,6 +39,7 @@ import {
 import { getCalibrationState } from "./calibration_cache.ts";
 import { applyCalibration } from "./prob_math.ts";
 import { PROB_LEAN } from "./thresholds.ts";
+import { selectWnbaConsensusMarkets } from "./wnba_model.ts";
 
 // App slate timezone — matches the public-display assumption in src/lib/gameDate.ts.
 const APP_TZ = "America/New_York";
@@ -1128,6 +1129,76 @@ async function evaluateGameLines(sport: string, stats: any): Promise<ScoredPlay[
     }
   }
 
+  if (sport === "wnba") {
+    const wnbaPlays: ScoredPlay[] = [];
+    for (const g of upcoming) {
+      const ev = oddsMap.get(matchupKey(g.home_team, g.away_team));
+      if (!ev?.bookmakers?.length) continue;
+      const selections = selectWnbaConsensusMarkets(
+        ev.bookmakers,
+        g.home_team,
+        g.away_team,
+        3,
+      );
+      for (const selection of selections) {
+        if (selection.odds <= -350 || selection.odds >= 500) continue;
+        const rawImplied = americanToImpliedProb(selection.odds);
+        const opposingImplied = selection.opposingOdds === null
+          ? null
+          : americanToImpliedProb(selection.opposingOdds);
+        const fairMarket = opposingImplied !== null && rawImplied + opposingImplied > 0
+          ? rawImplied / (rawImplied + opposingImplied)
+          : rawImplied;
+        const selectedIsHome = selection.team
+          ? teamNameKey(selection.team) === teamNameKey(g.home_team)
+          : null;
+        const scored = scorePrecomputed({
+          sport,
+          bet_type: selection.betType,
+          player_name: `${g.away_team} @ ${g.home_team}`,
+          home_team: g.home_team,
+          away_team: g.away_team,
+          team: selection.team,
+          opponent: selection.team
+            ? selectedIsHome ? g.away_team : g.home_team
+            : null,
+          prop_type: selection.betType,
+          line: selection.line,
+          spread_line: selection.betType === "spread" ? selection.line : null,
+          total_line: selection.betType === "total" ? selection.line : null,
+          direction: selection.direction,
+          odds: selection.odds,
+          odds_opp: selection.opposingOdds,
+          projected_prob: fairMarket,
+          implied_prob: fairMarket,
+          raw_implied_prob: rawImplied,
+          edge: 0,
+          ev_pct: 0,
+          confidence: fairMarket,
+          event_id: ev.id ?? null,
+          commence_time: ev.commence_time ?? null,
+          game_date: toETDate(ev.commence_time ?? null),
+          model_diagnostics: {
+            discovery_only: true,
+            discovery_source: "consensus_market_without_model_edge",
+            discovery_market_probability: fairMarket,
+            bookCount: selection.bookCount,
+            marketDataQuality: selection.marketDataQuality,
+            selected_side: selection.team ?? selection.direction,
+            probability_supported: false,
+          },
+        });
+        scored.quality_score = selection.rankingScore;
+        scored.score = selection.rankingScore;
+        scored.reasoning = "Consensus WNBA market candidate awaiting the verified WNBA analyzer; no discovery edge is claimed.";
+        wnbaPlays.push(scored);
+      }
+    }
+    wnbaPlays.sort((a, b) => b.quality_score - a.quality_score);
+    console.log(`[wnba] evaluateGameLines produced ${wnbaPlays.length} consensus market-side candidates`);
+    return wnbaPlays;
+  }
+
   for (const g of upcoming) {
     const key = matchupKey(g.home_team, g.away_team);
     const ev = oddsMap.get(key);
@@ -1506,17 +1577,18 @@ async function evaluatePlayerProps(
               projected = impliedSide;
             }
 
-            const baseBump =
-              pick.bestPrice < 0
-                ? Math.min(0.10, 0.04 + (Math.abs(pick.bestPrice) - 100) / 2000)
-                : Math.max(0.02, 0.04 - (pick.bestPrice - 100) / 4000);
-
-            projected = Math.min(0.95, projected + baseBump);
-            projected = Math.max(0.35, Math.min(0.95, projected));
+            if (sport !== "wnba") {
+              const baseBump =
+                pick.bestPrice < 0
+                  ? Math.min(0.10, 0.04 + (Math.abs(pick.bestPrice) - 100) / 2000)
+                  : Math.max(0.02, 0.04 - (pick.bestPrice - 100) / 4000);
+              projected = Math.min(0.95, projected + baseBump);
+              projected = Math.max(0.35, Math.min(0.95, projected));
+            }
 
             const edge = projected - impliedSide;
 
-            if (edge <= 0.005) continue;
+            if (sport !== "wnba" && edge <= 0.005) continue;
 
             const scored = scorePrecomputed({
               sport,
@@ -1560,7 +1632,23 @@ async function evaluatePlayerProps(
                 opponentResolutionStatus,
                 eventHomeTeam: homeTeam ?? null,
                 eventAwayTeam: awayTeam ?? null,
+                ...(sport === "wnba"
+                  ? {
+                      discovery_only: true,
+                      discovery_source: "consensus_market_without_model_edge",
+                      discovery_market_probability: projected,
+                      probability_supported: false,
+                    }
+                  : {}),
               };
+              if (sport === "wnba") {
+                const bookCount = Number((scored.model_diagnostics as Record<string, unknown>).bookCount ?? bestCount);
+                scored.edge = 0;
+                scored.ev_pct = 0;
+                scored.score = bookCount;
+                scored.quality_score = bookCount;
+                scored.reasoning = "Consensus WNBA prop candidate awaiting the verified WNBA analyzer; no discovery edge is claimed.";
+              }
             } catch (e) {
               console.error(`[${sport}] summarizeMarket failed:`, (e as Error).message);
             }
@@ -1674,7 +1762,9 @@ export async function validateWithAnalyzer(
   // exact analyzer request that was used for this play.
   const body = {
     player: play.player_name,
-    prop_type: play.sport === "nba" ? normalizeNbaPropType(play.prop_type) : play.prop_type,
+    prop_type: play.sport === "nba" || play.sport === "wnba"
+      ? normalizeNbaPropType(play.prop_type)
+      : play.prop_type,
     line: play.line,
     over_under: normalizeDirection(play.direction),
     opponent: play.opponent || "",
@@ -2222,10 +2312,11 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
   const rejectedLowConfidenceTop: Array<Record<string, unknown>> = [];
 
   const prefiltered = all.filter((p) => {
+    const discoveryOnly = p.model_diagnostics?.discovery_only === true;
     if (p.odds >= 500) { drops.oddsHigh++; return false; }
     if (p.odds <= -350) { drops.oddsLow++; return false; }
-    if (p.edge <= 0) { drops.edge++; return false; }
-    if (p.confidence < minConf) {
+    if (p.edge <= 0 && !discoveryOnly) { drops.edge++; return false; }
+    if (p.confidence < minConf && !discoveryOnly) {
       const diag = lowConfidenceDiagnostic(p, minConf);
       for (const tr of matchingTrace(traceResults, p)) {
         tr.lowConfidenceReason = diag;

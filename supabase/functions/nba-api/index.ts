@@ -16,6 +16,14 @@ import {
   type MlbGameIntelligence,
   type MlbStatLine,
 } from "../_shared/mlb_data.ts";
+import {
+  buildWnbaTeamMetrics,
+  deriveWnbaEfficiency,
+  fetchWnbaLineupContext,
+  scoreWnbaPlayerProp,
+  type WnbaEfficiency,
+  type WnbaTeamMetrics,
+} from "../_shared/wnba_model.ts";
 import { requirePremiumAccess } from "../_shared/premium-access.ts";
 
 const corsHeaders = {
@@ -406,6 +414,7 @@ const WNBA_TEAMS = [
   { abbr: "LV", name: "Las Vegas Aces" }, { abbr: "LA", name: "Los Angeles Sparks" },
   { abbr: "MIN", name: "Minnesota Lynx" }, { abbr: "NY", name: "New York Liberty" },
   { abbr: "PHX", name: "Phoenix Mercury" }, { abbr: "SEA", name: "Seattle Storm" },
+  { abbr: "POR", name: "Portland Fire" }, { abbr: "TOR", name: "Toronto Tempo" },
   { abbr: "WAS", name: "Washington Mystics" },
 ];
 
@@ -890,6 +899,11 @@ async function getNextGame(teamAbbr: string, config?: EspnConfig) {
     const data = await resp.json();
 
     for (const event of data?.events || []) {
+      const gameDate = new Date(event?.date).getTime();
+      if (!Number.isFinite(gameDate) || gameDate < Date.now() - 3 * 3600000) continue;
+      const status = event?.status?.type?.name;
+      if (status === "STATUS_FINAL" || status === "STATUS_POSTPONED") continue;
+
       const comp = event?.competitions?.[0];
       if (!comp) continue;
       const competitors = comp.competitors || [];
@@ -906,10 +920,14 @@ async function getNextGame(teamAbbr: string, config?: EspnConfig) {
 
       const opponent = isHome ? awayTeam : homeTeam;
       return {
+        event_id: String(event.id || ""),
         date: event.date ? new Date(event.date).toISOString().split("T")[0] : "",
+        date_time: event.date || null,
         opponent_abbr: opponent.abbreviation || "",
         opponent_name: opponent.displayName || "",
         is_home: isHome,
+        venue_city: comp?.venue?.address?.city ?? null,
+        lineup_status: "unconfirmed",
       };
     }
 
@@ -948,10 +966,14 @@ async function getNextGame(teamAbbr: string, config?: EspnConfig) {
       const isHome = homeTeam.abbreviation?.toUpperCase() === teamAbbr.toUpperCase();
       const opponent = isHome ? awayTeam : homeTeam;
       return {
+        event_id: String(event.id || ""),
         date: new Date(event.date).toISOString().split("T")[0],
+        date_time: event.date || null,
         opponent_abbr: opponent.abbreviation || "",
         opponent_name: opponent.displayName || "",
         is_home: isHome,
+        venue_city: comp?.venue?.address?.city ?? null,
+        lineup_status: "unconfirmed",
       };
     }
   } catch { /* ignore */ }
@@ -959,20 +981,52 @@ async function getNextGame(teamAbbr: string, config?: EspnConfig) {
 }
 
 // ── Injuries (single source of truth — see _shared/injuries.ts) ────
-import { fetchTeamInjuries as _sharedFetchTeamInjuries } from "../_shared/injuries.ts";
+import {
+  fetchTeamInjuryReport as _sharedFetchTeamInjuryReport,
+  type InjuryReport,
+} from "../_shared/injuries.ts";
 
-async function getTeamInjuries(teamAbbr: string, config?: EspnConfig) {
+async function getTeamInjuryReport(teamAbbr: string, config?: EspnConfig): Promise<InjuryReport> {
   const cfg = config || getEspnConfig("nba");
   const teamMeta = (cfg.teams as any[]).find((t: any) => t.abbr.toUpperCase() === teamAbbr.toUpperCase());
-  const list = await _sharedFetchTeamInjuries(cfg.sportKey, {
+  const report = await _sharedFetchTeamInjuryReport(cfg.sportKey, {
     abbr: teamAbbr,
     name: teamMeta?.name,
   });
-  // Backward-compat: existing call sites read `player_name` (aliased in shared module) and use
-  // status string comparisons. Normalized values ("out", "doubtful", "day-to-day", "questionable", "probable")
-  // all satisfy existing .includes() and equality checks.
-  console.log(`Injuries for ${teamAbbr}: ${list.length} found (${list.filter((i) => ["out", "doubtful"].includes(i.status)).length} out/doubtful)`);
-  return list;
+  console.log(
+    `Injuries for ${teamAbbr}: ${report.team1.length} found ` +
+      `(${report.team1.filter((i) => ["out", "doubtful"].includes(i.status)).length} out/doubtful), ` +
+      `source_available=${report.sourceAvailable} team_matched=${report.team1Matched}`,
+  );
+  return report;
+}
+
+async function getTeamInjuries(teamAbbr: string, config?: EspnConfig) {
+  return (await getTeamInjuryReport(teamAbbr, config)).team1;
+}
+
+async function getWnbaTeamContext(
+  teamAbbr: string,
+  targetDate: string,
+): Promise<{ metrics: WnbaTeamMetrics; efficiency: WnbaEfficiency }> {
+  const base = "https://site.api.espn.com/apis/site/v2/sports/basketball/wnba";
+  const season = new Date(targetDate || Date.now()).getFullYear();
+  const [scheduleResponse, statsResponse] = await Promise.all([
+    fetch(`${base}/teams/${encodeURIComponent(teamAbbr)}/schedule?season=${season}`).catch(() => null),
+    fetch(`${base}/teams/${encodeURIComponent(teamAbbr)}/statistics`).catch(() => null),
+  ]);
+  const schedule = scheduleResponse?.ok ? await scheduleResponse.json().catch(() => ({})) : {};
+  const statsPayload = statsResponse?.ok ? await statsResponse.json().catch(() => ({})) : {};
+  const stats: Record<string, number> = {};
+  const categories = statsPayload?.results?.stats?.categories ?? statsPayload?.statistics?.splits?.categories ?? [];
+  for (const category of categories) {
+    for (const stat of category?.stats ?? []) {
+      const value = Number(stat?.value ?? stat?.displayValue);
+      if (stat?.name && Number.isFinite(value)) stats[stat.name] = value;
+    }
+  }
+  const metrics = buildWnbaTeamMetrics(schedule?.events ?? [], teamAbbr, targetDate);
+  return { metrics, efficiency: deriveWnbaEfficiency(stats, metrics) };
 }
 
 // ── Fetch Team Roster & Identify Key Players ────────────────
@@ -3616,14 +3670,16 @@ async function analyzeProp(
   if (cfg.searchLeague === "mlb" || cfg.searchLeague === "wnba") {
     // Always fetch previous season for MLB/WNBA blending or fallback.
     prevSeasonGames = await getGameLog(playerId, prevYear, cfg);
-    if (!games.length && prevSeasonGames.length) {
+    if (cfg.searchLeague === "mlb" && !games.length && prevSeasonGames.length) {
       games = prevSeasonGames;
       prevSeasonGames = [];
     }
   } else if (!games.length) {
     games = await getGameLog(playerId, prevYear, cfg);
   }
-  if (!games.length) return { error: `No game log data found for ${player.full_name} this season.`, player };
+  if (!games.length && !(cfg.searchLeague === "wnba" && prevSeasonGames.length >= 5)) {
+    return { error: `No game log data found for ${player.full_name} this season.`, player };
+  }
 
   // If 1Q prop, fetch quarter-level stats from ESPN game summaries
   const is1QProp = propType.startsWith("1q_");
@@ -3719,17 +3775,9 @@ async function analyzeProp(
   let wnbaPreviousSeasonHitRate: any = null;
   if (cfg.searchLeague === "wnba" && currentFiniteSample < 10 && prevSeasonStatValues.length >= 5) {
     const prevHr = hitRate(prevSeasonStatValues, line, overUnder);
-    const currentWeight = currentFiniteSample >= 5 ? 0.65 : 0.45;
-    const prevWeight = 1 - currentWeight;
-    seasonHitRate = {
-      hits: seasonHr.hits + prevHr.hits,
-      total: seasonHr.total + prevHr.total,
-      rate: Math.round((seasonHr.rate * currentWeight + prevHr.rate * prevWeight) * 10) / 10,
-      avg: Math.round(((avg(statValues) || 0) * currentWeight + (avg(prevSeasonStatValues) || 0) * prevWeight) * 10) / 10,
-    };
     wnbaPreviousSeasonUsed = true;
     wnbaPreviousSeasonHitRate = { ...prevHr, avg: avg(prevSeasonStatValues) };
-    wnbaPreviousSeasonNote = "Confidence is moderated because WNBA current-season sample is limited; previous-season form was included as a fallback.";
+    wnbaPreviousSeasonNote = "The current-season WNBA sample is limited. Prior-season form is retained as a separately labeled, low-weight prior and is not merged into the current-season hit rate.";
   }
   const l10v = statValues.slice(-10);
   const last10 = { ...hitRate(l10v, line, overUnder), avg: avg(l10v) };
@@ -3746,6 +3794,27 @@ async function analyzeProp(
 
   // ── Fetch pace/total context for both teams ──
   let paceContext: any = null;
+  let wnbaTeamContext: { metrics: WnbaTeamMetrics; efficiency: WnbaEfficiency } | null = null;
+  let wnbaOpponentContext: { metrics: WnbaTeamMetrics; efficiency: WnbaEfficiency } | null = null;
+  if (cfg.searchLeague === "wnba") {
+    const wnbaOpponent = opponent?.toUpperCase() || nextGame?.opponent_abbr || null;
+    if (wnbaOpponent) {
+      try {
+        [wnbaTeamContext, wnbaOpponentContext] = await Promise.all([
+          getWnbaTeamContext(player.team_abbr, nextGame?.date_time || nextGame?.date || new Date().toISOString()),
+          getWnbaTeamContext(wnbaOpponent, nextGame?.date_time || nextGame?.date || new Date().toISOString()),
+        ]);
+        paceContext = {
+          team: wnbaTeamContext.efficiency,
+          opponent: wnbaOpponentContext.efficiency,
+          sport: "wnba",
+          matchup_source: "espn-team-statistics-derived",
+        };
+      } catch (error) {
+        console.error("WNBA efficiency context fetch error:", error);
+      }
+    }
+  }
   try {
     const oppAbbr2 = (cfg.searchLeague === "nba" ? normalizeNbaTeam(opponent) : null) || opponent?.toUpperCase() || nextGame?.opponent_abbr;
     if (oppAbbr2) {
@@ -3845,15 +3914,18 @@ async function analyzeProp(
     otherGames = { games: nonH2hGameLog, ...hitRate(nonH2hVals, line, overUnder), avg: avg(nonH2hVals), opponent: h2hOpp };
   }
 
-  const teamInjuries = await getTeamInjuries(player.team_abbr, cfg);
+  const teamInjuryReport = await getTeamInjuryReport(player.team_abbr, cfg);
+  const teamInjuries = teamInjuryReport.team1;
   const playerInjuries = teamInjuries.filter(i => i.player_name.toLowerCase() === player.full_name.toLowerCase());
   const teammateInjuries = teamInjuries.filter(i => i.player_name.toLowerCase() !== player.full_name.toLowerCase());
 
   // Opponent injuries
   const oppAbbr = h2hOpp || nextGame?.opponent_abbr;
   let opponentInjuries: any[] = [];
+  let opponentInjuryReport: InjuryReport | null = null;
   if (oppAbbr) {
-    opponentInjuries = await getTeamInjuries(oppAbbr, cfg);
+    opponentInjuryReport = await getTeamInjuryReport(oppAbbr, cfg);
+    opponentInjuries = opponentInjuryReport.team1;
   }
 
   // Fetch roster context for both teams (parallel)
@@ -3929,6 +4001,11 @@ async function analyzeProp(
     previous_season_used: wnbaPreviousSeasonUsed,
     previous_season_hit_rate: wnbaPreviousSeasonHitRate,
     previous_season_note: wnbaPreviousSeasonNote,
+    injuries_last_updated: teamInjuryReport.sourceUpdatedAt ?? teamInjuryReport.fetchedAt,
+    injury_source_available: teamInjuryReport.sourceAvailable && teamInjuryReport.team1Matched,
+    opponent_injury_source_available: opponentInjuryReport
+      ? opponentInjuryReport.sourceAvailable && opponentInjuryReport.team1Matched
+      : false,
     all_games: games,
     confidence: 0, verdict: "N/A", reasoning: [],
   };
@@ -4033,6 +4110,72 @@ async function analyzeProp(
   // These were previously computed only in the emission block AFTER confidence
   // was finalized. Phase 2 (NBA-only) needs the playoff/series/cushion/dataQuality
   // values up front. Computation itself is byte-identical to Phase 1.
+  // WNBA props use a league-specific scorer. It excludes the generic NBA
+  // injury/usage assumptions, keeps prior-season data separately labeled,
+  // and treats lineup/availability gaps as confidence limits rather than as
+  // evidence that the player or roster is healthy.
+  if (cfg.searchLeague === "wnba") {
+    const lineup = await fetchWnbaLineupContext(
+      nextGame?.event_id ?? null,
+      player.team_abbr,
+      player.full_name,
+    );
+    if (nextGame) nextGame.lineup_status = lineup.status;
+    const toWnbaGame = (game: GameRow) => ({
+      date: game.date,
+      value: getStatValue(game, propType),
+      minutes: Number.isFinite(game.min) ? game.min : null,
+      isHome: game.isHome,
+      opponent: game.opponent,
+    });
+    const rosterPlayer = [...(teamRoster?.keyOut ?? []), ...(teamRoster?.keyPlaying ?? [])]
+      .find((entry: any) => String(entry?.name ?? "").toLowerCase() === player.full_name.toLowerCase());
+    const playerAvailability = playerInjuries[0]
+      ? {
+          name: player.full_name,
+          status: playerInjuries[0].status,
+          minutesPerGame: Number.isFinite(rosterPlayer?.avgMinutes) ? rosterPlayer.avgMinutes : null,
+          detail: playerInjuries[0].detail ?? null,
+        }
+      : null;
+    const wnbaScore = scoreWnbaPlayerProp({
+      games: analysisGames.map(toWnbaGame),
+      previousSeasonGames: prevSeasonGames.map(toWnbaGame),
+      line,
+      direction: overUnder === "under" ? "under" : "over",
+      propType,
+      opponent: h2hOpp || null,
+      nextGameDate: nextGame?.date_time ?? nextGame?.date ?? null,
+      isHome: typeof nextGame?.is_home === "boolean" ? nextGame.is_home : null,
+      lineup,
+      playerAvailability,
+      injurySourceAvailable: teamInjuryReport.sourceAvailable && teamInjuryReport.team1Matched,
+      teamEfficiency: wnbaTeamContext?.efficiency ?? null,
+      opponentEfficiency: wnbaOpponentContext?.efficiency ?? null,
+      targetVenueCity: nextGame?.venue_city ?? null,
+      lastVenueCity: wnbaTeamContext?.metrics.lastVenueCity ?? null,
+    });
+
+    result.confidence = wnbaScore.score;
+    result.verdict = wnbaScore.verdict;
+    result.reasoning = wnbaScore.reasoning;
+    result.factorBreakdown = wnbaScore.factors;
+    result.wnba_factors = wnbaScore.factors;
+    result.model = "wnba-verified-props-v1";
+    result.playerIsOut = wnbaScore.playerIsOut;
+    result.model_diagnostics = {
+      ...(result.model_diagnostics ?? {}),
+      ...wnbaScore.diagnostics,
+      injury_source_updated_at: teamInjuryReport.sourceUpdatedAt,
+      injury_team_matched: teamInjuryReport.team1Matched,
+      opponent_injury_source_available: result.opponent_injury_source_available,
+      pace_context_source: paceContext?.matchup_source ?? null,
+    };
+    result.score_kind = "heuristic_score";
+    result.probability_supported = false;
+    return result;
+  }
+
   let phase1Diag: Record<string, unknown> | null = null;
   let phase1Series: any = null;
   let phase1Playoff: any = null;
