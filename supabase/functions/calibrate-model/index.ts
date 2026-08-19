@@ -205,7 +205,7 @@ async function collectSamples(
       .select(
         "id,sport,bet_type,player_name,prop_type,line,direction,hit_rate,result,pick_date,score_kind,model_version,model_diagnostics,odds,profit_units,stake_units,prediction_recorded_at,commence_time,graded_at,grading_source",
       )
-      .gte("pick_date", sinceIso.slice(0, 10))
+      .gte("prediction_recorded_at", sinceIso)
       .in("result", ["hit", "miss"])
       .not("grading_source", "is", null)
       .not("prediction_recorded_at", "is", null)

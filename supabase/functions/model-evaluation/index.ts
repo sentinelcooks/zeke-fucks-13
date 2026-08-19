@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
         .select(
           "id,sport,bet_type,prop_type,tier,model_version,model_diagnostics,result,odds,profit_units,stake_units,confidence,calibrated_probability,score_kind,calibration_status,pick_date,prediction_recorded_at,commence_time,graded_at,grading_source,clv,clv_method,closing_odds",
         )
-        .gte("pick_date", since.slice(0, 10))
+        .gte("prediction_recorded_at", since)
         .in("result", ["hit", "miss", "push"])
         .order("prediction_recorded_at", { ascending: true })
         .range(from, from + pageSize - 1);
