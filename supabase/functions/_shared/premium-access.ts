@@ -53,6 +53,15 @@ function bearerToken(req: Request): string {
   return header.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : "";
 }
 
+function requiresRegisteredDevice(req: Request): boolean {
+  try {
+    const platform = new URL(req.url).searchParams.get("client_platform")?.toLowerCase();
+    return platform !== "web";
+  } catch {
+    return true;
+  }
+}
+
 async function sha256(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
   const hash = await crypto.subtle.digest("SHA-256", data);
@@ -153,78 +162,79 @@ export async function requirePremiumAccess(
     };
   }
 
-  const rawDeviceId = req.headers.get("x-sentinel-device-id");
-  const hashSecret = Deno.env.get("DEVICE_ID_HASH_SECRET");
-  if (!hashSecret) {
-    await logSecurityEvent(admin, {
-      userId: user.id,
-      eventType: "premium_api_device_check_failed",
-      metadata: { reason: "missing_device_hash_secret" },
-    });
-    return {
-      ok: false,
-      status: 403,
-      reason: "device_check_unavailable",
-      response: json({ error: "Premium access unavailable" }, 403, corsHeaders),
-    };
-  }
+  let deviceIdHash: string | null = null;
+  if (requiresRegisteredDevice(req)) {
+    const rawDeviceId = req.headers.get("x-sentinel-device-id");
+    const hashSecret = Deno.env.get("DEVICE_ID_HASH_SECRET");
+    if (!hashSecret) {
+      await logSecurityEvent(admin, {
+        userId: user.id,
+        eventType: "premium_api_device_check_failed",
+        metadata: { reason: "missing_device_hash_secret" },
+      });
+      return {
+        ok: false,
+        status: 403,
+        reason: "device_check_unavailable",
+        response: json({ error: "Premium access unavailable" }, 403, corsHeaders),
+      };
+    }
 
-  if (!rawDeviceId) {
-    await logSecurityEvent(admin, {
-      userId: user.id,
-      eventType: "premium_api_device_missing",
-      metadata: { reason: "missing_device_header" },
-    });
-    return {
-      ok: false,
-      status: 403,
-      reason: "device_header_required",
-      response: json({ error: "Device verification required" }, 403, corsHeaders),
-    };
-  }
+    if (!rawDeviceId) {
+      await logSecurityEvent(admin, {
+        userId: user.id,
+        eventType: "premium_api_device_missing",
+        metadata: { reason: "missing_device_header" },
+      });
+      return {
+        ok: false,
+        status: 403,
+        reason: "device_header_required",
+        response: json({ error: "Device verification required" }, 403, corsHeaders),
+      };
+    }
 
-  const deviceIdHash = await sha256(rawDeviceId + hashSecret);
+    deviceIdHash = await sha256(rawDeviceId + hashSecret);
 
-  const { data: blockedSession, error: blockedError } = await admin
-    .from("blocked_sessions")
-    .select("id, reason")
-    .eq("user_id", user.id)
-    .is("revoked_at", null)
-    .or(deviceIdHash ? `device_id_hash.eq.${deviceIdHash},device_id_hash.is.null` : "device_id_hash.is.null")
-    .limit(1)
-    .maybeSingle();
+    const { data: blockedSession, error: blockedError } = await admin
+      .from("blocked_sessions")
+      .select("id, reason")
+      .eq("user_id", user.id)
+      .is("revoked_at", null)
+      .or(`device_id_hash.eq.${deviceIdHash},device_id_hash.is.null`)
+      .limit(1)
+      .maybeSingle();
 
-  if (blockedError) {
-    await logSecurityEvent(admin, {
-      userId: user.id,
-      eventType: "premium_api_block_check_failed",
-      deviceIdHash,
-      metadata: { error: blockedError.message },
-    });
-    return {
-      ok: false,
-      status: 403,
-      reason: "security_check_failed",
-      response: json({ error: "Premium access unavailable" }, 403, corsHeaders),
-    };
-  }
+    if (blockedError) {
+      await logSecurityEvent(admin, {
+        userId: user.id,
+        eventType: "premium_api_block_check_failed",
+        deviceIdHash,
+        metadata: { error: blockedError.message },
+      });
+      return {
+        ok: false,
+        status: 403,
+        reason: "security_check_failed",
+        response: json({ error: "Premium access unavailable" }, 403, corsHeaders),
+      };
+    }
 
-  if (blockedSession) {
-    await logSecurityEvent(admin, {
-      userId: user.id,
-      eventType: "premium_api_blocked",
-      deviceIdHash,
-      metadata: { reason: blockedSession.reason },
-    });
-    return {
-      ok: false,
-      status: 403,
-      reason: "blocked_session",
-      response: json({ error: "Premium access unavailable" }, 403, corsHeaders),
-    };
-  }
+    if (blockedSession) {
+      await logSecurityEvent(admin, {
+        userId: user.id,
+        eventType: "premium_api_blocked",
+        deviceIdHash,
+        metadata: { reason: blockedSession.reason },
+      });
+      return {
+        ok: false,
+        status: 403,
+        reason: "blocked_session",
+        response: json({ error: "Premium access unavailable" }, 403, corsHeaders),
+      };
+    }
 
-  if (deviceIdHash) {
     const { data: device, error: deviceError } = await admin
       .from("user_devices")
       .select("id, status")

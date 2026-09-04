@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateDeviceFingerprint } from "@/utils/fingerprint";
 import { getFunctionUrl, getSupabaseAnonKey } from "@/services/supabaseFunctionUrl";
 import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
+import { getMobilePlatform } from "@/lib/mobileDeviceIdentity";
 
 function getStoredSessionToken(): string {
   const remember = localStorage.getItem("primal-remember") === "true";
@@ -86,6 +87,11 @@ function normalizeOddsSport(sport?: string) {
   return SPORT_ALIASES[sport.toLowerCase()] ?? sport;
 }
 
+function withClientPlatform(params: URLSearchParams): URLSearchParams {
+  params.set("client_platform", getMobilePlatform());
+  return params;
+}
+
 export async function fetchNbaOdds(bookmakers?: string, markets?: string, sport?: string) {
   const secHeaders = await getSessionHeaders();
   const normalizedSport = normalizeOddsSport(sport);
@@ -95,7 +101,7 @@ export async function fetchNbaOdds(bookmakers?: string, markets?: string, sport?
   if (markets) params.set("markets", markets);
   if (normalizedSport) params.set("sport", normalizedSport);
 
-  const qs = params.toString() ? `?${params.toString()}` : "";
+  const qs = `?${withClientPlatform(params).toString()}`;
   const resp = await fetch(`${getFunctionUrl("nba-odds")}/events${qs}`, {
     headers: {
       apikey: getSupabaseAnonKey(),
@@ -117,7 +123,7 @@ export async function fetchUpcomingOddsEvents(sport?: string): Promise<UpcomingO
   const params = new URLSearchParams();
   if (normalizedSport) params.set("sport", normalizedSport);
 
-  const qs = params.toString() ? `?${params.toString()}` : "";
+  const qs = `?${withClientPlatform(params).toString()}`;
   const resp = await fetch(`${getFunctionUrl("nba-odds")}/event-ids${qs}`, {
     headers: {
       apikey: getSupabaseAnonKey(),
@@ -143,7 +149,7 @@ export async function fetchPlayerProps(eventId: string, markets?: string, sport?
   if (markets) params.set("markets", markets);
   if (normalizedSport) params.set("sport", normalizedSport);
 
-  const resp = await fetch(`${getFunctionUrl("nba-odds")}/player-props?${params.toString()}`, {
+  const resp = await fetch(`${getFunctionUrl("nba-odds")}/player-props?${withClientPlatform(params).toString()}`, {
     headers: {
       apikey: getSupabaseAnonKey(),
       Authorization: await getAuthHeader(),
@@ -162,7 +168,8 @@ export async function fetchPlayerOdds(playerName: string, propType: string, over
   const secHeaders = await getSessionHeaders();
   const normalizedSport = normalizeOddsSport(sport);
 
-  const resp = await fetch(`${getFunctionUrl("nba-odds")}/player-odds`, {
+  const params = withClientPlatform(new URLSearchParams());
+  const resp = await fetch(`${getFunctionUrl("nba-odds")}/player-odds?${params.toString()}`, {
     method: "POST",
     headers: {
       apikey: getSupabaseAnonKey(),
