@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
-import MoneyLineSection from "@/components/MoneyLineSection";
+import { GameLinesBrowser } from "@/components/GameLinesBrowser";
 
 import sportNcaabLogo from "@/assets/sport-ncaab.png";
 import nbaLogo from "@/assets/nba-logo.png";
@@ -8,7 +8,7 @@ import wnbaLogo from "@/assets/wnba-logo.png";
 import mlbLogo from "@/assets/mlb-logo.png";
 import nhlLogo from "@/assets/logo-nhl.png";
 import ufcLogo from "@/assets/ufc-logo.png";
-import { Search, Loader2, Target, TrendingUp, TrendingDown, Crosshair, Shield, Hand, RotateCcw, Zap, Trophy, ChevronDown, Sparkles, X, BarChart3, Activity, Swords, Link2, Timer, Clock, Layers, Flame, CircleDot, Hash, Gauge, Info, Plus, Trash2, DollarSign } from "lucide-react";
+import { Search, Loader2, Target, TrendingUp, TrendingDown, Crosshair, Shield, Hand, RotateCcw, Zap, Trophy, ChevronDown, Sparkles, X, BarChart3, Activity, Swords, Link2, Timer, Clock, Layers, Flame, CircleDot, Hash, Gauge, Info, Plus, Trash2, DollarSign, UserRound } from "lucide-react";
 import { searchPlayers, getTeams, analyzeProp, searchUfcFighters, analyzeUfcMatchup, validateMlbPropLine } from "@/services/api";
 import { supabase } from "@/integrations/supabase/client";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -1223,8 +1223,8 @@ const NbaPropsPage = () => {
           border: '1px solid hsla(228, 30%, 16%, 0.25)',
         }}>
           {([
-            { value: "props" as const, label: "Props", icon: <Target className="w-3.5 h-3.5" /> },
-            { value: "lines" as const, label: "Lines", icon: <BarChart3 className="w-3.5 h-3.5" /> },
+            { value: "props" as const, label: "Player Props", icon: <UserRound className="w-3.5 h-3.5" /> },
+            { value: "lines" as const, label: "Game Lines", icon: <Swords className="w-3.5 h-3.5" /> },
           ]).map((opt) => {
             const active = mode === opt.value;
             return (
@@ -1255,12 +1255,11 @@ const NbaPropsPage = () => {
 
         {/* ── Lines Mode: show MoneyLineSection ── */}
         {mode === "lines" && (
-          <MoneyLineSection
+          <GameLinesBrowser
             key={`${location.key}-${linesSport}`}
-            embeddedSport={linesSport as any}
-            hideSportToggle
-            initialTeam1={hasHiddenLinesNavigation ? undefined : linesNavigationState?.home_team}
-            initialTeam2={hasHiddenLinesNavigation ? undefined : linesNavigationState?.away_team}
+            sport={linesSport}
+            initialHomeTeam={hasHiddenLinesNavigation ? undefined : linesNavigationState?.home_team}
+            initialAwayTeam={hasHiddenLinesNavigation ? undefined : linesNavigationState?.away_team}
             autoAnalyze={hasHiddenLinesNavigation ? false : linesNavigationState?.autoAnalyze}
           />
         )}

@@ -23,6 +23,26 @@ export function todayInTZ(tz: string = APP_TZ): string {
   return ymdFmt(tz).format(new Date());
 }
 
+export function shiftYmd(date: string, days: number): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match || !Number.isInteger(days)) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const value = new Date(Date.UTC(year, month - 1, day));
+  if (
+    value.getUTCFullYear() !== year ||
+    value.getUTCMonth() !== month - 1 ||
+    value.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
 export function toETDate(
   iso: string | null | undefined,
   tz: string = APP_TZ,

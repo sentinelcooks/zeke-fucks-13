@@ -38,8 +38,6 @@ export interface TodaysEdgeSelection<T extends TodaysEdgeCandidate> {
   fallbackIds: Set<string>;
 }
 
-const FALLBACK_SPORTS = new Set(["mlb", "wnba"]);
-
 function normalized(value: unknown): string {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
@@ -102,11 +100,10 @@ function isValidatedEdge(pick: TodaysEdgeCandidate): boolean {
 }
 
 function isFallbackCandidate(pick: TodaysEdgeCandidate): boolean {
-  const sport = String(pick.sport ?? "").toLowerCase();
-  return FALLBACK_SPORTS.has(sport) &&
-    String(pick.tier ?? "").toLowerCase() === "daily" &&
+  return String(pick.tier ?? "").toLowerCase() === "daily" &&
     pick.score_kind === "heuristic_score" &&
-    pick.model_diagnostics?.shadow_edge_candidate === true;
+    pick.model_diagnostics?.shadow_edge_candidate === true &&
+    pick.model_diagnostics?.confidenceSource === "analyzer";
 }
 
 function dedupeConflicts<T extends TodaysEdgeCandidate>(rows: T[]): T[] {
@@ -120,30 +117,34 @@ function dedupeConflicts<T extends TodaysEdgeCandidate>(rows: T[]): T[] {
 
 export function selectTodaysEdgePicks<T extends TodaysEdgeCandidate>(
   rows: T[],
-  fallbackLimitPerSport = 4,
+  fallbackLimit = 5,
 ): TodaysEdgeSelection<T> {
-  const safeLimit = Math.max(0, Math.floor(fallbackLimitPerSport));
+  const safeLimit = Math.max(0, Math.floor(fallbackLimit));
   const validated = dedupeConflicts(rows.filter(isValidatedEdge));
+  const validatedKeys = new Set(validated.map(todaysEdgeConflictKey));
   const validatedSports = new Set(validated.map((pick) => String(pick.sport).toLowerCase()));
   const fallbackIds = new Set<string>();
   const fallback: PresentedTodaysEdgePick<T>[] = [];
 
-  for (const sport of FALLBACK_SPORTS) {
-    if (validatedSports.has(sport) || safeLimit === 0) continue;
-    const selected = dedupeConflicts(
-      rows.filter((pick) => String(pick.sport).toLowerCase() === sport && isFallbackCandidate(pick)),
-    ).slice(0, safeLimit);
-    for (const pick of selected) {
-      fallbackIds.add(pick.id);
-      fallback.push({
-        ...pick,
-        calibrated_probability: undefined,
-        edgePresentation: "fallback",
-        edgeWarning: typeof pick.model_diagnostics?.shadow_edge_warning === "string"
-          ? pick.model_diagnostics.shadow_edge_warning
-          : null,
-      });
-    }
+  const fallbackSlots = Math.max(0, safeLimit - validated.length);
+  const selected = dedupeConflicts(
+    rows.filter(
+      (pick) => isFallbackCandidate(pick) && !validatedSports.has(String(pick.sport).toLowerCase()),
+    ),
+  )
+    .filter((pick) => !validatedKeys.has(todaysEdgeConflictKey(pick)))
+    .slice(0, fallbackSlots);
+
+  for (const pick of selected) {
+    fallbackIds.add(pick.id);
+    fallback.push({
+      ...pick,
+      calibrated_probability: undefined,
+      edgePresentation: "fallback",
+      edgeWarning: typeof pick.model_diagnostics?.shadow_edge_warning === "string"
+        ? pick.model_diagnostics.shadow_edge_warning
+        : null,
+    });
   }
 
   return {

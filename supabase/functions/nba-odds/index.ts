@@ -115,6 +115,7 @@ function setCache(key: string, data: unknown) {
 // _shared/oddsKeyPool.ts. It remains backed by the admin-uploaded mass key pool;
 // this adapter only preserves structured failures for callers and logs.
 import {
+  EXHAUST_CONFIGURED_KEY_POOL,
   fetchWithRotation as poolFetchWithRotation,
   rotationFailureResponse,
   type RotationError,
@@ -123,7 +124,7 @@ import {
 async function fetchWithRotation(
   supabase: any,
   buildUrl: (apiKey: string) => string,
-  maxRetries = 3,
+  maxRetries = EXHAUST_CONFIGURED_KEY_POOL,
   signal?: AbortSignal,
 ): Promise<{ resp: Response; keyId: string } | { error: RotationError }> {
   const out = await poolFetchWithRotation(supabase, buildUrl, { maxRetries, signal });
@@ -180,7 +181,7 @@ async function fetchMultiRegion(
     const result = await fetchWithRotation(
       supabase,
       (apiKey) => buildUrl(apiKey, config.region, config.bookmakers),
-      3,
+      EXHAUST_CONFIGURED_KEY_POOL,
       signal,
     );
 
@@ -475,9 +476,8 @@ Deno.serve(async (req) => {
         return rotationErrorJson(result.error);
       }
       if (!result.resp.ok) {
-        const body = await result.resp.text().catch(() => "");
-        console.warn(`[nba-odds] event-ids sport=${sport} HTTP ${result.resp.status}: ${body.slice(0, 200)}`);
-        return json({ error: `Odds API HTTP ${result.resp.status}` }, result.resp.status);
+        console.warn(`[nba-odds] event-ids sport=${sport} HTTP ${result.resp.status}`);
+        return json({ error: "Live odds are temporarily unavailable", code: "upstream_5xx" }, 503);
       }
 
       const data = await result.resp.json();

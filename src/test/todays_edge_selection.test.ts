@@ -6,7 +6,7 @@ import {
 
 function fallbackPick(
   id: string,
-  sport: "mlb" | "wnba",
+  sport: string,
   confidence: number,
   overrides: Partial<TodaysEdgeCandidate> = {},
 ): TodaysEdgeCandidate {
@@ -35,7 +35,7 @@ function fallbackPick(
 
 function validatedPick(id: string, sport: string): TodaysEdgeCandidate {
   return {
-    ...fallbackPick(id, sport as "mlb" | "wnba", 0.71),
+    ...fallbackPick(id, sport, 0.71),
     tier: "edge",
     score_kind: "calibrated_probability",
     calibration_status: "validated",
@@ -58,18 +58,24 @@ describe("Today's Edge fallback selection", () => {
     expect(result.fallbackIds).toEqual(new Set(["wnba-fallback"]));
   });
 
-  it("selects the four highest model scores per fallback sport", () => {
+  it("selects the highest approved model scores across markets and sports", () => {
     const rows = [
-      ...[61, 62, 63, 64, 65, 66].map((score) => fallbackPick(`mlb-${score}`, "mlb", score / 100)),
-      ...[58, 59, 60, 61, 62].map((score) => fallbackPick(`wnba-${score}`, "wnba", score / 100)),
+      fallbackPick("mlb-spread", "mlb", 0.71),
+      fallbackPick("nba-moneyline", "nba", 0.79, {
+        event_id: "nba-game", bet_type: "moneyline", prop_type: "moneyline", player_name: "NBA Team",
+      }),
+      fallbackPick("nhl-total", "nhl", 0.77, {
+        event_id: "nhl-game", bet_type: "total", prop_type: "total", direction: "over", line: 6.5,
+      }),
+      fallbackPick("wnba-prop", "wnba", 0.75, {
+        event_id: "wnba-game", bet_type: "prop", prop_type: "points", player_name: "WNBA Player", direction: "over", line: 18.5,
+      }),
+      fallbackPick("ufc-spread", "ufc", 0.69),
     ];
     const result = selectTodaysEdgePicks(rows, 4);
 
-    expect(result.picks.filter((pick) => pick.sport === "mlb").map((pick) => pick.id)).toEqual([
-      "mlb-66", "mlb-65", "mlb-64", "mlb-63",
-    ]);
-    expect(result.picks.filter((pick) => pick.sport === "wnba").map((pick) => pick.id)).toEqual([
-      "wnba-62", "wnba-61", "wnba-60", "wnba-59",
+    expect(result.picks.map((pick) => pick.id)).toEqual([
+      "nba-moneyline", "nhl-total", "wnba-prop", "mlb-spread",
     ]);
   });
 
@@ -97,6 +103,7 @@ describe("Today's Edge fallback selection", () => {
         model_diagnostics: {
           shadow_edge_candidate: true,
           shadow_edge_warning: "lineups_pending",
+          confidenceSource: "analyzer",
         },
       }),
     ]);

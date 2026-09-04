@@ -8,6 +8,7 @@ import {
   selectEventBatch,
 } from "../../supabase/functions/_shared/scan_batches";
 import {
+  isInvalidOddsApiCredential,
   isTransientPoolDbError,
   rotationFailureResponse,
   withPoolQueryRetry,
@@ -126,6 +127,23 @@ describe("Odds API key-pool reliability", () => {
       });
   });
 
+  it("immediately removes documented invalid and deactivated credentials from rotation", () => {
+    expect(isInvalidOddsApiCredential(403, '{"message":"INVALID_KEY"}')).toBe(true);
+    expect(isInvalidOddsApiCredential(403, '{"message":"DEACTIVATED_KEY"}')).toBe(true);
+    expect(isInvalidOddsApiCredential(403, '{"message":"provider access issue"}')).toBe(false);
+  });
+
+  it("keeps provider diagnostics out of the browser response", () => {
+    expect(rotationFailureResponse({
+      kind: "auth_error",
+      status: 403,
+      detail: "INVALID_KEY apiKey=should-never-leak",
+    })).toEqual({
+      status: 503,
+      body: { error: "Live odds are temporarily unavailable", code: "auth_error" },
+    });
+  });
+
   it("keeps the uploaded pool and atomically claims its least-recently-used key", () => {
     const poolSource = readFileSync(
       resolve(process.cwd(), "supabase/functions/_shared/oddsKeyPool.ts"),
@@ -135,8 +153,14 @@ describe("Odds API key-pool reliability", () => {
       resolve(process.cwd(), "supabase/migrations/20260826000000_reliable_batched_daily_edge_scans.sql"),
       "utf8",
     );
+    const oddsEndpointSource = readFileSync(
+      resolve(process.cwd(), "supabase/functions/nba-odds/index.ts"),
+      "utf8",
+    );
 
     expect(poolSource).toContain('rpc("claim_available_odds_api_key")');
+    expect(poolSource).toContain("EXHAUST_CONFIGURED_KEY_POOL");
+    expect(oddsEndpointSource).toContain("EXHAUST_CONFIGURED_KEY_POOL");
     expect(migration).toContain("CREATE OR REPLACE FUNCTION public.claim_available_odds_api_key()");
     expect(migration).toContain("FOR UPDATE SKIP LOCKED");
   });

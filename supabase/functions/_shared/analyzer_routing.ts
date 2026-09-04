@@ -60,10 +60,10 @@ function identityPart(value: string | null | undefined): string {
   return (value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-// Game markets are mutually exclusive recommendations. The scanner may see
-// both sides and several book lines, but only the strongest candidate for a
-// given event + market should enter the analyzer queue. Player props are not
-// grouped here because different players and prop types are independent.
+// Moneylines and spreads are mutually exclusive recommendations. Totals are
+// different: both Over and Under must reach the model so it can evaluate the
+// real total line before one side is selected for presentation. Player props
+// are not grouped here because different players and prop types are independent.
 export function teamMarketExclusivityKey(
   candidate: AnalyzerCandidate,
 ): string | null {
@@ -81,7 +81,13 @@ export function teamMarketExclusivityKey(
   const eventIdentity = eventId ? `event:${eventId}` : matchup ? `matchup:${matchup}` : "";
   if (!eventIdentity) return null;
 
-  return `${identityPart(candidate.sport)}|${eventIdentity}|${betType}`;
+  const totalDirection = identityPart(candidate.direction);
+  const marketIdentity = betType === "total" &&
+      (totalDirection === "over" || totalDirection === "under")
+    ? `${betType}:${totalDirection}`
+    : betType;
+
+  return `${identityPart(candidate.sport)}|${eventIdentity}|${marketIdentity}`;
 }
 
 export function buildAnalyzerRequest(

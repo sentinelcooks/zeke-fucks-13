@@ -193,7 +193,7 @@ describe("team-market exclusivity", () => {
     expect(dodgers).toBe(rockies);
   });
 
-  it("groups over and under selections into one totals slot", () => {
+  it("keeps over and under totals separate until the model evaluates both sides", () => {
     const over = teamMarketExclusivityKey({
       ...matchup,
       bet_type: "total",
@@ -207,7 +207,7 @@ describe("team-market exclusivity", () => {
       total_line: 11.5,
     });
 
-    expect(over).toBe(under);
+    expect(over).not.toBe(under);
   });
 
   it("keeps different events separate", () => {

@@ -489,7 +489,13 @@ async function getScoreboard(sport = "nba") {
 }
 
 // ── Resolve real scheduled venue (HOME/AWAY for tonight's matchup) ──
-async function resolveMatchupVenue(team1Id: string, team2Id: string, sport: string): Promise<{ gameId: string; team1IsHome: boolean; gameDate: string; venueCity: string | null } | null> {
+function startsAtSameScheduledEvent(first: string, second: string) {
+  const firstTime = Date.parse(first);
+  const secondTime = Date.parse(second);
+  return Number.isFinite(firstTime) && Number.isFinite(secondTime) && Math.abs(firstTime - secondTime) <= 90 * 60 * 1000;
+}
+
+async function resolveMatchupVenue(team1Id: string, team2Id: string, sport: string, expectedCommenceTime?: string | null): Promise<{ gameId: string; team1IsHome: boolean; gameDate: string; venueCity: string | null } | null> {
   try {
     const base = getEspnBase(sport);
     const t1 = String(team1Id), t2 = String(team2Id);
@@ -502,7 +508,7 @@ async function resolveMatchupVenue(team1Id: string, team2Id: string, sport: stri
         const comp = ev?.competitions?.[0];
         if (!comp) continue;
         const ids = (comp.competitors || []).map((c: any) => String(c.id || c.team?.id));
-        if (ids.includes(t1) && ids.includes(t2)) {
+        if (ids.includes(t1) && ids.includes(t2) && (!expectedCommenceTime || startsAtSameScheduledEvent(ev.date, expectedCommenceTime))) {
           const home = comp.competitors.find((c: any) => c.homeAway === "home");
           const homeId = String(home?.id || home?.team?.id);
           return {
@@ -1231,19 +1237,54 @@ async function fetchOddsWithRotation(supabase: any, url: string, maxRetries = 3)
   return null;
 }
 
-async function fetchOddsForMatchup(team1Name: string, team2Name: string, sport: string, supabaseClient?: any) {
+type ExpectedOddsEvent = {
+  eventId: string;
+  commenceTime: string;
+  homeTeam: string;
+  awayTeam: string;
+};
+
+async function fetchOddsForMatchup(team1Name: string, team2Name: string, sport: string, supabaseClient?: any, expectedEvent?: ExpectedOddsEvent | null) {
   try {
     const sb = supabaseClient || (await getMasterClient());
     const sportKey = SPORT_ODDS_KEYS[sport] || SPORT_ODDS_KEYS.nba;
-    const url = `https://api.the-odds-api.com/v4/sports/${sportKey}/odds/?apiKey=__API_KEY__&regions=us,us2&markets=h2h,spreads,totals&oddsFormat=american`;
+    const eventPath = expectedEvent ? `/events/${encodeURIComponent(expectedEvent.eventId)}/odds` : "/odds";
+    const url = `https://api.the-odds-api.com/v4/sports/${sportKey}${eventPath}/?apiKey=__API_KEY__&regions=us,us2&markets=h2h,spreads,totals&oddsFormat=american`;
 
     const resp = await fetchOddsWithRotation(sb, url);
     if (!resp) return { __unavailable: true, reason: "fetch_failed" } as any;
-    const events = await resp.json();
+    const payload = await resp.json();
+    const events = Array.isArray(payload) ? payload : payload ? [payload] : [];
 
     const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
     const t1 = norm(team1Name);
     const t2 = norm(team2Name);
+
+    if (expectedEvent) {
+      const expectedHome = norm(expectedEvent.homeTeam);
+      const expectedAway = norm(expectedEvent.awayTeam);
+      const match = events.find((event: any) =>
+        String(event.id || "") === expectedEvent.eventId &&
+        norm(event.home_team || "") === expectedHome &&
+        norm(event.away_team || "") === expectedAway &&
+        startsAtSameScheduledEvent(event.commence_time, expectedEvent.commenceTime) &&
+        ((norm(event.home_team || "") === t1 && norm(event.away_team || "") === t2) ||
+          (norm(event.home_team || "") === t2 && norm(event.away_team || "") === t1)),
+      );
+
+      if (!match) return { __unavailable: true, reason: "event_verification_failed" } as any;
+
+      const result: Record<string, any[]> = {};
+      for (const bookmaker of match.bookmakers || []) {
+        for (const market of bookmaker.markets || []) {
+          if (!result[market.key]) result[market.key] = [];
+          for (const outcome of market.outcomes || []) {
+            result[market.key].push({ ...outcome, book: bookmaker.title, bookKey: normalizeBookKey(bookmaker.key) });
+          }
+        }
+      }
+      return result;
+    }
 
     const matchesTeam = (haystack: string, needle: string) => {
       if (haystack.includes(needle) || needle.includes(haystack)) return true;
@@ -1450,8 +1491,35 @@ Deno.serve(async (req) => {
       const gate = await requirePremiumAccess(req, corsHeaders);
       if (!gate.ok) return gate.response;
       const body = await req.json();
-      const { bet_type, team1: t1Input, team2: t2Input, spread_team, spread_line, total_line, over_under, sport: reqSport } = body;
+      const {
+        bet_type,
+        team1: t1Input,
+        team2: t2Input,
+        spread_team,
+        spread_line,
+        total_line,
+        over_under,
+        sport: reqSport,
+        odds_event_id,
+        odds_commence_time,
+        odds_home_team,
+        odds_away_team,
+      } = body;
       const sport = reqSport || "nba";
+
+      const hasAnyExpectedEventField = [odds_event_id, odds_commence_time, odds_home_team, odds_away_team].some(Boolean);
+      const expectedEvent = hasAnyExpectedEventField && odds_event_id && odds_commence_time && odds_home_team && odds_away_team
+        ? {
+            eventId: String(odds_event_id),
+            commenceTime: String(odds_commence_time),
+            homeTeam: String(odds_home_team),
+            awayTeam: String(odds_away_team),
+          }
+        : null;
+
+      if (hasAnyExpectedEventField && !expectedEvent) {
+        return json({ error: "Verified event ID, start time, home team, and away team are required for game-line analysis." }, 400);
+      }
 
       if (!t1Input || !t2Input) return json({ error: "Both teams are required" }, 400);
       if (!bet_type) return json({ error: "bet_type is required (moneyline|spread|total)" }, 400);
@@ -1471,7 +1539,10 @@ Deno.serve(async (req) => {
       if (!team2) return json({ error: `Team not found: ${t2Input}` }, 400);
 
       // Resolve real scheduled venue (which team is HOME tonight) — never guess
-      const venue = await resolveMatchupVenue(team1.id, team2.id, sport);
+      const venue = await resolveMatchupVenue(team1.id, team2.id, sport, expectedEvent?.commenceTime);
+      if (expectedEvent && !venue) {
+        return json({ error: "Sentinel could not verify this exact scheduled event, so analysis was not run." }, 422);
+      }
       const team1HomeAway: "home" | "away" | null = venue ? (venue.team1IsHome ? "home" : "away") : null;
       const team2HomeAway: "home" | "away" | null = venue ? (venue.team1IsHome ? "away" : "home") : null;
 
@@ -1523,7 +1594,7 @@ Deno.serve(async (req) => {
 
       // Fetch live odds for all sports — always read rotation pool from MASTER DB.
       const oddsDb = await getMasterClient();
-      const oddsData = await fetchOddsForMatchup(team1.name, team2.name, sport, oddsDb);
+      const oddsData = await fetchOddsForMatchup(team1.name, team2.name, sport, oddsDb, expectedEvent);
 
       if (sport === "wnba") {
         const targetDate = venue?.gameDate ?? new Date().toISOString();
@@ -1603,7 +1674,7 @@ Deno.serve(async (req) => {
           errors: [],
           team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
           team2: { ...team2, stats: team2Stats, homeAway: team2HomeAway },
-          matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue, venueCity: venue?.venueCity ?? null },
+          matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue, oddsEventId: expectedEvent?.eventId ?? null, venueCity: venue?.venueCity ?? null },
           injuries: {
             team1: injuries1,
             team2: injuries2,
@@ -1712,7 +1783,7 @@ Deno.serve(async (req) => {
                 errors: [],
                 team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
                 team2: { ...team2, stats: team2Stats, homeAway: team2HomeAway },
-                matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue },
+                matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue, oddsEventId: expectedEvent?.eventId ?? null },
                 head_to_head: h2h,
                 injuries: { team1: injuries1, team2: injuries2, fetchedAt: injuryReport.fetchedAt, source: injuryReport.source },
                 splits: { team1: splits1, team2: splits2 },
@@ -1806,7 +1877,7 @@ Deno.serve(async (req) => {
                 errors: [],
                 team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
                 team2: { ...team2, stats: team2Stats, homeAway: team2HomeAway },
-                matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue },
+                matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue, oddsEventId: expectedEvent?.eventId ?? null },
                 head_to_head: h2h,
                 injuries: { team1: injuries1, team2: injuries2, fetchedAt: injuryReport.fetchedAt, source: injuryReport.source },
                 splits: { team1: splits1, team2: splits2 },
@@ -1906,7 +1977,7 @@ Deno.serve(async (req) => {
         errors: [],
         team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
         team2: { ...team2, stats: team2Stats, homeAway: team2HomeAway },
-        matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue },
+        matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue, oddsEventId: expectedEvent?.eventId ?? null },
         head_to_head: h2h,
         injuries: { team1: injuries1, team2: injuries2, fetchedAt: injuryReport.fetchedAt, source: injuryReport.source },
         splits: { team1: splits1, team2: splits2 },

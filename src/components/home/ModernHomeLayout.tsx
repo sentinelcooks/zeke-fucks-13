@@ -1,14 +1,12 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { motion } from "framer-motion";
 import {
   Flame, ChevronRight, Sparkles, CheckCircle2, XCircle,
-  BarChart3, Layers, Crosshair, Activity, Trophy, Percent,
-  Users, TrendingDown, Zap, DollarSign, Target
+  BarChart3, Crosshair, DollarSign, Target
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 import { useNavigate } from "react-router-dom";
-import { useParlaySlip } from "@/contexts/ParlaySlipContext";
 
 import { PnLCalendar } from "@/components/PnLCalendar";
 import { useAuth } from "@/contexts/AuthContext";
@@ -17,10 +15,10 @@ import { AddToSlipSheet } from "@/components/AddToSlipSheet";
 import { getTeamLogoUrl } from "@/utils/teamLogos";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
 import { isEdgeHistoryPick, isPicksHistoryPick, isActiveTodayPick } from "@/lib/pickHistoryFilters";
-import { todayInTZ, getGameDate, isTodayGamePick, isResultFinal } from "@/lib/gameDate";
+import { todayInTZ, getGameDate, isTodayGamePick, isResultFinal, shiftYmd } from "@/lib/gameDate";
 import { formatPropType } from "@/lib/formatPickLabel";
 import { resolveDisplayName } from "@/lib/displayName";
-import { normalizeConfidencePercent, normalizeVerdict, verdictColorHex } from "@/lib/matchupGrade";
+import { normalizeConfidencePercent, normalizeVerdict } from "@/lib/matchupGrade";
 import {
   modelScorePercent,
   selectTodaysEdgePicks,
@@ -165,134 +163,11 @@ function timeAgo(dateStr: string) {
   return `Updated ${hours}h ago`;
 }
 
-function CountUp({ target, duration = 1200, suffix = "%" }: { target: number; duration?: number; suffix?: string }) {
-  const [value, setValue] = useState(0);
-  useEffect(() => {
-    if (target <= 0) { setValue(target); return; }
-    const steps = 60;
-    const interval = duration / steps;
-    let step = 0;
-    const timer = setInterval(() => {
-      step++;
-      const t = step / steps;
-      const eased = 1 - Math.pow(1 - t, 3);
-      setValue(Math.round(eased * target));
-      if (step >= steps) { clearInterval(timer); setValue(target); }
-    }, interval);
-    return () => clearInterval(timer);
-  }, [target, duration]);
-  return <>{value}{suffix}</>;
-}
-
-function getConfidenceColor(rate: number): string {
-  return verdictColorHex(undefined, rate);
-}
-
-function getConfidenceLabel(rate: number): string {
-  return normalizeVerdict(undefined, rate);
-}
-
-function ConfidenceRing({ rate, isModelScore = false }: { rate: number; isModelScore?: boolean }) {
-  const r = 32;
-  const circ = 2 * Math.PI * r;
-  const offset = circ - (rate / 100) * circ;
-  const color = getConfidenceColor(rate);
+function CompactScore({ rate, isModelScore = false }: { rate: number; isModelScore?: boolean }) {
   return (
-    <div className="relative shrink-0" style={{ width: 80, height: 80 }}>
-      <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80">
-        <circle cx="40" cy="40" r={r} fill="none" stroke="#1a1735" strokeWidth="5" />
-        <motion.circle
-          cx="40" cy="40" r={r}
-          fill="none" stroke={color} strokeWidth="5" strokeLinecap="round"
-          strokeDasharray={circ}
-          initial={{ strokeDashoffset: circ }}
-          animate={{ strokeDashoffset: offset }}
-          transition={{ duration: 1.5, ease: "easeOut", delay: 0.3 }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-bold tabular-nums" style={{ fontSize: 18, fontWeight: 700, color }}>
-          <CountUp target={Math.round(rate)} suffix={isModelScore ? "" : "%"} />
-        </span>
-        {isModelScore && (
-          <span style={{ fontSize: 6.5, fontWeight: 800, letterSpacing: 0.7, color: '#8b87b8' }}>
-            MODEL SCORE
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function CarouselWrapper({ children, pickCount }: { children: React.ReactNode; pickCount: number }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const isPaused = useRef(false);
-  const animRef = useRef<number | null>(null);
-
-  const shouldScroll = pickCount > 1;
-
-  useEffect(() => {
-    if (!shouldScroll) return;
-    const container = containerRef.current;
-    if (!container) return;
-
-    let scrollPos = 0;
-    const speed = 0.15;
-
-    const tick = () => {
-      if (!isPaused.current) {
-        scrollPos += speed;
-        if (scrollPos >= container.scrollWidth / 2) {
-          scrollPos = 0;
-        }
-        container.scrollLeft = scrollPos;
-      }
-      animRef.current = requestAnimationFrame(tick);
-    };
-
-    animRef.current = requestAnimationFrame(tick);
-
-    const pause = () => {
-      isPaused.current = true;
-    };
-
-    const resume = () => {
-      setTimeout(() => {
-        isPaused.current = false;
-      }, 2000);
-    };
-
-    container.addEventListener('touchstart', pause);
-    container.addEventListener('mousedown', pause);
-    window.addEventListener('touchend', resume);
-    window.addEventListener('mouseup', resume);
-
-    return () => {
-      if (animRef.current !== null) {
-        cancelAnimationFrame(animRef.current);
-      }
-      container.removeEventListener('touchstart', pause);
-      container.removeEventListener('mousedown', pause);
-      window.removeEventListener('touchend', resume);
-      window.removeEventListener('mouseup', resume);
-    };
-  }, [shouldScroll]);
-
-  if (!shouldScroll) {
-    return (
-      <div className="w-full overflow-hidden">
-        <div className="flex flex-row overflow-hidden hide-scrollbar">
-          {children}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="w-full overflow-hidden">
-      <div ref={containerRef} className="flex flex-row overflow-hidden hide-scrollbar">
-        {children}{children}
-      </div>
+    <div className="shrink-0 pt-1 text-right">
+      <p className="text-lg font-extrabold tabular-nums text-foreground">{rate}{isModelScore ? "" : "%"}</p>
+      <p className="mt-0.5 text-[7px] font-bold uppercase tracking-[0.12em] text-muted-foreground/50">{isModelScore ? "MODEL SCORE" : "Confidence"}</p>
     </div>
   );
 }
@@ -304,7 +179,6 @@ interface ModernHomeLayoutProps {
 
 export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const navigate = useNavigate();
-  const { addLeg } = useParlaySlip();
   const [slipSheetOpen, setSlipSheetOpen] = useState(false);
   const [slipSheetPick, setSlipSheetPick] = useState<import("@/components/AddToSlipSheet").SlipSheetPick | null>(null);
   
@@ -314,31 +188,15 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const [dailyTierPicks, setDailyTierPicks] = useState<DailyPick[]>([]);
   const [yesterdayPicks, setYesterdayPicks] = useState<DailyPick[]>([]);
   const [picksLoading, setPicksLoading] = useState(true);
+  const [lineupError, setLineupError] = useState<string | null>(null);
+  const [lineupScanPending, setLineupScanPending] = useState(false);
   const [userSports, setUserSports] = useState<string[]>([]);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [headshots, setHeadshots] = useState<Record<string, string>>({});
-  const [rotatingTip, setRotatingTip] = useState<{ tip: string; focus_area: string } | null>(null);
-  const [rotatingTipLoading, setRotatingTipLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user) { setRotatingTipLoading(false); return; }
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke("rotating-tip", {
-          headers: await premiumRequestHeaders(),
-        });
-        if (!cancelled && !error && data?.tip) {
-          setRotatingTip({ tip: data.tip, focus_area: data.focus_area });
-        }
-      } catch (e) {
-        console.error("rotating-tip fetch failed", e);
-      } finally {
-        if (!cancelled) setRotatingTipLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [user]);
+  const [activeDailyEdge, setActiveDailyEdge] = useState(0);
+  const [activeLineupIndex, setActiveLineupIndex] = useState(0);
+  const todayPickRequestId = useRef(0);
+  const lineupPollTimeout = useRef<number | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -370,7 +228,39 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     return arr;
   }, [userSports]);
 
-  const fetchTodayPicks = useCallback(async () => {
+  const fetchYesterdayEdgeResults = useCallback(async () => {
+    const yesterdayET = shiftYmd(todayInTZ(), -1);
+    if (!yesterdayET) return;
+
+    const [byGameDate, legacyByPickDate] = await Promise.all([
+      supabase
+        .from("daily_picks")
+        .select("*")
+        .eq("game_date", yesterdayET)
+        .eq("tier", "edge")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("daily_picks")
+        .select("*")
+        .is("game_date", null)
+        .eq("pick_date", yesterdayET)
+        .eq("tier", "edge")
+        .order("created_at", { ascending: false }),
+    ]);
+
+    if (byGameDate.error || legacyByPickDate.error) {
+      console.error("[YesterdayEdge] failed to load results", byGameDate.error || legacyByPickDate.error);
+      return;
+    }
+
+    setYesterdayPicks(
+      [...((byGameDate.data as DailyPick[]) || []), ...((legacyByPickDate.data as DailyPick[]) || [])]
+        .filter(isEdgeHistoryPick),
+    );
+  }, []);
+
+  const fetchTodayPicks = useCallback(async (): Promise<number | null> => {
+    const requestId = ++todayPickRequestId.current;
     const todayET = todayInTZ();
     const yesterdayPickDate = new Date(Date.now() - 86400000).toISOString().split("T")[0];
 
@@ -380,32 +270,46 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     //   1. Today's slate by game_date (with a fallback for legacy rows that
     //      were inserted before the game_date column existed).
     //   2. Yesterday's edge results for the recap card (unchanged).
-    const [todayByGame, todayLegacyRes, yesterdayRes] = await Promise.all([
-      supabase
-        .from("daily_picks")
-        .select("*")
-        .eq("game_date", todayET)
-        .order("created_at", { ascending: false })
-        .order("confidence", { ascending: false, nullsFirst: false })
-        .limit(120),
-      // Legacy fallback: rows missing game_date that were generated today or
-      // yesterday (night-before scans). isActiveTodayPick will drop any whose
-      // commence_time-derived game date is not today.
-      supabase
-        .from("daily_picks")
-        .select("*")
-        .is("game_date", null)
-        .gte("pick_date", yesterdayPickDate)
-        .lte("pick_date", todayET)
-        .order("created_at", { ascending: false })
-        .limit(80),
-      supabase
-        .from("daily_picks")
-        .select("*")
-        .eq("pick_date", yesterdayPickDate)
-        .eq("tier", "edge")
-        .order("created_at", { ascending: false }),
-    ]);
+    let todayByGame: Awaited<ReturnType<typeof supabase.from<"daily_picks">>>;
+    let todayLegacyRes: Awaited<ReturnType<typeof supabase.from<"daily_picks">>>;
+    try {
+      [todayByGame, todayLegacyRes] = await Promise.all([
+        supabase
+          .from("daily_picks")
+          .select("*")
+          .eq("game_date", todayET)
+          .order("created_at", { ascending: false })
+          .order("confidence", { ascending: false, nullsFirst: false })
+          .limit(120),
+        // Legacy fallback: rows missing game_date that were generated today or
+        // yesterday (night-before scans). isActiveTodayPick will drop any whose
+        // commence_time-derived game date is not today.
+        supabase
+          .from("daily_picks")
+          .select("*")
+          .is("game_date", null)
+          .gte("pick_date", yesterdayPickDate)
+          .lte("pick_date", todayET)
+          .order("created_at", { ascending: false })
+          .limit(80),
+      ]);
+    } catch (error) {
+      console.error("[TodaysEdge] failed to load lineup", error);
+      if (requestId === todayPickRequestId.current) {
+        setLineupError("Live picks could not be loaded. Please try again.");
+        setPicksLoading(false);
+      }
+      return null;
+    }
+
+    if (todayByGame.error || todayLegacyRes.error) {
+      console.error("[TodaysEdge] failed to load lineup", todayByGame.error || todayLegacyRes.error);
+      if (requestId === todayPickRequestId.current) {
+        setLineupError("Live picks could not be loaded. Please try again.");
+        setPicksLoading(false);
+      }
+      return null;
+    }
 
     // Hard odds guard: drop extreme longshots (|odds| >= 1000)
     const oddsOk = (o: string | null | undefined) => {
@@ -449,7 +353,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     // validated Edge, use up to four analyzer-backed shadow candidates for
     // that sport. They remain tier=daily and render as model scores, never
     // as win probabilities.
-    const edgeSelection = selectTodaysEdgePicks(activeToday, 4);
+    const edgeSelection = selectTodaysEdgePicks(activeToday, 5);
     const edgeTier = dedupe(edgeSelection.picks as DailyPick[]);
 
     // Keep every other active Daily Pick, but remove fallback cards already
@@ -505,33 +409,84 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       console.groupEnd();
     }
 
-    setTodayPicks(sortByPref(edgeTier));
+    if (requestId !== todayPickRequestId.current) return edgeTier.length;
+
+    setTodayPicks([...edgeTier].sort((left, right) => comparePickQuality(right, left)));
     setDailyTierPicks(sortByPref(dailyTier));
-    setYesterdayPicks(((yesterdayRes.data as DailyPick[]) || []).filter(isEdgeHistoryPick));
+    setLineupError(null);
+    await fetchYesterdayEdgeResults();
     setPicksLoading(false);
     setLastRefreshed(new Date());
-  }, [sortByPref]);
+    return edgeTier.length;
+  }, [fetchYesterdayEdgeResults, sortByPref]);
+
+  const pollQueuedLineup = useCallback(() => {
+    if (lineupPollTimeout.current !== null) {
+      window.clearTimeout(lineupPollTimeout.current);
+    }
+
+    let attempts = 0;
+    const poll = async () => {
+      const visibleCount = await fetchTodayPicks();
+      attempts += 1;
+      if ((visibleCount ?? 0) > 0 || attempts >= 8) {
+        setLineupScanPending(false);
+        return;
+      }
+      lineupPollTimeout.current = window.setTimeout(() => { void poll(); }, 15_000);
+    };
+
+    void poll();
+  }, [fetchTodayPicks]);
+
+  const requestTodayLineup = useCallback(async () => {
+    if (lineupScanPending) return;
+
+    setLineupError(null);
+    setLineupScanPending(true);
+    try {
+      const headers = await premiumRequestHeaders();
+      const { data, error } = await supabase.functions.invoke<{
+        ok?: boolean;
+        mode?: "rerank" | "queued" | "in_progress";
+      }>("force-refresh-edge", { headers });
+      if (error || data?.ok === false) throw error ?? new Error("refresh_failed");
+
+      const visibleCount = await fetchTodayPicks();
+      if ((visibleCount ?? 0) > 0 || data?.mode === "rerank") {
+        setLineupScanPending(false);
+      } else {
+        pollQueuedLineup();
+      }
+    } catch (error) {
+      console.error("[TodaysEdge] failed to start lineup refresh", error);
+      setLineupError("Today's slate could not be started. Please try again shortly.");
+      setLineupScanPending(false);
+    }
+  }, [fetchTodayPicks, lineupScanPending, pollQueuedLineup]);
 
   useEffect(() => {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    const refresh = () => { void fetchTodayPicks(); };
     if (supabaseUrl && anonKey) {
       fetch(`${supabaseUrl}/functions/v1/grade-picks`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "apikey": anonKey, "Authorization": `Bearer ${anonKey}` },
-      }).catch(() => {});
+      }).catch(() => {}).finally(refresh);
+    } else {
+      refresh();
     }
-
-    fetchTodayPicks();
 
     // Auto-refresh yesterday's results every 60 seconds
     const interval = setInterval(async () => {
-      const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
-      const { data } = await supabase.from("daily_picks").select("*").eq("pick_date", yesterday).eq("tier", "edge").order("created_at", { ascending: false });
-      setYesterdayPicks(((data as DailyPick[]) || []).filter(isEdgeHistoryPick));
+      await fetchYesterdayEdgeResults();
     }, 60000);
-    return () => clearInterval(interval);
-  }, [fetchTodayPicks]);
+    return () => {
+      clearInterval(interval);
+      if (lineupPollTimeout.current !== null) window.clearTimeout(lineupPollTimeout.current);
+    };
+  }, [fetchTodayPicks, fetchYesterdayEdgeResults]);
 
   // Fetch player headshots for prop picks only
   useEffect(() => {
@@ -614,15 +569,18 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const hasYesterdayData = yesterdayPicks.length > 0;
   const yesterdayPendingVisibleLimit = 5;
 
-  const ringRadius = 52;
-  const ringCircumference = 2 * Math.PI * ringRadius;
-  const ringOffset = ringCircumference - (stats.hitRate / 100) * ringCircumference;
-
   const quickLinks = [
-    { label: "Analyze", icon: BarChart3, path: "/dashboard/analyze", gradient: "from-[hsl(142,100%,50%)] to-[hsl(158,64%,52%)]", desc: "Props & Lines" },
-    { label: "Picks", icon: Sparkles, path: "/dashboard/picks", gradient: "from-[hsl(30,100%,50%)] to-[hsl(15,100%,55%)]", desc: "Today's picks" },
-    { label: "Tracker", icon: DollarSign, path: "/dashboard/tracker", gradient: "from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)]", desc: "Your bets" },
-    { label: "Lines", icon: Crosshair, path: "/dashboard/analyze?mode=lines", gradient: "from-[hsl(190,90%,55%)] to-[hsl(158,64%,52%)]", desc: "Moneylines" },
+    { label: "Analyze", icon: BarChart3, path: "/dashboard/analyze" },
+    { label: "Picks", icon: Sparkles, path: "/dashboard/picks" },
+    { label: "Tracker", icon: DollarSign, path: "/dashboard/tracker" },
+    { label: "Lines", icon: Crosshair, path: "/dashboard/analyze?mode=lines" },
+  ];
+  const verifiedDailyEdges = todayPicks.filter((pick) => pick.edgePresentation !== "fallback");
+  const updatedMinutes = Math.max(1, Math.round((Date.now() - lastRefreshed.getTime()) / 60000));
+  const performanceMetrics = [
+    { label: "Record", value: stats.total ? `${stats.wins}-${stats.losses}` : "—" },
+    { label: "Win Rate", value: stats.total ? `${stats.hitRate}%` : "—" },
+    { label: "ROI", value: stats.total ? `${stats.roi > 0 ? "+" : ""}${stats.roi}%` : "—" },
   ];
 
   return (
@@ -643,69 +601,130 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
 
       
 
-      <div className="w-full max-w-[430px] mx-auto px-5 pt-1 pb-6 space-y-6 relative">
-        <div className="vision-orb w-64 h-64 -top-20 -right-20" style={{ background: 'hsl(142 100% 50%)' }} />
-        <div className="vision-orb w-48 h-48 top-[400px] -left-16" style={{ background: 'hsl(190 90% 55%)', animationDelay: '-3s' }} />
+      <div className="w-full max-w-[430px] mx-auto px-5 pt-4 pb-6 space-y-5 relative">
+        <div className="vision-orb w-64 h-64 -top-24 -right-28 opacity-70" style={{ background: 'hsl(250 76% 62%)' }} />
+        <div className="vision-orb w-44 h-44 top-[760px] -left-24 opacity-45" style={{ background: 'hsl(250 76% 62%)', animationDelay: '-3s' }} />
 
         <motion.div {...stagger(0)} className="relative z-10">
-          <h1 className="text-2xl font-extrabold text-foreground tracking-tight">
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-accent/85">
+            {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+          </p>
+          <h1 className="mt-1 text-[29px] font-extrabold text-foreground tracking-tight">
             {getGreeting()}, {resolveDisplayName(profile, user, "Player")}
           </h1>
-          <div className="mt-1">
-            <span
-              className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground/60 tracking-wide"
-              style={{
-                background: 'hsl(250 30% 8%)',
-                border: '1px solid hsl(250 20% 18%)',
-                borderRadius: 20,
-                padding: '3px 10px',
-              }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-[hsl(158,64%,52%)] animate-glow-pulse" />
-              {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-            </span>
-          </div>
+          <p className="hidden">A focused view of today’s model-supported opportunities.</p>
         </motion.div>
 
-        <motion.div {...stagger(0.5)} className="relative z-10">
-          <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/50 mb-2.5">Quick Access</p>
-          <div className="grid grid-cols-4 gap-2.5">
-            {quickLinks.map((link, i) => (
-              <motion.button
-                key={link.label}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15 + i * 0.04, type: "spring", stiffness: 300, damping: 22 }}
-                onClick={() => navigate(link.path)}
-                whileTap={{ scale: 0.92 }}
-                className="flex flex-col items-center gap-2 p-3 rounded-2xl active:scale-[0.97] transition-transform"
-                style={{
-                  background: 'linear-gradient(165deg, hsl(250 20% 13%), hsl(250 22% 9%))',
-                  border: '1px solid hsl(250 20% 18% / 0.7)',
+        {(picksLoading || verifiedDailyEdges.length > 0) && (
+          <motion.section {...stagger(0.5)} className="relative z-10 -mx-5 overflow-hidden">
+          <div className="mb-3 flex items-end justify-between px-5">
+            <div>
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-accent">Today’s best opportunity</p>
+              <h2 className="mt-1 text-[22px] font-extrabold tracking-tight text-foreground">Daily Edge</h2>
+            </div>
+            <span className="mb-1 text-[10px] font-medium text-muted-foreground/55">Updated {updatedMinutes}m ago</span>
+          </div>
+
+          {picksLoading ? (
+            <div className="mx-5 h-[236px] animate-pulse rounded-[26px] bg-secondary/25" />
+          ) : (
+            <>
+              <div
+                className="flex gap-3 overflow-x-auto px-5 pb-3 hide-scrollbar snap-x snap-mandatory"
+                onScroll={(event) => {
+                  const cardWidth = event.currentTarget.clientWidth * 0.86 + 12;
+                  setActiveDailyEdge(Math.min(verifiedDailyEdges.length - 1, Math.max(0, Math.round(event.currentTarget.scrollLeft / cardWidth))));
                 }}
               >
-                <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${link.gradient} flex items-center justify-center`}
-                  style={{ boxShadow: '0 6px 16px -4px hsla(228, 20%, 0%, 0.5)' }}>
-                  <link.icon className="w-5 h-5 text-white" />
+                {verifiedDailyEdges.map((pick, index) => {
+                  const isGameBet = Boolean(pick.bet_type && pick.bet_type !== "prop");
+                  const score = Math.round(modelScorePercent(pick));
+                  const verdict = normalizeVerdict(pick.verdict, score);
+                  const title = isGameBet
+                    ? `${pick.away_team || pick.opponent || ""} @ ${pick.home_team || pick.team || ""}`
+                    : pick.player_name;
+                  const matchup = isGameBet
+                    ? formatPickLabel(pick)
+                    : `${pick.team || "Team"}${pick.opponent ? ` vs ${pick.opponent}` : ""} · ${formatPickLabel(pick)}`;
+                  return (
+                    <motion.article
+                      key={`${pick.id}-daily-${index}`}
+                      initial={{ opacity: 0, x: 18 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.08 + index * 0.05 }}
+                      className="relative w-[86vw] max-w-[360px] min-w-[86vw] shrink-0 snap-start overflow-hidden rounded-[26px] p-5"
+                      style={{ background: 'radial-gradient(circle at 100% 0%, hsla(250,76%,62%,0.36), transparent 40%), radial-gradient(circle at 0% 100%, hsla(210,100%,60%,0.15), transparent 45%), linear-gradient(145deg, hsl(250 28% 15%), hsl(228 30% 8%) 72%)', boxShadow: '0 18px 40px -24px hsla(250,76%,62%,0.8), inset 0 1px 0 hsla(250,90%,90%,0.1)' }}
+                    >
+                      <div className="absolute -right-8 bottom-[-72px] h-44 w-44 rounded-full opacity-40 blur-3xl" style={{ background: 'hsl(250 76% 62%)' }} />
+                      <div className="relative">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="inline-flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-accent"><Flame className="h-3 w-3" /> Daily Edge</span>
+                          <span className="text-[9px] font-semibold text-muted-foreground/55">{index + 1} of {verifiedDailyEdges.length}</span>
+                        </div>
+                        <div className="mt-6 flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-accent/80">{(pick.sport || "Sentinel").toUpperCase()}</p>
+                            <h3 className="mt-2 text-[24px] font-extrabold leading-[1.05] tracking-tight text-foreground">{title}</h3>
+                            <p className="mt-2 text-[12px] font-medium text-muted-foreground/75">{matchup}</p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="text-2xl font-black tabular-nums text-foreground">{score}%</p>
+                            <p className="mt-0.5 text-[8px] font-bold uppercase tracking-[0.12em] text-muted-foreground/55">Confidence</p>
+                          </div>
+                        </div>
+                        <div className="mt-5 flex items-center justify-between gap-3 border-t border-white/[0.08] pt-3">
+                          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-accent">{verdict}</span>
+                          <span className="text-[10px] font-semibold text-muted-foreground/65">{pick.odds ? formatOddsFn(pick.odds) : "â€”"}</span>
+                        </div>
+                        <div className="mt-4 flex gap-2">
+                          <button type="button" onClick={() => navigate("/dashboard/picks")} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-[11px] font-bold text-white active:scale-[0.98]" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(220 100% 62%))', boxShadow: '0 10px 20px -12px hsla(250,76%,62%,0.8)' }}>
+                            View Daily Edge <ChevronRight className="h-3.5 w-3.5" />
+                          </button>
+                          <button type="button" onClick={() => navigate("/dashboard/analyze")} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-accent" style={{ background: 'hsla(228,25%,7%,0.52)' }} aria-label="Open analysis"><BarChart3 className="h-4 w-4" /></button>
+                        </div>
+                      </div>
+                    </motion.article>
+                  );
+                })}
+              </div>
+              {verifiedDailyEdges.length > 1 && (
+                <div className="flex justify-center gap-1.5">
+                  {verifiedDailyEdges.map((pick, index) => <span key={`${pick.id}-dot`} className="h-1.5 rounded-full transition-all" style={{ width: index === activeDailyEdge ? 18 : 6, background: index === activeDailyEdge ? 'hsl(250 76% 68%)' : 'hsla(250,30%,70%,0.26)' }} />)}
                 </div>
-                <div className="text-center">
-                  <span className="block text-[11px] font-bold text-foreground/80">{link.label}</span>
-                  <span className="block text-[8px] text-muted-foreground/40 mt-0.5">{link.desc}</span>
-                </div>
+              )}
+            </>
+          )}
+          </motion.section>
+        )}
+
+        <motion.nav {...stagger(0.85)} aria-label="Explore Sentinel" className="relative z-10 border-y border-white/[0.06] py-2.5">
+          <div className="flex items-center justify-between gap-2">
+            {quickLinks.map((link, index) => (
+              <motion.button
+                key={link.label}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 + index * 0.04 }}
+                onClick={() => navigate(link.path)}
+                whileTap={{ scale: 0.93 }}
+                className="flex min-w-0 flex-1 flex-col items-center gap-1 py-1 text-muted-foreground/65 transition-colors active:text-accent"
+              >
+                <span className="flex h-8 w-8 items-center justify-center text-accent"><link.icon className="h-4 w-4" /></span>
+                <span className="text-[9px] font-bold tracking-wide text-foreground/75">{link.label}</span>
               </motion.button>
             ))}
           </div>
-        </motion.div>
+        </motion.nav>
 
         <motion.div {...stagger(1)} className="relative z-10">
-          <div className="flex items-center justify-between border-b border-[hsl(250,20%,18%)]/40 pb-2 mb-3">
+          <div className="flex items-center justify-between border-b border-white/[0.07] pb-2.5 mb-0">
             <div className="flex items-center gap-2">
-              <Flame className="w-4 h-4" style={{ color: 'hsl(142 100% 50%)', animation: 'pulse-fire 3s ease-in-out infinite' }} />
-              <span className="text-xs font-bold tracking-[0.15em] uppercase" style={{ color: 'hsl(142 100% 50%)' }}>Today's Edge</span>
+              <Flame className="w-4 h-4 text-accent" style={{ animation: 'pulse-fire 3s ease-in-out infinite' }} />
+              <span className="text-xs font-bold tracking-[0.15em] uppercase text-foreground">Today's Edge Lineup</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-muted-foreground/40">
-                Updated {Math.max(1, Math.round((Date.now() - lastRefreshed.getTime()) / 60000))}m ago
+              <span className="text-[10px] text-muted-foreground/45">
+                {lineupScanPending ? "Analyzing live slate…" : `${todayPicks.length} available · ${updatedMinutes}m ago`}
               </span>
             </div>
           </div>
@@ -733,25 +752,44 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               borderRadius: 20,
             }}>
               <Sparkles className="w-6 h-6 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-[11px] text-muted-foreground/55 mb-1">No edge picks generated yet today.</p>
-              <p className="text-[10px] text-muted-foreground/35">Check back after games are scheduled. Lean plays may be available in Daily Picks below.</p>
+              <p className="text-[11px] text-muted-foreground/65 mb-1">
+                {lineupError
+                  ? lineupError
+                  : lineupScanPending
+                    ? "Sentinel is analyzing today’s live slate."
+                    : "No model-supported picks are available yet."}
+              </p>
+              <p className="text-[10px] text-muted-foreground/35">
+                {lineupScanPending
+                  ? "Only analyzer-finalized plays will appear here."
+                  : "Run a fresh analysis to check every eligible live market."}
+              </p>
+              <button
+                type="button"
+                onClick={() => { void requestTodayLineup(); }}
+                disabled={lineupScanPending}
+                className="mt-4 inline-flex h-10 items-center justify-center rounded-xl px-4 text-[11px] font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-55"
+                style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(220 100% 62%))' }}
+              >
+                {lineupScanPending ? "Analyzing slate…" : lineupError ? "Try again" : "Analyze today’s slate"}
+              </button>
             </div>
           ) : (
-            <div className="-mx-5 px-5 overflow-x-auto hide-scrollbar snap-x snap-mandatory">
-              <div className="flex gap-3 pb-2">
+            <>
+            <div
+              className="-mx-5 overflow-x-auto px-5 pb-2 hide-scrollbar snap-x snap-mandatory"
+              onScroll={(event) => {
+                const cardWidth = event.currentTarget.clientWidth * 0.84 + 12;
+                setActiveLineupIndex(Math.min(todayPicks.length - 1, Math.max(0, Math.round(event.currentTarget.scrollLeft / cardWidth))));
+              }}
+            >
+              <div className="flex gap-3">
                 {todayPicks.map((pick, i) => {
                   const isGameBet = pick.bet_type && pick.bet_type !== 'prop';
                   const isFallbackEdge = pick.edgePresentation === "fallback";
                   const isLineupsPending = isFallbackEdge && pick.edgeWarning === "lineups_pending";
                   const confPercent = Math.round(modelScorePercent(pick));
                   const canonicalVerdict = normalizeVerdict(pick.verdict, confPercent);
-                  const diagnostics = pick.model_diagnostics ?? {};
-                  const sourceContractVersion = String(diagnostics.sourceContractVersion ?? "");
-                  const savedCanonical =
-                    pick.sport !== "nba" ||
-                    sourceContractVersion.startsWith("canonical.") ||
-                    diagnostics.confidenceSource === "analyzer" ||
-                    (pick.model_used === "nba-api/analyze" && diagnostics.stored_verdict != null);
                   const resultRaw = String(pick.result ?? "pending").toLowerCase();
                   const statusBadge =
                     resultRaw === "hit" || resultRaw === "win"
@@ -776,27 +814,23 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.1 + i * 0.06 }}
-                    className="w-[88%] max-w-[332px] min-w-0 shrink-0 snap-start flex flex-col relative overflow-hidden"
+                    className="relative flex min-h-[210px] w-[84vw] max-w-[360px] shrink-0 snap-start flex-col overflow-hidden rounded-[22px] border border-white/[0.08]"
                     style={{
-                      background: 'radial-gradient(circle at 0% 0%, hsla(190,90%,55%,0.08), transparent 38%), linear-gradient(165deg, hsl(250 20% 12%), hsl(250 22% 9%))',
-                      border: '1px solid hsl(250 20% 18% / 0.6)',
-                      borderTop: `2px solid ${isGameBet ? '#22d3ee' : '#7c6ff7'}`,
-                      borderRadius: 18,
-                      padding: 18,
-                      boxShadow: '0 12px 34px -16px rgba(0,0,0,0.78), inset 0 1px 0 rgba(255,255,255,0.025)',
-                      gap: 12,
+                      padding: '16px',
+                      background: 'radial-gradient(circle at 100% 0%, hsla(250, 76%, 62%, 0.28), transparent 43%), linear-gradient(145deg, hsl(250 30% 16%), hsl(228 28% 8%) 72%)',
+                      boxShadow: 'inset 0 1px 0 hsla(250, 90%, 94%, 0.08), 0 18px 34px -28px hsla(250, 76%, 62%, 0.92)',
                     }}
                   >
 
                     {/* HEADER ROW */}
-                    <div className="relative z-10" style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div className="relative z-10 flex items-start gap-3">
                       {/* Left: Recommended team logo or player headshot */}
                       <div style={{
-                        width: 56, height: 56, borderRadius: 15, overflow: 'hidden',
-                        border: `1px solid ${isGameBet ? 'rgba(34,211,238,0.28)' : '#302b58'}`,
+                        width: 48, height: 48, borderRadius: 15, overflow: 'hidden',
+                        border: `1px solid ${isGameBet ? 'rgba(124,111,247,0.26)' : '#302b58'}`,
                         flexShrink: 0, position: 'relative',
                         background: isGameBet
-                          ? 'radial-gradient(circle at 50% 35%, rgba(34,211,238,0.16), transparent 68%), #201d38'
+                          ? 'radial-gradient(circle at 50% 35%, rgba(124,111,247,0.18), transparent 68%), #201d38'
                           : '#252340',
                         boxShadow: isGameBet ? 'inset 0 1px 0 rgba(255,255,255,0.05)' : 'none',
                       }}>
@@ -811,13 +845,13 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                                 width: '100%', height: '100%',
                                 display: 'flex',
                                 alignItems: 'center', justifyContent: 'center',
-                                padding: 5,
+                                padding: 4,
                               }}>
                                 {selectedLogo && (
                                   <img
                                     src={selectedLogo}
                                     alt={`${logoTeam} logo`}
-                                    style={{ width: 42, height: 42, objectFit: 'contain', filter: 'drop-shadow(0 5px 8px rgba(0,0,0,0.34))' }}
+                                    style={{ width: 38, height: 38, objectFit: 'contain', filter: 'drop-shadow(0 5px 8px rgba(0,0,0,0.34))' }}
                                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                   />
                                 )}
@@ -878,15 +912,15 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                             ? `${pick.away_team || pick.opponent || ''} @ ${pick.home_team || pick.team || ''}`
                             : pick.player_name}
                         </p>
-                        <div style={{ display: 'flex', gap: 4, marginTop: 2, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
                           <span style={{
                             display: 'inline-block',
-                            background: '#252340', color: '#22d3ee',
-                            fontSize: 10, fontWeight: 700, letterSpacing: 1,
+                            color: '#a9a3f9',
+                            fontSize: 9, fontWeight: 700, letterSpacing: 1,
                             borderRadius: 20, padding: '2px 8px',
                           }}>{(pick.sport || 'NBA').toUpperCase()}</span>
                           <span style={{
-                            display: 'inline-block',
+                            display: 'none',
                             background: `${statusBadge.color}1f`,
                             color: statusBadge.color,
                             fontSize: 10, fontWeight: 700, letterSpacing: 1,
@@ -895,7 +929,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                           }}>{statusBadge.label}</span>
                           {isGameBet && (
                             <span style={{
-                              display: 'inline-block',
+                              display: 'none',
                               background: 'hsla(190,90%,55%,0.15)', color: '#22d3ee',
                               fontSize: 10, fontWeight: 700, letterSpacing: 1,
                               borderRadius: 20, padding: '2px 8px',
@@ -906,7 +940,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                           )}
                           {isFallbackEdge && (
                             <span style={{
-                              display: 'inline-block',
+                              display: 'none',
                               background: 'hsla(45,93%,58%,0.12)', color: 'hsl(45 93% 58%)',
                               fontSize: 8, fontWeight: 800, letterSpacing: 0.8,
                               borderRadius: 20, padding: '2px 7px',
@@ -917,7 +951,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                           )}
                           {isLineupsPending && (
                             <span style={{
-                              display: 'inline-block',
+                              display: 'none',
                               background: 'hsla(30,100%,55%,0.12)', color: 'hsl(30 100% 62%)',
                               fontSize: 8, fontWeight: 800, letterSpacing: 0.8,
                               borderRadius: 20, padding: '2px 7px',
@@ -950,10 +984,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                         )}
                       </div>
 
-                      {/* Right: Confidence Ring */}
-                      <div style={{ width: 80, height: 80, flexShrink: 0 }}>
-                        <ConfidenceRing rate={confPercent} isModelScore={isFallbackEdge} />
-                      </div>
+                      <CompactScore rate={confPercent} isModelScore={isFallbackEdge} />
                     </div>
 
                     {/* VERDICT BADGE */}
@@ -972,18 +1003,16 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       const dotColor = colorMap[label] || '#ef4444';
                       const bgColor = dotColor.replace('#', '').match(/.{2}/g)!;
                       const r = parseInt(bgColor[0], 16), g = parseInt(bgColor[1], 16), b = parseInt(bgColor[2], 16);
-                      const badgeText = label === 'STRONG' || label === 'LEAN'
-                        ? isGameBet ? `${label} ${ou}` : `${label} ${pick.direction === "over" ? "OVER" : "UNDER"}`
-                        : label;
+                      const badgeText = isLineupsPending ? 'LINEUPS PENDING' : isFallbackEdge ? 'MODEL LEAN' : label;
                       return (
                         <div className="relative z-10" style={{
                           display: 'inline-flex', alignItems: 'center', gap: 6,
-                          background: `rgba(${r},${g},${b},0.15)`, border: `1px solid rgba(${r},${g},${b},0.3)`,
-                          borderRadius: 20, padding: '5px 12px', alignSelf: 'flex-start', maxWidth: '100%',
+                          background: 'transparent', border: 'none',
+                          borderRadius: 20, padding: '1px 0', marginTop: 14, alignSelf: 'flex-start', maxWidth: '100%',
                         }}>
                           <div style={{ width: 6, height: 6, borderRadius: '50%', background: dotColor }} />
                           <span style={{
-                            fontSize: 10, fontWeight: 700, letterSpacing: 1.5,
+                            fontSize: 9, fontWeight: 700, letterSpacing: 1.2,
                             color: dotColor, textTransform: 'uppercase', lineHeight: 1.35,
                           }}>{badgeText}</span>
                         </div>
@@ -991,12 +1020,10 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     })()}
 
                     {/* STAT + ODDS ROW */}
-                    <div className="relative z-10" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                    <div className="relative z-10" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 6 }}>
                       <span style={{
-                        background: 'linear-gradient(90deg, #282643, #222039)', color: '#f0eeff',
-                        borderRadius: 20, padding: '6px 14px',
-                        fontSize: 13, fontWeight: 600,
-                        border: '1px solid #3a3562',
+                        color: '#c5c1e3', padding: 0,
+                        fontSize: 12, fontWeight: 600,
                         flex: '1 1 auto', minWidth: 0,
                       }}>
                         {isGameBet
@@ -1009,13 +1036,12 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                         }
                       </span>
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <div style={{ fontSize: 9, letterSpacing: 1.5, color: '#555272', textTransform: 'uppercase', fontWeight: 600, whiteSpace: 'nowrap' }}>ODDS</div>
                         <div style={{ fontSize: 14, fontWeight: 600, color: '#f0eeff', whiteSpace: 'nowrap' }}>{pick.odds ? formatOddsFn(pick.odds) : "—"}</div>
                       </div>
                     </div>
 
                     {isFallbackEdge && (
-                      <p className="relative z-10" style={{
+                      <p className="hidden relative z-10" style={{
                         fontSize: 9.5, color: 'hsl(45 90% 62%)', lineHeight: 1.45,
                         marginBottom: -5,
                       }}>
@@ -1025,10 +1051,10 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
 
                     {/* AI NARRATIVE */}
                     {pick.reasoning && (
-                      <p className="relative z-10" style={{
+                      <p className="hidden relative z-10" style={{
                         fontStyle: 'italic', fontSize: 12, color: '#aaa6cf',
                         lineHeight: 1.6, overflow: 'hidden',
-                        display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
+                        display: 'none', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
                         marginBottom: 0,
                       }}>
                         {pick.reasoning?.replace(/^\[VERDICT:[^\]]+\]\s*/i, '').replace(/NaN%/g, 'N/A')}
@@ -1036,7 +1062,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     )}
 
                     {/* BUTTONS */}
-                    <div className="relative z-10" style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    <div className="relative z-10 mt-auto grid grid-cols-2 gap-2 border-t border-white/[0.08] pt-3">
                       <button
                         onClick={() => {
                           const isGameBet = pick.bet_type && pick.bet_type !== 'prop';
@@ -1088,12 +1114,12 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                         }}
                         className="flex items-center justify-center active:opacity-70"
                         style={{
-                          flex: 1, height: 42, borderRadius: 10,
-                          fontSize: 13, fontWeight: 600,
-                          background: '#13112b', border: '1px solid #252340', color: '#8b87b8',
+                          height: 38, borderRadius: 11,
+                          fontSize: 11, fontWeight: 600,
+                          background: 'hsla(250, 28%, 10%, 0.62)', border: '1px solid hsla(250, 55%, 68%, 0.2)', color: '#c4c0ff',
                         }}
                       >
-                        See why →
+                        Details
                       </button>
                       <button
                         onClick={() => {
@@ -1110,12 +1136,12 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                         }}
                         className="flex items-center justify-center active:opacity-80"
                         style={{
-                          flex: 1, height: 42, borderRadius: 10,
-                          fontSize: 13, fontWeight: 600,
-                          background: 'linear-gradient(135deg, #7c6ff7, #22d3ee)', color: '#f0eeff',
+                          height: 38, borderRadius: 11,
+                          fontSize: 11, fontWeight: 600,
+                          background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(224 86% 66%))', color: '#f0eeff',
                         }}
                       >
-                        + Add to Slip
+                        Add to Slip
                       </button>
                     </div>
                   </motion.div>
@@ -1123,15 +1149,25 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                 })}
               </div>
             </div>
+            {todayPicks.length > 1 && (
+              <div className="mt-1 flex justify-center gap-1.5">
+                {todayPicks.map((pick, index) => (
+                  <span
+                    key={`${pick.id}-lineup-dot`}
+                    className="h-1.5 rounded-full transition-all"
+                    style={{
+                      width: index === activeLineupIndex ? 16 : 6,
+                      background: index === activeLineupIndex ? 'hsl(250 76% 68%)' : 'hsla(250,30%,70%,0.26)',
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+            </>
           )}
         </motion.div>
 
-        <motion.div {...stagger(2)} className="relative z-10 w-full min-w-0 overflow-hidden" style={{
-          background: 'linear-gradient(165deg, hsl(250 20% 12%), hsl(250 22% 9%))',
-          border: '1px solid hsl(250 20% 18% / 0.6)',
-          borderRadius: 20,
-          padding: 16,
-        }}>
+        <motion.section {...stagger(2)} className="relative z-10 w-full min-w-0 border-t border-white/[0.07] pt-5">
           <div className="absolute -bottom-6 -right-6 w-24 h-24 rounded-full opacity-[0.04] pointer-events-none"
             style={{ background: 'radial-gradient(circle, hsl(142 71% 45%), transparent)' }} />
           <p className="text-[11px] font-bold tracking-[0.15em] uppercase mb-3" style={{ color: 'hsl(142 100% 50%)' }}>
@@ -1205,117 +1241,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               </div>
             </div>
           )}
-        </motion.div>
-
-        <motion.div {...stagger(2.5)} className="relative z-10 w-full min-w-0" style={{
-          background: 'linear-gradient(165deg, hsl(250 20% 12%), hsl(250 22% 9%))',
-          border: '1px solid hsl(250 76% 62% / 0.12)',
-          borderRadius: 20,
-          padding: 16,
-        }}>
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <div className="flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5" style={{ color: 'hsl(142 100% 50%)' }} />
-              <p className="text-[10px] tracking-[0.15em] uppercase font-bold" style={{ color: 'hsl(142 100% 50%)' }}>AI Daily Tip</p>
-            </div>
-            {rotatingTip?.focus_area && (
-              <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full" style={{
-                background: 'hsl(142 100% 50% / 0.12)',
-                color: 'hsl(142 100% 50%)',
-                border: '1px solid hsl(142 100% 50% / 0.25)',
-              }}>{rotatingTip.focus_area}</span>
-            )}
-          </div>
-          {rotatingTipLoading ? (
-            <div className="space-y-1.5">
-              <div className="h-2.5 rounded animate-pulse" style={{ background: 'hsl(250 18% 18%)', width: '95%' }} />
-              <div className="h-2.5 rounded animate-pulse" style={{ background: 'hsl(250 18% 18%)', width: '70%' }} />
-            </div>
-          ) : (
-            <p style={{ fontSize: 12, color: 'hsl(250 20% 62%)', lineHeight: 1.55 }}>
-              {rotatingTip?.tip ?? "Prime-time props with 65%+ hit rates are today's strongest edges. Check the Parlay Builder for correlated plays."}
-            </p>
-          )}
-        </motion.div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <motion.div {...stagger(3)} className="vision-card p-3.5 flex flex-col items-center justify-center relative overflow-hidden min-w-0" style={{ borderRadius: 20 }}>
-            <div className="vision-orb w-20 h-20 top-0 left-0" style={{ background: 'hsl(142 100% 50%)', animationDelay: '-2s' }} />
-            <p className="text-[8px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-1 relative z-10">Performance</p>
-            <div className="relative w-24 h-24 my-1">
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-                <circle cx="60" cy="60" r={ringRadius} fill="none" stroke="hsla(228, 18%, 15%, 0.6)" strokeWidth="6" />
-                <motion.circle
-                  cx="60" cy="60" r={ringRadius}
-                  fill="none" stroke="url(#ringGradientModern)" strokeWidth="6" strokeLinecap="round"
-                  strokeDasharray={ringCircumference}
-                  initial={{ strokeDashoffset: ringCircumference }}
-                  animate={{ strokeDashoffset: ringOffset }}
-                  transition={{ duration: 1, ease: "easeOut", delay: 0.3 }}
-                />
-                <defs>
-                  <linearGradient id="ringGradientModern" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="hsl(142 100% 50%)" />
-                    <stop offset="100%" stopColor="hsl(190 90% 55%)" />
-                  </linearGradient>
-                </defs>
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <motion.span className="text-xl font-extrabold text-foreground tabular-nums"
-                  initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.5, type: "spring" }}
-                >
-                  {stats.hitRate}%
-                </motion.span>
-                <span className="text-[8px] text-muted-foreground/55 font-medium">Win Rate</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 mt-0.5 relative z-10">
-              <span className="flex items-center gap-1 text-[9px] text-muted-foreground/65">
-                <span className="w-1.5 h-1.5 rounded-full bg-[hsl(142,71%,45%)] animate-glow-pulse" /> {stats.wins}W
-              </span>
-              <span className="flex items-center gap-1 text-[9px] text-muted-foreground/65">
-                <span className="w-1.5 h-1.5 rounded-full bg-[hsl(0,84%,60%)]" /> {stats.losses}L
-              </span>
-            </div>
-          </motion.div>
-
-          <motion.div {...stagger(4)} className="vision-card p-3.5 min-w-0" style={{ borderRadius: 20 }}>
-            <div className="flex items-center justify-between mb-2.5">
-              <div>
-                <p className="text-[11px] font-bold text-foreground">Sports</p>
-                <p className="text-[8px] text-muted-foreground/55">Distribution</p>
-              </div>
-              <span className="text-base font-extrabold gradient-text-accent tabular-nums">{Object.keys(stats.sportCounts).length}</span>
-            </div>
-            {Object.keys(stats.sportCounts).length > 0 ? (
-              <div className="space-y-2.5 mt-1">
-                {Object.entries(stats.sportCounts).map(([sport, count], i) => (
-                  <div key={sport}>
-                    <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-[10px] font-semibold text-foreground/70 uppercase tracking-wide">{sport}</span>
-                      <span className="text-[9px] text-muted-foreground/65 tabular-nums">{count}</span>
-                    </div>
-                    <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'hsla(228, 18%, 15%, 0.6)' }}>
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(count / stats.total) * 100}%` }}
-                        transition={{ duration: 0.6, delay: 0.2 + i * 0.08 }}
-                        className="h-full rounded-full"
-                        style={{ background: 'linear-gradient(90deg, hsl(142 100% 50%), hsl(158 64% 52%))' }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-4 text-center">
-                <Activity className="w-4 h-4 text-muted-foreground/65 mb-1.5" />
-                <p className="text-[9px] text-muted-foreground/55">No plays yet</p>
-              </div>
-            )}
-          </motion.div>
-        </div>
+        </motion.section>
 
         <PnLCalendar plays={plays} />
 

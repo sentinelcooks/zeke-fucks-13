@@ -35,9 +35,10 @@ async function getAuthHeader(): Promise<string> {
 }
 
 async function logEdgeError(label: string, resp: Response) {
-  const body = await resp.text().catch(() => "");
-  console.error("[edge]", label, resp.status, body.slice(0, 500));
+  console.error("[edge]", label, resp.status);
 }
+
+export const LIVE_LINES_UNAVAILABLE_MESSAGE = "Live lines temporarily unavailable — please try again shortly.";
 
 export interface OddsEvent {
   id: string;
@@ -59,6 +60,15 @@ export interface OddsEvent {
       }>;
     }>;
   }>;
+}
+
+export interface UpcomingOddsEvent {
+  id: string;
+  sport_key: string;
+  sport_title?: string;
+  commence_time: string;
+  home_team: string;
+  away_team: string;
 }
 
 const SPORT_ALIASES: Record<string, string> = {
@@ -96,9 +106,33 @@ export async function fetchNbaOdds(bookmakers?: string, markets?: string, sport?
 
   if (!resp.ok) {
     await logEdgeError("nba-odds/events", resp);
-    throw new Error(`Odds API error ${resp.status}`);
+    throw new Error(LIVE_LINES_UNAVAILABLE_MESSAGE);
   }
   return resp.json();
+}
+
+export async function fetchUpcomingOddsEvents(sport?: string): Promise<UpcomingOddsEvent[]> {
+  const secHeaders = await getSessionHeaders();
+  const normalizedSport = normalizeOddsSport(sport);
+  const params = new URLSearchParams();
+  if (normalizedSport) params.set("sport", normalizedSport);
+
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  const resp = await fetch(`${getFunctionUrl("nba-odds")}/event-ids${qs}`, {
+    headers: {
+      apikey: getSupabaseAnonKey(),
+      Authorization: await getAuthHeader(),
+      ...secHeaders,
+    },
+  });
+
+  if (!resp.ok) {
+    await logEdgeError("nba-odds/event-ids", resp);
+    throw new Error(LIVE_LINES_UNAVAILABLE_MESSAGE);
+  }
+
+  const payload = await resp.json();
+  return Array.isArray(payload) ? payload : (Array.isArray(payload?.events) ? payload.events : []);
 }
 
 export async function fetchPlayerProps(eventId: string, markets?: string, sport?: string) {
@@ -119,7 +153,7 @@ export async function fetchPlayerProps(eventId: string, markets?: string, sport?
 
   if (!resp.ok) {
     await logEdgeError("nba-odds/player-props", resp);
-    throw new Error(`Player props error ${resp.status}`);
+    throw new Error("Live player odds are temporarily unavailable — please try again shortly.");
   }
   return resp.json();
 }

@@ -30,6 +30,7 @@ const PROBE_URL = "https://api.the-odds-api.com/v4/sports/";
 
 export const ENV_FALLBACK_ID = "env-fallback";
 export const APP_CONFIG_ID = "app-config";
+export const EXHAUST_CONFIGURED_KEY_POOL = Number.MAX_SAFE_INTEGER;
 
 export type KeyInfo = { id: string; key: string; source: "pool" | "app_config" | "env" };
 
@@ -101,7 +102,7 @@ export async function withPoolQueryRetry<T>(
 
 export function rotationFailureResponse(error: RotationError): {
   status: number;
-  body: { error: string; code: RotationErrorKind; retryAfterMs?: number; detail?: string };
+  body: { error: string; code: RotationErrorKind; retryAfterMs?: number };
 } {
   switch (error.kind) {
     case "key_pool_unavailable":
@@ -123,18 +124,21 @@ export function rotationFailureResponse(error: RotationError): {
       };
     default:
       return {
-        status: error.status && error.status >= 400 && error.status < 500 ? error.status : 502,
+        status: error.kind === "rate_limited" ? 429 : 503,
         body: {
-          error: "Odds provider request failed",
+          error: "Live odds are temporarily unavailable",
           code: error.kind,
           ...(error.retryAfterMs ? { retryAfterMs: error.retryAfterMs } : {}),
-          ...(error.detail ? { detail: error.detail } : {}),
         },
       };
   }
 }
 
-const INVALID_AUTH_BODY = /invalid api key|unauthori[sz]ed|forbidden/i;
+const INVALID_AUTH_BODY = /(?:invalid|deactivated)[_\s-]*(?:api[_\s-]*)?key|api[_\s-]*key.*(?:invalid|deactivated)|not associated with (?:an )?subscription|unauthori[sz]ed|forbidden/i;
+
+export function isInvalidOddsApiCredential(status: number, body: string): boolean {
+  return (status === 401 || status === 403) && INVALID_AUTH_BODY.test(body);
+}
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -306,7 +310,7 @@ async function classifyResponse(resp: Response): Promise<Outcome> {
   }
   if (resp.status === 401 || resp.status === 403) {
     const body = await resp.text().catch(() => "");
-    if (INVALID_AUTH_BODY.test(body)) {
+    if (isInvalidOddsApiCredential(resp.status, body)) {
       return { status: "invalid_auth", detail: body.slice(0, 200) };
     }
     return { status: "transient_auth", detail: `HTTP ${resp.status}: ${body.slice(0, 200)}` };
@@ -483,8 +487,9 @@ export async function fetchWithRotation(
     if (!keyInfo) {
       return { error: { kind: "no_usable_keys" } };
     }
-    // Avoid retrying the exact same DB row in the same call (sentinels OK to reuse).
-    if (!isSentinel(keyInfo.id) && tried.has(keyInfo.id)) {
+    // Never retry an identical credential in one request. This also prevents a
+    // broken app-config/env fallback from consuming the entire retry budget.
+    if (tried.has(keyInfo.id)) {
       // No fresh distinct key available → bail.
       return { error: lastError ?? { kind: "no_usable_keys" } };
     }
