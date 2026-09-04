@@ -17,6 +17,16 @@ import { fetchNbaOdds, fetchUpcomingOddsEvents, LIVE_LINES_UNAVAILABLE_MESSAGE, 
 import { generateDeviceFingerprint } from "@/utils/fingerprint";
 import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 import { formatOdds } from "@/utils/oddsFormat";
+import { getMobilePlatform } from "@/lib/mobileDeviceIdentity";
+import {
+  GameAnalysisExperience,
+  type GameAnalysisExperienceState,
+  type GameAnalysisMarketKey,
+  type GameAnalysisReport,
+  type GameAnalysisReportMarket,
+  type GameAnalysisReportSelection,
+} from "@/components/game-analysis/GameAnalysisExperience";
+import type { GameAnalysisDecision, GameAnalysisResponse } from "@/lib/gameAnalysisPresentation";
 
 type GameLinesSport = "nba" | "wnba" | "mlb" | "nhl" | "ncaab";
 type MarketKey = "h2h" | "spreads" | "totals";
@@ -44,24 +54,8 @@ interface PublishedQuote {
   point?: number;
 }
 
-interface AnalysisDecision {
-  winning_side?: "team1" | "team2" | "over" | "under" | null;
-  winning_team_name?: string | null;
-  win_probability?: number | null;
-  conviction_tier?: string | null;
-  recommended_units?: number | null;
-  grade_explanation?: string | null;
-}
-
-interface AnalysisResponse {
-  team1?: { name?: string; shortName?: string };
-  team2?: { name?: string; shortName?: string };
-  matchup?: { confirmed?: boolean; gameDate?: string | null; oddsEventId?: string | null };
-  probability_supported?: boolean;
-  score_kind?: string | null;
-  decision?: AnalysisDecision | null;
-  error?: string;
-}
+type AnalysisDecision = GameAnalysisDecision;
+type AnalysisResponse = GameAnalysisResponse;
 
 interface MarketSnapshot {
   key: MarketKey;
@@ -357,7 +351,8 @@ async function requestAnalysis(body: Record<string, unknown>) {
     "x-request-nonce": crypto.randomUUID(),
     ...(await premiumRequestHeaders()),
   };
-  const { data, error } = await supabase.functions.invoke("moneyline-api/analyze", {
+  const platform = encodeURIComponent(getMobilePlatform());
+  const { data, error } = await supabase.functions.invoke(`moneyline-api/analyze?client_platform=${platform}`, {
     body: { ...body, __sec: headers },
     headers,
   });
@@ -368,6 +363,83 @@ async function requestAnalysis(body: Record<string, unknown>) {
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function reportSelection(
+  event: OddsEvent,
+  teams: EventTeams | null,
+  markets: Array<{ key: MarketKey; snapshot: MarketSnapshot | null; analysis: MarketAnalysis }>,
+): GameAnalysisReportSelection | undefined {
+  if (!teams) return undefined;
+
+  const candidates = markets.flatMap(({ key, snapshot, analysis }) => {
+    if (!snapshot) return [];
+    return analysis.entries.flatMap((entry) => {
+      const response = entry.response;
+      const decisionQuote = quoteForDecision(snapshot, response?.decision);
+      const score = Number(response?.decision?.win_probability);
+      const matchesRequestedQuote = !entry.quote || decisionQuote?.side === entry.quote.side;
+      if (!response || !responseMatchesSelectedEvent(response, event, teams) || !matchesRequestedQuote || !Number.isFinite(score)) return [];
+
+      return [{
+        marketKey: key,
+        marketTitle: snapshot.title,
+        label: response.decision?.winning_team_name || entry.label,
+        quote: entry.quote || decisionQuote,
+        response,
+        priority: response.probability_supported === true && Number(response.decision?.recommended_units) > 0 ? 1 : 0,
+        score,
+      }];
+    });
+  });
+
+  candidates.sort((first, second) => second.priority - first.priority || second.score - first.score);
+  const winner = candidates[0];
+  return winner ? {
+    marketKey: winner.marketKey,
+    marketTitle: winner.marketTitle,
+    label: winner.label,
+    quote: winner.quote,
+    response: winner.response,
+  } : undefined;
+}
+
+function buildGameAnalysisReport(
+  event: OddsEvent,
+  scope: "full" | MarketKey,
+  teams: EventTeams | null,
+  markets: Array<{ key: MarketKey; snapshot: MarketSnapshot | null; analysis: MarketAnalysis }>,
+): GameAnalysisReport {
+  const reportMarkets: GameAnalysisReportMarket[] = markets.map(({ key, snapshot, analysis }) => ({
+    key: key as GameAnalysisMarketKey,
+    title: snapshot?.title || MARKET_TITLES[key],
+    state: analysis.state === "loading" ? "error" : analysis.state,
+    message: analysis.message,
+    entries: analysis.entries,
+  }));
+  const selected = reportSelection(event, teams, markets);
+  const failures = markets.filter(({ analysis }) => analysis.state === "error").length;
+  const completed = markets.filter(({ analysis }) => analysis.state === "complete").length;
+
+  return {
+    event: {
+      id: event.id,
+      sportTitle: event.sport_title || "Game lines",
+      commenceTime: event.commence_time,
+      homeTeam: event.home_team,
+      awayTeam: event.away_team,
+    },
+    scope,
+    markets: reportMarkets,
+    selected,
+    message: selected
+      ? "Sentinel completed the verified model review for this matchup."
+      : failures === markets.length
+        ? "Sentinel could not retrieve a verified model response. Please try again shortly."
+        : completed > 0
+          ? "Sentinel reviewed the available markets but could not confirm a model response for this exact scheduled matchup."
+          : "No verified live market was available for analysis.",
+  };
 }
 
 function TeamBadge({ team, fallbackName, size = "regular" }: { team?: TeamDirectoryEntry; fallbackName: string; size?: "small" | "regular" | "hero" }) {
@@ -492,7 +564,6 @@ function MarketCard({ snapshot, title, analysis, onAnalyze, marketFeedUnavailabl
         {analysis?.state === "loading" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
         Analyze {title}
       </button>
-      <AnalysisCallout analysis={analysis} />
     </div>
   );
 }
@@ -507,6 +578,7 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
   const [selectedEvent, setSelectedEvent] = useState<OddsEvent | null>(null);
   const [marketAnalyses, setMarketAnalyses] = useState<Record<string, Partial<Record<MarketKey, MarketAnalysis>>>>({});
   const [fullAnalyses, setFullAnalyses] = useState<Record<string, FullGameAnalysis>>({});
+  const [analysisExperience, setAnalysisExperience] = useState<GameAnalysisExperienceState | null>(null);
   const initialNavigationHandled = useRef("");
 
   const loadEvents = useCallback(async () => {
@@ -684,6 +756,11 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
   }, [buildRequests, setMarketAnalysis, teamDirectory]);
 
   const analyzeFullGame = useCallback(async (event: OddsEvent) => {
+    setAnalysisExperience({
+      stage: "scanning",
+      event: { id: event.id, sportTitle: event.sport_title || "Game lines", commenceTime: event.commence_time, homeTeam: event.home_team, awayTeam: event.away_team },
+      scope: "full",
+    });
     setFullAnalyses((current) => ({ ...current, [event.id]: { state: "loading", marketsReviewed: 0, message: "Comparing every published market for this verified matchup…" } }));
     const analyses = await Promise.all((["h2h", "spreads", "totals"] as MarketKey[]).map((market) => analyzeMarket(event, market)));
     const recommendation = analyses
@@ -711,7 +788,30 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
             : "No market could be safely analyzed for this matchup.",
       },
     }));
-  }, [analyzeMarket]);
+    const marketKeys = ["h2h", "spreads", "totals"] as MarketKey[];
+    setAnalysisExperience({
+      stage: "report",
+      report: buildGameAnalysisReport(
+        event,
+        "full",
+        resolveEventTeams(event, teamDirectory),
+        marketKeys.map((key, index) => ({ key, snapshot: getMarketSnapshot(event, key), analysis: analyses[index] })),
+      ),
+    });
+  }, [analyzeMarket, teamDirectory]);
+
+  const analyzeSingleMarket = useCallback(async (event: OddsEvent, market: MarketKey) => {
+    setAnalysisExperience({
+      stage: "scanning",
+      event: { id: event.id, sportTitle: event.sport_title || "Game lines", commenceTime: event.commence_time, homeTeam: event.home_team, awayTeam: event.away_team },
+      scope: market,
+    });
+    const analysis = await analyzeMarket(event, market);
+    setAnalysisExperience({
+      stage: "report",
+      report: buildGameAnalysisReport(event, market, resolveEventTeams(event, teamDirectory), [{ key: market, snapshot: getMarketSnapshot(event, market), analysis }]),
+    });
+  }, [analyzeMarket, teamDirectory]);
 
   useEffect(() => {
     const navigationKey = `${sport}:${initialHomeTeam || ""}:${initialAwayTeam || ""}`;
@@ -761,12 +861,12 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
           <button type="button" onClick={() => void analyzeFullGame(selectedEvent)} disabled={fullAnalysis?.state === "loading" || availableMarkets === 0} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-[11px] font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-45" style={{ background: "linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))", boxShadow: "0 4px 18px -4px hsla(250,76%,62%,0.42)" }}>
             {fullAnalysis?.state === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Analyze Full Game
           </button>
-          <AnalysisCallout analysis={fullAnalysis} full />
         </div>
 
-        <MarketCard snapshot={snapshots.h2h} title="Moneyline" analysis={marketAnalysesForEvent.h2h} onAnalyze={() => void analyzeMarket(selectedEvent, "h2h")} marketFeedUnavailable={marketFeedUnavailable} />
-        <MarketCard snapshot={snapshots.spreads} title="Spread" analysis={marketAnalysesForEvent.spreads} onAnalyze={() => void analyzeMarket(selectedEvent, "spreads")} marketFeedUnavailable={marketFeedUnavailable} />
-        <MarketCard snapshot={snapshots.totals} title="Game Total" analysis={marketAnalysesForEvent.totals} onAnalyze={() => void analyzeMarket(selectedEvent, "totals")} marketFeedUnavailable={marketFeedUnavailable} />
+        <MarketCard snapshot={snapshots.h2h} title="Moneyline" analysis={marketAnalysesForEvent.h2h} onAnalyze={() => void analyzeSingleMarket(selectedEvent, "h2h")} marketFeedUnavailable={marketFeedUnavailable} />
+        <MarketCard snapshot={snapshots.spreads} title="Spread" analysis={marketAnalysesForEvent.spreads} onAnalyze={() => void analyzeSingleMarket(selectedEvent, "spreads")} marketFeedUnavailable={marketFeedUnavailable} />
+        <MarketCard snapshot={snapshots.totals} title="Game Total" analysis={marketAnalysesForEvent.totals} onAnalyze={() => void analyzeSingleMarket(selectedEvent, "totals")} marketFeedUnavailable={marketFeedUnavailable} />
+        <GameAnalysisExperience experience={analysisExperience} onClose={() => setAnalysisExperience(null)} />
       </section>
     );
   }
