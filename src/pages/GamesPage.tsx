@@ -24,7 +24,7 @@ import {
 } from "@/services/pushNotificationService";
 
 type SportFilter = "nba" | "wnba" | "mlb" | "ufc" | "nhl" | "nfl";
-type GamesSportFilter = Exclude<SportFilter, "nfl">;
+type GamesSportFilter = SportFilter;
 
 interface Game {
   id: string;
@@ -103,7 +103,7 @@ const SPORT_LOGO_SIZE: Record<SportFilter, string> = {
   ufc: "w-5 h-5",
 };
 
-const GAMES_SPORT_OPTIONS: readonly GamesSportFilter[] = ["nba", "wnba", "mlb", "nhl", "ufc"];
+const GAMES_SPORT_OPTIONS: readonly GamesSportFilter[] = ["nba", "wnba", "mlb", "nhl", "nfl", "ufc"];
 const VISIBLE_GAMES_SPORT_OPTIONS = GAMES_SPORT_OPTIONS.filter((sport) => !isSportTemporarilyHidden(sport));
 const DEFAULT_GAMES_SPORT: GamesSportFilter = VISIBLE_GAMES_SPORT_OPTIONS[0] ?? GAMES_SPORT_OPTIONS[0];
 

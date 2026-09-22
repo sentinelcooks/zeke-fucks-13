@@ -118,6 +118,47 @@ function compactDate(s: string): string {
   return s.replace(/-/g, "");
 }
 
+// ESPN's legacy site.api host began returning HTTP 403 in August 2026 while the
+// current site.web.api host kept serving the same schema. games-schedule was
+// migrated at the time (see its ESPN_SCOREBOARD_BASE_URLS comment); grade-picks
+// was not, and it kept calling site.api exclusively.
+//
+// That is why grading died: the last successful grade was 2026-08-19T05:00:03Z,
+// and from then on every scoreboard lookup 403'd, returned zero events, and
+// every pick fell through to "no_event" — MLB and WNBA stopping at the same
+// second, which is a provider change, not a code regression.
+//
+// The silence was the real trap: fetchScoreboard returned [] for a 403 exactly
+// as it does for a genuinely empty slate, so 24 days of failures looked like
+// "no games found". Always log a non-OK response, and keep the legacy host only
+// as a failover so one more ESPN host change cannot silently empty grading again.
+const ESPN_BASE_URLS = [
+  "https://site.web.api.espn.com/apis/site/v2",
+  "https://site.api.espn.com/apis/site/v2",
+] as const;
+
+const ESPN_HEADERS = {
+  "User-Agent": "Mozilla/5.0",
+  Accept: "application/json",
+} as const;
+
+// `path` is everything after /apis/site/v2, e.g. "/sports/baseball/mlb/scoreboard?dates=20260910".
+async function espnFetch(path: string, context: string): Promise<Response | null> {
+  for (const baseUrl of ESPN_BASE_URLS) {
+    const url = `${baseUrl}${path}`;
+    try {
+      const resp = await fetch(url, { headers: ESPN_HEADERS });
+      if (resp.ok) return resp;
+      console.error(
+        `[GradePicks] espn fetch not ok | context=${context} | status=${resp.status} | url=${url}`,
+      );
+    } catch (e) {
+      console.error(`[GradePicks] espn fetch threw | context=${context} | url=${url}`, e);
+    }
+  }
+  return null;
+}
+
 function teamMatch(a: string | null | undefined, b: string | null | undefined): boolean {
   if (!a || !b) return false;
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -149,9 +190,9 @@ async function fetchScoreboard(
   dateStr: string,
 ): Promise<ScoreboardGame[]> {
   const path = espnSportPath(sport);
-  const url = `https://site.api.espn.com/apis/site/v2/sports/${path}/scoreboard?dates=${compactDate(dateStr)}`;
-  const resp = await fetch(url);
-  if (!resp.ok) return [];
+  const url = `/sports/${path}/scoreboard?dates=${compactDate(dateStr)}`;
+  const resp = await espnFetch(url, `scoreboard sport=${sport} date=${dateStr}`);
+  if (!resp) return [];
   const json = await resp.json();
   const games: ScoreboardGame[] = [];
   for (const e of json.events || []) {
@@ -251,10 +292,11 @@ async function gradeBasketballProps(
   if (picks.length === 0) return { graded: 0, skippedNoData: 0 };
 
   const dateStr = compactDate(scoreDate);
-  const scoreboardResp = await fetch(
-    `https://site.api.espn.com/apis/site/v2/sports/${espnSportPath(sport)}/scoreboard?dates=${dateStr}`,
+  const scoreboardResp = await espnFetch(
+    `/sports/${espnSportPath(sport)}/scoreboard?dates=${dateStr}`,
+    `scoreboard sport=${sport} date=${scoreDate}`,
   );
-  if (!scoreboardResp.ok) {
+  if (!scoreboardResp) {
     for (const p of picks) {
       recordSkip(ctx, p, "no_data", { date_used: scoreDate });
     }
@@ -308,10 +350,11 @@ async function gradeBasketballProps(
   await Promise.all(
     completedGameIds.map(async (gid) => {
       try {
-        const boxResp = await fetch(
-          `https://site.api.espn.com/apis/site/v2/sports/${espnSportPath(sport)}/summary?event=${gid}`,
+        const boxResp = await espnFetch(
+          `/sports/${espnSportPath(sport)}/summary?event=${gid}`,
+          `boxscore sport=${sport} event=${gid}`,
         );
-        if (!boxResp.ok) return;
+        if (!boxResp) return;
         const box = await boxResp.json();
         for (const team of box.boxscore?.players || []) {
           for (const statGroup of team.statistics || []) {
@@ -683,14 +726,15 @@ async function fetchSummary(
   eventId: string,
 ): Promise<any | null> {
   const path = sport === "mlb" ? "baseball/mlb" : "hockey/nhl";
+  const resp = await espnFetch(
+    `/sports/${path}/summary?event=${eventId}`,
+    `summary sport=${sport} event=${eventId}`,
+  );
+  if (!resp) return null;
   try {
-    const resp = await fetch(
-      `https://site.api.espn.com/apis/site/v2/sports/${path}/summary?event=${eventId}`,
-    );
-    if (!resp.ok) return null;
     return await resp.json();
   } catch (e) {
-    console.error(`[GradePicks] summary fetch failed sport=${sport} event=${eventId}`, e);
+    console.error(`[GradePicks] summary parse failed sport=${sport} event=${eventId}`, e);
     return null;
   }
 }
@@ -786,6 +830,44 @@ async function gradePlayerPropsForSport(
         pick.prop_type || "",
       );
       if (!found || actual == null) {
+        // A player absent from a FINAL box score did not play — scratched after
+        // the pick was written. That prop can never settle, and skipping it left
+        // it `pending` forever: it showed as "still pending" on a day that ended
+        // hours ago, dragged on the displayed hit rate, and was re-scanned by
+        // every 30-minute cron run indefinitely.
+        //
+        // Sportsbooks void a DNP prop rather than settling it, so it is written
+        // as a push: stake returned, counts as neither a win nor a loss.
+        //
+        // Deliberately NOT applied to `ambiguous_player` (two players share a
+        // surname — we simply don't know which) or `no_data` (the box score
+        // failed to parse at all). Both of those are our uncertainty, not a
+        // confirmed absence, and voiding them would hide a real matching bug.
+        if (reason === "player_not_found") {
+          const voided = await writeGrade(
+            supabase,
+            {
+              pick,
+              result: "push",
+              actualValue: null,
+              line: Number.isFinite(Number(pick.line)) ? Number(pick.line) : null,
+              direction: pick.direction ?? null,
+              source: `espn:${sport}`,
+              sport,
+              betType: (pick.bet_type || "prop").toLowerCase(),
+              reason: "player_did_not_play",
+            },
+            ctx,
+          );
+          if (voided) {
+            counters.graded++;
+            console.log(
+              `[grade-picks] voided (did not play) | ${pick.player_name} | ${pick.prop_type} | ${game.home}@${game.away}`,
+            );
+            continue;
+          }
+        }
+
         if (reason === "ambiguous_player") counters.skippedAmbiguousPlayer++;
         else if (reason === "unsupported_prop") counters.skippedUnsupportedProp++;
         else if (reason === "player_not_found") counters.skippedPlayerNotFound++;
@@ -969,10 +1051,25 @@ async function writeGrade(
   const gradedAt = new Date().toISOString();
   const closing = ctx.dryRun ? null : await loadClosingLine(supabase, pick);
 
-  const existingDiag =
-    pick.model_diagnostics && typeof pick.model_diagnostics === "object"
-      ? pick.model_diagnostics as Record<string, unknown>
-      : {};
+  // model_diagnostics is deliberately NOT part of GRADE_COLUMNS: it is the
+  // largest column in the table (analyzer snapshots run to ~100KB a row), and
+  // selecting it for every pending row is what made the scan query time out /
+  // 502 once the pending backlog grew into the thousands. Fetch it per row
+  // here instead — only rows that actually settle pay the cost, and this write
+  // still merges into whatever the scanner stored rather than clobbering it.
+  let existingDiag: Record<string, unknown> = {};
+  if (!ctx.dryRun) {
+    const { data: diagRow, error: diagErr } = await supabase
+      .from("daily_picks")
+      .select("model_diagnostics")
+      .eq("id", pick.id)
+      .maybeSingle();
+    if (diagErr) {
+      console.error(`[GradePicks] model_diagnostics fetch failed pick=${pick.id}`, diagErr);
+    } else if (diagRow?.model_diagnostics && typeof diagRow.model_diagnostics === "object") {
+      existingDiag = diagRow.model_diagnostics as Record<string, unknown>;
+    }
+  }
   const nextDiag = {
     ...existingDiag,
     auto_grade: {
@@ -1219,7 +1316,10 @@ Deno.serve(async (req) => {
       "bet_type", "spread_line", "total_line",
       "event_id", "odds", "opening_odds", "opening_line", "opening_captured_at",
       "selected_book", "stake_units",
-      "result", "tier", "status", "avg_value", "model_diagnostics",
+      // model_diagnostics is fetched per-row in writeGrade, never scanned in
+      // bulk — see the comment there. Adding it back here reintroduces the
+      // statement timeout / 502 on the pending scan.
+      "result", "tier", "status", "avg_value",
     ].join(",");
 
     const MAX_PICKS_PER_RUN = 500;
@@ -1424,19 +1524,15 @@ Deno.serve(async (req) => {
       const props = sport === "wnba" ? [] : sportPicks.filter(isPlayerProp);
       const games = sportPicks.filter((p) => !isPlayerProp(p));
 
-      let propCounters = emptyCounters();
-      if (props.length > 0 && sport !== "wnba") {
-        propCounters = await gradePlayerPropsForSport(
-          supabase,
-          sport,
-          props,
-          sport === "mlb" ? getVerifiedMlbPlayerStat : getNhlPlayerStat,
-          sport === "mlb" ? VERIFIED_MLB_PROP_TO_STAT : NHL_PROP_TO_STAT,
-          ctx,
-        );
-      }
-
-      // Game bets — preserve original behaviour exactly.
+      // Game bets run BEFORE player props, deliberately.
+      //
+      // This function has no time budget — it grades until the platform kills
+      // it. Game bets used to run last, after every prop, so on any slate large
+      // enough to exhaust the runtime they were never reached: not one game bet
+      // has ever been graded, while props settled normally. They are also the
+      // cheap half of the work (scoreboard only, no per-game boxscore fetch and
+      // typically ~14 rows against ~70 props), so doing them first costs props
+      // almost nothing and removes the starvation entirely.
       const scoreboards = new Map<string, ScoreboardGame[]>();
       const dateOf = async (d: string) => {
         if (!scoreboards.has(d)) scoreboards.set(d, await fetchScoreboard(sport, d));
@@ -1528,6 +1624,19 @@ Deno.serve(async (req) => {
           gameNoData++;
           recordSkip(ctx, pick, "no_event", { date_used: dateUsed });
         }
+      }
+
+      // Player props last — see the ordering note above the game-bet block.
+      let propCounters = emptyCounters();
+      if (props.length > 0 && sport !== "wnba") {
+        propCounters = await gradePlayerPropsForSport(
+          supabase,
+          sport,
+          props,
+          sport === "mlb" ? getVerifiedMlbPlayerStat : getNhlPlayerStat,
+          sport === "mlb" ? VERIFIED_MLB_PROP_TO_STAT : NHL_PROP_TO_STAT,
+          ctx,
+        );
       }
 
       totalGraded += propCounters.graded + gameGraded;

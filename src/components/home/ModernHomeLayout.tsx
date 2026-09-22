@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   Flame, ChevronRight, Sparkles, CheckCircle2, XCircle,
-  BarChart3, Crosshair, DollarSign, Target
+  BarChart3, Crosshair, DollarSign, MinusCircle, Target
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
@@ -14,8 +14,8 @@ import { searchPlayers } from "@/services/api";
 import { AddToSlipSheet } from "@/components/AddToSlipSheet";
 import { getTeamLogoUrl } from "@/utils/teamLogos";
 import { useOddsFormat } from "@/hooks/useOddsFormat";
-import { isEdgeHistoryPick, isPicksHistoryPick, isActiveTodayPick } from "@/lib/pickHistoryFilters";
-import { todayInTZ, getGameDate, isTodayGamePick, isResultFinal, shiftYmd } from "@/lib/gameDate";
+import { isEdgeHistoryPick, isPicksHistoryPick } from "@/lib/pickHistoryFilters";
+import { currentSlateDate, getGameDate, isTodayGamePick, isResultFinal, shiftYmd } from "@/lib/gameDate";
 import { formatPropType } from "@/lib/formatPickLabel";
 import { resolveDisplayName } from "@/lib/displayName";
 import { normalizeConfidencePercent, normalizeVerdict } from "@/lib/matchupGrade";
@@ -24,6 +24,15 @@ import {
   selectTodaysEdgePicks,
   type EdgePresentation,
 } from "@/lib/todaysEdgeSelection";
+import { oddsWithinGuard, selectYesterdayEdgeRecap } from "@/lib/yesterdayEdgeRecap";
+import { marketKeyForBetType, pickMarketLine } from "@/lib/pickMarket";
+import { settlementOf, actualValueLabel, SETTLEMENT_PALETTE, isUnresolved } from "@/lib/pickSettlement";
+import {
+  DAILY_PICK_LIST_COLUMNS,
+  DAILY_SLATE_ROW_LIMIT,
+  hydrateDailyPicks,
+  warnIfSlateTruncated,
+} from "@/lib/dailyPickColumns";
 
 interface Play {
   id: string;
@@ -49,6 +58,8 @@ interface DailyPick {
   odds: string | null;
   reasoning: string | null;
   result: string | null;
+  /** Set by grade-picks when it settles a player prop; null for game bets. */
+  actual_value?: number | string | null;
   pick_date: string;
   created_at: string;
   sport: string;
@@ -187,6 +198,8 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const [todayPicks, setTodayPicks] = useState<DailyPick[]>([]);
   const [dailyTierPicks, setDailyTierPicks] = useState<DailyPick[]>([]);
   const [yesterdayPicks, setYesterdayPicks] = useState<DailyPick[]>([]);
+  /** Non-null when the recap query itself failed, as opposed to genuinely having no picks. */
+  const [yesterdayError, setYesterdayError] = useState<string | null>(null);
   const [picksLoading, setPicksLoading] = useState(true);
   const [lineupError, setLineupError] = useState<string | null>(null);
   const [lineupScanPending, setLineupScanPending] = useState(false);
@@ -228,40 +241,82 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     return arr;
   }, [userSports]);
 
+  // Recaps exactly what Today's Edge showed yesterday. Pulls the whole slate
+  // (all tiers) and hands it to selectYesterdayEdgeRecap, which re-runs the
+  // live rail's selector — see that helper for why a tier=edge filter here
+  // would strand the card on its empty state.
   const fetchYesterdayEdgeResults = useCallback(async () => {
-    const yesterdayET = shiftYmd(todayInTZ(), -1);
+    const yesterdayET = shiftYmd(currentSlateDate(), -1);
     if (!yesterdayET) return;
 
     const [byGameDate, legacyByPickDate] = await Promise.all([
       supabase
         .from("daily_picks")
-        .select("*")
+        .select(DAILY_PICK_LIST_COLUMNS)
         .eq("game_date", yesterdayET)
-        .eq("tier", "edge")
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .limit(DAILY_SLATE_ROW_LIMIT),
       supabase
         .from("daily_picks")
-        .select("*")
+        .select(DAILY_PICK_LIST_COLUMNS)
         .is("game_date", null)
         .eq("pick_date", yesterdayET)
-        .eq("tier", "edge")
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .limit(DAILY_SLATE_ROW_LIMIT),
     ]);
 
+    warnIfSlateTruncated(byGameDate.data?.length ?? 0, DAILY_SLATE_ROW_LIMIT, "yesterday's slate");
+    warnIfSlateTruncated(legacyByPickDate.data?.length ?? 0, DAILY_SLATE_ROW_LIMIT, "yesterday's legacy slate");
+
     if (byGameDate.error || legacyByPickDate.error) {
-      console.error("[YesterdayEdge] failed to load results", byGameDate.error || legacyByPickDate.error);
+      const failure = byGameDate.error || legacyByPickDate.error;
+      console.error("[YesterdayEdge] failed to load results", failure);
+      // Surface the failure instead of returning quietly. Returning left the
+      // card on its "No edge yesterday" empty state, which asserts that no
+      // picks existed — the one thing we do NOT know when the query failed.
+      setYesterdayError("Yesterday's results could not be loaded. Pull to refresh or sign in again.");
       return;
     }
+    setYesterdayError(null);
 
-    setYesterdayPicks(
-      [...((byGameDate.data as DailyPick[]) || []), ...((legacyByPickDate.data as DailyPick[]) || [])]
-        .filter(isEdgeHistoryPick),
-    );
+    // Same selector and limit as the live rail, so the recap lists the same
+    // plays. Unlike Today's Edge it deliberately keeps graded rows — a settled
+    // hit or miss is the entire point of this card.
+    const rows = [
+      ...hydrateDailyPicks(byGameDate.data as unknown as Record<string, unknown>[]),
+      ...hydrateDailyPicks(legacyByPickDate.data as unknown as Record<string, unknown>[]),
+    ] as unknown as DailyPick[];
+    // An expired session does NOT error here — RLS simply filters every row out
+    // and the query returns 200 with an empty set. That is indistinguishable
+    // from a genuinely empty slate at this layer, and it is what produced a
+    // confident "No edge yesterday" while yesterday's picks sat in the table.
+    // So when the day looks empty, confirm the session is actually valid before
+    // claiming there were no picks. One extra round trip, only in the empty case.
+    if (rows.length === 0) {
+      const { error: sessionError } = await supabase.auth.getUser();
+      if (sessionError) {
+        console.error("[YesterdayEdge] session invalid", sessionError);
+        setYesterdayError("Your session expired. Sign in again to see yesterday's results.");
+        setYesterdayPicks([]);
+        return;
+      }
+    }
+
+    const recap = selectYesterdayEdgeRecap(rows, yesterdayET, 5) as DailyPick[];
+
+    if (import.meta.env.DEV) {
+      console.log(
+        `[YesterdayEdge] date=${yesterdayET} fetched=${rows.length} selected=${recap.length} ` +
+          `graded=${recap.filter(p => isResultFinal(p.result)).length}`,
+      );
+    }
+
+    setYesterdayPicks(recap);
   }, []);
 
   const fetchTodayPicks = useCallback(async (): Promise<number | null> => {
     const requestId = ++todayPickRequestId.current;
-    const todayET = todayInTZ();
+    const todayET = currentSlateDate();
     const yesterdayPickDate = new Date(Date.now() - 86400000).toISOString().split("T")[0];
 
     // Public display is keyed off the actual game_date in America/New_York —
@@ -276,22 +331,22 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       [todayByGame, todayLegacyRes] = await Promise.all([
         supabase
           .from("daily_picks")
-          .select("*")
+          .select(DAILY_PICK_LIST_COLUMNS)
           .eq("game_date", todayET)
           .order("created_at", { ascending: false })
           .order("confidence", { ascending: false, nullsFirst: false })
-          .limit(120),
+          .limit(DAILY_SLATE_ROW_LIMIT),
         // Legacy fallback: rows missing game_date that were generated today or
         // yesterday (night-before scans). isActiveTodayPick will drop any whose
         // commence_time-derived game date is not today.
         supabase
           .from("daily_picks")
-          .select("*")
+          .select(DAILY_PICK_LIST_COLUMNS)
           .is("game_date", null)
           .gte("pick_date", yesterdayPickDate)
           .lte("pick_date", todayET)
           .order("created_at", { ascending: false })
-          .limit(80),
+          .limit(DAILY_SLATE_ROW_LIMIT),
       ]);
     } catch (error) {
       console.error("[TodaysEdge] failed to load lineup", error);
@@ -311,18 +366,15 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       return null;
     }
 
-    // Hard odds guard: drop extreme longshots (|odds| >= 1000)
-    const oddsOk = (o: string | null | undefined) => {
-      if (!o) return true;
-      const n = parseInt(String(o).replace(/[^\d-]/g, ""), 10);
-      if (Number.isNaN(n)) return true;
-      return Math.abs(n) < 1000;
-    };
+    const oddsOk = oddsWithinGuard;
+
+    warnIfSlateTruncated(todayByGame.data?.length ?? 0, DAILY_SLATE_ROW_LIMIT, "today's slate");
+    warnIfSlateTruncated(todayLegacyRes.data?.length ?? 0, DAILY_SLATE_ROW_LIMIT, "today's legacy slate");
 
     const merged: DailyPick[] = [
-      ...((todayByGame.data as DailyPick[]) || []),
-      ...((todayLegacyRes.data as DailyPick[]) || []),
-    ];
+      ...hydrateDailyPicks(todayByGame.data as unknown as Record<string, unknown>[]),
+      ...hydrateDailyPicks(todayLegacyRes.data as unknown as Record<string, unknown>[]),
+    ] as unknown as DailyPick[];
 
     // Event-identity dedupe so the same logical pick can't appear twice
     // because the scanner inserted a fresh copy on a later run.
@@ -345,15 +397,24 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     // Yesterday's Edge on the next day; keeping them out of today's rail
     // prevents yesterday's manually-graded leftovers from masquerading as
     // today's slate when their game_date happens to align.
-    const activeToday = merged.filter(
-      p => oddsOk(p.odds) && p.tier !== "pass" && isActiveTodayPick(p as any)
+    // Today's full slate, settled rows INCLUDED. The Edge lineup deliberately
+    // keeps a pick after it grades so its card can flip to WON/LOST in place
+    // instead of silently disappearing the moment the game ends — the pick only
+    // leaves this rail when the date rolls and it moves to Yesterday's Edge.
+    // isTodayGamePick already pins this to today's ET game_date, so a settled
+    // row here is genuinely one of today's games, not a stale leftover.
+    const todaySlate = merged.filter(
+      p => oddsOk(p.odds) && p.tier !== "pass" && isTodayGamePick(p as any)
     );
+
+    // The Daily Picks rail underneath is unchanged: live plays only.
+    const activeToday = todaySlate.filter(p => !isResultFinal(p.result));
 
     // Genuine calibrated Edge rows always win. If MLB or WNBA has no
     // validated Edge, use up to four analyzer-backed shadow candidates for
     // that sport. They remain tier=daily and render as model scores, never
     // as win probabilities.
-    const edgeSelection = selectTodaysEdgePicks(activeToday, 5);
+    const edgeSelection = selectTodaysEdgePicks(todaySlate, 5);
     const edgeTier = dedupe(edgeSelection.picks as DailyPick[]);
 
     // Keep every other active Daily Pick, but remove fallback cards already
@@ -414,11 +475,16 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     setTodayPicks([...edgeTier].sort((left, right) => comparePickQuality(right, left)));
     setDailyTierPicks(sortByPref(dailyTier));
     setLineupError(null);
-    await fetchYesterdayEdgeResults();
+    // Yesterday's recap is NOT fetched here. It used to be, which coupled it to
+    // today's lineup: every early return above (query threw, query errored)
+    // skipped it, so a failure loading today's slate silently blanked
+    // Yesterday's Edge Results to "No edge yesterday" even though yesterday's
+    // picks were sitting in the table. They are independent queries about
+    // different days and are now loaded independently — see the effect below.
     setPicksLoading(false);
     setLastRefreshed(new Date());
     return edgeTier.length;
-  }, [fetchYesterdayEdgeResults, sortByPref]);
+  }, [sortByPref]);
 
   const pollQueuedLineup = useCallback(() => {
     if (lineupPollTimeout.current !== null) {
@@ -478,9 +544,17 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       refresh();
     }
 
-    // Auto-refresh yesterday's results every 60 seconds
-    const interval = setInterval(async () => {
-      await fetchYesterdayEdgeResults();
+    // Yesterday's recap loads on its own, in parallel with today's lineup and
+    // independently of whether that lineup succeeds.
+    void fetchYesterdayEdgeResults();
+
+    // Auto-refresh every 60s. Both rails are repolled because grade-picks
+    // settles on a 30-minute cron: today's cards flip to WON/LOST in place, and
+    // yesterday's recap fills in as its remaining games finish. They are fired
+    // separately on purpose — one failing must never take the other down.
+    const interval = setInterval(() => {
+      void fetchTodayPicks();
+      void fetchYesterdayEdgeResults();
     }, 60000);
     return () => {
       clearInterval(interval);
@@ -561,12 +635,21 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     return `${dir === "over" ? "O" : "U"} ${pick.line} ${formatPropType(pick.prop_type)}`;
   }
 
+  // Three states, not two. A push is SETTLED — it just has no win/loss, which
+  // is how a prop is recorded when the player was scratched and never played.
+  // Counting it as pending would claim a result is still coming; counting it as
+  // a loss would be wrong. It is shown, and excluded from the accuracy
+  // denominator, exactly as a sportsbook treats a voided bet.
   const yesterdayGraded = yesterdayPicks.filter(p => p.result === "hit" || p.result === "miss");
-  const yesterdayPending = yesterdayPicks.filter(p => !p.result || (p.result !== "hit" && p.result !== "miss"));
+  const yesterdayVoid = yesterdayPicks.filter(p => settlementOf(p).state === "push");
+  const yesterdayPending = yesterdayPicks.filter(p => !settlementOf(p).settled);
   const yesterdayHits = yesterdayGraded.filter(p => p.result === "hit").length;
   const yesterdayTotal = yesterdayGraded.length;
   const yesterdayAcc = yesterdayTotal > 0 ? Math.round((yesterdayHits / yesterdayTotal) * 100) : 0;
   const hasYesterdayData = yesterdayPicks.length > 0;
+  // Pending splits two ways: games genuinely still running, and picks whose
+  // game has finished without ever grading (scratched player, no box-score line).
+  const yesterdayLive = yesterdayPending.filter(p => !isUnresolved(p)).length;
   const yesterdayPendingVisibleLimit = 5;
 
   const quickLinks = [
@@ -790,15 +873,14 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                   const isLineupsPending = isFallbackEdge && pick.edgeWarning === "lineups_pending";
                   const confPercent = Math.round(modelScorePercent(pick));
                   const canonicalVerdict = normalizeVerdict(pick.verdict, confPercent);
-                  const resultRaw = String(pick.result ?? "pending").toLowerCase();
-                  const statusBadge =
-                    resultRaw === "hit" || resultRaw === "win"
-                      ? { label: "HIT", color: "hsl(142 100% 50%)" }
-                      : resultRaw === "miss" || resultRaw === "loss"
-                      ? { label: "MISS", color: "hsl(0 90% 60%)" }
-                      : resultRaw === "push"
-                      ? { label: "PUSH", color: "hsl(45 90% 55%)" }
-                      : { label: "PENDING", color: "hsl(220 15% 65%)" };
+                  // Settled state. grade-picks runs every 30 min, so a pick
+                  // flips to WON/LOST in place once its game finals — the card
+                  // stays put until the date rolls and it moves to Yesterday's.
+                  const settlement = settlementOf(pick);
+                  const settled = settlement.settled
+                    ? SETTLEMENT_PALETTE[settlement.state as "won" | "lost" | "push"]
+                    : null;
+                  const finalValue = settlement.settled ? actualValueLabel(pick) : null;
                   const logoTeam = isGameBet ? selectedTeamForGameLogo(pick) : "";
                   const sportRaw = (pick.sport || "nba").toLowerCase();
                   const supportedLogoSports = ["nba", "wnba", "mlb", "nhl", "nfl"];
@@ -814,11 +896,19 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.1 + i * 0.06 }}
-                    className="relative flex min-h-[210px] w-[84vw] max-w-[360px] shrink-0 snap-start flex-col overflow-hidden rounded-[22px] border border-white/[0.08]"
+                    className="relative flex min-h-[210px] w-[84vw] max-w-[360px] shrink-0 snap-start flex-col overflow-hidden rounded-[22px] border"
                     style={{
                       padding: '16px',
-                      background: 'radial-gradient(circle at 100% 0%, hsla(250, 76%, 62%, 0.28), transparent 43%), linear-gradient(145deg, hsl(250 30% 16%), hsl(228 28% 8%) 72%)',
-                      boxShadow: 'inset 0 1px 0 hsla(250, 90%, 94%, 0.08), 0 18px 34px -28px hsla(250, 76%, 62%, 0.92)',
+                      // Settled cards swap the purple edge glow for the result
+                      // colour and lay a faint wash over the base gradient, so
+                      // a finished pick reads as finished without shouting.
+                      borderColor: settled ? settled.border : 'hsla(0, 0%, 100%, 0.08)',
+                      background: settled
+                        ? `linear-gradient(145deg, ${settled.wash}, transparent 60%), radial-gradient(circle at 100% 0%, ${settled.chip}, transparent 43%), linear-gradient(145deg, hsl(250 30% 16%), hsl(228 28% 8%) 72%)`
+                        : 'radial-gradient(circle at 100% 0%, hsla(250, 76%, 62%, 0.28), transparent 43%), linear-gradient(145deg, hsl(250 30% 16%), hsl(228 28% 8%) 72%)',
+                      boxShadow: settled
+                        ? `inset 0 1px 0 hsla(250, 90%, 94%, 0.06), 0 18px 34px -28px ${settled.border}`
+                        : 'inset 0 1px 0 hsla(250, 90%, 94%, 0.08), 0 18px 34px -28px hsla(250, 76%, 62%, 0.92)',
                     }}
                   >
 
@@ -919,14 +1009,23 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                             fontSize: 9, fontWeight: 700, letterSpacing: 1,
                             borderRadius: 20, padding: '2px 8px',
                           }}>{(pick.sport || 'NBA').toUpperCase()}</span>
-                          <span style={{
-                            display: 'none',
-                            background: `${statusBadge.color}1f`,
-                            color: statusBadge.color,
-                            fontSize: 10, fontWeight: 700, letterSpacing: 1,
-                            borderRadius: 20, padding: '2px 8px',
-                            border: `1px solid ${statusBadge.color}40`,
-                          }}>{statusBadge.label}</span>
+                          {settled && (
+                            <span style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              background: settled.chip,
+                              color: settled.accent,
+                              fontSize: 10, fontWeight: 800, letterSpacing: 1.1,
+                              borderRadius: 20, padding: '2px 9px',
+                              border: `1px solid ${settled.border}`,
+                            }}>
+                              {settlement.state === "won"
+                                ? <CheckCircle2 style={{ width: 10, height: 10 }} />
+                                : settlement.state === "lost"
+                                  ? <XCircle style={{ width: 10, height: 10 }} />
+                                  : null}
+                              {settlement.label}
+                            </span>
+                          )}
                           {isGameBet && (
                             <span style={{
                               display: 'none',
@@ -1000,10 +1099,19 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       const colorMap: Record<string, string> = {
                         'STRONG': '#22c55e', 'LEAN': '#22d3ee', 'RISKY': '#f59e0b', 'PASS': '#ef4444',
                       };
-                      const dotColor = colorMap[label] || '#ef4444';
+                      const dotColor = settled ? settled.accent : (colorMap[label] || '#ef4444');
                       const bgColor = dotColor.replace('#', '').match(/.{2}/g)!;
                       const r = parseInt(bgColor[0], 16), g = parseInt(bgColor[1], 16), b = parseInt(bgColor[2], 16);
-                      const badgeText = isLineupsPending ? 'LINEUPS PENDING' : isFallbackEdge ? 'MODEL LEAN' : label;
+                      const liveBadgeText = isLineupsPending ? 'LINEUPS PENDING' : isFallbackEdge ? 'MODEL LEAN' : label;
+                      // Once the pick grades, the model's pre-game read is no
+                      // longer the useful thing on this line — the settled
+                      // number is. Game bets grade without a per-player actual,
+                      // so they just read FINAL.
+                      const badgeText = settled
+                        ? (finalValue !== null && !isGameBet
+                            ? `FINAL · ${finalValue} ${formatPropType(pick.prop_type)}`
+                            : 'FINAL')
+                        : liveBadgeText;
                       return (
                         <div className="relative z-10" style={{
                           display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -1061,18 +1169,31 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       </p>
                     )}
 
-                    {/* BUTTONS */}
-                    <div className="relative z-10 mt-auto grid grid-cols-2 gap-2 border-t border-white/[0.08] pt-3">
+                    {/* BUTTONS — a settled pick can no longer be bet, so
+                        "Add to Slip" is dropped and Details takes the row. */}
+                    <div
+                      className={`relative z-10 mt-auto grid gap-2 border-t border-white/[0.08] pt-3 ${settled ? 'grid-cols-1' : 'grid-cols-2'}`}
+                    >
                       <button
                         onClick={() => {
-                          const isGameBet = pick.bet_type && pick.bet_type !== 'prop';
-                          if (isGameBet) {
-                            navigate('/dashboard/moneyline', {
+                          // A game bet opens the full game-lines report on the
+                          // market the card was about. This used to go to
+                          // /dashboard/moneyline carrying only the two team
+                          // names, so a Spread -1.5 pick landed on the
+                          // Moneyline tab with no line and no side.
+                          const market = marketKeyForBetType(pick.bet_type);
+                          if (market) {
+                            navigate('/dashboard/analyze?mode=lines', {
                               state: {
                                 autoAnalyze: true,
                                 sport: pick.sport,
                                 home_team: pick.home_team,
                                 away_team: pick.away_team,
+                                market,
+                                event_id: pick.event_id ?? null,
+                                line: pickMarketLine(pick as any),
+                                direction: pick.direction ?? null,
+                                team: pick.team ?? null,
                               },
                             });
                           } else {
@@ -1121,6 +1242,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       >
                         Details
                       </button>
+                      {!settled && (
                       <button
                         onClick={() => {
                           setSlipSheetPick({
@@ -1143,6 +1265,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       >
                         Add to Slip
                       </button>
+                      )}
                     </div>
                   </motion.div>
                   );
@@ -1197,16 +1320,36 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       </div>
                     );
                   })}
-                {yesterdayPending.slice(0, yesterdayPendingVisibleLimit).map(pick => {
+                {yesterdayVoid.map(pick => {
                   const pickLabel = formatPickLabel(pick);
                   return (
                     <div key={pick.id} className="flex items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '1px solid hsl(250 20% 18% / 0.4)' }}>
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-4 h-4 shrink-0 rounded-full" style={{ border: '2px solid hsl(45 93% 58%)', background: 'transparent' }} />
-                        <span className="truncate" style={{ fontSize: 13, fontWeight: 700, color: 'hsl(250 80% 97%)' }}>{pick.player_name}</span>
+                        <MinusCircle className="w-4 h-4 shrink-0" style={{ color: 'hsl(250 15% 55%)' }} />
+                        <span className="truncate" style={{ fontSize: 13, fontWeight: 700, color: 'hsl(250 40% 74%)' }}>{pick.player_name}</span>
                       </div>
-                      <span className="tabular-nums shrink-0 ml-2" style={{ fontSize: 11, fontWeight: 700, color: 'hsl(45 93% 58%)' }}>
-                        {pickLabel} — PENDING
+                      <span className="tabular-nums shrink-0 ml-2" style={{ fontSize: 11, fontWeight: 700, color: 'hsl(250 15% 58%)' }}>
+                        {pickLabel} — VOID
+                      </span>
+                    </div>
+                  );
+                })}
+                {yesterdayPending.slice(0, yesterdayPendingVisibleLimit).map(pick => {
+                  const pickLabel = formatPickLabel(pick);
+                  // A pick whose game finished but never graded will never
+                  // settle — almost always a player scratched after the pick
+                  // was written, so there is no box-score line to grade. Saying
+                  // "pending" there promises a result that is not coming.
+                  const dead = isUnresolved(pick);
+                  const tone = dead ? 'hsl(250 15% 55%)' : 'hsl(45 93% 58%)';
+                  return (
+                    <div key={pick.id} className="flex items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '1px solid hsl(250 20% 18% / 0.4)' }}>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-4 h-4 shrink-0 rounded-full" style={{ border: `2px solid ${tone}`, background: 'transparent' }} />
+                        <span className="truncate" style={{ fontSize: 13, fontWeight: 700, color: dead ? 'hsl(250 40% 72%)' : 'hsl(250 80% 97%)' }}>{pick.player_name}</span>
+                      </div>
+                      <span className="tabular-nums shrink-0 ml-2" style={{ fontSize: 11, fontWeight: 700, color: tone }}>
+                        {pickLabel} — {dead ? "NO RESULT" : "PENDING"}
                       </span>
                     </div>
                   );
@@ -1215,12 +1358,13 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               {yesterdayTotal > 0 && yesterdayPending.length === 0 ? (
                 <p className="text-center mt-3" style={{ fontSize: 12, fontWeight: 700, color: 'hsl(142 71% 45%)' }}>
                   Sentinel went {yesterdayHits}/{yesterdayTotal} yesterday • {yesterdayAcc}% accuracy
+                  {yesterdayVoid.length > 0 ? ` · ${yesterdayVoid.length} void` : ""}
                 </p>
               ) : yesterdayPending.length > 0 ? (
-                <p className="text-center mt-3" style={{ fontSize: 12, fontWeight: 600, color: 'hsl(45 93% 58%)' }}>
-                  {yesterdayPending.length > yesterdayPendingVisibleLimit
-                    ? `Showing ${yesterdayPendingVisibleLimit} of ${yesterdayPending.length} pending edge picks - games in progress`
-                    : `${yesterdayPending.length} edge pick${yesterdayPending.length > 1 ? "s" : ""} still pending - games in progress`}
+                <p className="text-center mt-3" style={{ fontSize: 12, fontWeight: 600, color: yesterdayLive > 0 ? 'hsl(45 93% 58%)' : 'hsl(250 15% 55%)' }}>
+                  {yesterdayLive > 0
+                    ? `${yesterdayLive} edge pick${yesterdayLive > 1 ? "s" : ""} still pending - games in progress`
+                    : `Sentinel went ${yesterdayHits}/${yesterdayTotal} yesterday • ${yesterdayAcc}% accuracy · ${yesterdayPending.length} without a result`}
                 </p>
               ) : null}
             </>
@@ -1230,14 +1374,22 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               borderRadius: 14,
             }}>
               <div className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center" style={{
-                background: 'hsl(250 20% 14%)',
-                border: '1px solid hsl(250 20% 18% / 0.5)',
+                background: yesterdayError ? 'hsl(45 60% 14%)' : 'hsl(250 20% 14%)',
+                border: `1px solid ${yesterdayError ? 'hsl(45 93% 58% / 0.35)' : 'hsl(250 20% 18% / 0.5)'}`,
               }}>
-                <Target className="w-4 h-4 text-muted-foreground/40" />
+                <Target className={`w-4 h-4 ${yesterdayError ? 'text-[hsl(45_93%_58%)]' : 'text-muted-foreground/40'}`} />
               </div>
+              {/* A failed query and a genuinely empty slate are different facts.
+                  Showing "No edge yesterday" for a failure asserts something we
+                  do not know, and sends the user looking for a pick bug that
+                  isn't there. */}
               <div className="min-w-0">
-                <p style={{ fontSize: 13, fontWeight: 700, color: 'hsl(250 80% 97%)' }}>No edge yesterday</p>
-                <p style={{ fontSize: 11, color: 'hsl(250 15% 50%)', lineHeight: 1.4 }}>No Today's Edge picks were generated yesterday.</p>
+                <p style={{ fontSize: 13, fontWeight: 700, color: 'hsl(250 80% 97%)' }}>
+                  {yesterdayError ? "Results unavailable" : "No edge yesterday"}
+                </p>
+                <p style={{ fontSize: 11, color: 'hsl(250 15% 50%)', lineHeight: 1.4 }}>
+                  {yesterdayError ?? "No Today's Edge picks were generated yesterday."}
+                </p>
               </div>
             </div>
           )}

@@ -1,8 +1,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getMasterClient } from "../_shared/masterClient.ts";
+import { fetchWithRotation } from "../_shared/oddsKeyPool.ts";
 import { normalizeBookKey } from "../_shared/normalizeBookName.ts";
 import { selectBestBookLine, type BookLine, type Direction, type MarketType } from "../_shared/bestBookLine.ts";
 import { requirePremiumAccess } from "../_shared/premium-access.ts";
+import { fetchMlbGameIntelligence } from "../_shared/mlb_data.ts";
+import { findExactMlbScheduledGame, mlbScheduleDatesForExpectedEvent } from "../_shared/mlb_schedule_match.ts";
+import { buildMlbTotalProjection, describeMlbTotalProjection, scoreMlbTotalSide } from "../_shared/mlb_total_projection.ts";
+import { buildMlbTeamMarketProjection } from "../_shared/mlb_team_market_projection.ts";
 import {
   buildWnbaAvailability,
   buildWnbaTeamMetrics,
@@ -233,6 +238,8 @@ const ESPN_WNBA = "https://site.api.espn.com/apis/site/v2/sports/basketball/wnba
 const ESPN_NCAAB = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball";
 const ESPN_MLB = "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb";
 const ESPN_NHL = "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl";
+const MLB_STATS_API = "https://statsapi.mlb.com/api";
+const ESPN_FETCH_TIMEOUT_MS = 4_000;
 
 function getEspnBase(sport: string) {
   if (sport === "wnba") return ESPN_WNBA;
@@ -242,12 +249,19 @@ function getEspnBase(sport: string) {
   return ESPN_NBA;
 }
 
-async function fetchJSON(url: string) {
-  const resp = await fetch(url, {
-    headers: { "User-Agent": "PrimalAnalytics/1.0" },
-  });
-  if (!resp.ok) throw new Error(`ESPN fetch failed: ${resp.status}`);
-  return resp.json();
+async function fetchJSON(url: string, timeoutMs = ESPN_FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, {
+      headers: { "User-Agent": "PrimalAnalytics/1.0" },
+      signal: controller.signal,
+    });
+    if (!resp.ok) throw new Error(`ESPN fetch failed: ${resp.status}`);
+    return await resp.json();
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
 }
 
 // Common nicknames/aliases for NBA teams
@@ -495,10 +509,192 @@ function startsAtSameScheduledEvent(first: string, second: string) {
   return Number.isFinite(firstTime) && Number.isFinite(secondTime) && Math.abs(firstTime - secondTime) <= 90 * 60 * 1000;
 }
 
-async function resolveMatchupVenue(team1Id: string, team2Id: string, sport: string, expectedCommenceTime?: string | null): Promise<{ gameId: string; team1IsHome: boolean; gameDate: string; venueCity: string | null } | null> {
+function totalVerdict(score: number, direction: string) {
+  const side = direction.toUpperCase();
+  if (score >= 72) return `STRONG ${side}`;
+  if (score >= 58) return `LEAN ${side}`;
+  if (score >= 42) return "RISKY";
+  return `FADE ${side}`;
+}
+
+async function buildVerifiedMlbTotalFallback(input: {
+  team1: { name: string; abbr?: string };
+  team2: { name: string; abbr?: string };
+  venue: { gameDate: string; team1IsHome: boolean } | null;
+  totalLine: number | null;
+  direction: string | null | undefined;
+}) {
+  if (!input.venue || !Number.isFinite(input.totalLine) || !["over", "under"].includes(String(input.direction).toLowerCase())) {
+    return null;
+  }
+
+  const homeTeam = input.venue.team1IsHome ? input.team1 : input.team2;
+  const awayTeam = input.venue.team1IsHome ? input.team2 : input.team1;
+  const intelligence = await fetchMlbGameIntelligence({
+    gameDate: input.venue.gameDate,
+    gameStartTime: input.venue.gameDate,
+    homeAbbr: homeTeam.abbr,
+    awayAbbr: awayTeam.abbr,
+    includePitchTypes: false,
+  });
+  const projection = buildMlbTotalProjection({
+    homeRunsPerGame: intelligence.teamStats.home.runsPerGame,
+    awayRunsPerGame: intelligence.teamStats.away.runsPerGame,
+    homeStarterEra: intelligence.pitchers.home?.season?.era ?? null,
+    awayStarterEra: intelligence.pitchers.away?.season?.era ?? null,
+    homeBullpenEra: intelligence.teamStats.home.bullpenEra,
+    awayBullpenEra: intelligence.teamStats.away.bullpenEra,
+    parkFactor: intelligence.parkFactor?.runFactor ?? null,
+    temperatureF: intelligence.weather?.temperatureF ?? null,
+    windMph: intelligence.weather?.windMph ?? null,
+    windDirection: intelligence.weather?.windDirection ?? null,
+    roofClosed: String(intelligence.weather?.roofType || "").toLowerCase().includes("closed"),
+  });
+  const requestedDirection = String(input.direction).toLowerCase();
+  const requestedScore = scoreMlbTotalSide({
+    predictedTotal: projection.predictedTotal,
+    totalLine: input.totalLine,
+    side: requestedDirection,
+  });
+  if (projection.predictedTotal === null || requestedScore === null) return null;
+
+  const direction = requestedScore < 50
+    ? requestedDirection === "over" ? "under" : "over"
+    : requestedDirection;
+  const score = requestedScore < 50 ? 100 - requestedScore : requestedScore;
+
+  const coverage = Math.max(0, Math.min(100, 100 - intelligence.missing.length * 12 - projection.missingInputs.length * 18));
+  const factors = [
+    {
+      label: "Verified total projection",
+      team1Score: score,
+      team2Score: 100 - score,
+      score,
+      weight: 70,
+      detail: `Verified total ${projection.predictedTotal.toFixed(1)} against ${direction} ${input.totalLine!.toFixed(1)}.`,
+    },
+    {
+      label: "Verified data coverage",
+      team1Score: coverage,
+      team2Score: 100 - coverage,
+      score: coverage,
+      weight: 30,
+      detail: projection.missingInputs.length || intelligence.missing.length
+        ? `Unavailable inputs: ${[...projection.missingInputs, ...intelligence.missing].join(", ")}.`
+        : "All configured total inputs were verified from the official game context.",
+    },
+  ];
+
+  return {
+    model: "mlb-verified-total-v1",
+    selected_direction: direction,
+    confidence: score,
+    verdict: totalVerdict(score, direction),
+    predicted_total: projection.predictedTotal,
+    factorBreakdown: factors,
+    writeup: describeMlbTotalProjection({
+      predictedTotal: projection.predictedTotal,
+      totalLine: input.totalLine,
+      side: direction,
+      projectionInputs: projection.projectionInputs,
+      missingInputs: [...projection.missingInputs, ...intelligence.missing],
+    }),
+    pitchers: intelligence.pitchers,
+  };
+}
+
+async function buildVerifiedMlbTeamMarketFallback(input: {
+  market: "moneyline" | "spread";
+  team1: { name: string; abbr?: string };
+  team2: { name: string; abbr?: string };
+  venue: { gameDate: string; team1IsHome: boolean } | null;
+  spreadLine: number | null;
+}) {
+  if (!input.venue) return null;
+
+  const homeTeam = input.venue.team1IsHome ? input.team1 : input.team2;
+  const awayTeam = input.venue.team1IsHome ? input.team2 : input.team1;
+  const intelligence = await fetchMlbGameIntelligence({
+    gameDate: input.venue.gameDate,
+    gameStartTime: input.venue.gameDate,
+    homeAbbr: homeTeam.abbr,
+    awayAbbr: awayTeam.abbr,
+    includePitchTypes: false,
+  });
+  const team1Key = input.venue.team1IsHome ? "home" : "away";
+  const team2Key = input.venue.team1IsHome ? "away" : "home";
+  const team1Stats = intelligence.teamStats[team1Key];
+  const team2Stats = intelligence.teamStats[team2Key];
+  const team1Pitcher = intelligence.pitchers[team1Key];
+  const team2Pitcher = intelligence.pitchers[team2Key];
+  const projection = buildMlbTeamMarketProjection({
+    market: input.market,
+    team1Name: input.team1.name,
+    team2Name: input.team2.name,
+    team1RunsPerGame: team1Stats.runsPerGame,
+    team2RunsPerGame: team2Stats.runsPerGame,
+    team1Ops: team1Stats.ops,
+    team2Ops: team2Stats.ops,
+    team1StarterEra: team1Pitcher?.season?.era ?? null,
+    team2StarterEra: team2Pitcher?.season?.era ?? null,
+    team1BullpenEra: team1Stats.bullpenEra,
+    team2BullpenEra: team2Stats.bullpenEra,
+    team1Spread: input.spreadLine,
+  });
+  if (!projection) return null;
+
+  const marketLabel = input.market === "moneyline" ? "moneyline" : "spread";
+  const projectionDetail = input.market === "spread" && projection.predictedMargin !== null
+    ? ` The verified projected margin for ${input.team1.name} is ${projection.predictedMargin.toFixed(1)} runs against ${input.spreadLine! > 0 ? "+" : ""}${input.spreadLine}.`
+    : "";
+  const missingDetail = projection.missingInputs.length || intelligence.missing.length
+    ? ` Unavailable inputs: ${[...projection.missingInputs, ...intelligence.missing].join(", ")}.`
+    : "";
+
+  return {
+    model: "mlb-verified-core-market-v1",
+    confidence: projection.team1Score,
+    verdict: projection.verdict,
+    predicted_margin: projection.predictedMargin,
+    factorBreakdown: projection.factors,
+    writeup: `The verified MLB ${marketLabel} model compares current-season run production, OPS, probable starter ERA, and bullpen ERA for this exact scheduled matchup.${projectionDetail}${missingDetail}`,
+    pitchers: intelligence.pitchers,
+  };
+}
+
+async function resolveMlbMatchupVenue(
+  team1: { name: string; abbr?: string | null },
+  team2: { name: string; abbr?: string | null },
+  expectedCommenceTime: string,
+): Promise<{ gameId: string; team1IsHome: boolean; gameDate: string; venueCity: string | null } | null> {
+  for (const date of mlbScheduleDatesForExpectedEvent(expectedCommenceTime)) {
+    const schedule = await fetchJSON(`${MLB_STATS_API}/v1/schedule?sportId=1&date=${date}&hydrate=team,venue`).catch(() => null);
+    const games = (schedule?.dates || []).flatMap((entry: any) => entry?.games || []);
+    const match = findExactMlbScheduledGame({
+      games,
+      team1,
+      team2,
+      expectedCommenceTime,
+    });
+    if (match) return { ...match, venueCity: null };
+  }
+
+  return null;
+}
+
+async function resolveMatchupVenue(
+  team1: { id: string; name: string; abbr?: string | null },
+  team2: { id: string; name: string; abbr?: string | null },
+  sport: string,
+  expectedCommenceTime?: string | null,
+): Promise<{ gameId: string; team1IsHome: boolean; gameDate: string; venueCity: string | null } | null> {
   try {
+    if (sport === "mlb" && expectedCommenceTime) {
+      return await resolveMlbMatchupVenue(team1, team2, expectedCommenceTime);
+    }
+
     const base = getEspnBase(sport);
-    const t1 = String(team1Id), t2 = String(team2Id);
+    const t1 = String(team1.id), t2 = String(team2.id);
     for (let d = 0; d < 3; d++) {
       const date = new Date();
       date.setDate(date.getDate() + d);
@@ -1171,72 +1367,6 @@ const SPORT_ODDS_KEYS: Record<string, string> = {
   nfl: "americanfootball_nfl",
 };
 
-async function getNextOddsKey(supabase: any): Promise<{ id: string; key: string } | null> {
-  const { data, error } = await supabase
-    .from("odds_api_keys")
-    .select("id, api_key")
-    .eq("is_active", true)
-    .is("exhausted_at", null)
-    .order("last_used_at", { ascending: true, nullsFirst: true })
-    .limit(1)
-    .single();
-  if (!error && data) return { id: data.id, key: data.api_key };
-
-  // Fallback: try admin-configured key in app_config
-  const { data: configData } = await supabase
-    .from("app_config")
-    .select("value")
-    .eq("key", "odds_api_key")
-    .single();
-  if (configData?.value) return { id: "app-config", key: configData.value };
-
-  // Last resort: env var
-  const envKey = Deno.env.get("ODDS_API_KEY");
-  if (envKey) return { id: "env-fallback", key: envKey };
-  return null;
-}
-
-async function updateOddsKeyUsage(supabase: any, keyId: string, resp: Response) {
-  if (keyId === "env-fallback" || keyId === "app-config") return;
-  const remaining = resp.headers.get("x-requests-remaining");
-  const used = resp.headers.get("x-requests-used");
-  const update: Record<string, any> = { last_used_at: new Date().toISOString() };
-  if (remaining !== null) update.requests_remaining = parseInt(remaining, 10);
-  if (used !== null) update.requests_used = parseInt(used, 10);
-  if (remaining !== null && parseInt(remaining, 10) <= 0) {
-    update.exhausted_at = new Date().toISOString();
-  }
-  await supabase.from("odds_api_keys").update(update).eq("id", keyId);
-}
-
-async function markOddsKeyExhausted(supabase: any, keyId: string, error: string) {
-  if (keyId === "env-fallback" || keyId === "app-config") return;
-  await supabase.from("odds_api_keys").update({
-    exhausted_at: new Date().toISOString(),
-    last_error: error,
-    last_used_at: new Date().toISOString(),
-  }).eq("id", keyId);
-}
-
-async function fetchOddsWithRotation(supabase: any, url: string, maxRetries = 3): Promise<Response | null> {
-  for (let i = 0; i < maxRetries; i++) {
-    const keyInfo = await getNextOddsKey(supabase);
-    if (!keyInfo) return null;
-    const fullUrl = url.replace("__API_KEY__", keyInfo.key);
-    const resp = await fetch(fullUrl);
-    if (resp.ok) {
-      await updateOddsKeyUsage(supabase, keyInfo.id, resp);
-      return resp;
-    }
-    if (resp.status === 401 || resp.status === 403) {
-      await markOddsKeyExhausted(supabase, keyInfo.id, `HTTP ${resp.status}`);
-      continue;
-    }
-    return null;
-  }
-  return null;
-}
-
 type ExpectedOddsEvent = {
   eventId: string;
   commenceTime: string;
@@ -1251,9 +1381,13 @@ async function fetchOddsForMatchup(team1Name: string, team2Name: string, sport: 
     const eventPath = expectedEvent ? `/events/${encodeURIComponent(expectedEvent.eventId)}/odds` : "/odds";
     const url = `https://api.the-odds-api.com/v4/sports/${sportKey}${eventPath}/?apiKey=__API_KEY__&regions=us,us2&markets=h2h,spreads,totals&oddsFormat=american`;
 
-    const resp = await fetchOddsWithRotation(sb, url);
-    if (!resp) return { __unavailable: true, reason: "fetch_failed" } as any;
-    const payload = await resp.json();
+    const rotationResult = await fetchWithRotation(
+      sb,
+      (apiKey) => url.replace("__API_KEY__", apiKey),
+      { maxRetries: 3, attemptTimeoutMs: 5_000 },
+    );
+    if ("error" in rotationResult) return { __unavailable: true, reason: rotationResult.error.kind } as any;
+    const payload = await rotationResult.resp.json();
     const events = Array.isArray(payload) ? payload : payload ? [payload] : [];
 
     const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
@@ -1539,12 +1673,102 @@ Deno.serve(async (req) => {
       if (!team2) return json({ error: `Team not found: ${t2Input}` }, 400);
 
       // Resolve real scheduled venue (which team is HOME tonight) — never guess
-      const venue = await resolveMatchupVenue(team1.id, team2.id, sport, expectedEvent?.commenceTime);
+      const venue = await resolveMatchupVenue(team1, team2, sport, expectedEvent?.commenceTime);
       if (expectedEvent && !venue) {
         return json({ error: "Sentinel could not verify this exact scheduled event, so analysis was not run." }, 422);
       }
       const team1HomeAway: "home" | "away" | null = venue ? (venue.team1IsHome ? "home" : "away") : null;
       const team2HomeAway: "home" | "away" | null = venue ? (venue.team1IsHome ? "away" : "home") : null;
+
+      const oddsDb = await getMasterClient();
+      const oddsData = await fetchOddsForMatchup(team1.name, team2.name, sport, oddsDb, expectedEvent);
+
+      if (sport === "mlb") {
+        const respondWithVerifiedMlbCore = (mlbResult: any) => {
+          const confidence = Number(mlbResult.confidence);
+          const effectiveTotalDirection = bet_type === "total"
+            ? (mlbResult.selected_direction || over_under)
+            : over_under;
+          const odds = buildOddsPayload(oddsData, bet_type, confidence, team1.name, team2.name, effectiveTotalDirection);
+          const decision = buildDecision({
+            team1,
+            team2,
+            team1_pct: confidence,
+            verdict: mlbResult.verdict,
+            factorBreakdown: mlbResult.factorBreakdown,
+            oddsAmerican: odds?.bestOdds?.american ?? null,
+            betType: bet_type,
+            overUnder: effectiveTotalDirection,
+            sport: "mlb",
+          });
+          const status = buildAnalysisStatus(odds, mlbResult.factorBreakdown, !!mlbResult.writeup);
+          const factors = mlbResult.writeup ? [`Model summary: ${mlbResult.writeup}`] : [];
+
+          return json({
+            bet_type,
+            sport,
+            model: mlbResult.model,
+            ...status,
+            marketType: bet_type,
+            selectedSide: pickSelectedSide(bet_type, effectiveTotalDirection, spread_team, team1.name),
+            errors: [],
+            team1: { ...team1, stats: null, homeAway: team1HomeAway },
+            team2: { ...team2, stats: null, homeAway: team2HomeAway },
+            matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue, oddsEventId: expectedEvent?.eventId ?? null },
+            head_to_head: [],
+            injuries: { team1: [], team2: [], fetchedAt: null, source: "not_loaded_for_verified_core" },
+            splits: { team1: null, team2: null },
+            back_to_back: { team1: null, team2: null },
+            pace: { team1: null, team2: null },
+            factorBreakdown: mlbResult.factorBreakdown,
+            writeup: mlbResult.writeup,
+            pitchers: mlbResult.pitchers,
+            predicted_total: mlbResult.predicted_total ?? null,
+            predicted_margin: mlbResult.predicted_margin ?? null,
+            odds: withoutUnvalidatedEv(odds),
+            decision,
+            model_diagnostics: {
+              matchup_confirmed: !!venue,
+              data_path: "verified_mlb_core",
+              probability_supported: false,
+            },
+            confidence,
+            team1_pct: confidence,
+            team2_pct: 100 - confidence,
+            verdict: mlbResult.verdict,
+            factors,
+            score_kind: "heuristic_score",
+            calibration_status: "pending_queue_validation",
+            probability_supported: false,
+          });
+        };
+
+        try {
+          const directMarket = bet_type === "moneyline" || bet_type === "spread"
+            ? await buildVerifiedMlbTeamMarketFallback({
+                market: bet_type,
+                team1,
+                team2,
+                venue,
+                spreadLine: bet_type === "spread" ? Number(spread_line) : null,
+              })
+            : null;
+          if (directMarket) return respondWithVerifiedMlbCore(directMarket);
+
+          const directTotal = bet_type === "total"
+            ? await buildVerifiedMlbTotalFallback({
+                team1,
+                team2,
+                venue,
+                totalLine: parsedTotalLine,
+                direction: over_under,
+              })
+            : null;
+          if (directTotal) return respondWithVerifiedMlbCore(directTotal);
+        } catch (error) {
+          console.warn("[moneyline-api][mlb-core] verified analysis unavailable", error instanceof Error ? error.message : "unknown error");
+        }
+      }
 
       let [h2h, team1Stats, team2Stats, injuryReport, schedule1, schedule2] = await Promise.all([
         getHeadToHead(team1.id, team2.id, sport),
@@ -1591,10 +1815,6 @@ Deno.serve(async (req) => {
       const pace2 = computePace(team2Stats, schedule2, team2.id);
 
       const extras = { injuries1, injuries2, splits1, splits2, b2b1, b2b2, pace1, pace2, team1IsHome: venue ? venue.team1IsHome : null, previousSeasonFallbackUsed, previousSeasonNote };
-
-      // Fetch live odds for all sports — always read rotation pool from MASTER DB.
-      const oddsDb = await getMasterClient();
-      const oddsData = await fetchOddsForMatchup(team1.name, team2.name, sport, oddsDb, expectedEvent);
 
       if (sport === "wnba") {
         const targetDate = venue?.gameDate ?? new Date().toISOString();
@@ -1720,6 +1940,96 @@ Deno.serve(async (req) => {
         const supabaseUrl = Deno.env.get("SUPABASE_URL");
         const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
         if (supabaseUrl && serviceKey) {
+          const respondWithMlbModel = (mlbResult: any) => {
+            const factors: string[] = [];
+            for (const warning of mlbResult.injuries?.warnings || []) factors.push(warning);
+            if (mlbResult.writeup) factors.push(`Model summary: ${mlbResult.writeup}`);
+
+            const confidence = mlbResult.confidence;
+            const effectiveTotalDirection = bet_type === "total"
+              ? (mlbResult.selected_direction || over_under)
+              : over_under;
+            const analysis = bet_type === "moneyline"
+              ? { team1_pct: confidence, team2_pct: 100 - confidence, verdict: mlbResult.verdict, factors }
+              : { confidence, verdict: mlbResult.verdict, factors };
+            const odds = buildOddsPayload(oddsData, bet_type, confidence, team1.name, team2.name, effectiveTotalDirection);
+            const decision = buildDecision({
+              team1,
+              team2,
+              team1_pct: confidence,
+              verdict: mlbResult.verdict,
+              factorBreakdown: mlbResult.factorBreakdown,
+              oddsAmerican: odds?.bestOdds?.american ?? null,
+              betType: bet_type,
+              overUnder: effectiveTotalDirection,
+              sport: "mlb",
+            });
+            const status = buildAnalysisStatus(odds, mlbResult.factorBreakdown, !!mlbResult.writeup);
+            return json({
+              bet_type,
+              sport,
+              model: mlbResult.model || "mlb-20-factor",
+              ...status,
+              marketType: bet_type,
+              selectedSide: pickSelectedSide(bet_type, effectiveTotalDirection, spread_team, team1.name),
+              errors: [],
+              team1: { ...team1, stats: team1Stats, homeAway: team1HomeAway },
+              team2: { ...team2, stats: team2Stats, homeAway: team2HomeAway },
+              matchup: { gameDate: venue?.gameDate || null, confirmed: !!venue, oddsEventId: expectedEvent?.eventId ?? null },
+              head_to_head: h2h,
+              injuries: { team1: injuries1, team2: injuries2, fetchedAt: injuryReport.fetchedAt, source: injuryReport.source },
+              splits: { team1: splits1, team2: splits2 },
+              back_to_back: { team1: b2b1, team2: b2b2 },
+              pace: { team1: pace1, team2: pace2 },
+              factorBreakdown: mlbResult.factorBreakdown,
+              writeup: mlbResult.writeup,
+              pitchers: mlbResult.pitchers,
+              predicted_total: mlbResult.predicted_total ?? null,
+              predicted_margin: mlbResult.predicted_margin ?? null,
+              odds: withoutUnvalidatedEv(odds),
+              decision,
+              score_kind: "heuristic_score",
+              calibration_status: "pending_queue_validation",
+              probability_supported: false,
+              ...analysis,
+            });
+          };
+          const runVerifiedTotalFallback = async () => {
+            if (bet_type !== "total") return null;
+            try {
+              return await buildVerifiedMlbTotalFallback({
+                team1,
+                team2,
+                venue,
+                totalLine: parsedTotalLine,
+                direction: over_under,
+              });
+            } catch (error) {
+              console.warn("[moneyline-api][mlb-total] direct verified fallback unavailable", error instanceof Error ? error.message : "unknown error");
+              return null;
+            }
+          };
+          const runVerifiedTeamMarket = async () => {
+            if (bet_type !== "moneyline" && bet_type !== "spread") return null;
+            try {
+              return await buildVerifiedMlbTeamMarketFallback({
+                market: bet_type,
+                team1,
+                team2,
+                venue,
+                spreadLine: bet_type === "spread" ? Number(spread_line) : null,
+              });
+            } catch (error) {
+              console.warn("[moneyline-api][mlb-team-market] direct verified model unavailable", error instanceof Error ? error.message : "unknown error");
+              return null;
+            }
+          };
+          const directTeamMarket = await runVerifiedTeamMarket();
+          if (directTeamMarket) return respondWithMlbModel(directTeamMarket);
+          if (bet_type === "total") {
+            const directTotal = await runVerifiedTotalFallback();
+            if (directTotal) return respondWithMlbModel(directTotal);
+          }
           try {
             const mlbBetType = bet_type === "spread" ? "runline" : bet_type;
             if (bet_type === "total") {
@@ -1805,14 +2115,18 @@ Deno.serve(async (req) => {
               console.warn(
                 `[moneyline-api][mlb-total] model unavailable status=${mlbResp.status} event=${venue?.gameId ?? "unmatched"} side=${over_under} line=${parsedTotalLine}`,
               );
+              const fallback = await runVerifiedTotalFallback();
+              if (fallback) return respondWithMlbModel(fallback);
               return json({
                 error: modelError?.error || "Insufficient MLB totals data for this matchup right now.",
-              });
+              }, 422);
             }
           } catch (e: any) {
             console.error("MLB model delegation failed, falling back to generic:", e.message);
             if (bet_type === "total") {
-              return json({ error: "Insufficient MLB totals data for this matchup right now." });
+              const fallback = await runVerifiedTotalFallback();
+              if (fallback) return respondWithMlbModel(fallback);
+              return json({ error: "Insufficient MLB totals data for this matchup right now." }, 422);
             }
           }
         } else if (bet_type === "total") {

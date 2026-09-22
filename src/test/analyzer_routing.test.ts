@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   analyzerConfidenceRaw,
+  analyzerEndpointForCandidate,
   buildAnalyzerRequest,
+  propAnalyzerForSport,
   selectAnalyzerPoolDiversifiedByBetType,
   teamMarketExclusivityKey,
 } from "../../supabase/functions/_shared/analyzer_routing";
 
 describe("analyzer market routing", () => {
-  it("routes WNBA player props through the multi-sport player analyzer", () => {
+  it("routes WNBA player props at the dedicated WNBA prop model", () => {
     const route = buildAnalyzerRequest({
       sport: "wnba",
       bet_type: "prop",
@@ -22,7 +24,7 @@ describe("analyzer market routing", () => {
       odds: -115,
     });
 
-    expect(route.endpoint).toBe("nba-api/analyze");
+    expect(route.endpoint).toBe("wnba-prop-model");
     expect(route.payload).toMatchObject({
       player: "A'ja Wilson",
       sport: "wnba",
@@ -105,24 +107,62 @@ describe("analyzer market routing", () => {
     })).toBe(61);
   });
 
-  it("preserves the existing UFC analyzer payload while team markets change", () => {
+  // UFC's whole slate is fight-winner markets. Routing those at
+  // `ufc-api/analyze` (which takes a single `{ fighter }`) meant the call
+  // could only ever 400, so no UFC pick was ever analyzer-finalized and every
+  // one was dropped by the insert gate. Fight winners belong at
+  // `ufc-api/matchup`, which scores the pair.
+  it("routes UFC fight winners at the matchup analyzer with both fighters", () => {
     const route = buildAnalyzerRequest({
       sport: "ufc",
       bet_type: "moneyline",
       player_name: "Fighter A vs Fighter B",
       team: "Fighter A",
       opponent: "Fighter B",
+      home_team: "Fighter B",
+      away_team: "Fighter A",
       prop_type: "moneyline",
       line: 0,
       direction: "win",
+      odds: -150,
+    });
+
+    expect(route.endpoint).toBe("ufc-api/matchup");
+    expect(route.payload).toMatchObject({
+      fighter1: "Fighter A",
+      fighter2: "Fighter B",
+      sport: "ufc",
+      bet_type: "moneyline",
+      team: "Fighter A",
+    });
+  });
+
+  it("preserves the legacy UFC prop payload contract", () => {
+    const route = buildAnalyzerRequest({
+      sport: "ufc",
+      bet_type: "prop",
+      player_name: "Fighter A",
+      team: "Fighter A",
+      opponent: "Fighter B",
+      prop_type: "significant_strikes",
+      line: 95.5,
+      direction: "over",
     });
 
     expect(route.endpoint).toBe("ufc-api/analyze");
     expect(route.payload).toMatchObject({
-      player: "Fighter A vs Fighter B",
+      player: "Fighter A",
       bet_type: "player_prop",
       sport: "ufc",
     });
+  });
+
+  it("keeps UFC endpoint selection split by market", () => {
+    expect(analyzerEndpointForCandidate("ufc", "moneyline")).toBe("ufc-api/matchup");
+    expect(analyzerEndpointForCandidate("ufc", "prop")).toBe("ufc-api/analyze");
+    // Other sports' team markets are untouched by the UFC fix.
+    expect(analyzerEndpointForCandidate("mlb", "moneyline")).toBe("moneyline-api/analyze");
+    expect(analyzerEndpointForCandidate("nba", "prop")).toBe("nba-api/analyze");
   });
 });
 
@@ -230,5 +270,55 @@ describe("team-market exclusivity", () => {
       direction: "over",
       line: 1.5,
     })).toBeNull();
+  });
+});
+
+describe("per-sport prop analyzer split", () => {
+  // MLB and WNBA props were moved out of the 4,800-line nba-api handler into
+  // their own functions. NBA and NHL have not moved, and routing them at an
+  // endpoint that does not exist would fail every analysis for those sports.
+  it("sends MLB and WNBA props to their own functions", () => {
+    expect(analyzerEndpointForCandidate("mlb", "prop")).toBe("mlb-prop-model");
+    expect(analyzerEndpointForCandidate("wnba", "prop")).toBe("wnba-prop-model");
+  });
+
+  it("leaves NBA and NHL props on nba-api", () => {
+    expect(analyzerEndpointForCandidate("nba", "prop")).toBe("nba-api/analyze");
+    expect(analyzerEndpointForCandidate("nhl", "prop")).toBe("nba-api/analyze");
+  });
+
+  it("keeps team markets on the game-line analyzer for every sport", () => {
+    for (const sport of ["mlb", "wnba", "nba", "nhl"]) {
+      for (const market of ["moneyline", "spread", "total"]) {
+        expect(analyzerEndpointForCandidate(sport, market)).toBe("moneyline-api/analyze");
+      }
+    }
+  });
+
+  it("reports which sports have a dedicated prop analyzer", () => {
+    expect(propAnalyzerForSport("MLB")).toBe("mlb-prop-model");
+    expect(propAnalyzerForSport("wnba")).toBe("wnba-prop-model");
+    expect(propAnalyzerForSport("nba")).toBeNull();
+    expect(propAnalyzerForSport("")).toBeNull();
+  });
+
+  it("keeps the payload contract identical across the split", () => {
+    const candidate = {
+      sport: "mlb", bet_type: "prop", player_name: "Steven Kwan",
+      team: "Cleveland Guardians", opponent: "Chicago White Sox",
+      home_team: "Cleveland Guardians", away_team: "Chicago White Sox",
+      prop_type: "hits", line: 0.5, direction: "over", odds: -140,
+    };
+    const route = buildAnalyzerRequest(candidate);
+    expect(route.endpoint).toBe("mlb-prop-model");
+    expect(route.payload).toMatchObject({
+      player: "Steven Kwan",
+      sport: "mlb",
+      bet_type: "player_prop",
+      prop_type: "hits",
+      line: 0.5,
+      over_under: "over",
+      american_odds: -140,
+    });
   });
 });

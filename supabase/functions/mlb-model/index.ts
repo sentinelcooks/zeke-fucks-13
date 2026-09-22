@@ -2,6 +2,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { callAI, AIProviderError, ANTI_GENERIC_INSTRUCTION } from "../_shared/ai-provider.ts";
 import { requirePremiumAccess } from "../_shared/premium-access.ts";
 import { fetchMlbGameIntelligence, type MlbGameIntelligence } from "../_shared/mlb_data.ts";
+import {
+  buildMlbTotalProjection,
+  describeMlbTotalProjection,
+  normalizeMlbScoreboardDate,
+  scoreMlbTotalSide,
+} from "../_shared/mlb_total_projection.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -48,14 +54,22 @@ const ESPN_MLB = "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb";
 const ESPN_CORE = "https://sports.core.api.espn.com/v2/sports/baseball/leagues/mlb";
 
 async function fetchJSON(url: string) {
-  const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
-  if (!r.ok) throw new Error(`ESPN ${r.status}: ${url}`);
-  return r.json();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+  try {
+    const response = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" }, signal: controller.signal });
+    if (!response.ok) throw new Error(`ESPN ${response.status}: ${url}`);
+    return response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // ── Data Fetching ──
-async function getScoreboard() {
-  const data = await fetchJSON(`${ESPN_MLB}/scoreboard`);
+async function getScoreboard(gameDate?: string | null) {
+  const scoreboardDate = normalizeMlbScoreboardDate(gameDate);
+  const query = scoreboardDate ? `?dates=${scoreboardDate}` : "";
+  const data = await fetchJSON(`${ESPN_MLB}/scoreboard${query}`);
   return data.events || [];
 }
 
@@ -70,12 +84,15 @@ async function getTeamSchedule(teamId: string): Promise<any[]> {
 import { fetchTeamInjuries } from "../_shared/injuries.ts";
 
 async function getTeamInjuries(teamId: string): Promise<any[]> {
-  const list = await fetchTeamInjuries("mlb", { id: teamId });
-  // Add isStarter flag for mlb-model's injury impact heuristics
-  return list.map((i) => ({
-    ...i,
-    isStarter: ["SP", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"].includes(i.position || ""),
-  }));
+  try {
+    const list = await withDeadline(fetchTeamInjuries("mlb", { id: teamId }), 5_000);
+    return list.map((injury) => ({
+      ...injury,
+      isStarter: ["SP", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"].includes(injury.position || ""),
+    }));
+  } catch {
+    return [];
+  }
 }
 
 // ── Odds API Integration ──
@@ -349,9 +366,25 @@ function formatFactorLabel(factor: string): string {
 }
 
 // ── AI Writeup ──
+function withDeadline<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("MLB narrative generation timed out")), timeoutMs);
+    operation.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 async function generateWriteup(prediction: any, betType: string): Promise<string> {
   try {
-    const topFactors = prediction.factorBreakdown
+    const topFactors = [...prediction.factorBreakdown]
       .sort((a: any, b: any) => b.weight - a.weight)
       .slice(0, 5)
       .map((f: any) => `${f.label}: T1=${f.team1Score} T2=${f.team2Score} (weight ${f.weight}%)`)
@@ -359,14 +392,14 @@ async function generateWriteup(prediction: any, betType: string): Promise<string
 
     const prompt = `You are a concise MLB analyst. Given this ${betType} analysis with a non-probabilistic heuristic score of ${prediction.confidence}/100 (${prediction.verdict}), top factors: ${topFactors}. Injuries: ${(prediction.warnings || []).join("; ") || "None"}. Write exactly 2-3 data-driven sentences. Do not call the score a probability, win chance, or calibrated confidence.`;
 
-    const result = await callAI({
+    const result = await withDeadline(callAI({
       fnName: "mlb-model",
       messages: [
         { role: "system", content: `You are an expert MLB betting analyst. Be concise, data-driven, and confident. ${ANTI_GENERIC_INSTRUCTION}` },
         { role: "user", content: prompt },
       ],
       maxTokens: 200,
-    });
+    }), 8_000);
 
     const raw = result.output as string;
     const clean = raw.replace(/\*\*/g, "").replace(/^#+\s*/gm, "").replace(/\n{2,}/g, " ").trim();
@@ -376,7 +409,12 @@ async function generateWriteup(prediction: any, betType: string): Promise<string
     return lastDot > 80 ? cut.slice(0, lastDot + 1) : cut + "…";
   } catch (e) {
     if (!(e instanceof AIProviderError)) console.error("mlb-model writeup error:", e);
-    return "Analysis currently unavailable";
+    const factors = [...(prediction.factorBreakdown || [])]
+      .sort((first: any, second: any) => Number(second.weight || 0) - Number(first.weight || 0))
+      .slice(0, 3)
+      .map((factor: any) => `${factor.label}: T1=${factor.team1Score}, T2=${factor.team2Score}`)
+      .join("; ");
+    return `The ${betType} heuristic score is ${prediction.confidence}/100 from verified matchup factors: ${factors || "factor coverage was limited"}. The narrative provider did not respond in time, so no calibrated probability or betting recommendation is asserted.`;
   }
 }
 
@@ -464,7 +502,7 @@ Deno.serve(async (req) => {
     // ─── POST /analyze — Full 20-factor analysis ───
     if (path === "analyze" && req.method === "POST") {
       const body = await req.json();
-      const { game_id, bet_type = "moneyline", team1_id, team2_id, over_under, player_name, prop_type, line, team1_is_home } = body;
+      const { game_id, game_date, bet_type = "moneyline", team1_id, team2_id, over_under, player_name, prop_type, line, team1_is_home } = body;
       
       if (!team1_id || !team2_id) return json({ error: "team1_id and team2_id are required" }, 400);
       if (!["moneyline", "runline", "total", "player_prop"].includes(bet_type)) {
@@ -489,7 +527,12 @@ Deno.serve(async (req) => {
           .eq("prediction_date", new Date().toISOString().split("T")[0])
           .maybeSingle();
         
-        if (cached && !player_name) {
+        const cachedBinding = cached?.prediction?.request_binding;
+        const requestMatchesCache =
+          cachedBinding?.team1_id === String(team1_id) &&
+          cachedBinding?.team2_id === String(team2_id) &&
+          cachedBinding?.team1_is_home === (typeof team1_is_home === "boolean" ? team1_is_home : null);
+        if (cached && !player_name && requestMatchesCache) {
           return json(cached.prediction);
         }
       }
@@ -502,12 +545,16 @@ Deno.serve(async (req) => {
         getTeamInjuries(team2_id),
       ]);
       
-      const events = await getScoreboard();
+      const events = await getScoreboard(game_date);
       let eventData: any = game_id ? events.find((event: any) => String(event.id) === String(game_id)) : null;
       if (!eventData) {
+        const requestedStart = typeof game_date === "string" ? Date.parse(game_date) : Number.NaN;
         eventData = events.find((event: any) => {
           const ids = (event?.competitions?.[0]?.competitors || []).map((entry: any) => String(entry?.team?.id || entry?.id));
-          return ids.includes(String(team1_id)) && ids.includes(String(team2_id));
+          const eventStart = Date.parse(event?.date || "");
+          const startMatches = !Number.isFinite(requestedStart) ||
+            (Number.isFinite(eventStart) && Math.abs(eventStart - requestedStart) <= 90 * 60 * 1000);
+          return ids.includes(String(team1_id)) && ids.includes(String(team2_id)) && startMatches;
         });
       }
       if (!eventData) return json({ error: "Verified MLB game context is unavailable for this matchup." }, 422);
@@ -527,6 +574,7 @@ Deno.serve(async (req) => {
       try {
         verified = await fetchMlbGameIntelligence({
           gameDate: eventData.date,
+          gameStartTime: eventData.date,
           homeAbbr: homeComp?.team?.abbreviation,
           awayAbbr: awayComp?.team?.abbreviation,
           includePitchTypes: false,
@@ -665,36 +713,27 @@ Deno.serve(async (req) => {
 
       let predicted_total: number | null = null;
       const projectionInputs: string[] = [];
+      const projectionMissingInputs: string[] = [];
       if (bet_type === "total") {
-        if (team1Official.runsPerGame === null || team2Official.runsPerGame === null) {
+        const totalProjection = buildMlbTotalProjection({
+          homeRunsPerGame: verified.teamStats.home.runsPerGame,
+          awayRunsPerGame: verified.teamStats.away.runsPerGame,
+          homeStarterEra: homePitcher.season.era,
+          awayStarterEra: awayPitcher.season.era,
+          homeBullpenEra: verified.teamStats.home.bullpenEra,
+          awayBullpenEra: verified.teamStats.away.bullpenEra,
+          parkFactor,
+          temperatureF: temp,
+          windMph: windSpeed,
+          windDirection: windDir,
+          roofClosed,
+        });
+        predicted_total = totalProjection.predictedTotal;
+        projectionInputs.push(...totalProjection.projectionInputs);
+        projectionMissingInputs.push(...totalProjection.missingInputs);
+        if (predicted_total === null) {
           return json({ error: "Verified current-season runs-per-game data is required for an MLB total." }, 422);
         }
-        let projectedRuns = team1Official.runsPerGame + team2Official.runsPerGame;
-        projectionInputs.push("official_current_season_team_runs_per_game");
-        projectedRuns += ((homePitcher.season.era - 4.20) + (awayPitcher.season.era - 4.20)) * 0.35;
-        projectionInputs.push("official_probable_starter_season_era");
-        const bullpenEras = [verified.teamStats.home.bullpenEra, verified.teamStats.away.bullpenEra]
-          .filter((value): value is number => value !== null);
-        if (bullpenEras.length === 2) {
-          projectedRuns += ((bullpenEras[0] - 4.00) + (bullpenEras[1] - 4.00)) * 0.15;
-          projectionInputs.push("official_relief_pitching_era");
-        }
-        if (parkFactor !== null) {
-          projectedRuns *= parkFactor;
-          projectionInputs.push("current_season_park_factor");
-        }
-        if (!roofClosed && temp !== null) {
-          projectedRuns *= temp > 75 ? 1.03 : temp < 55 ? 0.97 : 1;
-          projectionInputs.push("official_game_weather_temperature");
-        }
-        if (!roofClosed && windSpeed !== null && windDir) {
-          const direction = windDir.toLowerCase();
-          projectedRuns *= direction.includes("out")
-            ? 1 + windSpeed * 0.008
-            : direction.includes("in") ? 1 - windSpeed * 0.005 : 1;
-          projectionInputs.push("official_game_weather_wind");
-        }
-        predicted_total = Math.round(projectedRuns * 10) / 10;
       }
       
       // Apply injury adjustments
@@ -707,9 +746,12 @@ Deno.serve(async (req) => {
       let finalConfidence = result.confidence;
       let finalVerdict = result.verdict;
       if (bet_type === "total" && predicted_total != null && totalLine != null) {
+        finalConfidence = scoreMlbTotalSide({
+          predictedTotal: predicted_total,
+          totalLine,
+          side: totalSide,
+        }) ?? 50;
         const diff = predicted_total - totalLine;
-        const overHeuristicScore = Math.max(10, Math.min(90, Math.round(50 + diff * 8)));
-        finalConfidence = totalSide === "over" ? overHeuristicScore : 100 - overHeuristicScore;
         if (Math.abs(diff) <= 0.3) finalVerdict = "PASS";
         else if (finalConfidence >= 72) finalVerdict = `STRONG ${String(totalSide).toUpperCase()}`;
         else if (finalConfidence >= 58) finalVerdict = `LEAN ${String(totalSide).toUpperCase()}`;
@@ -720,11 +762,23 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Generate AI writeup
-      const writeup = await generateWriteup({ ...result, confidence: finalConfidence, verdict: finalVerdict, warnings: [...warn1, ...warn2] }, bet_type);
+      const writeup = bet_type === "total"
+        ? describeMlbTotalProjection({
+            predictedTotal,
+            totalLine,
+            side: totalSide,
+            projectionInputs,
+            missingInputs: projectionMissingInputs,
+          })
+        : await generateWriteup({ ...result, confidence: finalConfidence, verdict: finalVerdict, warnings: [...warn1, ...warn2] }, bet_type);
       
       const prediction = {
         bet_type,
+        request_binding: {
+          team1_id: String(team1_id),
+          team2_id: String(team2_id),
+          team1_is_home: team1IsHome,
+        },
         confidence: finalConfidence,
         score_kind: "heuristic_score",
         probability_supported: false,
@@ -749,6 +803,7 @@ Deno.serve(async (req) => {
           momentum: { team1: last5_1, team2: last5_2 },
           splits: { team1: splits1, team2: splits2 },
           projectionInputs,
+          projectionMissingInputs,
           missing: verified.missing,
           source: verified.source,
           fetchedAt: verified.fetchedAt,

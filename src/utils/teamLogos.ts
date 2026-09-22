@@ -160,9 +160,20 @@ const NFL_TEAMS: Record<string, string> = {
   "Washington Commanders": "wsh",
 };
 
+/** All 32 NFL teams as { name, abbr } (ESPN logo abbreviations). */
+export function listNflTeams(): Array<{ name: string; abbr: string }> {
+  return Object.entries(NFL_TEAMS).map(([name, abbr]) => ({ name, abbr }));
+}
+
 export type TeamLogoSport = "nba" | "wnba" | "mlb" | "nhl" | "nfl";
 
-export function getTeamLogoUrl(teamName: string, sport: TeamLogoSport): string {
+/**
+ * @param size Rendered pixel size requested from ESPN's image combiner.
+ *   Defaults to 40 to preserve every existing call site. Pass a larger value
+ *   where the logo is a focal element (e.g. the analysis scan screen) —
+ *   requesting 40px and upscaling in CSS looks visibly soft.
+ */
+export function getTeamLogoUrl(teamName: string, sport: TeamLogoSport, size = 40): string {
   const map = sport === "nba"
     ? NBA_TEAMS
     : sport === "wnba"
@@ -176,5 +187,18 @@ export function getTeamLogoUrl(teamName: string, sport: TeamLogoSport): string {
   if (!abbr) return "";
 
   const sportPath = sport;
-  return `https://a.espncdn.com/combiner/i?img=/i/teamlogos/${sportPath}/500/${abbr}.png&h=40&w=40`;
+  const px = Number.isFinite(size) && size > 0 ? Math.round(size) : 40;
+  return `https://a.espncdn.com/combiner/i?img=/i/teamlogos/${sportPath}/500/${abbr}.png&h=${px}&w=${px}`;
+}
+
+/** Maps the loose sport strings the odds feed uses onto a logo sport key. */
+export function resolveLogoSport(raw: string | null | undefined): TeamLogoSport | null {
+  const value = String(raw ?? "").toLowerCase();
+  if (!value) return null;
+  if (value.includes("wnba")) return "wnba";
+  if (value.includes("nba") || value.includes("basketball")) return "nba";
+  if (value.includes("mlb") || value.includes("baseball")) return "mlb";
+  if (value.includes("nhl") || value.includes("hockey")) return "nhl";
+  if (value.includes("nfl") || value.includes("football")) return "nfl";
+  return null;
 }

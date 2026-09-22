@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 import { useNavigate } from "react-router-dom";
 import { isPicksHistoryPick, isActiveTodayPick } from "@/lib/pickHistoryFilters";
-import { todayInTZ, getGameDate } from "@/lib/gameDate";
+import { currentSlateDate, getGameDate } from "@/lib/gameDate";
 import { formatPropType } from "@/lib/formatPickLabel";
 import { pickMatchesCategory } from "@/lib/pickCategoryFilters";
 import { normalizeConfidencePercent, normalizeVerdict } from "@/lib/matchupGrade";
@@ -194,7 +194,7 @@ const FreePicksPage = () => {
   useEffect(() => {
     const fetchPicks = async () => {
       setLoading(true);
-      const todayET = todayInTZ();
+      const todayET = currentSlateDate();
       const yesterdayPickDate = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 
       // Filter by actual game_date (America/New_York) so night-before scans
@@ -310,7 +310,7 @@ const FreePicksPage = () => {
     sortMode === "high" ? scoreOf(b) - scoreOf(a) : scoreOf(a) - scoreOf(b)
   );
 
-  const isStale = pickDate && pickDate !== todayInTZ();
+  const isStale = pickDate && pickDate !== currentSlateDate();
   const formattedDate = pickDate ? new Date(pickDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
 
   const totalCount = visiblePicks.length + club100Picks.length;

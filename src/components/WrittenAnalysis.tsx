@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FileText, Brain, TrendingUp, Swords, BarChart3, AlertTriangle, Loader2, ChevronDown, ChevronUp, CheckCircle, XCircle, MinusCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
+import { withClientPlatform } from "@/lib/edgeFunctionPath";
 import { formatPropType } from "@/lib/formatPickLabel";
 import { normalizeConfidencePercent, normalizeVerdict } from "@/lib/matchupGrade";
 
@@ -15,6 +16,19 @@ export interface Decision {
   recommended_units: 0 | 0.5 | 1 | 2 | 3;
   verdict_text: string;
   grade_explanation?: string;
+}
+
+export function isDirectionalHeuristicLean(input: {
+  probabilitySupported?: boolean;
+  scoreKind?: string;
+  decision?: Decision | null;
+}): boolean {
+  if (input.probabilitySupported === true && input.scoreKind === "calibrated_probability") return false;
+
+  const decision = input.decision;
+  if (!decision?.winning_side || !decision.winning_team_name) return false;
+
+  return /\b(?:LEAN|STRONG)\b/i.test(decision.verdict_text || "");
 }
 
 interface WrittenAnalysisProps {
@@ -39,7 +53,21 @@ interface WrittenAnalysisProps {
   sport?: string;
   withoutTeammatesData?: any;
   paceContext?: any;
-  factorBreakdown?: Array<{ name: string; team1Score?: number; team2Score?: number; weight?: number }>;
+  factorBreakdown?: Array<{
+    name: string;
+    team1Score?: number;
+    team2Score?: number;
+    weight?: number;
+    detail?: string;
+  }>;
+  // Model-vs-market numbers, so an uncalibrated analysis can state the gap that
+  // actually produced its lean instead of alluding to it.
+  projection?: number | null;
+  lineValue?: number | null;
+  unit?: string;
+  factorCount?: number;
+  coverage?: number | null;
+  missingInputs?: string[];
   // Single source of truth from backend (moneyline-api). When present, overrides local recompute.
   decision?: Decision | null;
   // Names of the two teams — used for the validation guardrail
@@ -116,6 +144,180 @@ function normalizeAnalysisSections(sections: AnalysisSection[]): AnalysisSection
   return sections.map(normalizeAnalysisSection);
 }
 
+/**
+ * One decimal, always — matching ModelSignalCard's gauge and ModelStatTiles so
+ * the written analysis quotes the same numbers the tiles above it show. Dropping
+ * the trailing zero here printed "a 7 line" under a tile reading "7.0".
+ */
+function round1(value: number): string {
+  return value.toFixed(1);
+}
+
+/**
+ * Factors that carry weight AND state a direction, heaviest first.
+ *
+ * A factor sitting at exactly 50 is dead even: it counts in the model's maths
+ * but says nothing about which side is favoured. Renormalising a group onto one
+ * survivor can push such a factor to the top by weight, and leading a written
+ * analysis with "0 vs 0" reads as broken — so they are excluded from the
+ * explanation even though they remain in the score.
+ */
+function directionalFactors(
+  breakdown: WrittenAnalysisProps["factorBreakdown"],
+): NonNullable<WrittenAnalysisProps["factorBreakdown"]> {
+  return [...(breakdown || [])]
+    .filter((factor) =>
+      Boolean(factor?.name) &&
+      Number(factor.weight ?? 0) > 0 &&
+      Number(factor.team1Score ?? 50) !== 50)
+    .sort((first, second) => Number(second.weight ?? 0) - Number(first.weight ?? 0));
+}
+
+/**
+ * The written analysis for a market with no validated calibration.
+ *
+ * This used to return five fixed paragraphs of disclaimer that named no team,
+ * factor or number — while the caller was handing it 23 weighted factors, a
+ * projection and a coverage figure that it threw away. A card that shows a
+ * confident "62" and a LEAN badge but refuses to explain either invites the one
+ * reading that is actually wrong: that 62 is a win percentage worth a unit or
+ * two. So every section here has to be traceable to a value the caller passed.
+ *
+ * Clauses whose data is missing are omitted rather than filled with a generic
+ * sentence — "no blank or generic analysis outputs" is a project non-negotiable,
+ * and a shorter honest analysis beats a padded one.
+ *
+ * What it must never do is convert the score into a probability, an edge, an EV
+ * or a stake. Without graded out-of-sample results the score has no known hit
+ * rate, so any such number would be invented.
+ */
+export function buildUncalibratedSections(
+  data: WrittenAnalysisProps,
+  lineProp: string,
+): AnalysisSection[] {
+  const {
+    confidence,
+    playerOrTeam,
+    factorBreakdown,
+    // Game analysis sends detail strings as `factors`; the player-prop pages
+    // send theirs as `reasoning`. Either is a valid explanation source.
+    factors = [],
+    reasoning = [],
+    projection,
+    lineValue,
+    unit,
+    factorCount,
+    coverage,
+    missingInputs = [],
+    seasonHitRate,
+    last10,
+    last5,
+    h2hAvg,
+  } = data;
+
+  const subject = [playerOrTeam, lineProp].filter(Boolean).join(" ").trim() || "This market";
+  const ranked = directionalFactors(factorBreakdown);
+  const count = factorCount ?? (factorBreakdown?.length || 0);
+  const coveragePct = typeof coverage === "number" && Number.isFinite(coverage)
+    ? Math.round(coverage * 100)
+    : null;
+
+  const sections: AnalysisSection[] = [];
+
+  // 1. What the number is. This leads because it is the sentence that stops the
+  //    score being read as a win percentage.
+  const scoreParts = [
+    `${confidence}/100 is a directional model score`,
+    count > 0
+      ? `built from ${count} weighted factor${count === 1 ? "" : "s"}${coveragePct !== null ? ` at ${coveragePct}% input coverage` : ""}`
+      : null,
+  ].filter(Boolean).join(", ");
+  sections.push({
+    title: "What This Score Means",
+    content: `${scoreParts}. It ranks how strongly the model leans, not how often the bet wins — ${confidence}/100 is not a ${confidence}% win probability, and the two are not interchangeable.`,
+  });
+
+  // 2. Why it leans. Prefer the model's own factor breakdown; fall back to any
+  //    reasoning strings the caller supplied (the player-prop pages send these).
+  const topFactors = ranked.slice(0, 3);
+  if (topFactors.length > 0) {
+    // A factor's `detail` carries the actual numbers ("bullpen ERA 3.12 vs
+    // 4.40"); the name alone just labels the category. Prefer the detail.
+    // Details usually arrive as full sentences ending in a period; keeping it
+    // before the "; " separator rendered "…against over 7.0.; Verified data…".
+    const named = topFactors
+      .map((factor) => {
+        const detail = factor.detail?.trim().replace(/\.+$/, "");
+        return detail ? `${factor.name} — ${detail}` : factor.name;
+      })
+      .filter(Boolean);
+    const remaining = ranked.length - topFactors.length;
+    sections.push({
+      title: "What Drove It",
+      content: `Heaviest inputs behind this lean: ${named.join("; ")}.` +
+        (remaining > 0
+          ? ` ${remaining} further factor${remaining === 1 ? "" : "s"} contributed at lower weight.`
+          : ""),
+    });
+  } else {
+    const written = (reasoning.length > 0 ? reasoning : factors)
+      .filter((entry) => typeof entry === "string" && entry.trim().length > 0);
+    if (written.length > 0) {
+      sections.push({
+        title: "What Drove It",
+        content: written.slice(0, 3).join(" "),
+      });
+    }
+  }
+
+  // 3. The actual gap. For a game market this IS the reason it leans, so state
+  //    both numbers and the signed difference rather than alluding to them.
+  const proj = typeof projection === "number" && Number.isFinite(projection) ? projection : null;
+  const ln = typeof lineValue === "number" && Number.isFinite(lineValue) ? lineValue : null;
+  if (proj !== null && ln !== null) {
+    const gap = proj - ln;
+    const unitLabel = unit ? ` ${unit}` : "";
+    sections.push({
+      title: "Projection vs Line",
+      content: `The model projects ${round1(proj)}${unitLabel} against a posted line of ${round1(ln)}${unitLabel} — a gap of ${gap > 0 ? "+" : ""}${round1(gap)}${unitLabel} toward the ${gap > 0 ? "Over" : "Under"}. That gap is what produced the lean. Without calibration Sentinel will not price it as an edge or an EV number.`,
+    });
+  } else {
+    const trend = [
+      seasonHitRate?.rate != null ? `season ${Math.round(seasonHitRate.rate)}%` : null,
+      last10?.rate != null ? `last 10 ${Math.round(last10.rate)}%` : null,
+      last5?.rate != null ? `last 5 ${Math.round(last5.rate)}%` : null,
+      typeof h2hAvg === "number" && Number.isFinite(h2hAvg) ? `H2H average ${round1(h2hAvg)}` : null,
+    ].filter(Boolean);
+    if (trend.length > 0) {
+      sections.push({
+        title: "Supporting Rates",
+        content: `Historical rates behind this line: ${trend.join(", ")}. These are raw historical frequencies, not a calibrated forecast.`,
+      });
+    }
+  }
+
+  // 4. What the model could not see.
+  if (missingInputs.length > 0) {
+    sections.push({
+      title: "Data Limits",
+      content: `${missingInputs.length} input${missingInputs.length === 1 ? " was" : "s were"} unavailable and excluded rather than assumed neutral: ${missingInputs.slice(0, 6).join(", ")}. Verify lineups, injuries and market movement before acting on this.`,
+    });
+  } else if (coveragePct !== null) {
+    sections.push({
+      title: "Data Limits",
+      content: `The model had ${coveragePct}% of its weighting budget covered for this market. Treat this as directional research and verify lineups, injuries and market movement before acting on it.`,
+    });
+  }
+
+  // 5. Why there is no number to bet. The concrete reason, not "unsupported".
+  sections.push({
+    title: "Risk",
+    content: `This market has no graded out-of-sample history yet, so Sentinel cannot convert ${confidence}/100 into a win probability — and without a win probability there is no honest way to compute EV or a stake. Edge, EV and sizing stay hidden until enough settled results exist to validate the score against real outcomes.`,
+  });
+
+  return sections;
+}
+
 function generateFallbackSections(data: WrittenAnalysisProps): AnalysisSection[] {
   const { verdict, confidence, playerOrTeam, line, propDisplay, overUnder, reasoning = [], factors = [] } = data;
   const ev = (data as any).ev;
@@ -127,28 +329,7 @@ function generateFallbackSections(data: WrittenAnalysisProps): AnalysisSection[]
   const probabilitySupported = data.probabilitySupported === true &&
     data.scoreKind === "calibrated_probability";
   if (!probabilitySupported) {
-    return [
-      {
-        title: "Model Score",
-        content: `${playerOrTeam} ${lineProp} received a ${confidence}/100 heuristic model score. This is not a validated win probability.`,
-      },
-      {
-        title: "Calibration Status",
-        content: "This market does not yet have sufficient chronological out-of-sample evidence to support probability or hit-rate claims.",
-      },
-      {
-        title: "Market Comparison",
-        content: "The sportsbook price is shown for context only. Sentinel will not call the difference an edge or calculate EV until calibration is validated.",
-      },
-      {
-        title: "Data Limits",
-        content: "Treat this analysis as directional research and verify lineups, injuries, role, and market movement before making any decision.",
-      },
-      {
-        title: "Risk",
-        content: "No unit sizing is recommended because the model score is not a supported probability.",
-      },
-    ];
+    return buildUncalibratedSections(data, lineProp);
   }
   const evStr = typeof ev === "number" && ev !== 0 ? ` · +${ev.toFixed(1)}% EV` : "";
   const edgeStr = typeof edge === "number" && edge !== 0 ? ` · ${edge > 0 ? "+" : ""}${edge.toFixed(1)}% edge` : "";
@@ -265,10 +446,33 @@ function generateOverallSummary(props: WrittenAnalysisProps): { rating: "take" |
   const probabilitySupported = props.probabilitySupported === true &&
     props.scoreKind === "calibrated_probability";
   if (!probabilitySupported) {
+    // Name the driver in the headline. "Not a validated win probability" alone
+    // told the user what the number isn't and never what it is, which is how a
+    // 62 got read as 62% and worth a stake.
+    const proj = typeof props.projection === "number" && Number.isFinite(props.projection)
+      ? props.projection
+      : null;
+    const ln = typeof props.lineValue === "number" && Number.isFinite(props.lineValue)
+      ? props.lineValue
+      : null;
+    const gapClause = proj !== null && ln !== null
+      ? ` The model projects ${round1(proj)} against a ${round1(ln)} line, a ${proj - ln > 0 ? "+" : ""}${round1(proj - ln)} gap.`
+      : "";
+    const topFactor = directionalFactors(props.factorBreakdown)[0]?.name;
+    const factorClause = topFactor ? ` Heaviest input: ${topFactor}.` : "";
+
+    if (isDirectionalHeuristicLean(props)) {
+      return {
+        rating: "lean",
+        unitSize: null,
+        summary: `${pickLabel} is Sentinel's directional model lean at ${confidence}/100 — a ranking score, not a ${confidence}% win probability.${gapClause}${factorClause} No graded history for this market yet, so edge, EV and sizing stay withheld.`,
+      };
+    }
+
     return {
       rating: "fade",
       unitSize: null,
-      summary: `${pickLabel} has a ${confidence}/100 heuristic model score, not a validated win probability. No edge, EV, or unit-sizing claim is supported yet.`,
+      summary: `${pickLabel} scores ${confidence}/100 — a directional ranking score, not a ${confidence}% win probability.${gapClause}${factorClause} No graded history for this market yet, so edge, EV and sizing stay withheld.`,
     };
   }
 
@@ -431,7 +635,8 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
     }
     return rawSummary;
   })();
-  const isNoBet = overallSummary.unitSize === null;
+  const isDirectionalResearch = isDirectionalHeuristicLean(resolvedProps);
+  const isNoBet = overallSummary.rating === "fade";
   const [sections, setSections] = useState<AnalysisSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(true);
@@ -481,7 +686,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
           if (!cancelled) setSections(generateFallbackSections(resolvedProps));
           return;
         }
-        const { data, error } = await supabase.functions.invoke("ai-analysis", {
+        const { data, error } = await supabase.functions.invoke(withClientPlatform("ai-analysis"), {
           headers: await premiumRequestHeaders(),
           body: {
             type: props.type,
@@ -680,12 +885,14 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
                       <span className={`text-[12px] font-extrabold uppercase tracking-wider ${
                         isNoBet ? "text-nba-red" : overallSummary.rating === "take" ? "text-nba-green" : overallSummary.rating === "lean" ? "text-nba-blue" : "text-nba-red"
                       }`}>
-                        {isNoBet
+                        {isDirectionalResearch
+                          ? "✦ Model Lean — Research Only"
+                          : isNoBet
                           ? "❌ No Bet Recommended"
                           : overallSummary.rating === "take" ? "✅ Take This Pick" : overallSummary.rating === "lean" ? "🤔 Lean Play" : "❌ Fade This Pick"}
                       </span>
                       <span className="block text-[9px] text-muted-foreground/65 font-bold uppercase tracking-wider mt-0.5">
-                        Overall Verdict — All Factors Combined
+                        {isDirectionalResearch ? "Directional Signal — Calibration Pending" : "Overall Verdict — All Factors Combined"}
                       </span>
                     </div>
                   </div>

@@ -49,7 +49,16 @@ serve(async (req) => {
     }
 
     // Generate with AI
-    const sportLabel = sportName === "nba" ? "NBA basketball" : sportName === "mlb" ? "MLB baseball" : sportName === "nhl" ? "NHL hockey" : "UFC MMA";
+    const SPORT_LABELS: Record<string, string> = {
+      nba: "NBA basketball",
+      wnba: "WNBA basketball",
+      mlb: "MLB baseball",
+      nhl: "NHL hockey",
+      nfl: "NFL football",
+      ufc: "UFC MMA",
+    };
+    // Unknown sports must not be explained as another sport.
+    const sportLabel = SPORT_LABELS[sportName] ?? `${String(sportName).toUpperCase()} sports`;
 
     const levelPrompts: Record<string, string> = {
       beginner:

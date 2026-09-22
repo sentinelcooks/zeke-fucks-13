@@ -27,7 +27,20 @@ const SPORT_KEYS: Record<string, string> = {
   nba: "basketball_nba",
   wnba: "basketball_wnba",
   mlb: "baseball_mlb",
+  nfl: "americanfootball_nfl",
 };
+
+// NFL player-prop markets snapshotted for the NFL Player Prop Edge engine
+// (opening / current / best / closing prices). Opt-in via { props: true }
+// because per-event prop requests cost one credit per market per event.
+const NFL_PROP_SNAPSHOT_MARKETS = [
+  "player_pass_yds", "player_pass_attempts", "player_pass_completions", "player_pass_tds",
+  "player_pass_interceptions", "player_rush_yds", "player_rush_attempts", "player_reception_yds",
+  "player_receptions", "player_anytime_td", "player_field_goals", "player_pats", "player_kicking_points",
+];
+const NFL_PROP_SNAPSHOT_BOOKS = ["draftkings", "fanduel", "betmgm", "caesars", "pinnacle"];
+const NFL_PROP_MAX_EVENTS = 16;
+const NFL_PROP_LOOKAHEAD_MS = 7 * 86400e3;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -35,10 +48,12 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const pathSport = url.pathname.split("/").filter(Boolean).pop() || "";
   let bodySport = "";
+  let wantProps = false;
   if (req.method === "POST") {
     try {
       const body = await req.clone().json();
       bodySport = typeof body?.sport === "string" ? body.sport.toLowerCase() : "";
+      wantProps = body?.props === true;
     } catch {
       bodySport = "";
     }
@@ -100,6 +115,69 @@ Deno.serve(async (req) => {
 
   if (!apiKey) apiKey = Deno.env.get("ODDS_API_KEY");
   if (!apiKey) return json({ error: "no_api_key" }, 500);
+
+  // ── NFL player-prop snapshots (separate mode; game markets untouched) ──
+  if (sport === "nfl" && wantProps) {
+    const eventsResp = await fetch(`https://api.the-odds-api.com/v4/sports/${oddsSport}/events?apiKey=${apiKey}`);
+    if (!eventsResp.ok) return json({ error: "odds_api_failed", status: eventsResp.status }, 502);
+    const now = Date.now();
+    const upcoming = ((await eventsResp.json()) as any[])
+      .filter((e) => {
+        const t = new Date(e.commence_time).getTime();
+        return t > now && t - now < NFL_PROP_LOOKAHEAD_MS;
+      })
+      .slice(0, NFL_PROP_MAX_EVENTS);
+    const snapshotAt = new Date().toISOString();
+    const propRows: any[] = [];
+    let remainingP: number | null = null;
+    let usedP: number | null = null;
+    let failedEvents = 0;
+    for (const ev of upcoming) {
+      const r = await fetch(
+        `https://api.the-odds-api.com/v4/sports/${oddsSport}/events/${ev.id}/odds?apiKey=${apiKey}` +
+        `&regions=us&markets=${NFL_PROP_SNAPSHOT_MARKETS.join(",")}&bookmakers=${NFL_PROP_SNAPSHOT_BOOKS.join(",")}&oddsFormat=american`,
+      );
+      remainingP = parseInt(r.headers.get("x-requests-remaining") || "0", 10) || remainingP;
+      usedP = parseInt(r.headers.get("x-requests-used") || "0", 10) || usedP;
+      if (!r.ok) { failedEvents++; continue; }
+      const data = await r.json();
+      for (const bm of data.bookmakers || []) {
+        for (const mkt of bm.markets || []) {
+          for (const o of mkt.outcomes || []) {
+            if (!o?.name || !Number.isFinite(Number(o.price))) continue;
+            propRows.push({
+              event_id: String(ev.id), sport, book: bm.key, market: mkt.key,
+              outcome_name: String(o.name), outcome_description: o.description ? String(o.description) : "",
+              price: Number(o.price), line: Number.isFinite(Number(o.point)) ? Number(o.point) : null,
+              commence_time: ev.commence_time ?? null, snapshot_at: snapshotAt,
+            });
+          }
+        }
+      }
+    }
+    for (let i = 0; i < propRows.length; i += 1000) {
+      const { error } = await supabase.from("market_odds_snapshots").upsert(propRows.slice(i, i + 1000), {
+        onConflict: "event_id,book,market,outcome_name,outcome_description,snapshot_at",
+      });
+      if (error) console.error("nfl prop snapshots insert failed:", error.message);
+    }
+    if (keyId && keyId !== "app-config" && remainingP != null) {
+      await keysDb.from("odds_api_keys")
+        .update({ requests_remaining: remainingP, requests_used: usedP, last_used_at: new Date().toISOString() })
+        .eq("id", keyId);
+    }
+    await recordOddsApiUsage(keysDb, {
+      endpoint: `/v4/sports/${oddsSport}/events/{id}/odds`,
+      sport,
+      markets: NFL_PROP_SNAPSHOT_MARKETS,
+      regions: ["us"],
+      booksCount: NFL_PROP_SNAPSHOT_BOOKS.length,
+      requestsRemaining: remainingP,
+      requestsUsed: usedP,
+      keyId,
+    });
+    return json({ ok: failedEvents === 0, sport, mode: "props", events: upcoming.length, failed_events: failedEvents, snapshots_written: propRows.length, requests_remaining: remainingP });
+  }
 
   const markets = ["h2h", "spreads", "totals"];
   const regions = ["us", "us2", "eu"];

@@ -23,6 +23,30 @@ export function todayInTZ(tz: string = APP_TZ): string {
   return ymdFmt(tz).format(new Date());
 }
 
+/**
+ * Hour (ET) at which the daily slate rolls over.
+ *
+ * Midnight was the wrong boundary: West-coast games start as late as ~10 PM ET
+ * and run past midnight, so at 12:00 AM a still-live pick jumped into
+ * Yesterday's Edge and sat there as PENDING. By 4 AM ET no North American game
+ * is in progress. The slate scanners are scheduled for the same hour (see the
+ * `slate_scanners_4am_et` migration) so the new lineup and yesterday's results
+ * appear together.
+ */
+export const SLATE_ROLLOVER_HOUR_ET = 4;
+
+/**
+ * The slate date the app is currently showing: the ET calendar date, except
+ * that from midnight until 4 AM ET it is still the previous day.
+ *
+ * Use this for "today's picks" and derive "yesterday" from it. Keep
+ * `todayInTZ()` for things that genuinely mean the calendar date.
+ */
+export function currentSlateDate(now: Date = new Date(), tz: string = APP_TZ): string {
+  const shifted = new Date(now.getTime() - SLATE_ROLLOVER_HOUR_ET * 60 * 60 * 1000);
+  return ymdFmt(tz).format(shifted);
+}
+
 export function shiftYmd(date: string, days: number): string | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
   if (!match || !Number.isInteger(days)) return null;
@@ -66,10 +90,12 @@ export function getGameDate(p: GameDateLike): string | null {
 export function isTodayGamePick(p: GameDateLike): boolean {
   const gd = getGameDate(p);
   if (!gd) return false;
-  return gd === todayInTZ();
+  return gd === currentSlateDate();
 }
 
-const FINAL_RESULTS = new Set(["hit", "miss", "push", "win", "loss"]);
+// "void" = the pick was withdrawn (e.g. it was published against the wrong
+// side of a market); it is settled, stakes returned, and never re-graded.
+const FINAL_RESULTS = new Set(["hit", "miss", "push", "win", "loss", "void"]);
 export function isResultFinal(r?: string | null): boolean {
   if (!r) return false;
   return FINAL_RESULTS.has(String(r).toLowerCase());

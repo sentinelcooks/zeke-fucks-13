@@ -3,6 +3,9 @@
 // callers must omit or penalize unavailable factors rather than inventing a
 // league-average-looking replacement.
 
+import { normalizeMlbScheduleDate } from "./mlb_total_projection.ts";
+import { mlbScheduleTeamMatchesIdentifier } from "./mlb_schedule_match.ts";
+
 const MLB_API = "https://statsapi.mlb.com/api";
 
 export type MlbRole = "pitching" | "batting" | "unknown";
@@ -794,6 +797,7 @@ function parseWeather(feed: any): MlbWeatherContext | null {
 interface FetchMlbGameOptions {
   gamePk?: number | null;
   gameDate?: string | null;
+  gameStartTime?: string | null;
   homeAbbr?: string | null;
   awayAbbr?: string | null;
   teamAbbr?: string | null;
@@ -817,8 +821,14 @@ function normalizePersonName(value: unknown): string {
     .trim();
 }
 
+function startsAtSameMlbGame(first: unknown, second: unknown) {
+  const firstTime = Date.parse(String(first || ""));
+  const secondTime = Date.parse(String(second || ""));
+  return Number.isFinite(firstTime) && Number.isFinite(secondTime) && Math.abs(firstTime - secondTime) <= 90 * 60 * 1000;
+}
+
 async function resolveGame(options: FetchMlbGameOptions): Promise<{ gamePk: number; scheduleGame: any }> {
-  const date = options.gameDate ? isoDate(options.gameDate) : isoDate(new Date());
+  const date = normalizeMlbScheduleDate(options.gameDate) ?? isoDate(new Date());
   if (options.gamePk) {
     return { gamePk: Number(options.gamePk), scheduleGame: null };
   }
@@ -828,13 +838,37 @@ async function resolveGame(options: FetchMlbGameOptions): Promise<{ gamePk: numb
   const away = normalizeAbbr(options.awayAbbr);
   const team = normalizeAbbr(options.teamAbbr);
   const opponent = normalizeAbbr(options.opponentAbbr);
-  const match = games.find((game: any) => {
-    const h = normalizeAbbr(game?.teams?.home?.team?.abbreviation);
-    const a = normalizeAbbr(game?.teams?.away?.team?.abbreviation);
-    if (home && away) return h === home && a === away;
-    if (team && opponent) return (h === team && a === opponent) || (h === opponent && a === team);
-    return team ? h === team || a === team : false;
+  // Callers identify teams with whatever their feed gave them — a full name
+  // from the odds provider, an ESPN abbreviation, or a StatsAPI one — so the
+  // comparison has to accept all of those rather than the StatsAPI
+  // abbreviation alone.
+  const matches = games.filter((game: any) => {
+    const h = game?.teams?.home?.team;
+    const a = game?.teams?.away?.team;
+    const isHome = (identifier: string) => mlbScheduleTeamMatchesIdentifier(h, identifier);
+    const isAway = (identifier: string) => mlbScheduleTeamMatchesIdentifier(a, identifier);
+    if (home && away) return isHome(home) && isAway(away);
+    if (team && opponent) return (isHome(team) && isAway(opponent)) || (isHome(opponent) && isAway(team));
+    return team ? isHome(team) || isAway(team) : false;
   });
+
+  let match = options.gameStartTime
+    ? matches.find((game: any) => startsAtSameMlbGame(game?.gameDate, options.gameStartTime))
+    : matches[0];
+
+  // With a single scheduled meeting between these teams on this date, that game
+  // IS the game — rejecting it because the odds feed's start time drifted from
+  // MLB's is a false negative that reads to the user as "analysis unavailable".
+  // A doubleheader stays strict: two candidates are genuinely ambiguous, and
+  // only the start time can tell them apart.
+  if (!match && matches.length === 1) {
+    match = matches[0];
+    console.warn(
+      `[mlb_data] start time ${options.gameStartTime} outside the window for the only ` +
+      `${away || team} at ${home || opponent} game on ${date} (scheduled ${match?.gameDate}); using it`,
+    );
+  }
+
   if (!match) throw new Error(`No MLB game matched ${away || team} at ${home || opponent} on ${date}`);
   return { gamePk: Number(match.gamePk), scheduleGame: match };
 }

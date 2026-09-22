@@ -16,6 +16,14 @@ only when all of the following are true:
 User-entered outcomes, missing timestamps, legacy rows without model versions,
 post-start predictions, and silently reconstructed odds are excluded.
 
+### NFL: proven-profitable only (2026-09-22)
+
+The NFL engines (`nfl-game-edge`, `nfl-player-prop-edge`) publish picks only
+for markets / prop types proven profitable: a walk-forward backtest evidence
+gate, or a forward test of graded shadow picks meeting `NFL_PROMOTION_RULE`
+(>= 150 picks, ROI > 0, average CLV > 0). Unproven model output is never
+returned to users. See `docs/claude/nfl-edge-engines.md`.
+
 ## Nightly order
 
 1. `grade-picks` records verified results, profit, and available closing lines.

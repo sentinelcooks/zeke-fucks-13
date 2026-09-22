@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test:live": "vitest run --config vitest.live.config.ts",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",

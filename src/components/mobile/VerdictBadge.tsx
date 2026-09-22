@@ -10,6 +10,16 @@ interface VerdictBadgeProps {
   probabilitySupported?: boolean;
   scoreKind?: string;
   displayMode?: "model_score" | "historical_hit_rate";
+  /**
+   * Season hit rate, shown as a labelled secondary line. It used to be
+   * substituted for the headline on MLB, which made a "70 model score" card
+   * open on an unlabelled "72%" — two different metrics, neither named.
+   */
+  seasonHitRate?: number | null;
+  /** Model score stored on the pick, when this view re-ran the analyzer. */
+  savedConfidence?: number | null;
+  /** Absolute points of drift between the stored and re-run score. */
+  driftFromSaved?: number | null;
 }
 
 function getVerdictTheme(v: string) {
@@ -66,11 +76,29 @@ export function VerdictBadge({
   probabilitySupported = false,
   scoreKind,
   displayMode = "model_score",
+  seasonHitRate = null,
+  savedConfidence = null,
+  driftFromSaved = null,
 }: VerdictBadgeProps) {
   const confPct = Math.round(normalizeConfidencePercent(confidence));
   const canonicalVerdict = normalizeVerdict(verdict, confPct);
   const theme = getVerdictTheme(canonicalVerdict);
   const showHistoricalHitRate = displayMode === "historical_hit_rate";
+  const isProbability = probabilitySupported && scoreKind === "calibrated_probability";
+  const metricLabel = showHistoricalHitRate
+    ? "Season hit rate"
+    : isProbability
+      ? "Validated probability"
+      : "Heuristic model score";
+  const seasonPct = seasonHitRate != null && Number.isFinite(Number(seasonHitRate))
+    ? Math.round(normalizeConfidencePercent(seasonHitRate))
+    : null;
+  // Only worth showing when the re-run actually moved the number.
+  const savedPct = savedConfidence != null && Number.isFinite(Number(savedConfidence))
+    ? Math.round(normalizeConfidencePercent(savedConfidence))
+    : null;
+  const showDrift = savedPct != null && savedPct !== confPct &&
+    (driftFromSaved == null || Math.round(Number(driftFromSaved)) !== 0);
 
   return (
     <motion.div
@@ -90,23 +118,29 @@ export function VerdictBadge({
           transition={{ delay: 0.15, type: "spring", stiffness: 400, damping: 20 }}
           className={`text-5xl font-black ${theme.text} tabular-nums`}
         >
-          {showHistoricalHitRate || (probabilitySupported && scoreKind === "calibrated_probability") ? `${confPct}%` : `${confPct}/100`}
+          {showHistoricalHitRate || isProbability ? `${confPct}%` : `${confPct}/100`}
         </motion.div>
-        {!showHistoricalHitRate && (
-          <>
-            <div className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mt-1">
-              {probabilitySupported && scoreKind === "calibrated_probability"
-                ? "Validated probability"
-                : "Heuristic model score"}
-            </div>
-            <div className={`text-sm font-black tracking-[3px] mt-1 ${theme.text}`}>
-              {canonicalVerdict}
-            </div>
-          </>
-        )}
+        {/* Always name the metric. An unlabelled big number next to a card
+            showing a different one is what made these screens contradict. */}
+        <div className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mt-1">
+          {metricLabel}
+        </div>
+        <div className={`text-sm font-black tracking-[3px] mt-1 ${theme.text}`}>
+          {canonicalVerdict}
+        </div>
         <div className="text-xs text-muted-foreground/60 mt-2.5 font-medium">
           {overUnder.toUpperCase()} {line} {propDisplay}
         </div>
+        {seasonPct !== null && !showHistoricalHitRate && (
+          <div className="text-[10px] text-muted-foreground/55 mt-1.5">
+            Season hit rate {seasonPct}% · a historical frequency, not this score
+          </div>
+        )}
+        {showDrift && (
+          <div className="text-[10px] text-muted-foreground/55 mt-1">
+            Published at {savedPct}/100 · re-run just now scores {confPct}/100
+          </div>
+        )}
       </div>
     </motion.div>
   );

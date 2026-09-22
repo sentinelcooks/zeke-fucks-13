@@ -22,6 +22,7 @@ import {
 import { stripPropCodes } from "./format_labels.ts";
 import { summarizeMarket } from "./odds_intelligence.ts";
 import { normalizeDirection, normalizeNbaPropType } from "./prop_normalization.ts";
+import { analyzerTotalSideMismatch } from "./analyzer_side.ts";
 import {
   canonicalToScoredVerdict,
   normalizeCanonicalVerdict,
@@ -106,11 +107,13 @@ const PREFILTER_MIN_CONF: Record<string, number> = {
 // Sport → analyzer function path. nba-api/analyze is multi-sport: it dispatches
 // This is the default player-prop analyzer. Queue routing overrides it per
 // candidate for moneylines, spreads, and totals via analyzer_routing.ts.
+// Player-prop analyzer per sport. MLB and WNBA have been split out of
+// `nba-api` into their own functions; NBA and NHL still live there.
 const ANALYZER_ENDPOINT: Record<string, string | null> = {
   nba: "nba-api/analyze",
-  wnba: "nba-api/analyze",
+  wnba: "wnba-prop-model",
   ufc: "ufc-api/analyze",
-  mlb: "nba-api/analyze",
+  mlb: "mlb-prop-model",
   nhl: "nba-api/analyze",
 };
 
@@ -1786,7 +1789,267 @@ export interface TransientDeferredEntry {
   retry_after_ms?: number;
 }
 
-export async function validateWithAnalyzer(
+/**
+ * Analyzer pass for UFC fight-winner plays.
+ *
+ * UFC is the one sport whose entire public slate is non-prop: it has no
+ * supported prop markets, so every candidate `evaluateGameLines` produces is a
+ * moneyline. The generic `validateWithAnalyzer` returns non-prop plays
+ * untouched, which left UFC rows with no `confidenceSource` — and the insert
+ * gate below drops anything tiered edge/daily/value that is not
+ * analyzer-sourced. Net effect before this function existed: every UFC pick was
+ * generated, scored, then silently discarded, so UFC never reached the lineup.
+ *
+ * This is kept separate from the prop path deliberately. `ufc-api/matchup`
+ * takes two fighters and answers with a single `ml_pick` for the matchup, which
+ * is a different contract from the per-line prop analyzers — threading it
+ * through the prop function would mean UFC conditionals in code every other
+ * sport depends on.
+ *
+ * Returns null to drop the play, or the play stamped with the
+ * analyzer-finalize.v1 diagnostics contract that `daily_pick_rows.ts` requires.
+ */
+async function validateUfcFightWithAnalyzer(
+  play: ScoredPlay,
+  cache: Map<string, any>,
+  diagnostics: AnalyzerDiagnostics,
+  traceResults: TraceResult[] = [],
+  analyzerErrorCandidates: AnalyzerErrorCandidate[] = [],
+): Promise<ScoredPlay | null> {
+  const { endpoint, payload } = buildAnalyzerRequest({
+    sport: play.sport,
+    bet_type: play.bet_type,
+    player_name: play.player_name,
+    team: play.team,
+    opponent: play.opponent,
+    home_team: play.home_team,
+    away_team: play.away_team,
+    prop_type: play.prop_type,
+    line: play.line,
+    direction: play.direction,
+    odds: play.odds,
+  });
+
+  const fighter1 = String(payload.fighter1 ?? "").trim();
+  const fighter2 = String(payload.fighter2 ?? "").trim();
+
+  if (!endpoint || !fighter1 || !fighter2) {
+    for (const tr of matchingTrace(traceResults, play)) {
+      tr.final_rejection_reason = "ufc_missing_fighters";
+    }
+    return null;
+  }
+
+  // One matchup call serves both fighters' candidates for the same fight.
+  const cacheKey = `ufc|matchup|${fighter1}|${fighter2}`;
+  let analyzed = cache.get(cacheKey);
+
+  if (!analyzed) {
+    diagnostics.calls++;
+    diagnostics.callsAttempted++;
+    for (const tr of matchingTrace(traceResults, play)) {
+      tr.canonical_analyzer_called = true;
+      tr.analyzer_called = true;
+      tr.analyzer_payload = payload;
+    }
+
+    const r = await fnPostWithRetry(endpoint, payload, diagnostics);
+    for (const tr of matchingTrace(traceResults, play)) tr.analyzer_http_status = r.status;
+
+    if (!r.ok || !r.data || r.rateLimited || (r.data as any)?.error) {
+      diagnostics.errors++;
+      diagnostics.callsFailed++;
+      const ftype: AnalyzerFailureType = r.rateLimited
+        ? "rate_limited"
+        : classifyAnalyzerFailure(r.status, r.data, false);
+      diagnostics.failureTypes[ftype]++;
+      if (analyzerErrorCandidates.length < DIAGNOSTIC_SAMPLE_LIMIT) {
+        analyzerErrorCandidates.push({
+          player_name: play.player_name,
+          prop_type: "moneyline",
+          direction: play.direction,
+          line: play.line,
+          payload,
+          status: r.status,
+          error: (r.data as any)?.error ?? r.data ?? "empty_response",
+          errorType: ftype,
+          canonical_missing: true,
+        });
+      }
+      console.error(
+        `[ufc] matchup analyzer error: ${fighter1} vs ${fighter2} ` +
+        `status=${r.status} type=${ftype}`,
+      );
+      // No analyzer confidence means this play cannot be published. Dropping is
+      // correct here: a UFC row with scanner-only confidence would be rejected
+      // by the insert gate anyway, and keeping it alive only inflates counts.
+      for (const tr of matchingTrace(traceResults, play)) {
+        tr.final_rejection_reason = "ufc_analyzer_unavailable";
+      }
+      return null;
+    }
+
+    diagnostics.callsSucceeded++;
+    analyzed = r.data;
+    cache.set(cacheKey, analyzed);
+  }
+
+  const mlPick = (analyzed as any)?.ml_pick ?? null;
+  const pickedFighter = String(mlPick?.pick ?? "").trim();
+  const pickConfidence = String(mlPick?.confidence ?? "").toLowerCase();
+
+  if (!pickedFighter || pickConfidence === "avoid" || pickedFighter === "Toss-up") {
+    // The 24-factor model found no separation. Publishing either side here
+    // would be presenting a coin flip as a lean.
+    for (const tr of matchingTrace(traceResults, play)) {
+      tr.final_rejection_reason = "ufc_no_directional_signal";
+    }
+    return null;
+  }
+
+  // The scanner emits a candidate for each fighter in the fight. Keep only the
+  // one the model actually backs, so the underdog side is never published and
+  // both halves of a fight can't occupy lineup slots.
+  if (normalizeFighterName(pickedFighter) !== normalizeFighterName(play.team ?? "")) {
+    for (const tr of matchingTrace(traceResults, play)) {
+      tr.final_rejection_reason = "ufc_analyzer_backs_opponent";
+    }
+    return null;
+  }
+
+  const conf = normalizeConfidencePercent(mlPick?.probability);
+  if (!conf || conf <= 0) {
+    for (const tr of matchingTrace(traceResults, play)) {
+      tr.final_rejection_reason = "analyzer_missing_confidence";
+    }
+    return null;
+  }
+
+  const modelVersion = String((analyzed as any)?.model_version ?? "").trim() || null;
+  const calibrationState = await getCalibrationState(play.sport, play.bet_type, modelVersion);
+  const evaluationState = await getModelEvaluationState(play.sport, play.bet_type, modelVersion);
+  const rawAnalyzerScore = Math.max(0, Math.min(1, conf / 100));
+  const probabilitySupported = calibrationState.supported;
+  const projected = probabilitySupported
+    ? applyCalibration(rawAnalyzerScore, calibrationState.calibration)
+    : rawAnalyzerScore;
+  const canonicalVerdict = normalizeCanonicalVerdict(undefined, projected);
+
+  if (canonicalVerdict === "PASS") {
+    for (const tr of matchingTrace(traceResults, play)) tr.final_rejection_reason = "pass_verdict";
+    return null;
+  }
+
+  const implied = play.implied_prob;
+  const edge = projected - implied;
+  if (edge <= 0.025) {
+    for (const tr of matchingTrace(traceResults, play)) {
+      tr.final_rejection_reason = "canonical_edge_below_min";
+    }
+    return null;
+  }
+
+  const minConf = ANALYZER_MIN_CONF[play.sport] ?? 0.55;
+  if (projected < minConf) {
+    for (const tr of matchingTrace(traceResults, play)) {
+      tr.final_rejection_reason = "canonical_confidence_below_min";
+    }
+    return null;
+  }
+
+  for (const tr of matchingTrace(traceResults, play)) {
+    tr.analyzer_confidence = Math.round(conf);
+    tr.analyzer_verdict = canonicalVerdict;
+    tr.canonical_confidence = Math.round(conf);
+    tr.canonical_verdict = canonicalVerdict;
+  }
+
+  // Reasoning must name the fighters and the model's actual read — a generic
+  // string here would be exactly the blank analysis output the rules prohibit.
+  const reasoning = probabilitySupported
+    ? String(mlPick?.reasoning ?? play.reasoning)
+    : `${pickedFighter} to win vs ${play.opponent || "opponent"}: ` +
+      `${Math.round(rawAnalyzerScore * 100)}/100 heuristic model score from the 24-factor ` +
+      `matchup model. ${String(mlPick?.reasoning ?? "").trim()} ` +
+      `Calibration is not yet supported for UFC, so no probability, edge, or EV claim is made.`;
+
+  const analyzerResponseSnapshot = {
+    confidence: mlPick?.probability ?? null,
+    verdict: mlPick?.confidence ?? null,
+    reasoning: mlPick?.reasoning ?? null,
+    ml_pick: pickedFighter,
+    best_bet: (analyzed as any)?.best_bet?.bet ?? null,
+    combined_finish_rate: (analyzed as any)?.combined_finish_rate ?? null,
+    combined_avg_rounds: (analyzed as any)?.combined_avg_rounds ?? null,
+  };
+
+  const phaseCDiag: Record<string, unknown> = {
+    scannerConfidence: play.confidence,
+    scanner_confidence_raw: play.raw_confidence ?? play.confidence,
+    scanner_confidence_percent: normalizeConfidencePercent(play.confidence),
+    analyzerConfidence: rawAnalyzerScore,
+    analyzer_confidence_percent: Math.round(conf),
+    analyzer_payload: payload,
+    analyzer_response_snapshot: analyzerResponseSnapshot,
+    analyzer_confidence_raw: rawAnalyzerScore,
+    analyzer_verdict_raw: mlPick?.confidence ?? null,
+    analyzer_called_at: new Date().toISOString(),
+    confidenceSource: "analyzer",
+    verdictSource: "analyzer",
+    canonical_confidence: Math.round(projected * 100),
+    canonical_verdict: canonicalVerdict,
+    raw_model_score: rawAnalyzerScore,
+    model_version: modelVersion,
+    score_kind: probabilitySupported ? "calibrated_probability" : "heuristic_score",
+    calibration_status: calibrationState.status,
+    calibration_applied: probabilitySupported,
+    probability_supported: probabilitySupported,
+    calibration_n_samples: calibrationState.nSamples,
+    calibration_train_samples: calibrationState.trainSamples,
+    calibration_test_samples: calibrationState.testSamples,
+    calibration_fitted_at: calibrationState.fittedAt,
+    calibration_model_version: calibrationState.modelVersion,
+    edge_evidence_validated: evaluationState.validated,
+    evaluation_status: evaluationState.status,
+    evaluation_reasons: evaluationState.reasons,
+    evaluation_run_id: evaluationState.runId,
+    evaluation_evaluated_at: evaluationState.evaluatedAt,
+    analyzerAgreement: Math.abs(play.confidence - rawAnalyzerScore) <= 0.10 ? "agree" : "disagree",
+    analyzerDisagreementReason: Math.abs(play.confidence - rawAnalyzerScore) <= 0.10
+      ? null
+      : `delta_${Math.round(Math.abs(play.confidence - rawAnalyzerScore) * 100)}_${
+        rawAnalyzerScore < play.confidence ? "lower" : "higher"
+      }`,
+    publishedSource: "analyzer",
+    sourceContractVersion: "analyzer-finalize.v1",
+  };
+
+  console.log(
+    `[ufc][analyzer-finalize] ${pickedFighter} vs ${play.opponent} ` +
+    `analyzer=${Math.round(conf)} scanner=${normalizeConfidencePercent(play.confidence)} ` +
+    `verdict=${canonicalVerdict} calibrated=${probabilitySupported}`,
+  );
+
+  return {
+    ...play,
+    confidence: projected,
+    projected_prob: projected,
+    edge,
+    ev_pct: calcEv(projected, Number(play.odds)),
+    verdict: canonicalToScoredVerdict(canonicalVerdict),
+    reasoning,
+    model_diagnostics: { ...(play.model_diagnostics ?? {}), ...phaseCDiag },
+  };
+}
+
+/** Fighter names arrive from two sources (Odds API, fighter DB); compare loosely. */
+function normalizeFighterName(value: string): string {
+  return String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+export 
+
+async function validateWithAnalyzer(
   play: ScoredPlay,
   cache: Map<string, any>,
   diagnostics: AnalyzerDiagnostics,
@@ -1794,6 +2057,19 @@ export async function validateWithAnalyzer(
   analyzerErrorCandidates: AnalyzerErrorCandidate[] = [],
   transientDeferred?: TransientDeferredEntry[],
 ): Promise<ScoredPlay | null> {
+  // UFC's slate is entirely fight-winner markets, so it needs the matchup
+  // analyzer rather than the prop path. Every other sport's non-prop plays are
+  // unchanged: they still pass through untouched.
+  if (play.sport === "ufc" && play.bet_type !== "prop") {
+    return await validateUfcFightWithAnalyzer(
+      play,
+      cache,
+      diagnostics,
+      traceResults,
+      analyzerErrorCandidates,
+    );
+  }
+
   if (play.bet_type !== "prop") return play;
 
   // analyzer-finalize.v1: belt-and-suspenders guard — never analyze a prop with
@@ -1968,6 +2244,25 @@ export async function validateWithAnalyzer(
 
   if (analyzed.playerIsOut === true) {
     for (const tr of matchingTrace(traceResults, play)) tr.final_rejection_reason = "player_out";
+    return null;
+  }
+
+  // A game-total analyzer may answer about the OPPOSITE side: the verified MLB
+  // total model flips to the side its projection favours and returns THAT
+  // side's score (`selected_direction` / `decision.winning_side`). The score
+  // would then be attached to the requested direction, publishing an Over read
+  // as an "Under" pick — the card and the report would name different sides.
+  // The opposite side is scanned as its own candidate, so dropping this one
+  // loses no coverage.
+  const sideMismatch = analyzerTotalSideMismatch(play.bet_type, play.direction, analyzed);
+  if (sideMismatch) {
+    for (const tr of matchingTrace(traceResults, play)) {
+      tr.final_rejection_reason = `analyzer_side_mismatch_${sideMismatch.analyzerSide}`;
+    }
+    console.log(
+      `[scanner][side-mismatch] ${play.player_name} ${play.prop_type} ${play.line}: asked ${sideMismatch.requestedSide}, ` +
+      `model answered ${sideMismatch.analyzerSide} — candidate dropped so the score is never labelled with the wrong side.`,
+    );
     return null;
   }
 
@@ -3106,7 +3401,30 @@ export async function scanSport(sport: string, options: ScanSportOptions = {}): 
       if (diagnostics.probability_supported !== true) {
         diagnostics.final_edge_eligible = false;
         diagnostics.edgeDowngradeReason = "calibration_not_supported";
-        diagnostics.shadow_edge_candidate = false;
+        // An uncalibrated pick can never be a real Edge, but it can still hold
+        // a fallback slot provided a genuine analyzer read stands behind it.
+        //
+        // This matters for sports with no calibration history at all. UFC is
+        // the live case: calibration needs graded picks, graded picks need
+        // published picks, and zeroing the shadow flag here kept it out of the
+        // only lane it qualifies for — so UFC could never start that history.
+        //
+        // The bar is analyzer evidence, not calibration: confidenceSource must
+        // be "analyzer" with a stored response snapshot. Scanner-only
+        // confidence is still refused. These render as a model score with a
+        // warning, never as a win probability, which is what the fallback lane
+        // in todaysEdgeSelection.ts is for.
+        const analyzerBacked = diagnostics.confidenceSource === "analyzer" &&
+          diagnostics.analyzer_response_snapshot !== null &&
+          typeof diagnostics.analyzer_response_snapshot === "object";
+        diagnostics.shadow_edge_candidate = analyzerBacked;
+        diagnostics.shadow_edge_reason = analyzerBacked ? "calibration_not_supported" : null;
+        diagnostics.shadow_edge_rejection_reason = analyzerBacked
+          ? null
+          : "analyzer_evidence_missing";
+        diagnostics.shadow_edge_warning = analyzerBacked
+          ? "Model score only — not yet calibrated for this sport."
+          : null;
         p.model_diagnostics = diagnostics;
         continue;
       }

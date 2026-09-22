@@ -32,6 +32,8 @@ import { useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png";
 import { EdgeHistoryTab } from "@/components/admin/EdgeHistoryTab";
 import { PicksHistoryTab } from "@/components/admin/PicksHistoryTab";
+import { NflGameEdgeTab } from "@/components/admin/NflGameEdgeTab";
+import { NflPropEdgeTab } from "@/components/admin/NflPropEdgeTab";
 import { resolveDisplayName } from "@/lib/displayName";
 
 interface LicenseKey {
@@ -95,7 +97,7 @@ const AdminPage = () => {
   const authTimeRef = useRef<number>(0);
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<"keys" | "onboarding" | "edge" | "picks">("keys");
+  const [activeTab, setActiveTab] = useState<"keys" | "onboarding" | "edge" | "picks" | "nfl_game" | "nfl_prop">("keys");
 
   // Onboarding state
   const [onboardingResponses, setOnboardingResponses] = useState<OnboardingResponse[]>([]);
@@ -401,7 +403,7 @@ const AdminPage = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 p-1 rounded-xl bg-card/60 border border-border/40 w-fit">
+        <div className="flex flex-wrap gap-1 p-1 rounded-xl bg-card/60 border border-border/40 w-fit max-w-full">
           <button
             onClick={() => setActiveTab("keys")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
@@ -442,7 +444,33 @@ const AdminPage = () => {
           >
             <History className="w-4 h-4" /> Picks History
           </button>
+          <button
+            onClick={() => setActiveTab("nfl_game")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === "nfl_game"
+                ? "bg-primary text-primary-foreground shadow-lg"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <History className="w-4 h-4" /> NFL Game Edge
+          </button>
+          <button
+            onClick={() => setActiveTab("nfl_prop")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === "nfl_prop"
+                ? "bg-primary text-primary-foreground shadow-lg"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <History className="w-4 h-4" /> NFL Prop Edge
+          </button>
         </div>
+
+        {/* ═══ NFL GAME EDGE TAB (ML / spread / total only) ═══ */}
+        {activeTab === "nfl_game" && <NflGameEdgeTab password={password} />}
+
+        {/* ═══ NFL PLAYER PROP EDGE TAB (props only) ═══ */}
+        {activeTab === "nfl_prop" && <NflPropEdgeTab password={password} />}
 
         {/* ═══ EDGE HISTORY TAB ═══ */}
         {activeTab === "edge" && (

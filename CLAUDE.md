@@ -19,6 +19,7 @@ Before touching any backend, database, or AI logic, read the relevant sub-doc:
 | [docs/claude/supabase-edge-function-rules.md](docs/claude/supabase-edge-function-rules.md) | Any Edge Function creation, editing, or deployment |
 | [docs/claude/deployment-safety-rules.md](docs/claude/deployment-safety-rules.md) | Any multi-file change, migration, deploy, or Git push |
 | [docs/claude/codebase-memory-rules.md](docs/claude/codebase-memory-rules.md) | Session hygiene, token efficiency, architecture decisions |
+| [docs/claude/nfl-edge-engines.md](docs/claude/nfl-edge-engines.md) | Any NFL model, data ingest, NFL edge function or NFL admin analytics |
 
 ## Use Plan Mode First For
 
@@ -43,6 +44,7 @@ Before touching any backend, database, or AI logic, read the relevant sub-doc:
 5. **No blank or generic analysis outputs.** Every AI analysis must reference actual player/matchup/stat data passed in.
 6. **Inspect before editing.** Read the current file before writing to it.
 7. **List all files that will change before changing them.**
+8. **NFL is two products.** `calculate_nfl_game_edge()` (ML/spread/total) and `calculate_nfl_player_prop_edge()` (props) never import each other, never share weights, confidence, tables or metrics, and there is no combined `calculate_nfl_edge()`. See `docs/claude/nfl-edge-engines.md`.
 
 ## Key Paths
 

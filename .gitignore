@@ -46,3 +46,5 @@ graphify-out/
 # Scratch / debugging dumps
 temp_*.txt
 temp_*.json
+# NFL nflverse ingest cache (scripts/nfl)
+.cache/

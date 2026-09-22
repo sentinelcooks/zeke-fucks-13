@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getTeamLogoUrl, listNflTeams } from "@/utils/teamLogos";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
-  BarChart3,
   CalendarDays,
   ChevronRight,
   CircleAlert,
   Loader2,
   RefreshCw,
+  Radar,
   Shield,
-  Sparkles,
   Target,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,7 +17,16 @@ import { fetchNbaOdds, fetchUpcomingOddsEvents, LIVE_LINES_UNAVAILABLE_MESSAGE, 
 import { generateDeviceFingerprint } from "@/utils/fingerprint";
 import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 import { formatOdds } from "@/utils/oddsFormat";
-import { getMobilePlatform } from "@/lib/mobileDeviceIdentity";
+import { withClientPlatform } from "@/lib/edgeFunctionPath";
+import { buildGameLineGrid } from "@/lib/gameLineGrid";
+import { GameLineCard, MarketPill } from "@/components/game-lines/GameLineCard";
+import { quoteForModelDecision } from "@/lib/gameAnalysisSelection";
+import { adaptNflGameEdgeResponse, buildNflGameEdgeRequest, type NflGameEdgeResponse } from "@/lib/nflGameEdgeAdapter";
+import {
+  adaptGameModelResponse,
+  buildGameModelRequest,
+  type GameModelResponse,
+} from "@/lib/gameModelAdapter";
 import {
   GameAnalysisExperience,
   type GameAnalysisExperienceState,
@@ -25,10 +34,66 @@ import {
   type GameAnalysisReport,
   type GameAnalysisReportMarket,
   type GameAnalysisReportSelection,
+  type GameAnalysisScanDetails,
 } from "@/components/game-analysis/GameAnalysisExperience";
 import type { GameAnalysisDecision, GameAnalysisResponse } from "@/lib/gameAnalysisPresentation";
 
-type GameLinesSport = "nba" | "wnba" | "mlb" | "nhl" | "ncaab";
+type GameLinesSport = "nba" | "wnba" | "mlb" | "nhl" | "ncaab" | "nfl";
+
+const NFL_FORWARD_NOTE =
+  "NFL markets are in forward testing: the model's read is analysis, not a pick, until that market proves profitable on graded results.";
+
+/**
+ * `nfl-game-edge` answers for moneyline, spread and total in ONE call, but the
+ * Analyze screen asks per market and per side (six requests for a full game).
+ * Without this the same game would be modelled six times — slow and wasteful —
+ * so the in-flight response is shared per event for a short window.
+ */
+const NFL_RESPONSE_TTL_MS = 120_000;
+const nflResponseCache = new Map<string, { at: number; promise: Promise<NflGameEdgeResponse> }>();
+
+function nflGameEdgeResponse(
+  key: string,
+  payload: Record<string, unknown>,
+  headers: Record<string, string>,
+  signal: AbortSignal,
+): Promise<NflGameEdgeResponse> {
+  const cached = nflResponseCache.get(key);
+  if (cached && Date.now() - cached.at < NFL_RESPONSE_TTL_MS) return cached.promise;
+  const promise = supabase.functions
+    .invoke(withClientPlatform("nfl-game-edge"), { body: payload, headers, signal })
+    .then(async ({ data, error }) => {
+      if (data?.error) throw new Error(data.reason ? `${data.error}: ${data.reason}` : data.error);
+      if (error) {
+        const context = (error as { context?: { clone?: () => { json: () => Promise<unknown> } } }).context;
+        const payloadJson = (await context?.clone?.().json().catch(() => null)) as { error?: string; reason?: string } | null;
+        if (payloadJson?.error) throw new Error(payloadJson.reason ? `${payloadJson.error}: ${payloadJson.reason}` : payloadJson.error);
+        throw error;
+      }
+      return data as NflGameEdgeResponse;
+    })
+    .catch((e) => {
+      nflResponseCache.delete(key);
+      throw e;
+    });
+  nflResponseCache.set(key, { at: Date.now(), promise });
+  return promise;
+}
+
+/** moneyline-api's team directory has no NFL; build it from the static NFL list. */
+function nflTeamDirectory(): TeamDirectoryEntry[] {
+  return listNflTeams().map(({ name, abbr }) => {
+    const nickname = name.split(" ").slice(-1)[0];
+    return {
+      id: `nfl-${abbr}`,
+      abbr: abbr.toUpperCase(),
+      name,
+      shortName: nickname,
+      logo: getTeamLogoUrl(name, "nfl", 80),
+      aliases: [nickname, abbr.toUpperCase()],
+    };
+  });
+}
 type MarketKey = "h2h" | "spreads" | "totals";
 type QuoteSide = "home" | "away" | "over" | "under";
 type AnalysisState = "loading" | "complete" | "unavailable" | "error";
@@ -110,6 +175,13 @@ interface GameLinesBrowserProps {
   initialHomeTeam?: string;
   initialAwayTeam?: string;
   autoAnalyze?: boolean;
+  /**
+   * Open straight onto one market instead of running the full-game analysis.
+   * Set when the caller already knows which market the user asked for — a
+   * Today's Edge card for a spread should land on the spread report, not on a
+   * full-game scan that may select a different market.
+   */
+  initialMarket?: MarketKey;
 }
 
 const MARKET_TITLES: Record<MarketKey, string> = {
@@ -139,11 +211,6 @@ function dateLabel(value: string) {
   if (dayDifference === 0) return "Today";
   if (dayDifference === 1) return "Tomorrow";
   return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric" }).format(date);
-}
-
-function gameTimeLabel(value: string) {
-  const date = new Date(value);
-  return `${dateLabel(dateKey(value))} · ${new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(date)}`;
 }
 
 function mergeUpcomingEvents(publishedEvents: OddsEvent[], scheduledEvents: UpcomingOddsEvent[], sport: GameLinesSport): OddsEvent[] {
@@ -268,13 +335,12 @@ function responseMatchesSelectedEvent(response: AnalysisResponse | undefined, ev
   return Number.isFinite(responseTime) && Number.isFinite(selectedTime) && Math.abs(responseTime - selectedTime) <= 90 * 60 * 1_000;
 }
 
-function quoteForDecision(snapshot: MarketSnapshot, decision: AnalysisDecision | null | undefined) {
-  const side = decision?.winning_side === "team1"
-    ? "home"
-    : decision?.winning_side === "team2"
-      ? "away"
-      : decision?.winning_side;
-  return snapshot.quotes.find((quote) => quote.side === side);
+function quoteForDecision(
+  snapshot: MarketSnapshot,
+  decision: AnalysisDecision | null | undefined,
+  teams: EventTeams,
+) {
+  return quoteForModelDecision(snapshot.quotes, decision, teams);
 }
 
 function recommendationFromAnalysis(
@@ -288,7 +354,7 @@ function recommendationFromAnalysis(
   const isCalibrated = response?.probability_supported === true && response?.score_kind === "calibrated_probability";
   const hasEligibleDecision = decision?.conviction_tier && decision.conviction_tier !== "noBet" && Number(decision.recommended_units) > 0;
   const modelProbability = Number(decision?.win_probability);
-  const decisionQuote = quoteForDecision(snapshot, decision);
+  const decisionQuote = quoteForDecision(snapshot, decision, teams);
   if (entry.quote && decisionQuote?.side !== entry.quote.side) return null;
   const quote = entry.quote || decisionQuote;
   const implied = quote ? impliedProbability(quote.price) : null;
@@ -321,7 +387,7 @@ function modelLeanFromAnalysis(
   const response = entry.response;
   const decision = response?.decision;
   const heuristicScore = Number(decision?.win_probability);
-  const decisionQuote = quoteForDecision(snapshot, decision);
+  const decisionQuote = quoteForDecision(snapshot, decision, teams);
 
   if (
     response?.probability_supported === true || response?.score_kind !== "heuristic_score" ||
@@ -351,18 +417,114 @@ async function requestAnalysis(body: Record<string, unknown>) {
     "x-request-nonce": crypto.randomUUID(),
     ...(await premiumRequestHeaders()),
   };
-  const platform = encodeURIComponent(getMobilePlatform());
-  const { data, error } = await supabase.functions.invoke(`moneyline-api/analyze?client_platform=${platform}`, {
-    body: { ...body, __sec: headers },
-    headers,
-  });
-  if (error) throw error;
-  if (data?.error) throw new Error(data.error);
+  // MLB and WNBA now route to their own per-sport model functions. Anything
+  // else (NHL, UFC, NBA) still goes to moneyline-api untouched — the new
+  // endpoints are additive, not a replacement, so an unsupported sport or
+  // market simply falls through to the existing path.
+  const nflRequest = buildNflGameEdgeRequest(body);
+  const modelRequest = nflRequest ? null : buildGameModelRequest(body);
+
+  const controller = new AbortController();
+  let timeout: number | undefined;
+  let response: { data: any; error: any };
+  try {
+    const invocation = nflRequest
+      ? nflGameEdgeResponse(
+          `${nflRequest.options.oddsEventId ?? ""}|${nflRequest.options.homeTeamName}|${nflRequest.options.awayTeamName}`,
+          nflRequest.payload,
+          headers,
+          controller.signal,
+        ).then((data) => ({ data, error: null }))
+      : modelRequest
+      ? supabase.functions.invoke(withClientPlatform(modelRequest.fn), {
+          body: modelRequest.payload,
+          headers,
+          signal: controller.signal,
+        })
+      : supabase.functions.invoke(withClientPlatform("moneyline-api/analyze"), {
+          body: { ...body, __sec: headers },
+          headers,
+          signal: controller.signal,
+        });
+    response = await Promise.race([
+      invocation,
+      new Promise<never>((_resolve, reject) => {
+        timeout = window.setTimeout(() => {
+          controller.abort();
+          reject(new Error("The verified model check timed out. Please try again shortly."));
+        }, 30_000);
+      }),
+    ]);
+  } catch (requestError) {
+    if (controller.signal.aborted) throw new Error("The verified model check timed out. Please try again shortly.");
+    throw requestError;
+  } finally {
+    if (timeout !== undefined) window.clearTimeout(timeout);
+  }
+  const { data, error } = response;
+  if (data?.error) {
+    // The model endpoints return {error, reason}; keep the reason, it is the
+    // part that says WHY (missing starter, unmatched game, and so on).
+    throw new Error(data.reason ? `${data.error}: ${data.reason}` : data.error);
+  }
+  if (error) {
+    const context = (error as { context?: { clone?: () => { json: () => Promise<unknown> } } }).context;
+    const payloadPromise = context?.clone?.().json();
+    const payload = (payloadPromise ? await payloadPromise.catch(() => null) : null) as { error?: unknown; reason?: unknown } | null;
+    if (typeof payload?.error === "string" && payload.error) {
+      throw new Error(typeof payload.reason === "string" && payload.reason ? `${payload.error}: ${payload.reason}` : payload.error);
+    }
+    throw error;
+  }
+
+  if (nflRequest) {
+    return adaptNflGameEdgeResponse(data as NflGameEdgeResponse, nflRequest.options) as AnalysisResponse;
+  }
+  if (modelRequest) {
+    return adaptGameModelResponse(data as GameModelResponse, {
+      side: modelRequest.side,
+      oddsEventId: (body.odds_event_id as string) ?? null,
+    }) as AnalysisResponse;
+  }
   return data as AnalysisResponse;
 }
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+/**
+ * Minimum time the scan screen stays up.
+ *
+ * Analysis now returns in well under a second against a warm model, which made
+ * the scan flash and vanish — the user saw a strobe rather than feedback, and
+ * had no idea what work had been done. Holding it briefly makes the transition
+ * legible and gives the step list time to be read as it completes.
+ *
+ * This never delays a SLOW analysis: it only tops up the difference when the
+ * request finished early.
+ */
+const MIN_SCAN_MS = 4_000;
+
+function holdScanScreen(startedAt: number): Promise<void> {
+  const remaining = MIN_SCAN_MS - (Date.now() - startedAt);
+  return remaining > 0 ? new Promise((resolve) => setTimeout(resolve, remaining)) : Promise.resolve();
+}
+
+function safeModelFailureMessage(entries: AnalysisEntry[]) {
+  const failure = entries.find((entry) => entry.error)?.error || "";
+  const safePrefixes = [
+    "Verified MLB game context",
+    "Both probable starters",
+    "Official MLB",
+    "Verified current-season",
+    "Insufficient data",
+    "Sentinel could not verify",
+    "The verified model check timed out",
+  ];
+  return safePrefixes.some((prefix) => failure.startsWith(prefix))
+    ? failure
+    : "A verified model input is temporarily unavailable for this matchup.";
 }
 
 function reportSelection(
@@ -376,7 +538,7 @@ function reportSelection(
     if (!snapshot) return [];
     return analysis.entries.flatMap((entry) => {
       const response = entry.response;
-      const decisionQuote = quoteForDecision(snapshot, response?.decision);
+      const decisionQuote = quoteForDecision(snapshot, response?.decision, teams);
       const score = Number(response?.decision?.win_probability);
       const matchesRequestedQuote = !entry.quote || decisionQuote?.side === entry.quote.side;
       if (!response || !responseMatchesSelectedEvent(response, event, teams) || !matchesRequestedQuote || !Number.isFinite(score)) return [];
@@ -434,6 +596,8 @@ function buildGameAnalysisReport(
     selected,
     message: selected
       ? "Sentinel completed the verified model review for this matchup."
+      : scope !== "full" && reportMarkets[0]?.message
+        ? reportMarkets[0].message
       : failures === markets.length
         ? "Sentinel could not retrieve a verified model response. Please try again shortly."
         : completed > 0
@@ -532,43 +696,152 @@ function AnalysisCallout({ analysis, full = false }: { analysis?: MarketAnalysis
   );
 }
 
-function MarketCard({ snapshot, title, analysis, onAnalyze, marketFeedUnavailable = false }: { snapshot: MarketSnapshot | null; title: string; analysis?: MarketAnalysis; onAnalyze: () => void; marketFeedUnavailable?: boolean }) {
+const QUOTE_ORDER: Record<QuoteSide, number> = { away: 0, home: 1, over: 0, under: 1 };
+
+/** What a score is counted in, and what the handicap market is called, per sport. */
+function sportMarketWords(sport: GameLinesSport) {
+  if (sport === "mlb") return { scoring: "runs", handicap: "Run line" };
+  if (sport === "nhl") return { scoring: "goals", handicap: "Puck line" };
+  return { scoring: "points", handicap: "Point spread" };
+}
+
+/** One-line description under each market title, built from the live line. */
+function marketSubtitle(key: MarketKey, snapshot: MarketSnapshot | null, sport: GameLinesSport): string {
+  const words = sportMarketWords(sport);
+  if (key === "h2h") return "Winner of the game";
+  const point = snapshot?.quotes.find((quote) => quote.point != null)?.point;
+  if (key === "spreads") return point != null ? `${words.handicap} ±${Math.abs(point)}` : words.handicap;
+  return point != null ? `Combined ${words.scoring} · ${point}` : `Combined ${words.scoring}`;
+}
+
+/** A total's number is a threshold (no sign); a spread's is a handicap (signed). */
+function quotePointSuffix(quote: PublishedQuote): string {
+  if (quote.point == null) return "";
+  if (quote.side === "over" || quote.side === "under") return ` ${quote.point}`;
+  return ` ${quote.point > 0 ? "+" : ""}${quote.point}`;
+}
+
+function MarketCard({
+  marketKey,
+  snapshot,
+  title,
+  sport,
+  teams,
+  analysis,
+  onAnalyze,
+  marketFeedUnavailable = false,
+}: {
+  marketKey: MarketKey;
+  snapshot: MarketSnapshot | null;
+  title: string;
+  sport: GameLinesSport;
+  teams: EventTeams | null;
+  analysis?: MarketAnalysis;
+  onAnalyze: () => void;
+  marketFeedUnavailable?: boolean;
+}) {
+  const loading = analysis?.state === "loading";
+
+  // The shortest price is the book's favourite; its bar is drawn in the accent
+  // so the market reads at a glance instead of as two bare numbers.
+  const shortest = snapshot?.quotes.reduce<number | null>(
+    (min, quote) => (min === null || quote.price < min ? quote.price : min),
+    null,
+  ) ?? null;
+
+  const labelFor = (quote: PublishedQuote) => {
+    const team = quote.side === "home" ? teams?.home : quote.side === "away" ? teams?.away : undefined;
+    return `${team?.shortName || quote.label}${quotePointSuffix(quote)}`;
+  };
+
+  const badgeFor = (quote: PublishedQuote) => {
+    if (quote.side === "over" || quote.side === "under") {
+      return (
+        <span
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-[11px] font-black text-foreground/80"
+          style={{ background: "hsla(228,24%,18%,0.9)", border: "1px solid hsla(228,30%,28%,0.6)" }}
+        >
+          {quote.side === "over" ? "O" : "U"}
+        </span>
+      );
+    }
+    const team = quote.side === "home" ? teams?.home : teams?.away;
+    return <TeamBadge team={team} fallbackName={quote.label} size="small" />;
+  };
+
   return (
-    <div className="vision-card p-4" style={{ borderColor: "hsla(228,30%,22%,0.35)" }}>
+    <div className="vision-card p-4" style={{ borderColor: "hsla(228,30%,22%,0.4)" }}>
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-bold text-foreground">{title}</h3>
-          {snapshot && <p className="mt-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-muted-foreground/55">Live at {snapshot.sportsbook}</p>}
+        <div className="min-w-0">
+          <h3 className="text-[15px] font-extrabold text-foreground">{title}</h3>
+          <p className="mt-0.5 text-[10px] text-muted-foreground/60">{marketSubtitle(marketKey, snapshot, sport)}</p>
         </div>
-        {snapshot && <span className="rounded-md px-2 py-1 text-[8px] font-bold uppercase tracking-wider text-nba-green" style={{ background: "hsla(158,64%,52%,0.1)" }}>Live</span>}
+        <button
+          type="button"
+          onClick={onAnalyze}
+          disabled={!snapshot || loading}
+          className="flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-bold text-nba-green transition-colors hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
+          style={{ background: "hsla(228,24%,14%,0.9)", border: "1px solid hsla(228,30%,24%,0.6)" }}
+          aria-label={`Analyze ${title}`}
+        >
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
+          Analyze
+        </button>
       </div>
 
       {snapshot ? (
-        <div className="mt-3 divide-y divide-border/30">
-          {snapshot.quotes.map((quote) => (
-            <div key={quote.side} className="flex items-center justify-between gap-3 py-2.5">
-              <span className="min-w-0 truncate text-[12px] font-semibold text-foreground/90">{quote.label}{quote.point != null ? ` ${quote.point > 0 ? "+" : ""}${quote.point}` : ""}</span>
-              <span className="shrink-0 font-mono text-sm font-black text-foreground">{formatOdds(quote.price)}</span>
-            </div>
-          ))}
+        <div className={`mt-3 grid gap-2 ${snapshot.quotes.length === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+          {/* Away (and Over) first, so each tile sits on the same side as its
+              team in the matchup card above; the book lists home first. */}
+          {[...snapshot.quotes].sort((a, b) => QUOTE_ORDER[a.side] - QUOTE_ORDER[b.side]).map((quote) => {
+            const implied = impliedProbability(quote.price);
+            const isFavourite = shortest !== null && quote.price === shortest;
+            return (
+              <div
+                key={quote.side}
+                className="rounded-xl p-3"
+                style={{ background: "hsla(228,24%,10%,0.85)", border: "1px solid hsla(228,30%,22%,0.45)" }}
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  {badgeFor(quote)}
+                  <span className="truncate text-[12px] font-bold text-foreground/90">{labelFor(quote)}</span>
+                </div>
+                <p className={`mt-2.5 text-[24px] font-black leading-none tabular-nums ${quote.price > 0 ? "text-nba-green" : "text-foreground"}`}>
+                  {formatOdds(quote.price)}
+                </p>
+                {implied !== null && (
+                  <div className="mt-2.5">
+                    {/* Implied probability from the price itself — the book's
+                        number, shown so the model's score has something to be
+                        compared against. */}
+                    <div className="h-1.5 overflow-hidden rounded-full" style={{ background: "hsla(228,24%,22%,0.8)" }}>
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${Math.min(100, implied)}%`,
+                          background: isFavourite ? "hsl(250 76% 68%)" : "hsla(228,20%,55%,0.55)",
+                        }}
+                      />
+                    </div>
+                    <p className="mt-1.5 text-[10px] text-muted-foreground/55">{implied}% implied</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       ) : (
-        <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground/60">
+        <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground/60">
           {marketFeedUnavailable
             ? "Live odds could not be verified right now. Refresh to try again before running analysis."
             : `No verified live ${title.toLowerCase()} is currently returned for this matchup.`}
         </p>
       )}
-
-      <button type="button" onClick={onAnalyze} disabled={!snapshot || analysis?.state === "loading"} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-[11px] font-bold transition-all disabled:cursor-not-allowed disabled:opacity-45" style={{ background: "hsla(250,76%,62%,0.13)", border: "1px solid hsla(250,76%,62%,0.25)", color: "hsl(250 90% 78%)" }}>
-        {analysis?.state === "loading" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-        Analyze {title}
-      </button>
     </div>
   );
 }
 
-export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, autoAnalyze = false }: GameLinesBrowserProps) {
+export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, autoAnalyze = false, initialMarket }: GameLinesBrowserProps) {
   const [events, setEvents] = useState<OddsEvent[]>([]);
   const [teamDirectory, setTeamDirectory] = useState<TeamDirectoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -579,6 +852,11 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
   const [marketAnalyses, setMarketAnalyses] = useState<Record<string, Partial<Record<MarketKey, MarketAnalysis>>>>({});
   const [fullAnalyses, setFullAnalyses] = useState<Record<string, FullGameAnalysis>>({});
   const [analysisExperience, setAnalysisExperience] = useState<GameAnalysisExperienceState | null>(null);
+  // Identifies the analysis run on screen. Cancelling bumps it, so a run that
+  // finishes afterwards sees it is stale and never reopens the report. The
+  // requests themselves still complete — they are independent server calls —
+  // but their result is discarded instead of taking over the screen.
+  const analysisRunRef = useRef(0);
   const initialNavigationHandled = useRef("");
 
   const loadEvents = useCallback(async () => {
@@ -589,7 +867,9 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
       const [oddsResult, scheduleResult, teamsResult] = await Promise.allSettled([
         fetchNbaOdds(undefined, "h2h,spreads,totals", sport),
         fetchUpcomingOddsEvents(sport),
-        supabase.functions.invoke("moneyline-api/teams", { body: { sport } }),
+        sport === "nfl"
+          ? Promise.resolve({ data: nflTeamDirectory() })
+          : supabase.functions.invoke("moneyline-api/teams", { body: { sport } }),
       ]);
       const rawPublishedEvents = oddsResult.status === "fulfilled"
         ? (Array.isArray(oddsResult.value) ? oddsResult.value : oddsResult.value?.events)
@@ -626,6 +906,13 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
     void loadEvents();
   }, [loadEvents]);
 
+  // A refresh replaces `events`; re-point the open game at its fresh copy so
+  // the detail view shows the new odds instead of the ones it opened with.
+  // If the game has dropped out of the feed (it started), keep what we have.
+  useEffect(() => {
+    setSelectedEvent((current) => (current ? events.find((event) => event.id === current.id) ?? current : current));
+  }, [events]);
+
   const groupedEvents = useMemo(() => {
     const groups = new Map<string, OddsEvent[]>();
     for (const event of events) {
@@ -656,52 +943,58 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
       : { selected: teams.away, opponent: teams.home };
 
     if (snapshot.key === "h2h") {
-      return snapshot.quotes.map((quote) => {
-        const selection = teamsForSide(quote.side);
-        return {
-          label: quote.label,
-          quote,
-          body: {
-            ...eventContext,
-            team1: selection.selected.name,
-            team2: selection.opponent.name,
-            bet_type: "moneyline",
-            american_odds: quote.price,
-          },
-        };
-      });
+      return snapshot.quotes
+        .filter((quote) => quote.side === "home" || quote.side === "away")
+        .map((quote) => {
+          const selection = teamsForSide(quote.side);
+          return {
+            label: quote.label,
+            quote,
+            body: {
+              ...eventContext,
+              team1: selection.selected.name,
+              team2: selection.opponent.name,
+              bet_type: "moneyline",
+              american_odds: quote.price,
+            },
+          };
+        });
     }
     if (snapshot.key === "spreads") {
-      return snapshot.quotes.map((quote) => {
-        const selection = teamsForSide(quote.side);
-        return {
-          label: `${quote.label} ${quote.point! > 0 ? "+" : ""}${quote.point}`,
-          quote,
-          body: {
-            ...eventContext,
-            team1: selection.selected.name,
-            team2: selection.opponent.name,
-            bet_type: "spread",
-            spread_team: selection.selected.name,
-            spread_line: quote.point,
-            american_odds: quote.price,
-          },
-        };
-      });
+      return snapshot.quotes
+        .filter((quote) => quote.side === "home" || quote.side === "away")
+        .map((quote) => {
+          const selection = teamsForSide(quote.side);
+          return {
+            label: `${quote.label} ${quote.point! > 0 ? "+" : ""}${quote.point}`,
+            quote,
+            body: {
+              ...eventContext,
+              team1: selection.selected.name,
+              team2: selection.opponent.name,
+              bet_type: "spread",
+              spread_team: selection.selected.name,
+              spread_line: quote.point,
+              american_odds: quote.price,
+            },
+          };
+        });
     }
-    return snapshot.quotes.map((quote) => ({
-      label: `${quote.label} ${quote.point}`,
-      quote,
-      body: {
-        ...eventContext,
-        team1: teams.home.name,
-        team2: teams.away.name,
-        bet_type: "total",
-        total_line: quote.point,
-        over_under: quote.side,
-        american_odds: quote.price,
-      },
-    }));
+    return snapshot.quotes
+      .filter((quote) => quote.side === "over" || quote.side === "under")
+      .map((quote) => ({
+        label: `${quote.label} ${quote.point}`,
+        quote,
+        body: {
+          ...eventContext,
+          team1: teams.home.name,
+          team2: teams.away.name,
+          bet_type: "total",
+          total_line: quote.point,
+          over_under: quote.side,
+          american_odds: quote.price,
+        },
+      }));
   }, [sport]);
 
   const analyzeMarket = useCallback(async (event: OddsEvent, market: MarketKey): Promise<MarketAnalysis> => {
@@ -719,7 +1012,7 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
     }
 
     setMarketAnalysis(event.id, market, { state: "loading", entries: [], message: "Checking verified matchup data and live odds…" });
-    const entries = await Promise.all(buildRequests(event, teams, snapshot).map(async (request) => {
+    const entries = await Promise.all(buildRequests(event, teams, snapshot).map(async (request): Promise<AnalysisEntry> => {
       try {
         return { label: request.label, quote: request.quote, response: await requestAnalysis(request.body) };
       } catch (requestError: unknown) {
@@ -748,21 +1041,53 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
         : hasUnconfirmedMatchup
           ? "The model response could not confirm this exact scheduled event, so Sentinel will not attach a recommendation."
           : hasRequestFailure
-            ? "Sentinel could not complete every verified market check. No recommendation is shown."
+            ? safeModelFailureMessage(entries)
             : "The model is uncalibrated or did not meet Sentinel's quality gate. Probabilities, edge, and a pick are withheld.",
     };
     setMarketAnalysis(event.id, market, analysis);
     return analysis;
   }, [buildRequests, setMarketAnalysis, teamDirectory]);
 
+  const scanDetailsFor = useCallback((event: OddsEvent): GameAnalysisScanDetails => {
+    const teams = resolveEventTeams(event, teamDirectory);
+    return {
+      awayShortName: teams?.away.shortName || null,
+      homeShortName: teams?.home.shortName || null,
+      awayAbbr: teams?.away.abbr || null,
+      homeAbbr: teams?.home.abbr || null,
+      marketsAvailable: (["h2h", "spreads", "totals"] as MarketKey[]).filter((market) => getMarketSnapshot(event, market)).length,
+      phase: "models",
+    };
+  }, [teamDirectory]);
+
+  /** Marks the model step done on the scan screen, if this run is still the one showing. */
+  const markModelsDone = useCallback((runId: number) => {
+    if (analysisRunRef.current !== runId) return;
+    setAnalysisExperience((current) => current?.stage === "scanning"
+      ? { ...current, details: { ...current.details, phase: "report" } }
+      : current);
+  }, []);
+
+  const closeAnalysis = useCallback(() => {
+    analysisRunRef.current += 1;
+    setAnalysisExperience(null);
+  }, []);
+
   const analyzeFullGame = useCallback(async (event: OddsEvent) => {
+    const runId = ++analysisRunRef.current;
+    const scanStartedAt = Date.now();
     setAnalysisExperience({
       stage: "scanning",
       event: { id: event.id, sportTitle: event.sport_title || "Game lines", commenceTime: event.commence_time, homeTeam: event.home_team, awayTeam: event.away_team },
       scope: "full",
+      details: scanDetailsFor(event),
     });
     setFullAnalyses((current) => ({ ...current, [event.id]: { state: "loading", marketsReviewed: 0, message: "Comparing every published market for this verified matchup…" } }));
-    const analyses = await Promise.all((["h2h", "spreads", "totals"] as MarketKey[]).map((market) => analyzeMarket(event, market)));
+    const analyses = await Promise.all(
+      (["h2h", "spreads", "totals"] as MarketKey[]).map((market) => analyzeMarket(event, market)),
+    );
+    markModelsDone(runId);
+    if (analysisRunRef.current === runId) await holdScanScreen(scanStartedAt);
     const recommendation = analyses
       .map((analysis) => analysis.recommendation)
       .filter((candidate): candidate is Recommendation => candidate !== undefined)
@@ -788,6 +1113,9 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
             : "No market could be safely analyzed for this matchup.",
       },
     }));
+    // The inline game card still gets its result above; only the full-screen
+    // report is suppressed when the user cancelled.
+    if (analysisRunRef.current !== runId) return;
     const marketKeys = ["h2h", "spreads", "totals"] as MarketKey[];
     setAnalysisExperience({
       stage: "report",
@@ -798,30 +1126,42 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
         marketKeys.map((key, index) => ({ key, snapshot: getMarketSnapshot(event, key), analysis: analyses[index] })),
       ),
     });
-  }, [analyzeMarket, teamDirectory]);
+  }, [analyzeMarket, markModelsDone, scanDetailsFor, teamDirectory]);
 
   const analyzeSingleMarket = useCallback(async (event: OddsEvent, market: MarketKey) => {
+    const runId = ++analysisRunRef.current;
+    const scanStartedAt = Date.now();
     setAnalysisExperience({
       stage: "scanning",
       event: { id: event.id, sportTitle: event.sport_title || "Game lines", commenceTime: event.commence_time, homeTeam: event.home_team, awayTeam: event.away_team },
       scope: market,
+      details: scanDetailsFor(event),
     });
     const analysis = await analyzeMarket(event, market);
+    markModelsDone(runId);
+    if (analysisRunRef.current !== runId) return;
+    await holdScanScreen(scanStartedAt);
+    if (analysisRunRef.current !== runId) return;
     setAnalysisExperience({
       stage: "report",
       report: buildGameAnalysisReport(event, market, resolveEventTeams(event, teamDirectory), [{ key: market, snapshot: getMarketSnapshot(event, market), analysis }]),
     });
-  }, [analyzeMarket, teamDirectory]);
+  }, [analyzeMarket, markModelsDone, scanDetailsFor, teamDirectory]);
 
   useEffect(() => {
-    const navigationKey = `${sport}:${initialHomeTeam || ""}:${initialAwayTeam || ""}`;
+    const navigationKey = `${sport}:${initialHomeTeam || ""}:${initialAwayTeam || ""}:${initialMarket || "full"}`;
     if (!initialHomeTeam || !initialAwayTeam || initialNavigationHandled.current === navigationKey || events.length === 0) return;
     const matchingEvent = events.find((event) => normalizeName(event.home_team) === normalizeName(initialHomeTeam) && normalizeName(event.away_team) === normalizeName(initialAwayTeam));
     if (!matchingEvent) return;
     initialNavigationHandled.current = navigationKey;
     setSelectedEvent(matchingEvent);
-    if (autoAnalyze) void analyzeFullGame(matchingEvent);
-  }, [analyzeFullGame, autoAnalyze, events, initialAwayTeam, initialHomeTeam, sport]);
+    if (!autoAnalyze) return;
+    // A caller that named a market wants that market's report. Running the
+    // full-game scan instead can surface a different market entirely, which is
+    // how tapping Details on a spread card produced a moneyline view.
+    if (initialMarket) void analyzeSingleMarket(matchingEvent, initialMarket);
+    else void analyzeFullGame(matchingEvent);
+  }, [analyzeFullGame, analyzeSingleMarket, autoAnalyze, events, initialAwayTeam, initialHomeTeam, initialMarket, sport]);
 
   if (selectedEvent) {
     const teams = resolveEventTeams(selectedEvent, teamDirectory);
@@ -833,40 +1173,109 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
     const marketAnalysesForEvent = marketAnalyses[selectedEvent.id] || {};
     const fullAnalysis = fullAnalyses[selectedEvent.id];
     const availableMarkets = Object.values(snapshots).filter(Boolean).length;
+    const sportsbook = snapshots.h2h?.sportsbook || snapshots.spreads?.sportsbook || snapshots.totals?.sportsbook || null;
+    const kickoff = new Date(selectedEvent.commence_time);
+    const kickoffLabel = `${dateLabel(dateKey(selectedEvent.commence_time))} ${new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(kickoff)}`;
+    const awayName = teams?.away.shortName || selectedEvent.away_team;
+    const homeName = teams?.home.shortName || selectedEvent.home_team;
 
     return (
       <section className="space-y-3">
-        <button type="button" onClick={() => setSelectedEvent(null)} className="flex items-center gap-1.5 px-1 text-[11px] font-bold text-muted-foreground/70 transition-colors hover:text-foreground">
-          <ArrowLeft className="h-3.5 w-3.5" /> All Game Lines
-        </button>
-
-        <div className="vision-card relative overflow-hidden p-4">
-          <div className="absolute -top-10 left-1/2 h-28 w-48 -translate-x-1/2 rounded-full opacity-20 blur-3xl" style={{ background: "hsl(250 76% 62%)" }} />
-          <div className="relative">
-            <div className="flex items-center justify-between gap-3">
-              <span className="rounded-lg px-2 py-1 text-[8px] font-bold uppercase tracking-[0.15em] text-accent" style={{ background: "hsla(250,76%,62%,0.13)", border: "1px solid hsla(250,76%,62%,0.22)" }}>{selectedEvent.sport_title || sport.toUpperCase()}</span>
-              <span className="text-[10px] font-semibold text-muted-foreground/65">{gameTimeLabel(selectedEvent.commence_time)}</span>
-            </div>
-            <div className="mt-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-center">
-              <div className="flex flex-col items-center gap-2"><TeamBadge team={teams?.away} fallbackName={selectedEvent.away_team} size="hero" /><span className="text-[12px] font-bold leading-tight text-foreground">{selectedEvent.away_team}</span><span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/50">Away</span></div>
-              <span className="text-xl font-black text-accent">VS</span>
-              <div className="flex flex-col items-center gap-2"><TeamBadge team={teams?.home} fallbackName={selectedEvent.home_team} size="hero" /><span className="text-[12px] font-bold leading-tight text-foreground">{selectedEvent.home_team}</span><span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/50">Home</span></div>
-            </div>
-            <p className="mt-4 flex items-center justify-center gap-1.5 text-[9px] font-semibold text-muted-foreground/60"><BarChart3 className="h-3.5 w-3.5 text-nba-green" />{availableMarkets} live market{availableMarkets === 1 ? "" : "s"} available</p>
+        <header className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setSelectedEvent(null)}
+            aria-label="Back to all game lines"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-foreground transition-colors hover:bg-white/[0.08]"
+            style={{ background: "hsla(228,24%,14%,0.9)", border: "1px solid hsla(228,30%,24%,0.6)" }}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[17px] font-black uppercase tracking-[0.03em] text-foreground">Game lines</h2>
+            <p className="text-[10px] text-muted-foreground/60">{selectedEvent.sport_title || sport.toUpperCase()} · {kickoffLabel}</p>
           </div>
-        </div>
+          <button
+            type="button"
+            onClick={() => void loadEvents()}
+            disabled={loading}
+            aria-label="Refresh live game lines"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-white/[0.08] hover:text-foreground disabled:opacity-40"
+            style={{ background: "hsla(228,24%,14%,0.9)", border: "1px solid hsla(228,30%,24%,0.6)" }}
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </button>
+        </header>
 
         <div className="vision-card p-4">
-          <div className="flex items-start justify-between gap-4"><div><p className="text-[8px] font-bold uppercase tracking-[0.15em] text-accent/75">Sentinel Full-Game Analysis</p><h2 className="mt-1 text-sm font-bold text-foreground">Compare all live markets</h2><p className="mt-1 text-[10px] leading-relaxed text-muted-foreground/65">Moneyline, spread, and game total are checked independently. A pick appears only when the event, live price, and calibrated model evidence all agree.</p></div><Target className="h-5 w-5 shrink-0 text-accent/70" /></div>
-          <button type="button" onClick={() => void analyzeFullGame(selectedEvent)} disabled={fullAnalysis?.state === "loading" || availableMarkets === 0} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-[11px] font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-45" style={{ background: "linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))", boxShadow: "0 4px 18px -4px hsla(250,76%,62%,0.42)" }}>
-            {fullAnalysis?.state === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Analyze Full Game
-          </button>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <TeamBadge team={teams?.away} fallbackName={selectedEvent.away_team} />
+              <div className="min-w-0 leading-tight">
+                <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-muted-foreground/50">Away</p>
+                <p className="truncate text-[16px] font-extrabold text-foreground">{awayName}</p>
+              </div>
+            </div>
+            <span className="text-[15px] font-black text-nba-green">@</span>
+            <div className="flex min-w-0 items-center justify-end gap-2.5 text-right">
+              <div className="min-w-0 leading-tight">
+                <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-muted-foreground/50">Home</p>
+                <p className="truncate text-[16px] font-extrabold text-foreground">{homeName}</p>
+              </div>
+              <TeamBadge team={teams?.home} fallbackName={selectedEvent.home_team} />
+            </div>
+          </div>
+          <div className="mt-3.5 flex items-center justify-between gap-3 border-t border-white/[0.07] pt-3">
+            <p className="truncate text-[11px] text-muted-foreground/65">
+              {sportsbook ? <>Odds via <span className="font-bold text-foreground/90">{sportsbook}</span></> : "Odds not posted yet"}
+            </p>
+            <MarketPill status={availableMarkets > 0 ? "live" : marketFeedUnavailable ? "unavailable" : "none"} count={availableMarkets} />
+          </div>
+          {!teams && <p className="mt-2 text-[9px] font-semibold text-nba-yellow">Team verification pending</p>}
         </div>
 
-        <MarketCard snapshot={snapshots.h2h} title="Moneyline" analysis={marketAnalysesForEvent.h2h} onAnalyze={() => void analyzeSingleMarket(selectedEvent, "h2h")} marketFeedUnavailable={marketFeedUnavailable} />
-        <MarketCard snapshot={snapshots.spreads} title="Spread" analysis={marketAnalysesForEvent.spreads} onAnalyze={() => void analyzeSingleMarket(selectedEvent, "spreads")} marketFeedUnavailable={marketFeedUnavailable} />
-        <MarketCard snapshot={snapshots.totals} title="Game Total" analysis={marketAnalysesForEvent.totals} onAnalyze={() => void analyzeSingleMarket(selectedEvent, "totals")} marketFeedUnavailable={marketFeedUnavailable} />
-        <GameAnalysisExperience experience={analysisExperience} onClose={() => setAnalysisExperience(null)} />
+        <div
+          className="rounded-[1.25rem] p-4"
+          style={{
+            background: "linear-gradient(150deg, hsla(158,64%,52%,0.09), hsla(228,30%,8%,0.6) 60%)",
+            border: "1px solid hsla(158,64%,52%,0.28)",
+          }}
+        >
+          <div className="flex items-start gap-3">
+            <span
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-nba-green"
+              style={{ background: "hsla(158,64%,52%,0.1)", border: "1px solid hsla(158,64%,52%,0.3)" }}
+            >
+              <Target className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <h3 className="text-[15px] font-extrabold text-foreground">Full-game analysis</h3>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground/70">
+                Checks {availableMarkets > 0 ? `all ${availableMarkets}` : "every"} market{availableMarkets === 1 ? "" : "s"} at once. A pick only shows when the event, live price and model evidence agree.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void analyzeFullGame(selectedEvent)}
+            disabled={fullAnalysis?.state === "loading" || availableMarkets === 0 || !teams}
+            className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-xl bg-nba-green py-3.5 text-[13px] font-bold text-[#06140d] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {fullAnalysis?.state === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radar className="h-4 w-4" />}
+            Analyze full game
+          </button>
+          {sport === "nfl" && <p className="mt-2 text-[10px] leading-relaxed text-nba-yellow/80">{NFL_FORWARD_NOTE}</p>}
+        </div>
+
+        <div className="flex items-center justify-between px-1 pt-2">
+          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-foreground/75">Markets</span>
+          <span className="text-[10px] text-muted-foreground/50">Bar = implied probability</span>
+        </div>
+
+        <MarketCard marketKey="h2h" snapshot={snapshots.h2h} title="Moneyline" sport={sport} teams={teams} analysis={marketAnalysesForEvent.h2h} onAnalyze={() => void analyzeSingleMarket(selectedEvent, "h2h")} marketFeedUnavailable={marketFeedUnavailable} />
+        <MarketCard marketKey="spreads" snapshot={snapshots.spreads} title="Spread" sport={sport} teams={teams} analysis={marketAnalysesForEvent.spreads} onAnalyze={() => void analyzeSingleMarket(selectedEvent, "spreads")} marketFeedUnavailable={marketFeedUnavailable} />
+        <MarketCard marketKey="totals" snapshot={snapshots.totals} title="Game Total" sport={sport} teams={teams} analysis={marketAnalysesForEvent.totals} onAnalyze={() => void analyzeSingleMarket(selectedEvent, "totals")} marketFeedUnavailable={marketFeedUnavailable} />
+        <GameAnalysisExperience experience={analysisExperience} onClose={closeAnalysis} />
       </section>
     );
   }
@@ -875,7 +1284,7 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
     <section className="space-y-4">
       <div className="vision-card relative overflow-hidden p-4">
         <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-15 blur-2xl" style={{ background: "hsl(250 76% 62%)" }} />
-        <div className="relative flex items-start justify-between gap-3"><div><p className="text-[8px] font-bold uppercase tracking-[0.15em] text-accent/75">Live Game Lines</p><h2 className="mt-1 text-base font-extrabold text-foreground">Upcoming {sport.toUpperCase()} matchups</h2><p className="mt-1 text-[10px] leading-relaxed text-muted-foreground/65">Published sportsbook odds only. Open a game to compare markets or run a verified analysis.</p></div><button type="button" onClick={() => void loadEvents()} disabled={loading} className="rounded-lg p-2 text-muted-foreground/65 transition-colors hover:bg-accent/10 hover:text-accent disabled:opacity-40" aria-label="Refresh live game lines"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></button></div>
+        <div className="relative flex items-start justify-between gap-3"><div><p className="text-[8px] font-bold uppercase tracking-[0.15em] text-accent/75">Live Game Lines</p><h2 className="mt-1 text-base font-extrabold text-foreground">Upcoming {sport.toUpperCase()} matchups</h2><p className="mt-1 text-[10px] leading-relaxed text-muted-foreground/65">Published sportsbook odds only. Open a game to compare markets or run a verified analysis.{sport === "nfl" ? ` ${NFL_FORWARD_NOTE}` : ""}</p></div><button type="button" onClick={() => void loadEvents()} disabled={loading} className="rounded-lg p-2 text-muted-foreground/65 transition-colors hover:bg-accent/10 hover:text-accent disabled:opacity-40" aria-label="Refresh live game lines"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></button></div>
       </div>
 
       {loading && <div className="flex flex-col items-center justify-center py-12 text-center"><Loader2 className="h-6 w-6 animate-spin text-accent" /><p className="mt-3 text-xs font-semibold text-muted-foreground">Loading live sportsbook events…</p></div>}
@@ -891,15 +1300,42 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
 
       {!loading && !error && groupedEvents.slice(0, visibleDateCount).map((group) => (
         <div key={group.date} className="space-y-2.5">
-          <div className="flex items-center gap-2 px-1"><CalendarDays className="h-3.5 w-3.5 text-accent/75" /><h3 className="text-[10px] font-bold uppercase tracking-[0.15em] text-foreground/80">{dateLabel(group.date)}</h3><span className="text-[9px] text-muted-foreground/45">{group.games.length} game{group.games.length === 1 ? "" : "s"}</span></div>
+          <div className="px-1 pt-1">
+            <p className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-nba-green">
+              <span className="h-1.5 w-1.5 rounded-full bg-nba-green" style={{ boxShadow: "0 0 6px hsl(158 64% 52%)" }} />
+              {dateLabel(group.date)}
+            </p>
+            <div className="mt-1 flex items-baseline justify-between gap-3">
+              <h3 className="text-[17px] font-extrabold tracking-tight text-foreground">
+                {group.games.length} {sport.toUpperCase()} matchup{group.games.length === 1 ? "" : "s"}
+              </h3>
+              <span className="shrink-0 text-[10px] text-muted-foreground/55">Published sportsbook odds</span>
+            </div>
+          </div>
           {group.games.map((event, index) => {
             const teams = resolveEventTeams(event, teamDirectory);
-            const availableMarketCount = (["h2h", "spreads", "totals"] as MarketKey[]).filter((market) => getMarketSnapshot(event, market)).length;
+            const snapshots = {
+              h2h: getMarketSnapshot(event, "h2h"),
+              spreads: getMarketSnapshot(event, "spreads"),
+              totals: getMarketSnapshot(event, "totals"),
+            };
+            const grid = buildGameLineGrid(snapshots);
+            const kickoff = new Date(event.commence_time);
             return (
-              <motion.article key={event.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.03 }} className="vision-card overflow-hidden">
-                <div className="p-4"><div className="flex items-center justify-between gap-3 text-[8px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/55"><span>{event.sport_title || sport.toUpperCase()}</span><span>{gameTimeLabel(event.commence_time)}</span></div><div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2"><div className="flex min-w-0 items-center gap-2"><TeamBadge team={teams?.away} fallbackName={event.away_team} /><span className="min-w-0 truncate text-[12px] font-bold text-foreground">{event.away_team}</span></div><span className="text-[10px] font-black text-accent/75">VS</span><div className="flex min-w-0 items-center justify-end gap-2 text-right"><span className="min-w-0 truncate text-[12px] font-bold text-foreground">{event.home_team}</span><TeamBadge team={teams?.home} fallbackName={event.home_team} /></div></div><div className="mt-3 flex items-center gap-1.5 text-[9px] text-muted-foreground/60"><BarChart3 className="h-3.5 w-3.5 text-nba-green" />{availableMarketCount > 0 ? `${availableMarketCount} live market${availableMarketCount === 1 ? "" : "s"} available` : marketFeedUnavailable ? "Live odds temporarily unavailable" : "No verified markets currently returned"}{!teams && <span className="ml-auto text-nba-yellow">Team verification pending</span>}</div></div>
-                <div className="grid grid-cols-2 gap-px border-t border-border/30 bg-border/30"><button type="button" onClick={() => setSelectedEvent(event)} className="flex items-center justify-center gap-1.5 bg-card py-3 text-[11px] font-bold text-foreground/85 transition-colors hover:bg-accent/10 hover:text-accent">View Lines <ChevronRight className="h-3.5 w-3.5" /></button><button type="button" onClick={() => { setSelectedEvent(event); void analyzeFullGame(event); }} disabled={!teams || availableMarketCount === 0} className="flex items-center justify-center gap-1.5 bg-card py-3 text-[11px] font-bold text-accent transition-colors hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-40"><Sparkles className="h-3.5 w-3.5" />Analyze</button></div>
-              </motion.article>
+              <GameLineCard
+                key={event.id}
+                index={index}
+                time={new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(kickoff)}
+                dayLabel={dateLabel(dateKey(event.commence_time))}
+                away={{ name: event.away_team, shortName: teams?.away.shortName, badge: <TeamBadge team={teams?.away} fallbackName={event.away_team} /> }}
+                home={{ name: event.home_team, shortName: teams?.home.shortName, badge: <TeamBadge team={teams?.home} fallbackName={event.home_team} /> }}
+                grid={grid}
+                marketStatus={grid.liveMarkets > 0 ? "live" : marketFeedUnavailable ? "unavailable" : "none"}
+                teamsVerified={Boolean(teams)}
+                canAnalyze={Boolean(teams) && grid.liveMarkets > 0}
+                onViewLines={() => setSelectedEvent(event)}
+                onAnalyze={() => { setSelectedEvent(event); void analyzeFullGame(event); }}
+              />
             );
           })}
         </div>

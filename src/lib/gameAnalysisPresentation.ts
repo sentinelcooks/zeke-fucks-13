@@ -9,10 +9,59 @@ export interface GameAnalysisDecision {
   grade_explanation?: string | null;
 }
 
+/** Per-side season stats, for the team comparison card. */
+export interface GameAnalysisTeamStats {
+  runsPerGame?: number | null;
+  ops?: number | null;
+  bullpenEra?: number | null;
+}
+
+/**
+ * Verified game context the model already gathers: park, weather, starters and
+ * lineup confirmation. Every field is optional — the model reports what it
+ * could verify and nothing else, and a section with no data hides rather than
+ * inventing a league average.
+ */
+export interface GameAnalysisContext {
+  parkRunFactor?: number | null;
+  weather?: {
+    temperatureF?: number | null;
+    windMph?: number | null;
+    windDirection?: string | null;
+    condition?: string | null;
+    roofType?: string | null;
+  } | null;
+  homeLineupConfirmed?: boolean | null;
+  awayLineupConfirmed?: boolean | null;
+  homeStarter?: { name?: string | null; era?: number | null } | null;
+  awayStarter?: { name?: string | null; era?: number | null } | null;
+  homeTeamStats?: GameAnalysisTeamStats | null;
+  awayTeamStats?: GameAnalysisTeamStats | null;
+}
+
 export interface GameAnalysisResponse {
   team1?: { name?: string; shortName?: string };
   team2?: { name?: string; shortName?: string };
-  matchup?: { confirmed?: boolean; gameDate?: string | null; oddsEventId?: string | null };
+  matchup?: {
+    confirmed?: boolean;
+    gameDate?: string | null;
+    oddsEventId?: string | null;
+    venue?: string | null;
+    status?: string | null;
+  };
+  /**
+   * The model's own projected value for the market, on the market's scale —
+   * runs for a total. Only the totals path produces one, so the model-vs-line
+   * gauge renders for totals and hides elsewhere.
+   */
+  predicted_total?: number | null;
+  predicted_margin?: number | null;
+  /** Share of the model's weight budget that had real data behind it, 0-1. */
+  data_coverage?: number | null;
+  /** Raw input keys the model could not use. Map through `gameAnalysisInputs`. */
+  missing_inputs?: string[];
+  feed_missing?: string[];
+  context?: GameAnalysisContext | null;
   probability_supported?: boolean;
   score_kind?: GameAnalysisScoreKind;
   decision?: GameAnalysisDecision | null;
@@ -108,6 +157,34 @@ export function headToHeadRows(
         venue: game.venue || undefined,
       };
     });
+}
+
+/**
+ * The label for a selected market quote, with its number appended exactly once.
+ *
+ * A total's number is a threshold, not a handicap, so it carries no sign — an
+ * "Over +8" reads as if the line were plus-eight runs. Spreads keep their sign,
+ * because there the sign is the whole meaning.
+ *
+ * The de-duplication matters because a total's label arrives already carrying
+ * the number: over/under has no `winning_team_name` to overwrite it, so the
+ * request-time label ("Over 167.5") survives and appending the point again
+ * rendered "Over 167.5 167.5". Spreads are not affected — a team name replaces
+ * their label — but the guard is general so neither market can regress.
+ */
+export function quoteSelectionLabel(
+  label: string,
+  point: number | null | undefined,
+  side?: string | null,
+): string {
+  if (point == null || !Number.isFinite(point)) return label;
+
+  const trailing = /([+-]?\d+(?:\.\d+)?)\s*$/.exec(label ?? "");
+  if (trailing && Math.abs(Number(trailing[1]) - point) < 1e-9) return label;
+
+  const isTotal = side === "over" || side === "under";
+  if (isTotal) return `${label} ${point.toFixed(1)}`;
+  return `${label} ${point > 0 ? "+" : ""}${point}`;
 }
 
 export function analysisNarrative(response: GameAnalysisResponse | undefined): string | null {

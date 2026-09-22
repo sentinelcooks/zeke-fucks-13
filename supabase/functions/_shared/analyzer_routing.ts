@@ -26,6 +26,19 @@ export type AnalyzerPoolCandidate = {
   quality_score?: number;
 };
 
+/**
+ * Player-prop analyzers that have been split out of `nba-api`.
+ *
+ * MLB and WNBA props each have their own deployable function now. NBA and NHL
+ * are deliberately absent: they still live in `nba-api/analyze`, and adding
+ * them here before those models move would route them at a function that does
+ * not exist.
+ */
+const PROP_ANALYZER_BY_SPORT: Record<string, string> = {
+  mlb: "mlb-prop-model",
+  wnba: "wnba-prop-model",
+};
+
 export function analyzerEndpointForCandidate(
   sport: string,
   betType: string,
@@ -42,10 +55,26 @@ export function analyzerEndpointForCandidate(
   }
 
   if (["nba", "wnba", "mlb", "nhl"].includes(normalizedSport)) {
-    return "nba-api/analyze";
+    return PROP_ANALYZER_BY_SPORT[normalizedSport] ?? "nba-api/analyze";
   }
-  if (normalizedSport === "ufc") return "ufc-api/analyze";
+  // UFC fight-winner markets go to `ufc-api/matchup`, which takes both
+  // fighters and returns a head-to-head read built from real fighter stats.
+  // `ufc-api/analyze` only accepts a single `{ fighter }` and cannot score a
+  // matchup, so routing moneylines there 400s. UFC has no supported prop
+  // markets today; the analyze mapping is kept for if that changes.
+  if (normalizedSport === "ufc") {
+    return normalizedBetType === "prop" ? "ufc-api/analyze" : "ufc-api/matchup";
+  }
   return fallback;
+}
+
+/**
+ * The prop analyzer a sport should be using, or null when it has not been
+ * split out yet. Exported so the queue drainer can normalize stale
+ * `analyzer_endpoint` values without duplicating the table.
+ */
+export function propAnalyzerForSport(sport: string): string | null {
+  return PROP_ANALYZER_BY_SPORT[String(sport ?? "").toLowerCase()] ?? null;
 }
 
 function sameTeam(a: string | null | undefined, b: string | null | undefined): boolean {
@@ -99,6 +128,29 @@ export function buildAnalyzerRequest(
     candidate.bet_type,
     fallbackEndpoint,
   );
+
+  // UFC fight-winner: `ufc-api/matchup` scores the pair, so it wants the two
+  // fighter names rather than the prop contract. The scanner stores the
+  // fighters in away_team/home_team (see evaluateGameLines in sport_scan.ts);
+  // `team` is the specific fighter this play backs, and is carried through so
+  // the analyzer read can be attributed to the right side.
+  if (
+    candidate.sport.toLowerCase() === "ufc" &&
+    candidate.bet_type.toLowerCase() !== "prop"
+  ) {
+    return {
+      endpoint,
+      payload: {
+        fighter1: candidate.away_team ?? "",
+        fighter2: candidate.home_team ?? "",
+        sport: candidate.sport,
+        bet_type: "moneyline",
+        team: candidate.team ?? null,
+        opponent: candidate.opponent ?? null,
+        american_odds: candidate.odds ?? null,
+      },
+    };
+  }
 
   // Preserve the existing UFC analyzer payload contract. UFC matchup
   // routing is separate from the team-market work in this patch.

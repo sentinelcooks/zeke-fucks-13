@@ -7,6 +7,7 @@ import { formatPropType } from "@/lib/formatPickLabel";
 
 import { analyzeProp } from "@/services/api";
 import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
+import { withClientPlatform } from "@/lib/edgeFunctionPath";
 import WrittenAnalysis from "@/components/WrittenAnalysis";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import OddsComparison from "@/components/OddsComparison";
@@ -195,7 +196,7 @@ const FreePropsPage = () => {
 
       if (fetched.length === 0) {
         try {
-          const { error } = await supabase.functions.invoke("free-props", {
+          const { error } = await supabase.functions.invoke(withClientPlatform("free-props"), {
             body: { path: "generate" },
             headers: await premiumRequestHeaders(),
           });
@@ -259,7 +260,7 @@ const FreePropsPage = () => {
         if (prop.sport === "nba") {
           setCorrLoading(true);
           const playerTeam = data.team || data.player?.team_abbr || data.player?.team || data.player_info?.team || prop.team || "";
-          premiumRequestHeaders().then((headers) => supabase.functions.invoke("correlated-props", {
+          premiumRequestHeaders().then((headers) => supabase.functions.invoke(withClientPlatform("correlated-props"), {
             body: { player: prop.player_name, prop: prop.prop_type, line: prop.line, team: playerTeam, over_under: prop.direction || "over" },
             headers,
           })).then(({ data: corrData, error: corrErr }) => {

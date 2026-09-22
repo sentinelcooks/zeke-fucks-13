@@ -24,7 +24,8 @@ export const profitUnits = (
   stakeUnits = 1,
 ): number | null => {
   const r = (result || "").toLowerCase();
-  if (r === "push") return 0;
+  // A voided pick returns the stake, exactly like a push.
+  if (r === "push" || r === "void" || r === "voided") return 0;
   const isWin = r === "hit" || r === "win";
   const isLoss = r === "miss" || r === "loss";
   if (!isWin && !isLoss) return null;

@@ -39,6 +39,7 @@ import {
 } from "../_shared/canonical_verdict.ts";
 import type { ScoredPlay } from "../_shared/edge_scoring.ts";
 import { parseRetryAfterMs } from "../_shared/sport_scan.ts";
+import { analyzerTotalSideMismatch } from "../_shared/analyzer_side.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -149,18 +150,36 @@ function decodeJwtRole(jwt: string): string | null {
   }
 }
 
-// Canonical sport → analyzer endpoint. Mirrors ANALYZER_ENDPOINT in
-// _shared/sport_scan.ts. Duplicated here so the queue worker can override
+// Canonical sport → PLAYER-PROP analyzer endpoint. Mirrors ANALYZER_ENDPOINT
+// in _shared/sport_scan.ts. Duplicated here so the queue worker can override
 // any stale row.analyzer_endpoint without pulling sport_scan into this
-// function. mlb/nhl MUST route to nba-api/analyze for now — the separate
-// mlb-api/analyze endpoint is unfinished and must not be called.
+// function.
+//
+// MLB and WNBA props now have their own functions; NBA and NHL still run
+// through nba-api/analyze.
 const CANONICAL_ANALYZER_ENDPOINT: Record<string, string> = {
   nba: "nba-api/analyze",
-  mlb: "nba-api/analyze",
+  mlb: "mlb-prop-model",
+  wnba: "wnba-prop-model",
   nhl: "nba-api/analyze",
   ufc: "ufc-api/analyze",
 };
-function canonicalEndpointForSport(sport: string, fallback: string): string {
+
+/**
+ * Normalizes a queued row's analyzer endpoint.
+ *
+ * Only PROP rows are normalized. The table above lists prop analyzers, so
+ * applying it to a team-market row would send a moneyline or total at a
+ * player-prop endpoint — which is what the previous sport-only lookup did to
+ * every MLB and NHL team-market row it saw. Team markets keep the endpoint the
+ * router already chose for them (`moneyline-api/analyze`).
+ */
+function canonicalEndpointForSport(sport: string, fallback: string, betType?: unknown): string {
+  const normalizedBetType = String(betType ?? "").toLowerCase();
+  const isProp = normalizedBetType === "" ||
+    normalizedBetType === "prop" ||
+    normalizedBetType === "player_prop";
+  if (!isProp) return fallback;
   return CANONICAL_ANALYZER_ENDPOINT[sport] ?? fallback;
 }
 
@@ -401,7 +420,11 @@ async function processOne(
   // column is stale (e.g. 'mlb-api/analyze' from before the routing change)
   // is silently routed to the canonical endpoint for its sport. Logged so we
   // can confirm cleanup.
-  const endpoint = canonicalEndpointForSport(row.sport, row.analyzer_endpoint);
+  const endpoint = canonicalEndpointForSport(
+    row.sport,
+    row.analyzer_endpoint,
+    (row.analyzer_payload as { bet_type?: unknown } | null)?.bet_type,
+  );
   if (endpoint !== row.analyzer_endpoint) {
     console.log(
       `[analyzer-queue][endpoint-normalized] queue_id=${row.id} sport=${row.sport} ` +
@@ -542,6 +565,31 @@ async function processOne(
       "analyzer_unsupported_or_no_pick",
     );
     for (const r of rejectReasons) bumpOutcome(outcomeCounts, `no_pick_${r}`);
+    return "no_pick";
+  }
+
+  // A game-total analyzer can answer about the OPPOSITE side: the verified MLB
+  // total model returns the side its projection favours and THAT side's score
+  // (`selected_direction`). Attaching it to the requested direction published
+  // an Over read as an "Under" pick, so the Daily Edge card and its own report
+  // named different sides. The opposite side is queued as its own candidate,
+  // so dropping this one loses no coverage.
+  const sideMismatch = analyzerTotalSideMismatch(
+    c0?.bet_type as string | undefined,
+    c0?.direction as string | undefined,
+    ar as Record<string, unknown>,
+  );
+  if (sideMismatch) {
+    console.warn(
+      `[analyzer-queue][side-mismatch] queue_id=${row.id} sport=${row.sport} ` +
+        `asked=${sideMismatch.requestedSide} answered=${sideMismatch.analyzerSide}`,
+    );
+    await finalizeAnalyzerQueueRow(
+      supabase, row.id, "failed",
+      { reason: "analyzer_side_mismatch", details: [sideMismatch.requestedSide, sideMismatch.analyzerSide] },
+      "analyzer_side_mismatch",
+    );
+    bumpOutcome(outcomeCounts, "no_pick_analyzer_side_mismatch");
     return "no_pick";
   }
 

@@ -67,11 +67,17 @@ const NHL_PROP_MARKETS = [
 
 const NFL_PROP_MARKETS = [
   "player_pass_yds",
+  "player_pass_attempts",
+  "player_pass_completions",
   "player_pass_tds",
+  "player_pass_interceptions",
   "player_rush_yds",
+  "player_rush_attempts",
   "player_reception_yds",
   "player_receptions",
   "player_anytime_td",
+  "player_field_goals",
+  "player_pats",
   "player_kicking_points",
 ].join(",");
 

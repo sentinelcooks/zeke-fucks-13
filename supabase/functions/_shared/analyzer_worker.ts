@@ -21,6 +21,7 @@
 //      worker limits, then returns.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { analyzerTotalSideMismatch } from "./analyzer_side.ts";
 import {
   applyAnalyzerFinalizeInsertGuard,
   buildDailyPickRow,
@@ -694,6 +695,35 @@ async function processRow(args: {
     }
     return { outcome: "no_pick" };
   }
+
+  // A game-total analyzer can answer about the OPPOSITE side: the verified MLB
+  // total model returns the side its projection favours and THAT side's score
+  // (`selected_direction`). Attaching it to the requested direction published
+  // an Over read as an "Under" pick, so the Daily Edge card and its own report
+  // named different sides. The opposite side is queued as its own candidate,
+  // so dropping this one loses no coverage.
+  const sideCandidate = row.candidate_payload as Record<string, unknown>;
+  const sideMismatch = analyzerTotalSideMismatch(
+    sideCandidate?.bet_type as string | undefined,
+    sideCandidate?.direction as string | undefined,
+    ar as Record<string, unknown>,
+  );
+  if (sideMismatch) {
+    console.warn(
+      `[analyzer-worker][side-mismatch] queue_id=${row.id} sport=${row.sport} ` +
+        `asked=${sideMismatch.requestedSide} answered=${sideMismatch.analyzerSide}`,
+    );
+    await finalizeAnalyzerQueueRow(
+      supabase, row.id, "failed",
+      { reason: "analyzer_side_mismatch", details: [sideMismatch.requestedSide, sideMismatch.analyzerSide] },
+      "analyzer_side_mismatch",
+    );
+    bucket.counters.pass_count++;
+    bumpReason(bucket.edgeGateBlockedReasons, "analyzer_side_mismatch");
+    bumpReason(bucket.outcomeCounts, "no_pick_analyzer_side_mismatch");
+    return { outcome: "no_pick" };
+  }
+
 
   // Build scored play + recompute tier via the edge-gate-aware finalizer.
   const rawBetType = String(candidate.bet_type ?? "prop").toLowerCase();

@@ -94,6 +94,10 @@ Access secrets via `Deno.env.get('SECRET_NAME')`. Never hardcode. Never pass the
 | `moneyline-api` | Moneyline data endpoint |
 | `nba-api` | NBA data endpoint |
 | `nba-odds` | NBA odds fetching |
+| `nfl-game-edge` | NFL Game Edge engine — ML / spread / total (separate product from props) |
+| `nfl-player-prop-edge` | NFL Player Prop Edge engine — QB/RB/WR/TE/K props (separate product) |
+| `nfl-grade` | Grades both NFL prediction tables (independent passes), closing lines, CLV |
+| `nfl-admin-analytics` | Admin-only NFL analytics, one action per engine |
 | `nhl-model` | NHL prediction model |
 | `odds-snapshot` | Odds snapshot storage |
 | `personalize` | User personalization |

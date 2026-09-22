@@ -8,8 +8,11 @@ import wnbaLogo from "@/assets/wnba-logo.png";
 import mlbLogo from "@/assets/mlb-logo.png";
 import nhlLogo from "@/assets/logo-nhl.png";
 import ufcLogo from "@/assets/ufc-logo.png";
+import nflLogo from "@/assets/logo-nfl.png";
+import { NflPropAnalysisCard, type NflPropAnalysis } from "@/components/nfl/NflPropAnalysisCard";
+import { listNflTeams } from "@/utils/teamLogos";
 import { Search, Loader2, Target, TrendingUp, TrendingDown, Crosshair, Shield, Hand, RotateCcw, Zap, Trophy, ChevronDown, Sparkles, X, BarChart3, Activity, Swords, Link2, Timer, Clock, Layers, Flame, CircleDot, Hash, Gauge, Info, Plus, Trash2, DollarSign, UserRound } from "lucide-react";
-import { searchPlayers, getTeams, analyzeProp, searchUfcFighters, analyzeUfcMatchup, validateMlbPropLine } from "@/services/api";
+import { searchPlayers, getTeams, analyzeProp, searchUfcFighters, analyzeUfcMatchup, validateMlbPropLine, fetchNflPlayerPropEdge, searchNflPlayers } from "@/services/api";
 import { supabase } from "@/integrations/supabase/client";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AddToSlipSheet } from "@/components/AddToSlipSheet";
@@ -33,6 +36,7 @@ import { formatPropType } from "@/lib/formatPickLabel";
 import { normalizeConfidencePercent, normalizeVerdict } from "@/lib/matchupGrade";
 import { isSavedPickPayload, mapSavedPickToView, type SavedDailyPickRow } from "@/lib/savedPick";
 import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
+import { withClientPlatform } from "@/lib/edgeFunctionPath";
 import { isSportTemporarilyHidden } from "@/lib/sportAvailability";
 
 import { Bar } from "react-chartjs-2";
@@ -176,12 +180,61 @@ const NHL_PROP_CATEGORIES: PropCategory[] = [
 ];
 
 // Flat arrays for backward compat
+// NFL props are scored by the dedicated NFL Player Prop Edge engine
+// (nfl-player-prop-edge); values are that engine's prop types.
+const NFL_PROP_CATEGORIES: PropCategory[] = [
+  {
+    category: "Passing",
+    props: [
+      { value: "pass_yds", label: "PASS YDS", icon: Target, desc: "Passing Yards" },
+      { value: "pass_tds", label: "PASS TD", icon: Trophy, desc: "Passing TDs" },
+      { value: "pass_cmp", label: "CMP", icon: CircleDot, desc: "Completions" },
+      { value: "pass_att", label: "ATT", icon: Hash, desc: "Pass Attempts" },
+      { value: "pass_ints", label: "INT", icon: Shield, desc: "Interceptions" },
+    ],
+  },
+  {
+    category: "Rushing",
+    props: [
+      { value: "rush_yds", label: "RUSH YDS", icon: TrendingUp, desc: "Rushing Yards" },
+      { value: "rush_att", label: "CARRIES", icon: RotateCcw, desc: "Rush Attempts" },
+    ],
+  },
+  {
+    category: "Receiving",
+    props: [
+      { value: "rec_yds", label: "REC YDS", icon: Zap, desc: "Receiving Yards" },
+      { value: "receptions", label: "REC", icon: Hand, desc: "Receptions" },
+      { value: "targets", label: "TGT", icon: Crosshair, desc: "Targets" },
+    ],
+  },
+  {
+    category: "Scoring",
+    props: [
+      { value: "anytime_td", label: "ANY TD", icon: Flame, desc: "Anytime Touchdown" },
+    ],
+  },
+  {
+    category: "Kicking",
+    props: [
+      { value: "fg_made", label: "FG", icon: Gauge, desc: "Field Goals Made" },
+      { value: "xp_made", label: "XP", icon: Layers, desc: "Extra Points" },
+      { value: "kicking_points", label: "K PTS", icon: BarChart3, desc: "Kicking Points" },
+    ],
+  },
+];
+
 const NBA_PROP_TYPES = NBA_PROP_CATEGORIES.flatMap((c) => c.props);
 const MLB_PROP_TYPES = MLB_PROP_CATEGORIES.flatMap((c) => c.props);
 const NHL_PROP_TYPES = NHL_PROP_CATEGORIES.flatMap((c) => c.props);
+const NFL_PROP_TYPES = NFL_PROP_CATEGORIES.flatMap((c) => c.props);
 
-type PropsSport = "nba" | "wnba" | "mlb" | "nhl" | "ufc";
-type LinesSport = "nba" | "wnba" | "mlb" | "nhl" | "ncaab";
+function propCategoriesFor(sport: string): PropCategory[] {
+  return sport === "mlb" ? MLB_PROP_CATEGORIES : sport === "nhl" ? NHL_PROP_CATEGORIES : sport === "nfl" ? NFL_PROP_CATEGORIES : NBA_PROP_CATEGORIES;
+}
+
+type PropsSport = "nba" | "wnba" | "mlb" | "nhl" | "nfl" | "ufc";
+type LinesSport = "nba" | "wnba" | "mlb" | "nhl" | "nfl" | "ncaab";
 const DEFAULT_PROPS_SPORT: PropsSport = "wnba";
 const DEFAULT_LINES_SPORT: LinesSport = "wnba";
 
@@ -435,6 +488,9 @@ const NbaPropsPage = () => {
     away_team?: string;
     sport?: LinesSport;
     autoAnalyze?: boolean;
+    // Set when the caller knows which market it wants (Today's Edge "Details"
+    // on a spread/total/moneyline card). Absent means analyse the full game.
+    market?: "h2h" | "spreads" | "totals";
   } | null;
   const globalSlip = useParlaySlip();
   const autoAnalyzedRef = useRef(false);
@@ -534,7 +590,7 @@ const NbaPropsPage = () => {
   const handlePropSelect = (propValue: string) => {
     setPropType(propValue);
     if (shouldAutoShow && !hasSeenProp(propValue)) {
-      const prop = (sport === "mlb" ? MLB_PROP_CATEGORIES : sport === "nhl" ? NHL_PROP_CATEGORIES : NBA_PROP_CATEGORIES)
+      const prop = propCategoriesFor(sport)
         .flatMap(c => c.props)
         .find(p => p.value === propValue);
       if (prop) {
@@ -556,8 +612,8 @@ const NbaPropsPage = () => {
   const ufcRef1 = useRef<HTMLDivElement>(null);
   const ufcRef2 = useRef<HTMLDivElement>(null);
 
-  const PROP_CATEGORIES = sport === "mlb" ? MLB_PROP_CATEGORIES : sport === "nhl" ? NHL_PROP_CATEGORIES : NBA_PROP_CATEGORIES;
-  const PROP_TYPES = sport === "mlb" ? MLB_PROP_TYPES : sport === "nhl" ? NHL_PROP_TYPES : NBA_PROP_TYPES;
+  const PROP_CATEGORIES = propCategoriesFor(sport);
+  const PROP_TYPES = sport === "mlb" ? MLB_PROP_TYPES : sport === "nhl" ? NHL_PROP_TYPES : sport === "nfl" ? NFL_PROP_TYPES : NBA_PROP_TYPES;
   const [activeCategory, setActiveCategory] = useState(PROP_CATEGORIES[0]?.category || "");
 
   // Reconcile propType against activeCategory: if the current selection
@@ -573,7 +629,11 @@ const NbaPropsPage = () => {
   }, [activeCategory, PROP_CATEGORIES]);
 
   useEffect(() => {
-    if (sport !== "ufc") {
+    if (sport === "nfl") {
+      // The NFL engine auto-detects the next game; the list only validates an override.
+      setTeams(listNflTeams().map((t) => ({ abbr: t.abbr === "wsh" ? "WAS" : t.abbr === "lar" ? "LA" : t.abbr.toUpperCase(), name: t.name })));
+      if (!autoAnalyzePrefillRef.current) setPropType("pass_yds");
+    } else if (sport !== "ufc") {
       getTeams(sport).then(setTeams).catch(() => {});
       if (!autoAnalyzePrefillRef.current) {
         setPropType(sport === "mlb" ? "hits" : sport === "nhl" ? "goals" : "points");
@@ -586,7 +646,7 @@ const NbaPropsPage = () => {
     }
 
     if (!autoAnalyzePrefillRef.current) {
-      const cats = sport === "mlb" ? MLB_PROP_CATEGORIES : sport === "nhl" ? NHL_PROP_CATEGORIES : NBA_PROP_CATEGORIES;
+      const cats = propCategoriesFor(sport);
       setActiveCategory(cats[0]?.category || "");
     }
   }, [sport]);
@@ -649,7 +709,7 @@ const NbaPropsPage = () => {
       })();
 
       // Set the correct category for the incoming prop type
-      const cats = s === "mlb" ? MLB_PROP_CATEGORIES : s === "nhl" ? NHL_PROP_CATEGORIES : NBA_PROP_CATEGORIES;
+      const cats = propCategoriesFor(s);
       const matchCat = cats.find(c => c.props.some(p => p.value === nextPropType));
 
       setMode("props");
@@ -910,7 +970,7 @@ const NbaPropsPage = () => {
             if (s === "nba") {
               setCorrLoading(true);
               const playerTeam = data.team || data.player?.team_abbr || data.player?.team || data.player_info?.team || "";
-              premiumRequestHeaders().then((headers) => supabase.functions.invoke("correlated-props", {
+              premiumRequestHeaders().then((headers) => supabase.functions.invoke(withClientPlatform("correlated-props"), {
                 body: { player: navState.player!, prop: nextPropType, line: navState.line || 0, team: playerTeam, over_under: navState.over_under || "over" },
                 headers,
               })).then(({ data: corrData, error: corrErr }) => {
@@ -1004,7 +1064,7 @@ const NbaPropsPage = () => {
     if (q.length < 2) { setShowSuggestions(false); return; }
     searchTimeout.current = setTimeout(async () => {
       try {
-        const data = await searchPlayers(q, sport);
+        const data = sport === "nfl" ? await searchNflPlayers(q) : await searchPlayers(q, sport);
         setSuggestions(data);
         setShowSuggestions(data.length > 0);
       } catch { setShowSuggestions(false); }
@@ -1063,6 +1123,35 @@ const NbaPropsPage = () => {
     if (!effPlayer) { setError("Enter a player name"); return; }
     const lineNum = parseFloat(effLine);
     if (isNaN(lineNum) || lineNum <= 0) { setError("Enter a valid line value"); return; }
+
+    if (sport === "nfl") {
+      const nflKey = `nfl|${effPlayer}|${effPropType}|${lineNum}|${effOverUnder}|${opponent || ""}`;
+      const nflCached = analysisCacheRef.current.get(nflKey);
+      if (nflCached) { setError(""); setResults(nflCached); setSnapshotAvgValue(null); return; }
+      const localId = ++analyzeRequestIdRef.current;
+      setLoading(true); setError(""); setCorrProps([]); setSnapshotAvgValue(null);
+      try {
+        const data = await fetchNflPlayerPropEdge({
+          player: effPlayer, prop_type: effPropType, line: lineNum, over_under: effOverUnder, opponent: opponent || undefined,
+        });
+        if (analyzeRequestIdRef.current !== localId) return;
+        if (data?.error || !Array.isArray(data?.results) || data.results.length === 0) {
+          setResults(null);
+          setError(data?.error || data?.reason || "NFL analysis unavailable for this prop.");
+        } else {
+          const next: NflPropAnalysis = { ...data, _isNfl: true };
+          setResults(next);
+          analysisCacheRef.current.set(nflKey, next);
+        }
+      } catch (e) {
+        if (analyzeRequestIdRef.current !== localId) return;
+        setResults(null);
+        setError(e instanceof Error && e.message ? e.message : "Failed to analyze. Please try again.");
+      } finally {
+        if (analyzeRequestIdRef.current === localId) setLoading(false);
+      }
+      return;
+    }
     if (sport === "mlb") {
       const lineValidation = validateMlbPropLine(effPropType, lineNum);
       if (!lineValidation.valid) {
@@ -1098,7 +1187,7 @@ const NbaPropsPage = () => {
         if (sport === "nba") {
           setCorrLoading(true);
           const playerTeam = data.team || data.player?.team_abbr || data.player?.team || data.player_info?.team || "";
-          premiumRequestHeaders().then((headers) => supabase.functions.invoke("correlated-props", {
+          premiumRequestHeaders().then((headers) => supabase.functions.invoke(withClientPlatform("correlated-props"), {
             body: { player: effPlayer, prop: effPropType, line: lineNum, team: playerTeam, over_under: effOverUnder },
             headers,
           })).then(({ data: corrData, error: corrErr }) => {
@@ -1125,8 +1214,8 @@ const NbaPropsPage = () => {
   const prev = results?.prev_season_h2h || {};
 
 
-  const sportLabel = sport === "ufc" ? "UFC" : sport === "mlb" ? "MLB" : sport === "nhl" ? "NHL" : sport === "wnba" ? "WNBA" : "NBA";
-  const sportEmoji = sport === "wnba" ? "W" : sport === "ufc" ? "🥊" : sport === "mlb" ? "⚾" : sport === "nhl" ? "🏒" : "🏀";
+  const sportLabel = sport === "ufc" ? "UFC" : sport === "mlb" ? "MLB" : sport === "nhl" ? "NHL" : sport === "nfl" ? "NFL" : sport === "wnba" ? "WNBA" : "NBA";
+  const sportEmoji = sport === "wnba" ? "W" : sport === "ufc" ? "🥊" : sport === "mlb" ? "⚾" : sport === "nhl" ? "🏒" : sport === "nfl" ? "🏈" : "🏀";
 
   const hasHiddenLinesNavigation = isSportTemporarilyHidden(linesNavigationState?.sport);
 
@@ -1141,10 +1230,11 @@ const NbaPropsPage = () => {
 
         {/* ── Sport Toggle (always visible) ── */}
         {mode === "props" ? (
-        <div className="grid w-full max-w-full grid-cols-3 gap-1.5 rounded-2xl p-1.5" style={{
+        <div className="grid w-full max-w-full gap-1.5 rounded-2xl p-1.5" style={{
           background: 'hsla(228, 25%, 7%, 0.8)',
           border: '1px solid hsla(228, 30%, 18%, 0.3)',
           backdropFilter: 'blur(12px)',
+          gridTemplateColumns: `repeat(${["nba", "wnba", "mlb", "nhl", "nfl", "ufc"].filter((s) => !isSportTemporarilyHidden(s)).length}, minmax(0, 1fr))`,
         }}>
           {[
             { value: "nba" as const, label: "NBA", color: "#1D428A", icon: (active: boolean) => (
@@ -1158,6 +1248,9 @@ const NbaPropsPage = () => {
             )},
             { value: "nhl" as const, label: "NHL", color: "#111111", icon: (active: boolean) => (
               <img src={nhlLogo} alt="NHL" className={`h-5 w-5 object-contain shrink-0 ${active ? '' : 'opacity-70'}`} />
+            )},
+            { value: "nfl" as const, label: "NFL", color: "#013369", icon: (active: boolean) => (
+              <img src={nflLogo} alt="NFL" className={`h-5 w-5 object-contain shrink-0 ${active ? '' : 'opacity-70'}`} />
             )},
             { value: "ufc" as const, label: "UFC", color: "#3a1518", icon: (active: boolean) => (
               <img src={ufcLogo} alt="UFC" className={`h-5 w-5 object-contain shrink-0 ${active ? '' : 'opacity-70'}`} />
@@ -1184,16 +1277,18 @@ const NbaPropsPage = () => {
           })}
         </div>
         ) : (
-        <div className="grid w-full max-w-full grid-cols-2 gap-1.5 rounded-2xl p-1.5" style={{
+        <div className="grid w-full max-w-full gap-1.5 rounded-2xl p-1.5" style={{
           background: 'hsla(228, 25%, 7%, 0.8)',
           border: '1px solid hsla(228, 30%, 18%, 0.3)',
           backdropFilter: 'blur(12px)',
+          gridTemplateColumns: `repeat(${["nba", "wnba", "mlb", "nhl", "nfl"].filter((s) => !isSportTemporarilyHidden(s)).length}, minmax(0, 1fr))`,
         }}>
           {[
             { value: "nba", label: "NBA", color: "#1D428A", logo: nbaLogo, logoClass: "" },
             { value: "wnba", label: "WNBA", color: "#E03A3E", logo: wnbaLogo, logoClass: "" },
             { value: "mlb", label: "MLB", color: "#002D72", logo: mlbLogo, logoClass: "" },
             { value: "nhl", label: "NHL", color: "#111111", logo: nhlLogo, logoClass: "" },
+            { value: "nfl", label: "NFL", color: "#013369", logo: nflLogo, logoClass: "" },
           ].filter((s) => !isSportTemporarilyHidden(s.value)).map((s) => {
             const active = linesSport === s.value;
             return (
@@ -1261,6 +1356,7 @@ const NbaPropsPage = () => {
             initialHomeTeam={hasHiddenLinesNavigation ? undefined : linesNavigationState?.home_team}
             initialAwayTeam={hasHiddenLinesNavigation ? undefined : linesNavigationState?.away_team}
             autoAnalyze={hasHiddenLinesNavigation ? false : linesNavigationState?.autoAnalyze}
+            initialMarket={hasHiddenLinesNavigation ? undefined : linesNavigationState?.market}
           />
         )}
 
@@ -1937,7 +2033,15 @@ const NbaPropsPage = () => {
         )}
 
         {/* UFC Results */}
-        {mode === "props" && results?._isUfc && (
+        {mode === "props" && sport === "nfl" && results?._isNfl && (
+          <div ref={resultsRef}>
+            <ErrorBoundary>
+              <NflPropAnalysisCard data={results as NflPropAnalysis} />
+            </ErrorBoundary>
+          </div>
+        )}
+
+        {mode === "props" && sport !== "nfl" && results?._isUfc && (
           <ErrorBoundary>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
               {/* Analysis Complete Banner */}
@@ -2202,7 +2306,7 @@ const NbaPropsPage = () => {
         )}
 
         {/* NBA/MLB Results */}
-        {mode === "props" && results && !results._isUfc && (
+        {mode === "props" && sport !== "nfl" && results && !results._isUfc && (
           <ErrorBoundary>
             <motion.div ref={resultsRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
 
@@ -2234,19 +2338,25 @@ const NbaPropsPage = () => {
               )}
 
               <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.15, type: "spring" }}>
+                {/* The headline is the model score, for every sport.
+                    MLB used to swap in season_hit_rate here, so a card reading
+                    "70 MODEL SCORE" opened on a bare "72%" — that 72 was the
+                    71.8% season rate, a different metric with no label saying
+                    so. The season/L10/L5 rates still render in HIT RATES just
+                    below, which is where they belong. */}
                 <VerdictBadge
-                  confidence={sport === "mlb" && Number.isFinite(Number(results.season_hit_rate?.rate))
-                    ? Number(results.season_hit_rate.rate)
-                    : results.confidence}
+                  confidence={results.confidence}
                   verdict={results.verdict}
                   overUnder={results.over_under}
                   line={results.line}
                   propDisplay={formatDisplayPropType(results.prop_display || propType)}
                   scoreKind={results.score_kind}
                   probabilitySupported={results.probability_supported === true}
-                  displayMode={sport === "mlb" && Number.isFinite(Number(results.season_hit_rate?.rate))
-                    ? "historical_hit_rate"
-                    : "model_score"}
+                  seasonHitRate={Number.isFinite(Number(results.season_hit_rate?.rate))
+                    ? Number(results.season_hit_rate.rate)
+                    : null}
+                  savedConfidence={results._savedSnapshot?.confidence ?? null}
+                  driftFromSaved={results._seeWhyDelta ?? null}
                 />
               </motion.div>
 

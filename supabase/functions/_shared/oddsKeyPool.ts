@@ -27,6 +27,8 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const RECHECK_INTERVAL_HOURS = 6;
 const PROBE_URL = "https://api.the-odds-api.com/v4/sports/";
+const POOL_QUERY_TIMEOUT_MS = 2_500;
+const PROBE_TIMEOUT_MS = 5_000;
 
 export const ENV_FALLBACK_ID = "env-fallback";
 export const APP_CONFIG_ID = "app-config";
@@ -81,16 +83,36 @@ export async function withPoolQueryRetry<T>(
   options: {
     label: string;
     attempts?: number;
+    attemptTimeoutMs?: number;
     sleep?: (milliseconds: number) => Promise<unknown>;
   },
 ): Promise<T> {
   const attempts = Math.max(1, options.attempts ?? 3);
+  const attemptTimeoutMs = Math.max(1, options.attemptTimeoutMs ?? POOL_QUERY_TIMEOUT_MS);
   const sleep = options.sleep ?? ((milliseconds: number) =>
     new Promise((resolve) => setTimeout(resolve, milliseconds)));
   let lastError: PoolQueryError | null = null;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const result = await operation();
+    let result: { data: T; error: PoolQueryError | null };
+    try {
+      let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+      try {
+        result = await new Promise<{ data: T; error: PoolQueryError | null }>((resolve, reject) => {
+          timeoutHandle = setTimeout(() => {
+            reject(new Error(`${options.label} timed out after ${attemptTimeoutMs}ms`));
+          }, attemptTimeoutMs);
+          Promise.resolve(operation()).then(resolve, reject);
+        });
+      } finally {
+        if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+      }
+    } catch (error) {
+      lastError = { message: String(error).slice(0, 200) };
+      if (!isTransientPoolDbError(lastError) || attempt === attempts) break;
+      await sleep(150 * attempt);
+      continue;
+    }
     if (!result.error) return result.data;
     lastError = result.error;
     if (!isTransientPoolDbError(result.error) || attempt === attempts) break;
@@ -159,7 +181,13 @@ export function parseRetryAfterHeader(resp: Response): number | null {
 }
 
 async function probeKey(rawKey: string): Promise<Response> {
-  return await fetch(`${PROBE_URL}?apiKey=${encodeURIComponent(rawKey)}`);
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  try {
+    return await fetch(`${PROBE_URL}?apiKey=${encodeURIComponent(rawKey)}`, { signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
 }
 
 // ── Selection ────────────────────────────────────────────────────────────────
@@ -467,9 +495,10 @@ export async function setKeyStatus(
 export async function fetchWithRotation(
   supabase: SupabaseClient,
   buildUrl: (apiKey: string) => string,
-  opts: { maxRetries?: number; signal?: AbortSignal } = {},
+  opts: { maxRetries?: number; signal?: AbortSignal; attemptTimeoutMs?: number } = {},
 ): Promise<{ resp: Response; keyId: string } | { error: RotationError }> {
   const maxRetries = opts.maxRetries ?? 3;
+  const attemptTimeoutMs = Math.max(0, opts.attemptTimeoutMs ?? 0);
   const tried = new Set<string>();
   let lastError: RotationError | null = null;
 
@@ -496,13 +525,38 @@ export async function fetchWithRotation(
     tried.add(keyInfo.id);
 
     let resp: Response;
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    let removeParentAbort: (() => void) | null = null;
+    let timedOut = false;
+    const attemptController = attemptTimeoutMs > 0 ? new AbortController() : null;
     try {
-      resp = await fetch(buildUrl(keyInfo.key), { signal: opts.signal });
+      if (attemptController) {
+        const abortForParentSignal = () => attemptController.abort();
+        if (opts.signal?.aborted) {
+          attemptController.abort();
+        } else if (opts.signal) {
+          opts.signal.addEventListener("abort", abortForParentSignal, { once: true });
+          removeParentAbort = () => opts.signal?.removeEventListener("abort", abortForParentSignal);
+        }
+        timeoutHandle = setTimeout(() => {
+          timedOut = true;
+          attemptController.abort();
+        }, attemptTimeoutMs);
+      }
+
+      resp = await fetch(buildUrl(keyInfo.key), {
+        signal: attemptController?.signal ?? opts.signal,
+      });
     } catch (e) {
+      if (opts.signal?.aborted) {
+        return { error: { kind: "upstream_5xx", detail: "request_cancelled" } };
+      }
       try {
         await applyOutcome(supabase, keyInfo.id, {
           status: "transient",
-          detail: `network: ${String(e).slice(0, 200)}`,
+          detail: timedOut
+            ? `provider attempt timed out after ${attemptTimeoutMs}ms`
+            : `network: ${String(e).slice(0, 200)}`,
         });
       } catch (poolError) {
         if (poolError instanceof OddsKeyPoolUnavailableError) {
@@ -510,8 +564,14 @@ export async function fetchWithRotation(
         }
         throw poolError;
       }
-      lastError = { kind: "upstream_5xx", detail: String(e).slice(0, 200) };
+      lastError = {
+        kind: "upstream_5xx",
+        detail: timedOut ? "provider_timeout" : String(e).slice(0, 200),
+      };
       continue;
+    } finally {
+      if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+      removeParentAbort?.();
     }
 
     const outcome = await classifyResponse(resp.clone());

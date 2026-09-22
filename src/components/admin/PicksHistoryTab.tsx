@@ -296,6 +296,13 @@ export const PicksHistoryTab: React.FC<{ password: string }> = ({ password }) =>
         throw new Error(msg);
       }
       const r = data ?? {};
+      // The summary line collapses grade-picks' skip diagnostics, which are the
+      // only way to answer "why did N picks not grade?" without server logs.
+      if (import.meta.env.DEV) {
+        console.log("[AutoGrade] metrics", JSON.stringify(r.metrics));
+        console.log("[AutoGrade] by_sport", JSON.stringify(r.by_sport));
+        console.log("[AutoGrade] sample_skipped", JSON.stringify(r.sample_skipped));
+      }
       setGradeMsg(
         `Scanned ${r.scanned ?? 0}, graded ${r.graded ?? 0}: ${r.hits ?? 0} wins, ${r.misses ?? 0} losses, ${r.pushes ?? 0} pushes, ${r.skipped ?? 0} skipped`
       );

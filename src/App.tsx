@@ -43,6 +43,7 @@ const AuthPage = lazy(() => import("./pages/AuthPage"));
 const AuthCallbackPage = lazy(() => import("./pages/AuthCallbackPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
+const NflEdgePage = lazy(() => import("./pages/NflEdgePage"));
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
 const PaywallPage = lazy(() => import("./pages/PaywallPage"));
 const WelcomeConfirmationPage = lazy(() => import("./pages/WelcomeConfirmationPage"));
@@ -258,6 +259,7 @@ function AppRoutes() {
           <Route path="tracker" element={<PremiumGate><ProfitTrackerPage /></PremiumGate>} />
           <Route path="games" element={<GamesPage />} />
           <Route path="arbitrage" element={<PremiumGate><ArbitragePage /></PremiumGate>} />
+          <Route path="nfl" element={<PremiumGate><Suspense fallback={null}><NflEdgePage /></Suspense></PremiumGate>} />
           <Route path="mlb-predictions" element={<Navigate to="/dashboard/moneyline" replace />} />
           <Route path="trends" element={<Navigate to="/dashboard/free-picks" replace />} />
           <Route path="settings" element={<SettingsPage />} />

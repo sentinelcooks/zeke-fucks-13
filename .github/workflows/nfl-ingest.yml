@@ -1,0 +1,45 @@
+# NFL feature-store ingest (nflverse → Supabase nfl_* tables).
+#
+# Runs in CI rather than an Edge Function: a season of play-by-play is
+# ~200 MB of CSV, far beyond an Edge Function's CPU budget.
+#
+# Required repository secrets (server-side only, never VITE_*):
+#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+name: NFL ingest
+
+on:
+  schedule:
+    - cron: "0 10 * * *" # daily 10:00 UTC (nflverse refreshes overnight)
+  workflow_dispatch:
+    inputs:
+      seasons:
+        description: "Season or range, e.g. 2026 or 2017-2026"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Ingest nflverse data
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Passed via env (not inlined) so the input can't inject shell; ingest.ts validates the format.
+          SEASONS: ${{ github.event.inputs.seasons }}
+        run: |
+          if [ -n "$SEASONS" ]; then
+            node scripts/nfl/ingest.ts --seasons "$SEASONS"
+          else
+            node scripts/nfl/ingest.ts
+          fi
