@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PillTabs } from "@/components/playbook/controls";
 import { Zap } from "lucide-react";
 import { formatOdds } from "@/utils/oddsFormat";
 import { AnalysisCard, CardHeading } from "./AnalysisCard";
@@ -54,22 +55,13 @@ export function OddsTabsCard({
     <AnalysisCard>
       <CardHeading icon={Zap} title="Odds" />
 
-      <div role="tablist" aria-label="Markets" className="mt-3 grid gap-1 rounded-xl p-1" style={{ background: "hsl(var(--card) / 0.8)", gridTemplateColumns: `repeat(${available.length}, minmax(0, 1fr))` }}>
-        {available.map((key) => (
-          <button
-            key={key}
-            type="button"
-            role="tab"
-            aria-selected={key === active}
-            onClick={() => setActive(key)}
-            className={`rounded-lg py-2 text-[12px] font-semibold transition-colors ${
-              key === active ? "bg-foreground/[0.08] text-foreground" : "text-muted-foreground hover:text-foreground/80"
-            }`}
-          >
-            {TAB_LABELS[key]}
-          </button>
-        ))}
-      </div>
+      <PillTabs<GameAnalysisMarketKey>
+        ariaLabel="Markets"
+        className="mt-3"
+        value={active}
+        onChange={setActive}
+        options={available.map((key) => ({ value: key, label: TAB_LABELS[key] }))}
+      />
 
       {quotes.length > 0 ? (
         <div className="mt-1.5">

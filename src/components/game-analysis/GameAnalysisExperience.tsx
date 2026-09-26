@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { CircleButton } from "@/components/playbook/controls";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
@@ -255,24 +256,18 @@ function GameAnalysisScan({ event, scope, details, onCancel }: Extract<GameAnaly
 
       <div className="relative mx-auto flex min-h-full w-full max-w-md flex-col px-5 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]">
         <header className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            aria-label="Cancel analysis"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-foreground transition-colors hover:bg-foreground/[0.08]"
-            style={{ background: "hsl(var(--secondary) / 0.9)", border: "1px solid hsl(var(--border) / 0.6)" }}
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
+          <CircleButton onClick={onCancel} aria-label="Cancel analysis">
+            <ArrowLeft />
+          </CircleButton>
           <div className="min-w-0 flex-1">
-            <p className="text-[15px] font-black uppercase tracking-[0.04em] text-foreground">Sentinel analysis</p>
-            <p className="text-[10px] text-muted-foreground/60">{scope === "full" ? "Game lines" : marketScopeLabel(scope)} · {todayLabel}</p>
+            <p className="text-[17px] font-semibold text-foreground">Sentinel analysis</p>
+            <p className="text-[13px] text-muted-foreground">{scope === "full" ? "Game lines" : marketScopeLabel(scope)} · {todayLabel}</p>
           </div>
           <span
             className="flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-bold tracking-[0.12em] text-nba-green"
             style={{ background: "hsl(var(--success) / 0.1)", border: "1px solid hsl(var(--success) / 0.3)" }}
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-nba-green" style={{ boxShadow: "0 0 6px hsl(var(--success))" }} />
+            <span className="h-1.5 w-1.5 rounded-full bg-nba-green"  />
             LIVE
           </span>
         </header>
@@ -530,18 +525,18 @@ function GameAnalysisReportView({ report, onClose }: { report: GameAnalysisRepor
 
   return (
     <motion.div key="game-analysis-report" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }} className="fixed inset-0 z-[45] overflow-y-auto bg-background text-foreground">
-      <div className="sticky top-0 z-10 border-b border-foreground/[0.07] bg-background/90 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-xl">
+      <div className="ios-blur sticky top-0 z-10 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] shadow-[inset_0_-0.5px_0_hsl(var(--hairline))]">
         <div className="mx-auto flex w-full max-w-md items-center justify-between">
-          <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-xl border border-foreground/[0.08] bg-foreground/[0.03] text-foreground transition-colors hover:bg-foreground/[0.08]" aria-label="Back to game lines"><ArrowLeft className="h-4 w-4" /></button>
-          <div className="text-center"><p className="text-[8px] font-bold uppercase tracking-[0.16em] text-accent">Sentinel report</p><p className="mt-0.5 text-[11px] font-bold text-foreground">{marketScopeLabel(report.scope)} analysis</p></div>
-          <div className="grid h-10 w-10 place-items-center rounded-xl bg-nba-green/10 text-nba-green"><ShieldCheck className="h-4 w-4" /></div>
+          <CircleButton onClick={onClose} aria-label="Back to game lines"><ArrowLeft /></CircleButton>
+          <div className="text-center"><p className="text-[12px] font-medium text-muted-foreground">Sentinel report</p><p className="text-[17px] font-semibold text-foreground">{marketScopeLabel(report.scope)} analysis</p></div>
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-success/15 text-success" aria-hidden="true"><ShieldCheck className="h-5 w-5" /></span>
         </div>
       </div>
 
       <main className="mx-auto w-full max-w-md space-y-3 px-4 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-4">
         <div className="flex items-center justify-between px-1 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-2 font-bold uppercase tracking-[0.12em] text-nba-green">
-            <span className="h-[7px] w-[7px] rounded-full bg-nba-green" style={{ boxShadow: "0 0 8px hsl(var(--success))" }} />
+            <span className="h-[7px] w-[7px] rounded-full bg-nba-green"  />
             Analysis complete
           </span>
           <span>{analysedAt}</span>
