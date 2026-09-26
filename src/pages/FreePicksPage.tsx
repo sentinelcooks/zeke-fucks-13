@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Flame, Clock, TrendingUp, Star, ChevronRight, Zap,
-  BarChart3, Shield, MapPin, Trophy, Filter,
+  BarChart3, Shield, MapPin, Trophy, Filter, AlertTriangle,
 } from "lucide-react";
+import { PillTabs } from "@/components/playbook/controls";
 import { supabase } from "@/integrations/supabase/client";
 import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 import { useNavigate } from "react-router-dom";
@@ -317,90 +318,63 @@ const FreePicksPage = () => {
 
   return (
     <div className="flex flex-col min-h-full relative">
-      {/* Ambient orbs */}
-      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: "hsl(var(--primary))" }} />
-      <div className="vision-orb w-36 h-36 top-[600px] -left-12" style={{ background: "hsl(var(--nba-yellow))", animationDelay: "-3s" }} />
 
       
 
       <div className="px-4 pt-3 pb-2 space-y-2 relative z-10">
         {/* Main category tabs */}
-        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
-          {TABS.filter((tab) => !TEMPORARILY_HIDDEN_PICK_TABS.has(tab.key)).map((tab) => {
+        <PillTabs<TabType>
+          scroll
+          ariaLabel="Pick views"
+          value={activeTab}
+          onChange={setActiveTab}
+          options={TABS.filter((tab) => !TEMPORARILY_HIDDEN_PICK_TABS.has(tab.key)).map((tab) => {
             const Icon = tab.icon;
-            const active = activeTab === tab.key;
             const count = tab.key === "picks" ? visiblePicks.length
               : tab.key === "100club" ? club100Picks.length
               : tab.key === "sgp" ? sgps.length
               : trends.length;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold tracking-wide transition-all ${
-                  active
-                    ? "text-white shadow-lg shadow-accent/20"
-                    : "text-muted-foreground/50 hover:text-muted-foreground/70"
-                }`}
-                style={active
-                  ? { background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--success)))" }
-                  : { background: "hsl(var(--card) / 0.6)", border: "1px solid hsl(var(--border) / 0.3)" }
-                }
-              >
-                <Icon className="w-3.5 h-3.5" />
-                {tab.label}
-                {count > 0 && (
-                  <span className={`text-[9px] px-1 py-0.5 rounded-md font-bold ${
-                    active ? "bg-foreground/20" : "bg-secondary"
-                  }`}>
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
+            return {
+              value: tab.key,
+              label: (
+                <span className="flex items-center gap-1.5">
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                  {count > 0 && <span className="rounded-full bg-fill/20 px-1.5 text-[12px] font-semibold tabular-nums">{count}</span>}
+                </span>
+              ),
+            };
           })}
-        </div>
+        />
 
         {/* Filters — only show on Picks tab */}
         {activeTab === "picks" && (
           <>
-            <div className="flex p-0.5 bg-secondary rounded-lg overflow-x-auto scrollbar-hide">
-              {(["all", "nba", "wnba", "mlb", "nhl", "ufc"] as const)
+            <PillTabs<SportFilter>
+              scroll
+              ariaLabel="Sport"
+              value={sportFilter}
+              onChange={setSportFilter}
+              options={(["all", "nba", "wnba", "mlb", "nhl", "ufc"] as const)
                 .filter((f) => f === "all" || !isSportTemporarilyHidden(f))
-                .map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setSportFilter(f)}
-                  className={`relative flex-1 py-1.5 text-[13px] font-semibold text-center rounded-md transition-all ${
-                    sportFilter === f ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
-                  }`}
-                >
-                  {f === "all" ? "All" : f.toUpperCase()}
-                </button>
-              ))}
-            </div>
+                .map((f) => ({ value: f, label: f === "all" ? "All" : f.toUpperCase() }))}
+            />
             <div className="flex items-center gap-2">
-              <div className="flex p-0.5 bg-secondary rounded-lg flex-1 overflow-x-auto scrollbar-hide">
-                {(PROP_FILTERS_BY_SPORT[sportFilter] || PROP_FILTERS_BY_SPORT.all).map((pf) => (
-                  <button
-                    key={pf.value}
-                    onClick={() => setPropFilter(pf.value)}
-                    className={`relative flex-1 py-1.5 text-[11px] font-bold text-center rounded-md transition-all ${
-                      propFilter === pf.value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
-                    }`}
-                  >
-                    {pf.label}
-                  </button>
-                ))}
-              </div>
+              <PillTabs
+                scroll
+                ariaLabel="Prop type"
+                className="min-w-0 flex-1"
+                value={propFilter}
+                onChange={setPropFilter}
+                options={(PROP_FILTERS_BY_SPORT[sportFilter] || PROP_FILTERS_BY_SPORT.all).map((pf) => ({ value: pf.value, label: pf.label }))}
+              />
               <button
                 onClick={() => setSortMode(sortMode === "high" ? "low" : "high")}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                aria-label={sortMode === "high" ? "Sorted by confidence, highest first" : "Sorted by confidence, lowest first"}
+                className="flex h-11 shrink-0 items-center gap-1.5 rounded-full bg-card px-3.5 text-[13px] font-semibold text-foreground shadow-[inset_0_0_0_0.5px_hsl(var(--hairline))]"
               >
-                <BarChart3 className="w-3.5 h-3.5" />
-                <span className="text-[10px] font-bold uppercase tracking-wider">
-                  {sortMode === "high" ? "HIGH–LOW" : "LOW–HIGH"}
-                </span>
+                <BarChart3 className="h-4 w-4 text-primary" />
+                {sortMode === "high" ? "High–low" : "Low–high"}
               </button>
             </div>
           </>
@@ -421,8 +395,8 @@ const FreePicksPage = () => {
             </div>
           </div>
           {isStale && (
-            <div className="mt-1.5 flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-medium text-nba-yellow" style={{ background: "hsl(var(--nba-yellow) / 0.08)", border: "1px solid hsl(var(--nba-yellow) / 0.12)" }}>
-              <span>⚠️</span>
+            <div className="mt-2 flex items-center gap-2 rounded-xl bg-warning/10 px-3 py-2 text-[13px] font-medium text-warning">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
               <span>No picks for today yet — showing most recent from {formattedDate}</span>
             </div>
           )}
@@ -771,7 +745,7 @@ function LoadingSpinner() {
   return (
     <div className="flex flex-col items-center justify-center py-20">
       <div className="w-8 h-8 border-[2.5px] border-secondary border-t-accent rounded-full animate-spin mb-3" />
-      <p className="text-[11px] text-muted-foreground/65">Loading...</p>
+      <p className="text-[13px] text-muted-foreground">Loading...</p>
     </div>
   );
 }
@@ -788,12 +762,12 @@ function EmptyState({ message }: { message: string }) {
 function SectionHeader({ icon: Icon, gradient, title, subtitle }: { icon: typeof Flame; gradient: string; title: string; subtitle: string }) {
   return (
     <div className="flex items-center gap-2">
-      <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg`}>
-        <Icon className="w-4 h-4 text-foreground" />
+      <div className={`w-8 h-8 rounded-[9px] bg-gradient-to-br ${gradient} flex items-center justify-center`}>
+        <Icon className="w-[18px] h-[18px] text-white" />
       </div>
       <div>
-        <h2 className="text-sm font-extrabold text-foreground tracking-tight">{title}</h2>
-        <p className="text-[9px] text-muted-foreground/55">{subtitle}</p>
+        <h2 className="text-[20px] font-semibold text-foreground tracking-tight">{title}</h2>
+        <p className="text-[13px] text-muted-foreground">{subtitle}</p>
       </div>
     </div>
   );
