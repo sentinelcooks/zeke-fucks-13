@@ -84,7 +84,7 @@ function Section({ title, children, defaultOpen = true, icon }: { title: string;
       <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-5 py-4 text-left group">
         <div className="flex items-center gap-2.5">
           {icon && <span className="text-accent/50">{icon}</span>}
-          <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted-foreground/50 group-hover:text-foreground/60 transition-colors">{title}</span>
+          <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/50 group-hover:text-foreground/60 transition-colors">{title}</span>
         </div>
         <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.3, ease: "easeInOut" }}>
           <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/65" />
@@ -132,7 +132,7 @@ function GamesTable({ games, line, overUnder, propType }: { games: any[]; line: 
   if (!games.length) return <p className="text-center text-muted-foreground/65 py-4 text-xs">No games data</p>;
   return (
     <div className="overflow-x-auto scrollbar-hide -mx-5 px-5">
-      <table className="w-full text-[10px]">
+      <table className="w-full text-[11px]">
         <thead><tr className="border-b border-border/30">{["Date", "OPP", "W/L", "MIN", "PTS", "REB", "AST", "Prop", ""].map((h) => (<th key={h} className="text-center py-2.5 px-1 text-muted-foreground/65 uppercase tracking-wider font-bold whitespace-nowrap">{h}</th>))}</tr></thead>
         <tbody>
           {games.slice(0, 10).map((g: any, i: number) => {
@@ -317,10 +317,10 @@ const FreePropsPage = () => {
                   style={{ background: 'linear-gradient(135deg, hsl(var(--success) / 0.08), hsl(var(--primary) / 0.04))', border: '1px solid hsl(var(--success) / 0.12)' }}>
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-                    <span className="text-[10px] font-bold text-nba-green uppercase tracking-wider">Analysis Complete</span>
+                    <span className="text-[11px] font-bold text-nba-green uppercase tracking-wider">Analysis Complete</span>
                   </div>
                   {prop.edge != null && prop.edge > 0 && (
-                    <span className={`text-[10px] font-bold ${getEdgeColor(prop.edge)}`}>{prop.edge.toFixed(1)}% edge</span>
+                    <span className={`text-[11px] font-bold ${getEdgeColor(prop.edge)}`}>{prop.edge.toFixed(1)}% edge</span>
                   )}
                 </motion.div>
 
@@ -343,7 +343,7 @@ const FreePropsPage = () => {
 
                 {results.season_averages && (
                   <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="vision-card p-4">
-                    <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-3 block">Season Averages</span>
+                    <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-3 block">Season Averages</span>
                     <div className="grid grid-cols-5 gap-2">
                       {[
                         { label: "PPG", value: results.season_averages?.pts },
@@ -355,7 +355,7 @@ const FreePropsPage = () => {
                         <motion.div key={s.label} className="text-center py-2 rounded-lg" style={{ background: 'hsl(var(--card) / 0.6)' }}
                           initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 + i * 0.04 }}>
                           <span className="block text-sm font-extrabold tabular-nums text-foreground/80">{s.value ?? "--"}</span>
-                          <span className="block text-[8px] text-muted-foreground/35 font-bold uppercase">{s.label}</span>
+                          <span className="block text-[11px] text-muted-foreground/35 font-bold uppercase">{s.label}</span>
                         </motion.div>
                       ))}
                     </div>
@@ -403,7 +403,7 @@ const FreePropsPage = () => {
 
                 {results.next_game && (
                   <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="vision-card p-5">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65">Next Game</span>
+                    <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65">Next Game</span>
                     <p className="text-lg font-bold text-foreground mt-1.5">{results.next_game.is_home ? "vs" : "@"} {results.next_game.opponent_name}</p>
                     <p className="text-xs text-muted-foreground/50 mt-0.5">{results.next_game.date}</p>
                   </motion.div>
@@ -417,9 +417,9 @@ const FreePropsPage = () => {
                       { label: "Combined", rate: results.h2h_combined?.rate, total: results.h2h_combined?.total },
                     ].map((s) => (
                       <div key={s.label} className="rounded-xl p-3 text-center" style={{ background: 'hsl(var(--card) / 0.6)' }}>
-                        <span className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground/65">{s.label}</span>
+                        <span className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground/65">{s.label}</span>
                         <span className={`block text-xl font-extrabold tabular-nums ${(s.rate || 0) >= 65 ? "text-nba-green" : (s.rate || 0) >= 50 ? "text-nba-blue" : (s.rate || 0) >= 35 ? "text-nba-yellow" : "text-nba-red"}`}>{s.rate ?? "--"}%</span>
-                        <span className="block text-[9px] text-muted-foreground/55">{s.total || 0} games</span>
+                        <span className="block text-[11px] text-muted-foreground/55">{s.total || 0} games</span>
                       </div>
                     ))}
                   </div>
@@ -429,18 +429,18 @@ const FreePropsPage = () => {
                 <Section title="Injury Report" defaultOpen={true}>
                   <div className="space-y-5">
                     <div>
-                      <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65">Player</span>
+                      <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65">Player</span>
                       {results.player_injuries?.length > 0 ? (
                         results.player_injuries.map((inj: any, i: number) => (
                           <div key={i} className="flex items-center gap-2.5 mt-2 py-2 border-b border-border/15">
-                            <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-destructive/15 text-nba-red">{inj.status?.toUpperCase()}</span>
+                            <span className="text-[11px] font-bold px-2 py-1 rounded-lg bg-destructive/15 text-nba-red">{inj.status?.toUpperCase()}</span>
                             <span className="text-xs text-foreground/60">{inj.detail || "No details"}</span>
                           </div>
                         ))
                       ) : <p className="text-xs text-nba-green mt-2 font-semibold">Healthy ✓</p>}
                     </div>
                     <div>
-                      <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65">Teammates</span>
+                      <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65">Teammates</span>
                       {results.teammate_injuries?.length > 0 ? (
                         <div className="mt-2 space-y-1">
                           {results.teammate_injuries.map((inj: any, idx: number) => {
@@ -449,8 +449,8 @@ const FreePropsPage = () => {
                             return (
                               <div key={idx} className="flex items-center gap-2 py-2 border-b border-border/10 last:border-0">
                                 <span className="text-xs font-semibold text-foreground/80">{inj.player_name}</span>
-                                {inj.position && <span className="text-[9px] text-muted-foreground/65">({inj.position})</span>}
-                                <span className={`text-[9px] font-bold px-2 py-1 rounded-lg ml-auto ${statusBg} ${statusColor}`}>{inj.status}</span>
+                                {inj.position && <span className="text-[11px] text-muted-foreground/65">({inj.position})</span>}
+                                <span className={`text-[11px] font-bold px-2 py-1 rounded-lg ml-auto ${statusBg} ${statusColor}`}>{inj.status}</span>
                               </div>
                             );
                           })}
@@ -458,7 +458,7 @@ const FreePropsPage = () => {
                       ) : <p className="text-xs text-muted-foreground/65 mt-2">None reported</p>}
                     </div>
                     <div>
-                      <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65">Opponent</span>
+                      <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65">Opponent</span>
                       {results.opponent_injuries?.length > 0 ? (
                         <div className="mt-2 space-y-1">
                           {results.opponent_injuries.map((inj: any, idx: number) => {
@@ -467,8 +467,8 @@ const FreePropsPage = () => {
                             return (
                               <div key={idx} className="flex items-center gap-2 py-2 border-b border-border/10 last:border-0">
                                 <span className="text-xs font-semibold text-foreground/80">{inj.player_name}</span>
-                                {inj.position && <span className="text-[9px] text-muted-foreground/65">({inj.position})</span>}
-                                <span className={`text-[9px] font-bold px-2 py-1 rounded-lg ml-auto ${statusBg} ${statusColor}`}>{inj.status}</span>
+                                {inj.position && <span className="text-[11px] text-muted-foreground/65">({inj.position})</span>}
+                                <span className={`text-[11px] font-bold px-2 py-1 rounded-lg ml-auto ${statusBg} ${statusColor}`}>{inj.status}</span>
                               </div>
                             );
                           })}
@@ -477,7 +477,7 @@ const FreePropsPage = () => {
                     </div>
                     {results.injury_insights?.length > 0 && (
                       <div className="mt-2 pt-4 border-t border-border/15">
-                        <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-accent/70">AI Impact Analysis</span>
+                        <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-accent/70">AI Impact Analysis</span>
                         <div className="mt-2 space-y-2">
                           {results.injury_insights.map((insight: string, idx: number) => (
                             <div key={idx} className="text-xs leading-relaxed text-foreground/60 py-0.5">{insight}</div>
@@ -494,7 +494,7 @@ const FreePropsPage = () => {
                       style={{ background: `radial-gradient(circle, ${results.minutes_trend.trend === "up" ? "hsl(var(--success))" : results.minutes_trend.trend === "down" ? "hsl(var(--danger))" : "hsl(var(--primary))"}, transparent)` }} />
                     <div className="flex items-center gap-2.5 mb-3">
                       <Activity className="w-3.5 h-3.5 text-accent/40" />
-                      <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65">{prop.sport === "mlb" ? "At-Bats Trend" : prop.sport === "nhl" ? "TOI Trend" : "Minutes Trend"}</span>
+                      <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65">{prop.sport === "mlb" ? "At-Bats Trend" : prop.sport === "nhl" ? "TOI Trend" : "Minutes Trend"}</span>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl font-extrabold relative overflow-hidden ${
@@ -508,9 +508,9 @@ const FreePropsPage = () => {
                       <div>
                         <p className="text-base font-bold text-foreground tabular-nums">{prop.sport === "mlb" ? Math.round(results.minutes_trend.avg_min) : results.minutes_trend.avg_min} {prop.sport === "mlb" ? "AB avg" : prop.sport === "nhl" ? "TOI avg" : "min avg"}</p>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className="text-[10px] text-muted-foreground/35">Recent: <span className="text-foreground/60 font-semibold">{prop.sport === "mlb" ? Math.round(results.minutes_trend.recent_avg) : results.minutes_trend.recent_avg}</span></span>
-                          <span className="text-[10px] text-muted-foreground/45">·</span>
-                          <span className="text-[10px] text-muted-foreground/35">Earlier: <span className="text-foreground/60 font-semibold">{prop.sport === "mlb" ? Math.round(results.minutes_trend.early_avg) : results.minutes_trend.early_avg}</span></span>
+                          <span className="text-[11px] text-muted-foreground/35">Recent: <span className="text-foreground/60 font-semibold">{prop.sport === "mlb" ? Math.round(results.minutes_trend.recent_avg) : results.minutes_trend.recent_avg}</span></span>
+                          <span className="text-[11px] text-muted-foreground/45">·</span>
+                          <span className="text-[11px] text-muted-foreground/35">Earlier: <span className="text-foreground/60 font-semibold">{prop.sport === "mlb" ? Math.round(results.minutes_trend.early_avg) : results.minutes_trend.early_avg}</span></span>
                         </div>
                       </div>
                     </div>
@@ -555,7 +555,7 @@ const FreePropsPage = () => {
                       </div>
                     ) : correlations.length > 0 ? (
                       <div className="space-y-1.5">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-accent/50 mb-2">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-accent/50 mb-2">
                           When {prop.player_name.split(" ").pop()} {formatPropType(prop.prop_type)} hits, these also hit:
                         </p>
                         {correlations.map((c, ci) => (
@@ -563,11 +563,11 @@ const FreePropsPage = () => {
                             className="flex items-center justify-between py-2.5 px-3 rounded-xl" style={{ background: 'hsl(var(--card) / 0.5)' }}>
                             <div>
                               <span className="text-[13px] font-bold text-foreground">{c.correlated_player}</span>
-                              {c.correlated_team && <span className="text-[10px] text-muted-foreground/50 ml-1.5">{c.correlated_team}</span>}
-                              <div className="text-[10px] text-muted-foreground/50 mt-0.5">{formatPropType(c.correlated_prop)}</div>
+                              {c.correlated_team && <span className="text-[11px] text-muted-foreground/50 ml-1.5">{c.correlated_team}</span>}
+                              <div className="text-[11px] text-muted-foreground/50 mt-0.5">{formatPropType(c.correlated_prop)}</div>
                             </div>
                             <div className="flex items-center gap-3">
-                              <span className="text-[9px] text-muted-foreground/35">{c.sample_size}G</span>
+                              <span className="text-[11px] text-muted-foreground/35">{c.sample_size}G</span>
                               <span className={`text-[16px] font-black tabular-nums ${c.hit_rate >= 80 ? "text-nba-green" : c.hit_rate >= 60 ? "text-nba-blue" : "text-nba-yellow"}`}>{c.hit_rate}%</span>
                             </div>
                           </motion.div>
@@ -644,7 +644,7 @@ const FreePropsPage = () => {
             <div className="flex gap-1.5">
               <button
                 onClick={() => setPropTypeFilter("all")}
-                className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all ${
                   propTypeFilter === "all" ? "text-foreground" : "text-muted-foreground/50"
                 }`}
                 style={{
@@ -658,7 +658,7 @@ const FreePropsPage = () => {
                 <button
                   key={pt}
                   onClick={() => setPropTypeFilter(pt)}
-                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all ${
                     propTypeFilter === pt ? "text-foreground" : "text-muted-foreground/50"
                   }`}
                   style={{
@@ -673,7 +673,7 @@ const FreePropsPage = () => {
           </div>
           <button
             onClick={() => setSortOrder(prev => prev === "desc" ? "asc" : "desc")}
-            className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 transition-all active:scale-95"
+            className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60 transition-all active:scale-95"
             style={{ background: 'hsl(var(--card) / 0.4)', border: '1px solid hsl(var(--border) / 0.2)' }}
           >
             <BarChart3 className="w-3 h-3" />
@@ -728,7 +728,7 @@ const FreePropsPage = () => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className="text-[14px] font-bold text-foreground truncate">{prop.player_name}</span>
-                        <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md text-muted-foreground/60"
+                        <span className="text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md text-muted-foreground/60"
                           style={{ background: 'hsl(var(--secondary) / 0.4)' }}>
                           {prop.sport}
                         </span>
@@ -748,7 +748,7 @@ const FreePropsPage = () => {
                         )}
                       </div>
                       {prop.opponent && (
-                        <span className="text-[10px] text-muted-foreground/65 mt-0.5 block truncate">vs {prop.opponent}</span>
+                        <span className="text-[11px] text-muted-foreground/65 mt-0.5 block truncate">vs {prop.opponent}</span>
                       )}
                     </div>
 
@@ -756,16 +756,16 @@ const FreePropsPage = () => {
                       {/* Confidence % - primary */}
                       <div className="flex flex-col items-center px-2.5 py-1.5 rounded-xl" style={{ background: getHitRateColor(hitRate).bg }}>
                         <span className={`text-[16px] font-black tabular-nums leading-none ${getHitRateColor(hitRate).text}`}>{hitRate}%</span>
-                        <span className={`text-[7px] font-bold uppercase tracking-widest mt-0.5 ${getHitRateColor(hitRate).text}`}>Confidence</span>
+                        <span className={`text-[11px] font-bold uppercase tracking-widest mt-0.5 ${getHitRateColor(hitRate).text}`}>Confidence</span>
                       </div>
                       {highConfidence && (
-                        <span className="text-[9px] font-bold text-nba-green flex items-center gap-0.5">
+                        <span className="text-[11px] font-bold text-nba-green flex items-center gap-0.5">
                           <Sparkles className="w-2.5 h-2.5" /> High Conf.
                         </span>
                       )}
                       {/* Edge - secondary */}
                       {prop.edge != null && prop.edge > 0 && (
-                        <span className={`text-[10px] font-bold tabular-nums ${getEdgeColor(prop.edge)}`}>
+                        <span className={`text-[11px] font-bold tabular-nums ${getEdgeColor(prop.edge)}`}>
                           {prop.edge.toFixed(1)}% edge
                         </span>
                       )}

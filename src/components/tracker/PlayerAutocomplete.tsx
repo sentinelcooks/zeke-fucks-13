@@ -222,7 +222,7 @@ export function PlayerAutocomplete({ sport, value, onChange, betType = "" }: Pla
 
   return (
     <div ref={containerRef} className="relative">
-      <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">{label}</label>
+      <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">{label}</label>
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -248,7 +248,7 @@ export function PlayerAutocomplete({ sport, value, onChange, betType = "" }: Pla
         <div className="absolute z-[80] top-full left-0 right-0 mt-1 rounded-xl overflow-hidden shadow-xl max-h-[280px] overflow-y-auto pb-1"
           style={{ background: 'hsl(var(--card) / 0.98)', border: '1px solid hsl(var(--border) / 0.4)', backdropFilter: 'blur(20px)' }}>
           {loading && (
-            <div className="px-3 py-2 text-[10px] text-muted-foreground/50">Searching...</div>
+            <div className="px-3 py-2 text-[11px] text-muted-foreground/50">Searching...</div>
           )}
           {suggestions.map((s, i) => (
             <button key={i} className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-foreground/5 transition-colors"
@@ -257,14 +257,14 @@ export function PlayerAutocomplete({ sport, value, onChange, betType = "" }: Pla
                 <img src={s.headshot} alt="" className="w-7 h-7 rounded-full object-cover bg-foreground/5 shrink-0"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
               ) : (
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-muted-foreground shrink-0"
+                <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-muted-foreground shrink-0"
                   style={{ background: 'hsl(var(--secondary) / 0.8)' }}>
                   {s.name.split(" ").map(w => w[0]).join("").slice(0, 2)}
                 </div>
               )}
               <div className="min-w-0 flex-1">
                 <p className="text-[12px] font-semibold text-foreground">{s.name}</p>
-                {s.team && <p className="text-[9px] text-muted-foreground/50">{s.team}</p>}
+                {s.team && <p className="text-[11px] text-muted-foreground/50">{s.team}</p>}
               </div>
             </button>
           ))}

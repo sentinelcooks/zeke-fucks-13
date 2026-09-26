@@ -155,17 +155,17 @@ export function ShareProfitCard({ plays, onClose }: ShareProfitCardProps) {
                   <img src={sentinelLogo} alt="Sentinel" className="w-8 h-8 rounded-xl"
                     style={{ boxShadow: '0 2px 8px hsl(var(--background) / 0.5)' }} />
                   <div>
-                    <span className="text-[12px] font-extrabold tracking-[0.12em] uppercase" style={{
+                    <span className="text-[12px] font-extrabold tracking-[0.04em] uppercase" style={{
                       background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))',
                       WebkitBackgroundClip: 'text',
                       WebkitTextFillColor: 'transparent',
                     }}>Sentinel</span>
-                    <p className="text-[7px] text-foreground/20 font-semibold tracking-wider uppercase -mt-0.5">AI Sports Analytics</p>
+                    <p className="text-[11px] text-foreground/20 font-semibold tracking-wider uppercase -mt-0.5">AI Sports Analytics</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1 px-2 py-1 rounded-full" style={{ background: 'hsl(var(--secondary) / 0.6)', border: '1px solid hsl(var(--border) / 0.2)' }}>
                   <Calendar className="w-2.5 h-2.5 text-foreground/25" />
-                  <span className="text-[7px] font-bold text-foreground/25 tracking-wider">{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                  <span className="text-[11px] font-bold text-foreground/25 tracking-wider">{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                 </div>
               </div>
             </div>
@@ -175,23 +175,23 @@ export function ShareProfitCard({ plays, onClose }: ShareProfitCardProps) {
 
             {/* Main PnL */}
             <div className="px-6 py-5 text-center">
-              <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-foreground/20 mb-2">Today's P&L</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-foreground/20 mb-2">Today's P&L</p>
               <p className={`text-5xl font-black tabular-nums tracking-tight ${stats.todayProfit >= 0 ? "text-success" : "text-danger"}`}
                 style={{ textShadow: stats.todayProfit >= 0 ? '0 0 30px hsl(var(--success) / 0.3)' : '0 0 30px hsl(var(--danger) / 0.3)' }}>
                 {fmtProfit(stats.todayProfit)}
               </p>
               <div className="flex items-center justify-center gap-3 mt-2.5">
-                <span className="text-[10px] font-bold text-success">{stats.todayWins}W</span>
-                <span className="text-[10px] font-bold text-foreground/15">·</span>
-                <span className="text-[10px] font-bold text-danger">{stats.todayLosses}L</span>
-                <span className="text-[10px] font-bold text-foreground/15">·</span>
-                <span className="text-[10px] font-bold text-foreground/30">{stats.todayPlays} plays</span>
+                <span className="text-[11px] font-bold text-success">{stats.todayWins}W</span>
+                <span className="text-[11px] font-bold text-foreground/15">·</span>
+                <span className="text-[11px] font-bold text-danger">{stats.todayLosses}L</span>
+                <span className="text-[11px] font-bold text-foreground/15">·</span>
+                <span className="text-[11px] font-bold text-foreground/30">{stats.todayPlays} plays</span>
               </div>
             </div>
 
             {/* 7-day sparkline */}
             <div className="px-6 pb-4">
-              <p className="text-[8px] font-bold uppercase tracking-[0.15em] text-foreground/15 mb-2">7-Day Trend</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-foreground/15 mb-2">7-Day Trend</p>
               <div className="flex items-end gap-1 h-10">
                 {stats.week.map((val, i) => {
                   const h = Math.max((Math.abs(val) / maxWeek) * 32, 2);
@@ -223,7 +223,7 @@ export function ShareProfitCard({ plays, onClose }: ShareProfitCardProps) {
                   }}>
                     <s.icon className="w-3 h-3 mx-auto mb-1.5" style={{ color: withAlpha(s.color, 0.38) }} />
                     <p className="text-sm font-extrabold tabular-nums" style={{ color: s.color }}>{s.value}</p>
-                    <p className="text-[7px] font-bold uppercase tracking-wider text-foreground/15 mt-0.5">{s.label}</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-foreground/15 mt-0.5">{s.label}</p>
                   </div>
                 ))}
               </div>
@@ -233,8 +233,8 @@ export function ShareProfitCard({ plays, onClose }: ShareProfitCardProps) {
             <div className="px-6 pb-5">
               <div className="h-[1px] mb-3" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--secondary) / 0.3), transparent)' }} />
               <div className="flex items-center justify-between">
-                <span className="text-[7px] text-foreground/10 font-medium">{dateStr}</span>
-                <span className="text-[7px] font-bold tracking-wider" style={{
+                <span className="text-[11px] text-foreground/10 font-medium">{dateStr}</span>
+                <span className="text-[11px] font-bold tracking-wider" style={{
                   background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',

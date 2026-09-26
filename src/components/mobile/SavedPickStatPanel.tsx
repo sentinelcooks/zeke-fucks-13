@@ -58,13 +58,13 @@ export function SavedPickStatPanel({
       className="vision-card p-4 space-y-3"
     >
       <div className="flex items-center justify-between">
-        <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65">
+        <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65">
           Scanner snapshot
         </span>
         <div className="flex items-center gap-1.5">
-          <span className="text-[9px] font-bold uppercase text-muted-foreground/55">{sportLabel}</span>
+          <span className="text-[11px] font-bold uppercase text-muted-foreground/55">{sportLabel}</span>
           {tierLabel && (
-            <span className="text-[9px] font-bold uppercase text-foreground/80 px-1.5 py-0.5 rounded" style={{ background: 'hsl(var(--primary) / 0.18)' }}>
+            <span className="text-[11px] font-bold uppercase text-foreground/80 px-1.5 py-0.5 rounded" style={{ background: 'hsl(var(--primary) / 0.18)' }}>
               {tierLabel}
             </span>
           )}
@@ -80,7 +80,7 @@ export function SavedPickStatPanel({
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'hsl(var(--card) / 0.6)' }}>
             <Building2 className="w-3.5 h-3.5 text-muted-foreground/70" />
             <div className="min-w-0">
-              <p className="text-[8px] uppercase font-bold text-muted-foreground/55 leading-none">Best book</p>
+              <p className="text-[11px] uppercase font-bold text-muted-foreground/55 leading-none">Best book</p>
               <p className="text-[11px] font-extrabold text-foreground/90 truncate uppercase">{market.bestBook}</p>
             </div>
           </div>
@@ -89,7 +89,7 @@ export function SavedPickStatPanel({
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'hsl(var(--card) / 0.6)' }}>
             <Layers3 className="w-3.5 h-3.5 text-muted-foreground/70" />
             <div className="min-w-0">
-              <p className="text-[8px] uppercase font-bold text-muted-foreground/55 leading-none">Market depth</p>
+              <p className="text-[11px] uppercase font-bold text-muted-foreground/55 leading-none">Market depth</p>
               <p className={`text-[11px] font-extrabold truncate uppercase ${depthColor(market.marketDepth)}`}>
                 {market.bookCount} {market.bookCount === 1 ? "book" : "books"}{market.marketDepth ? ` · ${market.marketDepth}` : ""}
               </p>
@@ -100,7 +100,7 @@ export function SavedPickStatPanel({
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'hsl(var(--card) / 0.6)' }}>
             <Gauge className="w-3.5 h-3.5 text-muted-foreground/70" />
             <div className="min-w-0">
-              <p className="text-[8px] uppercase font-bold text-muted-foreground/55 leading-none">Implied prob.</p>
+              <p className="text-[11px] uppercase font-bold text-muted-foreground/55 leading-none">Implied prob.</p>
               <p className="text-[11px] font-extrabold text-foreground/90 tabular-nums">{impliedDisplay}</p>
             </div>
           </div>
@@ -109,7 +109,7 @@ export function SavedPickStatPanel({
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'hsl(var(--card) / 0.6)' }}>
             <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground/70" />
             <div className="min-w-0">
-              <p className="text-[8px] uppercase font-bold text-muted-foreground/55 leading-none">Quality</p>
+              <p className="text-[11px] uppercase font-bold text-muted-foreground/55 leading-none">Quality</p>
               <p className={`text-[11px] font-extrabold uppercase ${qualityColor(market.marketDataQuality)}`}>
                 {market.marketDataQuality}
               </p>
@@ -119,7 +119,7 @@ export function SavedPickStatPanel({
       </div>
 
       {(evDisplay || market.consensusLine != null) && (
-        <div className="flex items-center justify-between text-[10px] text-muted-foreground/70 pt-1 border-t border-border/30">
+        <div className="flex items-center justify-between text-[11px] text-muted-foreground/70 pt-1 border-t border-border/30">
           {market.consensusLine != null && (
             <span>Consensus line: <span className="text-foreground/80 font-bold tabular-nums">{market.consensusLine}</span></span>
           )}
@@ -130,7 +130,7 @@ export function SavedPickStatPanel({
       )}
 
       {market.edgeDowngradeReason && (
-        <p className="text-[10px] text-nba-yellow/80 italic">Edge note: {market.edgeDowngradeReason}</p>
+        <p className="text-[11px] text-nba-yellow/80 italic">Edge note: {market.edgeDowngradeReason}</p>
       )}
     </motion.div>
   );

@@ -20,9 +20,9 @@ export function PastMeetingsCard({ rows, season }: { rows: HeadToHeadRow[]; seas
             <div key={row.id} className="rounded-xl px-3 py-2.5" style={{ background: "hsl(var(--card) / 0.8)" }}>
               <div className="flex items-center justify-between gap-3">
                 <p className="min-w-0 truncate text-[11px] font-bold text-foreground/85">{row.scoreLabel}</p>
-                <p className="shrink-0 text-[9px] font-semibold text-nba-green">{row.outcomeLabel}</p>
+                <p className="shrink-0 text-[11px] font-semibold text-nba-green">{row.outcomeLabel}</p>
               </div>
-              <p className="mt-1 text-[9px] text-muted-foreground/55">
+              <p className="mt-1 text-[11px] text-muted-foreground/55">
                 {row.dateLabel}{row.venue ? ` · ${row.venue}` : ""}
               </p>
             </div>

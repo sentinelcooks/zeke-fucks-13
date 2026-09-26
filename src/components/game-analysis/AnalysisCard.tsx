@@ -38,9 +38,9 @@ export function CardHeading({
     <div className={`flex items-center justify-between gap-3 ${className}`}>
       <div className="flex min-w-0 items-center gap-2">
         <Icon className="h-3.5 w-3.5 shrink-0 text-nba-green" />
-        <h2 className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-foreground/80">{title}</h2>
+        <h2 className="truncate text-[11px] font-bold uppercase tracking-[0.04em] text-foreground/80">{title}</h2>
       </div>
-      {note ? <span className="shrink-0 text-[10px] font-semibold text-muted-foreground/70">{note}</span> : null}
+      {note ? <span className="shrink-0 text-[11px] font-semibold text-muted-foreground/70">{note}</span> : null}
     </div>
   );
 }

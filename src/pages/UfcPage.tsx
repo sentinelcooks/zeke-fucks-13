@@ -94,7 +94,7 @@ const UfcPage = () => {
 
   const renderSearchInput = (value: string, side: 1 | 2, suggestions: any[], showSuggestions: boolean, placeholder: string) => (
     <div className="flex-1 relative">
-      <label className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-1.5">
+      <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-1.5">
         Fighter {side}
       </label>
       <input
@@ -120,7 +120,7 @@ const UfcPage = () => {
                   style={{ background: 'hsl(var(--secondary))' }}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
               ) : (
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-muted-foreground/50 shrink-0"
+                <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-muted-foreground/50 shrink-0"
                   style={{ background: 'hsl(var(--secondary) / 0.8)' }}>
                   {s.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2)}
                 </div>
@@ -170,7 +170,7 @@ const UfcPage = () => {
                 <div className="flex gap-3 items-end">
                   {renderSearchInput(fighter1, 1, suggestions1, showSug1, "e.g. Islam Makhachev")}
                   <div className="flex items-center pb-2.5">
-                    <span className="text-[10px] font-extrabold text-muted-foreground/40 uppercase">vs</span>
+                    <span className="text-[11px] font-extrabold text-muted-foreground/40 uppercase">vs</span>
                   </div>
                   {renderSearchInput(fighter2, 2, suggestions2, showSug2, "e.g. Charles Oliveira")}
                 </div>
@@ -216,7 +216,7 @@ function StatBar({ label, val1, val2, format }: { label: string; val1: number; v
   const max = Math.max(val1, val2, 0.1);
   return (
     <div className="py-1.5">
-      <div className="flex justify-between text-[10px] uppercase tracking-wider text-muted-foreground/50 mb-1">
+      <div className="flex justify-between text-[11px] uppercase tracking-wider text-muted-foreground/50 mb-1">
         <span className="font-bold text-foreground/80">{fmt(val1)}</span>
         <span className="font-semibold">{label}</span>
         <span className="font-bold text-foreground/80">{fmt(val2)}</span>
@@ -246,7 +246,7 @@ function BetSection({ icon, title, predictions }: { icon: React.ReactNode; title
       background: 'hsl(var(--card) / 0.5)',
       border: '1px solid hsl(var(--border) / 0.3)',
     }}>
-      <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground/50 font-semibold mb-3 flex items-center gap-1.5">
+      <h3 className="text-[11px] uppercase tracking-wider text-muted-foreground/50 font-semibold mb-3 flex items-center gap-1.5">
         {icon} {title}
       </h3>
       {predictions && predictions.length > 0 ? (
@@ -263,7 +263,7 @@ function BetSection({ icon, title, predictions }: { icon: React.ReactNode; title
                     p.confidence === "strong" ? "text-nba-green" : p.confidence === "lean" ? "text-[hsl(var(--nba-blue))]" : "text-muted-foreground/60"
                   }`}>{p.probability}%</span>
                 )}
-                <span className={`text-[8px] uppercase font-bold px-1.5 py-0.5 rounded-full ${
+                <span className={`text-[11px] uppercase font-bold px-1.5 py-0.5 rounded-full ${
                   p.confidence === "strong" ? "bg-nba-green text-accent-foreground" :
                   p.confidence === "lean" ? "bg-[hsl(var(--nba-blue))] text-primary-foreground" :
                   "bg-muted/50 text-muted-foreground/60"
@@ -272,7 +272,7 @@ function BetSection({ icon, title, predictions }: { icon: React.ReactNode; title
               <span className={`text-sm font-extrabold block mb-1 ${
                 p.confidence === "strong" ? "text-nba-green" : p.confidence === "lean" ? "text-[hsl(var(--nba-blue))]" : "text-muted-foreground"
               }`}>{p.bet}</span>
-              <p className="text-[10px] text-foreground leading-snug">{p.reasoning}</p>
+              <p className="text-[11px] text-foreground leading-snug">{p.reasoning}</p>
             </div>
           ))}
         </div>
@@ -354,12 +354,12 @@ function MatchupResults({ data }: { data: any }) {
             boxShadow: best_bet?.confidence === "strong" ? '0 0 24px hsla(var(--nba-green), 0.15)' : 'none',
           }}>
           <Trophy className={`w-5 h-5 mb-1 ${confidenceColor(best_bet?.confidence)}`} />
-          <span className="text-[8px] uppercase tracking-wider text-foreground/70 mb-0.5">Top Pick</span>
+          <span className="text-[11px] uppercase tracking-wider text-foreground/70 mb-0.5">Top Pick</span>
           <div className={`text-xs font-extrabold leading-tight ${confidenceColor(best_bet?.confidence)}`}>{best_bet?.bet}</div>
           {best_bet?.probability && (
             <div className={`text-lg font-extrabold ${confidenceColor(best_bet?.confidence)}`}>{best_bet.probability}%</div>
           )}
-          <p className="text-[8px] text-foreground/90 mt-0.5 leading-snug line-clamp-3">{best_bet?.reasoning}</p>
+          <p className="text-[11px] text-foreground/90 mt-0.5 leading-snug line-clamp-3">{best_bet?.reasoning}</p>
         </div>
 
         {/* Fighter 2 */}
@@ -372,11 +372,11 @@ function MatchupResults({ data }: { data: any }) {
         border: '1px solid hsl(var(--border) / 0.3)',
       }}>
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] font-bold text-accent truncate">{fighter1?.name}</span>
-          <h3 className="text-[9px] uppercase tracking-wider text-muted-foreground/40 font-semibold flex items-center gap-1">
+          <span className="text-[11px] font-bold text-accent truncate">{fighter1?.name}</span>
+          <h3 className="text-[11px] uppercase tracking-wider text-muted-foreground/40 font-semibold flex items-center gap-1">
             <BarChart3 className="w-3 h-3" /> Head to Head
           </h3>
-          <span className="text-[10px] font-bold text-[hsl(var(--nba-blue))] truncate">{fighter2?.name}</span>
+          <span className="text-[11px] font-bold text-[hsl(var(--nba-blue))] truncate">{fighter2?.name}</span>
         </div>
         <StatBar label="Strikes / Min" val1={comparison?.strikes_per_min?.fighter1 || 0} val2={comparison?.strikes_per_min?.fighter2 || 0} />
         <StatBar label="Finish Rate" val1={comparison?.finish_rate?.fighter1 || 0} val2={comparison?.finish_rate?.fighter2 || 0} format={v => `${v}%`} />
@@ -394,7 +394,7 @@ function MatchupResults({ data }: { data: any }) {
           background: 'hsl(var(--card) / 0.5)',
           border: '1px solid hsl(var(--border) / 0.3)',
         }}>
-          <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground/50 font-semibold mb-3 flex items-center gap-1.5">
+          <h3 className="text-[11px] uppercase tracking-wider text-muted-foreground/50 font-semibold mb-3 flex items-center gap-1.5">
             <Zap className="w-3 h-3" /> Moneyline
           </h3>
           {ml_pick && (
@@ -407,12 +407,12 @@ function MatchupResults({ data }: { data: any }) {
               {ml_pick.probability && (
                 <span className={`block text-2xl font-extrabold ${confidenceColor(ml_pick.confidence)}`}>{ml_pick.probability}%</span>
               )}
-              <span className={`inline-block text-[8px] uppercase font-bold px-1.5 py-0.5 rounded-full mt-1 mb-1.5 ${
+              <span className={`inline-block text-[11px] uppercase font-bold px-1.5 py-0.5 rounded-full mt-1 mb-1.5 ${
                 ml_pick.confidence === "strong" ? "bg-nba-green text-accent-foreground" :
                 ml_pick.confidence === "lean" ? "bg-[hsl(var(--nba-blue))] text-primary-foreground" :
                 "bg-[hsl(var(--nba-yellow))] text-accent-foreground"
               }`}>{ml_pick.confidence}</span>
-              <p className="text-[10px] text-foreground leading-snug">{ml_pick.reasoning}</p>
+              <p className="text-[11px] text-foreground leading-snug">{ml_pick.reasoning}</p>
             </div>
           )}
 
@@ -424,7 +424,7 @@ function MatchupResults({ data }: { data: any }) {
               { label: "Finish %", val: `${(data.combined_finish_rate || 0).toFixed(0)}%` },
             ].map(s => (
               <div key={s.label}>
-                <span className="block text-[8px] text-muted-foreground/40 uppercase">{s.label}</span>
+                <span className="block text-[11px] text-muted-foreground/40 uppercase">{s.label}</span>
                 <span className="block text-sm font-extrabold text-foreground">{s.val}</span>
               </div>
             ))}
@@ -437,14 +437,14 @@ function MatchupResults({ data }: { data: any }) {
         background: 'hsl(var(--card) / 0.5)',
         border: '1px solid hsl(var(--border) / 0.3)',
       }}>
-        <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground/50 font-semibold mb-3 flex items-center gap-1.5">
+        <h3 className="text-[11px] uppercase tracking-wider text-muted-foreground/50 font-semibold mb-3 flex items-center gap-1.5">
           <BarChart3 className="w-3 h-3" /> Sportsbook Odds
         </h3>
         {oddsLoading ? (
           <p className="text-xs text-muted-foreground/40 text-center py-3">Loading odds...</p>
         ) : ufcOdds.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-[10px]">
+            <table className="w-full text-[11px]">
               <thead>
                 <tr className="border-b border-border/20">
                   <th className="text-left py-1.5 text-muted-foreground/40 uppercase tracking-wider font-semibold">Book</th>
@@ -492,12 +492,12 @@ function MatchupResults({ data }: { data: any }) {
             background: 'hsl(var(--card) / 0.5)',
             border: '1px solid hsl(var(--border) / 0.3)',
           }}>
-            <h3 className={`text-[10px] uppercase tracking-wider font-semibold mb-2 ${side.color}`}>
+            <h3 className={`text-[11px] uppercase tracking-wider font-semibold mb-2 ${side.color}`}>
               {side.f?.name} — Recent Fights
             </h3>
             {side.fights && side.fights.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full text-[10px]">
+                <table className="w-full text-[11px]">
                   <thead>
                     <tr className="border-b border-border/20">
                       {["Date", "Opponent", "W/L", "Method", "Rd"].map(h => (
@@ -518,7 +518,7 @@ function MatchupResults({ data }: { data: any }) {
                   </tbody>
                 </table>
               </div>
-            ) : <p className="text-[10px] text-muted-foreground/40 text-center py-3">No fight data</p>}
+            ) : <p className="text-[11px] text-muted-foreground/40 text-center py-3">No fight data</p>}
           </div>
         ))}
       </div>
@@ -635,10 +635,10 @@ function FighterCard({ fighter, color }: { fighter: any; color: string }) {
       </div>
       <h3 className={`text-xs font-bold truncate ${color}`}>{fighter?.name}</h3>
       <div className="flex items-center justify-center gap-1.5">
-        <p className="text-[9px] text-muted-foreground/50">{fighter?.record}</p>
-        {fighter?.age && <span className="text-[9px] text-muted-foreground/40">• {fighter.age}yr</span>}
+        <p className="text-[11px] text-muted-foreground/50">{fighter?.record}</p>
+        {fighter?.age && <span className="text-[11px] text-muted-foreground/40">• {fighter.age}yr</span>}
       </div>
-      <p className="text-[8px] text-muted-foreground/35">{fighter?.weight_class}</p>
+      <p className="text-[11px] text-muted-foreground/35">{fighter?.weight_class}</p>
       <div className="grid grid-cols-3 gap-1 mt-2">
         {[
           { label: "KO", val: fighter?.stats?.ko_wins },
@@ -646,7 +646,7 @@ function FighterCard({ fighter, color }: { fighter: any; color: string }) {
           { label: "DEC", val: fighter?.stats?.dec_wins },
         ].map(s => (
           <div key={s.label}>
-            <span className="block text-[7px] text-muted-foreground/40 uppercase">{s.label}</span>
+            <span className="block text-[11px] text-muted-foreground/40 uppercase">{s.label}</span>
             <span className="block text-sm font-extrabold text-foreground">{s.val ?? 0}</span>
           </div>
         ))}

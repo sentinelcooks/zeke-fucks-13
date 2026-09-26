@@ -80,7 +80,7 @@ export function OddsTabsCard({
                   <span className="truncate">{quote.label}{pointLabel(quote.point, quote.side) ? ` ${pointLabel(quote.point, quote.side)}` : ""}</span>
                   {isPick && (
                     <span
-                      className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black tracking-wider"
+                      className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-black tracking-wider"
                       style={{ background: `color-mix(in srgb, ${tierColor} 18%, transparent)`, color: tierColor }}
                     >
                       MODEL

@@ -90,7 +90,7 @@ export default function WelcomeConfirmationPage() {
       {/* Decorative SENTINEL watermark */}
       <div className="absolute inset-0 z-[1] flex items-center justify-center pointer-events-none">
         <span
-          className="text-[20vw] font-black tracking-[0.15em] select-none"
+          className="text-[20vw] font-black tracking-[0.04em] select-none"
           style={{ color: "hsl(var(--foreground) / 0.04)" }}
         >
           SENTINEL

@@ -322,7 +322,7 @@ const UnitCalculatorSection = () => {
         <div className="space-y-3">
           <div className="bg-secondary/40 rounded-xl p-4 space-y-3">
             <div className="text-center">
-              <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-1">
+              <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55 mb-1">
                 Current 1U
               </p>
               <p className="text-2xl font-bold" style={{ color: "hsl(var(--primary))" }}>
@@ -335,7 +335,7 @@ const UnitCalculatorSection = () => {
                   key={mult}
                   className="flex flex-col items-center gap-0.5 bg-secondary/50 rounded-lg py-2"
                 >
-                  <span className="text-[9px] font-bold text-muted-foreground/55">{mult}U</span>
+                  <span className="text-[11px] font-bold text-muted-foreground/55">{mult}U</span>
                   <span className="text-[11px] font-bold text-foreground">{fmt(manualUnitNum * mult)}</span>
                 </div>
               ))}
@@ -363,13 +363,13 @@ const UnitCalculatorSection = () => {
       resultNode = (
         <div className="space-y-3">
           {showCustomWarning && (
-            <p className="text-[10px] text-warning/80 text-center">
+            <p className="text-[11px] text-warning/80 text-center">
               Most users keep units between 1–3% for safer bankroll management.
             </p>
           )}
           <div className="bg-secondary/40 rounded-xl p-4 space-y-3">
             <div className="text-center">
-              <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-1">
+              <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55 mb-1">
                 Recommended Unit Size
               </p>
               <p className="text-2xl font-bold" style={{ color: "hsl(var(--primary))" }}>
@@ -382,7 +382,7 @@ const UnitCalculatorSection = () => {
                   key={mult}
                   className="flex flex-col items-center gap-0.5 bg-secondary/50 rounded-lg py-2"
                 >
-                  <span className="text-[9px] font-bold text-muted-foreground/55">{mult}U</span>
+                  <span className="text-[11px] font-bold text-muted-foreground/55">{mult}U</span>
                   <span className="text-[11px] font-bold text-foreground">{fmt(unit * mult)}</span>
                 </div>
               ))}
@@ -437,7 +437,7 @@ const UnitCalculatorSection = () => {
 
         {/* Setup mode segmented control */}
         <div className="space-y-1.5">
-          <Label className="text-[10px] text-muted-foreground/65">Setup Mode</Label>
+          <Label className="text-[11px] text-muted-foreground/65">Setup Mode</Label>
           <div
             className="flex rounded-xl p-1 gap-1"
             style={{
@@ -476,7 +476,7 @@ const UnitCalculatorSection = () => {
           <>
             {/* Bankroll input */}
             <div className="space-y-1.5">
-              <Label className="text-[10px] text-muted-foreground/65">Bankroll</Label>
+              <Label className="text-[11px] text-muted-foreground/65">Bankroll</Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground/55 pointer-events-none">
                   $
@@ -499,7 +499,7 @@ const UnitCalculatorSection = () => {
 
             {/* Risk preset segmented control */}
             <div className="space-y-1.5">
-              <Label className="text-[10px] text-muted-foreground/65">Risk Level</Label>
+              <Label className="text-[11px] text-muted-foreground/65">Risk Level</Label>
               <div
                 className="flex rounded-xl p-1 gap-1 flex-wrap"
                 style={{
@@ -528,7 +528,7 @@ const UnitCalculatorSection = () => {
                     <span className="text-[11px] font-bold tracking-wider">{preset.label}</span>
                     {preset.pct !== null && (
                       <span
-                        className={`text-[9px] font-semibold ${
+                        className={`text-[11px] font-semibold ${
                           riskPreset === preset.value
                             ? "text-card/75"
                             : "text-muted-foreground/50"
@@ -545,7 +545,7 @@ const UnitCalculatorSection = () => {
             {/* Custom % input */}
             {riskPreset === "custom" && (
               <div className="space-y-1.5">
-                <Label className="text-[10px] text-muted-foreground/65">Custom % per unit</Label>
+                <Label className="text-[11px] text-muted-foreground/65">Custom % per unit</Label>
                 <div className="relative">
                   <Input
                     type="number"
@@ -569,7 +569,7 @@ const UnitCalculatorSection = () => {
 
         {setupMode === "manual" && (
           <div className="space-y-1.5">
-            <Label className="text-[10px] text-muted-foreground/65">1U Amount ($)</Label>
+            <Label className="text-[11px] text-muted-foreground/65">1U Amount ($)</Label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground/55 pointer-events-none">
                 $
@@ -596,10 +596,10 @@ const UnitCalculatorSection = () => {
 
         {/* Education footer */}
         <div className="space-y-1">
-          <p className="text-[10px] text-muted-foreground/65">
+          <p className="text-[11px] text-muted-foreground/65">
             A unit is a fixed bet size based on your bankroll. Using units helps you manage risk and avoid betting random amounts.
           </p>
-          <p className="text-[10px] text-muted-foreground/65">
+          <p className="text-[11px] text-muted-foreground/65">
             Most bettors use 1–3% of their bankroll as 1 unit. Never bet more than you can afford to lose.
           </p>
         </div>
@@ -713,7 +713,7 @@ const ProfitDisplayModeSection = () => {
             <button
               type="button"
               onClick={() => window.dispatchEvent(new Event(SHOW_UNIT_CALCULATOR_EVENT))}
-              className="text-[10px] font-bold uppercase tracking-wider text-warning/85 hover:text-warning transition-colors"
+              className="text-[11px] font-bold uppercase tracking-wider text-warning/85 hover:text-warning transition-colors"
             >
               Set Unit Size
             </button>
@@ -1012,10 +1012,10 @@ const SettingsPage = () => {
             <p className="text-[17px] font-medium text-foreground truncate">
               {resolveDisplayName(profile, user, "User")}
             </p>
-            <p className="text-[10px] text-muted-foreground/65 truncate">{user?.email}</p>
+            <p className="text-[11px] text-muted-foreground/65 truncate">{user?.email}</p>
           </div>
           <div className="flex items-center gap-1 text-muted-foreground/55">
-            <span className="hidden min-[360px]:inline text-[9px] font-bold uppercase tracking-wider">Manage</span>
+            <span className="hidden min-[360px]:inline text-[11px] font-bold uppercase tracking-wider">Manage</span>
             <ChevronRight className="w-4 h-4" />
           </div>
         </button>
@@ -1036,7 +1036,7 @@ const SettingsPage = () => {
               <p className="text-[11px] text-muted-foreground">{subscriptionTiming}</p>
               {!premiumLoading && premiumStatus !== "error" && (
                 <div className="flex items-center justify-between gap-3 pt-2 mt-2 border-t border-border/20">
-                  <span className="text-[10px] text-muted-foreground/65">Access type</span>
+                  <span className="text-[11px] text-muted-foreground/65">Access type</span>
                   <span className="text-[11px] font-semibold text-foreground text-right">{accessTypeLabel}</span>
                 </div>
               )}
@@ -1044,11 +1044,11 @@ const SettingsPage = () => {
 
             <div className="space-y-3">
               <div>
-                <p className="text-[10px] text-muted-foreground/65 mb-1">Email</p>
+                <p className="text-[11px] text-muted-foreground/65 mb-1">Email</p>
                 <p className="text-[13px] font-medium text-foreground truncate">{user?.email || "No email available"}</p>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="account-username" className="text-[10px] text-muted-foreground/65">Username</Label>
+                <Label htmlFor="account-username" className="text-[11px] text-muted-foreground/65">Username</Label>
                 <Input
                   id="account-username"
                   value={username}
@@ -1068,7 +1068,7 @@ const SettingsPage = () => {
                   className="bg-secondary/50 border-border/40 rounded-xl h-10 text-sm placeholder:text-muted-foreground/50"
                 />
                 {usernameError && <p className="text-[11px] text-destructive">{usernameError}</p>}
-                <p className="text-[10px] text-muted-foreground/55">3-24 characters. Letters, numbers, spaces, `_`, `-`, and `.` allowed.</p>
+                <p className="text-[11px] text-muted-foreground/55">3-24 characters. Letters, numbers, spaces, `_`, `-`, and `.` allowed.</p>
               </div>
               <div className="flex gap-2 pt-1">
                 <Button

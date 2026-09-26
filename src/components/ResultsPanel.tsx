@@ -65,7 +65,7 @@ function VerdictCard({ data }: { data: any }) {
       <div className={`text-5xl font-extrabold ${textClass}`}>
         {probabilitySupported ? `${confidence}%` : `${confidence}/100`}
       </div>
-      <div className="text-[9px] uppercase tracking-wider text-muted-foreground mt-1">
+      <div className="text-[11px] uppercase tracking-wider text-muted-foreground mt-1">
         {probabilitySupported ? "Validated probability" : "Heuristic model score"}
       </div>
       <div className={`text-base font-extrabold tracking-[2px] mt-1 ${textClass}`}>{v}</div>

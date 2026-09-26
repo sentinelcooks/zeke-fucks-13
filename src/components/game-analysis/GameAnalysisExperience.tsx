@@ -174,7 +174,7 @@ function ScanTeamTile({ name, abbr, sportTitle, side, delay }: {
           <span className="text-[17px] font-black tracking-tight text-foreground">{fallback}</span>
         )}
       </motion.div>
-      <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/55">{side}</span>
+      <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55">{side}</span>
     </div>
   );
 }
@@ -264,7 +264,7 @@ function GameAnalysisScan({ event, scope, details, onCancel }: Extract<GameAnaly
             <p className="text-[13px] text-muted-foreground">{scope === "full" ? "Game lines" : marketScopeLabel(scope)} · {todayLabel}</p>
           </div>
           <span
-            className="flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-bold tracking-[0.12em] text-nba-green"
+            className="flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold tracking-[0.04em] text-nba-green"
             style={{ background: "hsl(var(--success) / 0.1)", border: "1px solid hsl(var(--success) / 0.3)" }}
           >
             <span className="h-1.5 w-1.5 rounded-full bg-nba-green"  />
@@ -279,7 +279,7 @@ function GameAnalysisScan({ event, scope, details, onCancel }: Extract<GameAnaly
         </div>
 
         <div className="mt-6 text-center">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-nba-green">
+          <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-nba-green">
             {event.sportTitle}{kickoffLabel ? ` · ${kickoffLabel}` : ""}
           </p>
           <h1 className="mt-1.5 text-[26px] font-black tracking-tight text-foreground">
@@ -292,8 +292,8 @@ function GameAnalysisScan({ event, scope, details, onCancel }: Extract<GameAnaly
 
         <section className="vision-card mt-6 p-4" style={{ borderColor: "hsl(var(--border) / 0.45)" }}>
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-nba-green">Building your report</span>
-            <span className="text-[10px] font-semibold text-muted-foreground/65">Step {activeStep + 1} of {FULL_GAME_STEPS.length}</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-nba-green">Building your report</span>
+            <span className="text-[11px] font-semibold text-muted-foreground/65">Step {activeStep + 1} of {FULL_GAME_STEPS.length}</span>
           </div>
 
           <div className="mt-3 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${FULL_GAME_STEPS.length}, minmax(0, 1fr))` }}>
@@ -319,7 +319,7 @@ function GameAnalysisScan({ event, scope, details, onCancel }: Extract<GameAnaly
                     : { border: "1px solid transparent" }}
                 >
                   <span
-                    className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[10px] font-bold"
+                    className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-bold"
                     style={complete
                       ? { background: "hsl(var(--success) / 0.14)", border: "1px solid hsl(var(--success) / 0.4)", color: "hsl(var(--success))" }
                       : current
@@ -332,7 +332,7 @@ function GameAnalysisScan({ event, scope, details, onCancel }: Extract<GameAnaly
                     {step}
                   </span>
                   {(complete || current) && (
-                    <span className={`shrink-0 text-[10.5px] font-semibold ${current ? "text-nba-green" : "text-muted-foreground/60"}`}>
+                    <span className={`shrink-0 text-[11px] font-semibold ${current ? "text-nba-green" : "text-muted-foreground/60"}`}>
                       {stepStatus(index)}
                     </span>
                   )}
@@ -430,7 +430,7 @@ function AddToParlayButton({
       animate={{ opacity: 1, y: 0 }}
       whileTap={{ scale: 0.97 }}
       onClick={toggle}
-      className={`flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-[13px] font-bold tracking-[0.14em] transition-all ${
+      className={`flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-[13px] font-bold tracking-[0.04em] transition-all ${
         inSlip || !actionable ? "text-muted-foreground" : "text-white"
       }`}
       style={
@@ -535,7 +535,7 @@ function GameAnalysisReportView({ report, onClose }: { report: GameAnalysisRepor
 
       <main className="mx-auto w-full max-w-md space-y-3 px-4 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-4">
         <div className="flex items-center justify-between px-1 text-[11px] text-muted-foreground">
-          <span className="flex items-center gap-2 font-bold uppercase tracking-[0.12em] text-nba-green">
+          <span className="flex items-center gap-2 font-bold uppercase tracking-[0.04em] text-nba-green">
             <span className="h-[7px] w-[7px] rounded-full bg-nba-green"  />
             Analysis complete
           </span>

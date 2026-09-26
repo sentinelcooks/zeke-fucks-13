@@ -274,7 +274,7 @@ const LegalPage = () => {
                   </div>
                   <div>
                     <p className="text-xs font-bold text-foreground leading-tight">{section.title}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">{section.subtitle}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{section.subtitle}</p>
                   </div>
                 </motion.button>
               );
@@ -300,7 +300,7 @@ const LegalPage = () => {
                 )}
                 <div className="flex-1 min-w-0">
                   <h2 className="text-sm font-bold text-foreground truncate">{active?.title}</h2>
-                  <p className="text-[10px] text-muted-foreground truncate">{active?.subtitle}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{active?.subtitle}</p>
                 </div>
                 <button
                   onClick={() => setActiveSection(null)}
@@ -316,7 +316,7 @@ const LegalPage = () => {
                 ) : (
                   <div className="py-8 text-center">
                     <p className="text-muted-foreground/60 text-xs">Content coming soon.</p>
-                    <p className="text-muted-foreground/40 text-[10px] mt-1">This section is being prepared.</p>
+                    <p className="text-muted-foreground/40 text-[11px] mt-1">This section is being prepared.</p>
                   </div>
                 )}
               </div>

@@ -24,7 +24,7 @@ const AppFooter = () => {
           <button
             key={link.section}
             onClick={() => navigate("/dashboard/legal", { state: { section: link.section } })}
-            className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+            className="text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
           >
             {link.label}
           </button>
@@ -32,13 +32,13 @@ const AppFooter = () => {
       </div>
 
       <div className="text-center space-y-1.5">
-        <p className="text-[9px] text-muted-foreground/35 font-medium tracking-wide">
+        <p className="text-[11px] text-muted-foreground/35 font-medium tracking-wide">
           © {new Date().getFullYear()} Sentinel. All rights reserved.
         </p>
-        <p className="text-[8px] text-muted-foreground/30 leading-snug max-w-[320px] mx-auto">
+        <p className="text-[11px] text-muted-foreground/30 leading-snug max-w-[320px] mx-auto">
           Sentinel is a sports analysis tool. We are not a sportsbook, casino, or gambling operator. We do not accept wagers, guarantee wins, or provide financial advice. All analysis is for informational and entertainment purposes only. Users are solely responsible for their own decisions. Must be 18+.
         </p>
-        <a href="tel:1-800-426-2537" className="text-[9px] text-muted-foreground/40 hover:text-accent transition-colors font-semibold">
+        <a href="tel:1-800-426-2537" className="text-[11px] text-muted-foreground/40 hover:text-accent transition-colors font-semibold">
           1-800-GAMBLER
         </a>
       </div>

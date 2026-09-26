@@ -71,7 +71,7 @@ const CountdownBanner = () => {
           <div key={u.l} className="flex items-center gap-1.5">
             <div className="flex flex-col items-center">
               <span className="text-base font-extrabold text-foreground tabular-nums leading-none">{pad(u.v)}</span>
-              <span className="text-[8px] text-foreground/50 mt-0.5 tracking-wider">{u.l}</span>
+              <span className="text-[11px] text-foreground/50 mt-0.5 tracking-wider">{u.l}</span>
             </div>
             {i < 2 && <span className="text-foreground/40 text-base font-bold leading-none -mt-2">:</span>}
           </div>

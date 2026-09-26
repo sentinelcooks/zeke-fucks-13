@@ -271,11 +271,11 @@ const ParlayPage = () => {
                 {/* Leg header */}
                 <div className="px-4 py-2.5 flex items-center justify-between" style={{ borderBottom: "1px solid hsl(var(--border) / 0.4)" }}>
                   <div className="flex items-center gap-3">
-                    <span className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black bg-primary/10 text-primary tabular-nums">{idx + 1}</span>
+                    <span className="w-5 h-5 rounded-md flex items-center justify-center text-[11px] font-black bg-primary/10 text-primary tabular-nums">{idx + 1}</span>
                     <div className="flex gap-0.5 bg-secondary/30 rounded-lg p-0.5">
                       {ALL_SPORTS.map(s => (
                         <button key={s} onClick={() => changeSport(leg.id, s)}
-                          className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all ${
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${
                             leg.sport === s
                               ? "bg-primary/15 text-primary shadow-sm"
                               : "text-muted-foreground/40 hover:text-muted-foreground/70"
@@ -315,7 +315,7 @@ const ParlayPage = () => {
                   <div className="flex items-center gap-2">
                     {fetchingOdds[leg.id] && <Loader2 className="w-3 h-3 animate-spin text-primary/50" />}
                     {leg.bestBook && (
-                      <span className="text-[9px] font-medium text-primary/80 bg-primary/8 px-2 py-0.5 rounded-full flex items-center gap-1 border border-primary/10">
+                      <span className="text-[11px] font-medium text-primary/80 bg-primary/8 px-2 py-0.5 rounded-full flex items-center gap-1 border border-primary/10">
                         <BookOpen className="w-2.5 h-2.5" />
                         {leg.bestBook}
                       </span>
@@ -357,7 +357,7 @@ const ParlayPage = () => {
                   <div className="text-center">
                     <div className="flex items-center gap-1 mb-0.5">
                       <Target className="w-3 h-3 text-muted-foreground/40" />
-                      <span className="text-[9px] uppercase tracking-widest text-muted-foreground/45 font-medium">{isSingleLeg ? "Straight" : "Legs"}</span>
+                      <span className="text-[11px] uppercase tracking-widest text-muted-foreground/45 font-medium">{isSingleLeg ? "Straight" : "Legs"}</span>
                     </div>
                     <span className="text-lg font-bold text-foreground tabular-nums">{validLegs.length}</span>
                   </div>
@@ -365,7 +365,7 @@ const ParlayPage = () => {
                   <div className="text-center">
                     <div className="flex items-center gap-1 mb-0.5">
                       <Trophy className="w-3 h-3 text-primary/50" />
-                      <span className="text-[9px] uppercase tracking-widest text-muted-foreground/45 font-medium">{isSingleLeg ? "Odds" : "Parlay"}</span>
+                      <span className="text-[11px] uppercase tracking-widest text-muted-foreground/45 font-medium">{isSingleLeg ? "Odds" : "Parlay"}</span>
                     </div>
                     <span className="text-lg font-bold text-primary tabular-nums">{fmt(parlayOdds)}</span>
                   </div>
@@ -373,13 +373,13 @@ const ParlayPage = () => {
                   <div className="text-center">
                     <div className="flex items-center gap-1 mb-0.5">
                       <DollarSign className="w-3 h-3 text-nba-green/50" />
-                      <span className="text-[9px] uppercase tracking-widest text-muted-foreground/45 font-medium">Payout</span>
+                      <span className="text-[11px] uppercase tracking-widest text-muted-foreground/45 font-medium">Payout</span>
                     </div>
                     <span className="text-lg font-bold text-nba-green tabular-nums">${potentialPayout.toFixed(2)}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground/45 font-medium">Stake</span>
+                  <span className="text-[11px] text-muted-foreground/45 font-medium">Stake</span>
                   <div className="relative">
                     <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/35">$</span>
                     <input type="number" value={stake} onChange={(e) => setStake(e.target.value)} placeholder="10" min="0" step="5"

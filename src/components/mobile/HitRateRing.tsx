@@ -54,8 +54,8 @@ export function HitRateRing({ rate, hits, total, label, delay = 0 }: HitRateRing
           <span className={`text-xs font-black tabular-nums ${getTextColor(rate)}`}>{rate}%</span>
         </div>
       </div>
-      <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground mt-1.5">{label}</span>
-      <span className="text-[9px] text-muted-foreground">{hits}/{total}</span>
+      <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mt-1.5">{label}</span>
+      <span className="text-[11px] text-muted-foreground">{hits}/{total}</span>
     </motion.div>
   );
 }

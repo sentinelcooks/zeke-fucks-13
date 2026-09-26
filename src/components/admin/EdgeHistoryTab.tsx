@@ -337,10 +337,10 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
 
   const resultBadge = (result: string | null) => {
     const r = (result || "pending").toLowerCase();
-    if (r === "hit" || r === "win") return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-success/15 text-success border border-success/20">✓ Win</span>;
-    if (r === "miss" || r === "loss") return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/20">✗ Loss</span>;
-    if (r === "push") return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border">Push</span>;
-    return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-warning/15 text-warning border border-warning/20">Pending</span>;
+    if (r === "hit" || r === "win") return <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-success/15 text-success border border-success/20">✓ Win</span>;
+    if (r === "miss" || r === "loss") return <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/20">✗ Loss</span>;
+    if (r === "push") return <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border">Push</span>;
+    return <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-warning/15 text-warning border border-warning/20">Pending</span>;
   };
 
   const renderMatchup = (p: EdgePick) => {
@@ -380,16 +380,16 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
       {/* Stats header */}
       <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
         <div className="glass-card rounded-xl p-4 col-span-2 sm:col-span-1">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Hit Rate</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Hit Rate</p>
           <p className={cn("text-3xl font-extrabold tabular-nums", hitRateColor)}>{stats.hit_rate.toFixed(1)}%</p>
-          <p className="text-[10px] text-muted-foreground mt-0.5">{stats.wins}/{stats.resolved} resolved</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">{stats.wins}/{stats.resolved} resolved</p>
         </div>
         <div className="glass-card rounded-xl p-4">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Total</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Total</p>
           <p className="text-2xl font-extrabold text-foreground tabular-nums">{stats.total}</p>
         </div>
         <div className="glass-card rounded-xl p-4">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">W / L / P</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">W / L / P</p>
           <p className="text-2xl font-extrabold text-foreground tabular-nums">
             <span className="text-success">{stats.wins}</span>
             <span className="text-muted-foreground/40">/</span>
@@ -399,11 +399,11 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
           </p>
         </div>
         <div className="glass-card rounded-xl p-4">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Pending</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Pending</p>
           <p className="text-2xl font-extrabold text-warning tabular-nums">{stats.pending}</p>
         </div>
         <div className="glass-card rounded-xl p-4">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Streak</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Streak</p>
           {stats.current_streak ? (
             <p className={cn(
               "text-2xl font-extrabold tabular-nums inline-flex items-center gap-1.5",
@@ -425,7 +425,7 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
       {/* Edge analytics row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div className="glass-card rounded-xl p-4">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Avg Edge</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Avg Edge</p>
           <p className={cn(
             "text-2xl font-extrabold tabular-nums",
             stats.avg_edge >= 0 ? "text-success" : "text-destructive"
@@ -434,7 +434,7 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
           </p>
         </div>
         <div className="glass-card rounded-xl p-4">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Profit (units)</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Profit (units)</p>
           <p className={cn(
             "text-2xl font-extrabold tabular-nums",
             stats.total_profit_units >= 0 ? "text-success" : "text-destructive"
@@ -443,7 +443,7 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
           </p>
         </div>
         <div className="glass-card rounded-xl p-4">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">ROI</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">ROI</p>
           <p className={cn(
             "text-2xl font-extrabold tabular-nums",
             stats.roi_pct >= 0 ? "text-success" : "text-destructive"
@@ -588,18 +588,18 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Date</th>
-                  <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sport</th>
-                  <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Matchup</th>
-                  <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Pick</th>
-                  <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Model</th>
-                  <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Conf</th>
-                  <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Edge</th>
-                  <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Odds</th>
-                  <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">CLV</th>
-                  <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">P/L</th>
-                  <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Result</th>
-                  <th className="text-right py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Grade</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Date</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Sport</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Matchup</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Pick</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Model</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Conf</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Edge</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Odds</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">CLV</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">P/L</th>
+                  <th className="text-left py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Result</th>
+                  <th className="text-right py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Grade</th>
                 </tr>
               </thead>
               <tbody>
@@ -612,7 +612,7 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
                         {safeFormatDate(p.pick_date)}
                       </td>
                       <td className="py-2.5 px-4">
-                        <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase",
+                        <span className={cn("text-[11px] font-bold px-1.5 py-0.5 rounded border uppercase",
                           SPORT_COLORS[sportKey] || "bg-muted text-muted-foreground border-border")}>
                           {p.sport || "—"}
                         </span>

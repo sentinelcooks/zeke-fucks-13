@@ -191,11 +191,11 @@ function ArbCalculator() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-foreground">Arb Calculator</h3>
-                <p className="text-[9px] text-muted-foreground">Auto-balance for max profit</p>
+                <p className="text-[11px] text-muted-foreground">Auto-balance for max profit</p>
               </div>
             </div>
             <span
-              className="text-[10px] px-3 py-1 rounded-full font-bold tracking-wider uppercase"
+              className="text-[11px] px-3 py-1 rounded-full font-bold tracking-wider uppercase"
               style={{
                 background: 'linear-gradient(135deg, hsl(var(--primary) / 0.2), hsl(var(--primary) / 0.1))',
                 color: 'hsl(var(--accent))',
@@ -209,20 +209,20 @@ function ArbCalculator() {
           {/* Side Labels */}
           <div className="grid grid-cols-[1fr_28px_1fr] gap-0 items-center">
             <div className="text-center">
-              <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-accent/80">Side A</span>
+              <span className="text-[11px] font-extrabold uppercase tracking-[0.04em] text-accent/80">Side A</span>
             </div>
             <div className="flex items-center justify-center">
               <ArrowRightLeft className="w-3.5 h-3.5 text-muted-foreground/40" />
             </div>
             <div className="text-center">
-              <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-accent/80">Side B</span>
+              <span className="text-[11px] font-extrabold uppercase tracking-[0.04em] text-accent/80">Side B</span>
             </div>
           </div>
 
           {/* Odds Inputs */}
           <div className="grid grid-cols-[1fr_28px_1fr] gap-0 items-center">
             <div className="space-y-1.5">
-              <label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider pl-1">Odds</label>
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pl-1">Odds</label>
               <div className="relative group">
                 <input
                   type="text" inputMode="decimal" value={odds1} onChange={e => setOdds1(e.target.value)}
@@ -234,12 +234,12 @@ function ArbCalculator() {
                     boxShadow: odds1 ? '0 0 20px -8px hsl(var(--primary) / 0.2)' : 'none',
                   }}
                 />
-                {imp1 && <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[8px] text-muted-foreground/60">{imp1}% implied</span>}
+                {imp1 && <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[11px] text-muted-foreground/60">{imp1}% implied</span>}
               </div>
             </div>
             <div />
             <div className="space-y-1.5">
-              <label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider pl-1">Odds</label>
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pl-1">Odds</label>
               <div className="relative group">
                 <input
                   type="text" inputMode="decimal" value={odds2} onChange={e => setOdds2(e.target.value)}
@@ -251,7 +251,7 @@ function ArbCalculator() {
                     boxShadow: odds2 ? '0 0 20px -8px hsl(var(--primary) / 0.2)' : 'none',
                   }}
                 />
-                {imp2 && <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[8px] text-muted-foreground/60">{imp2}% implied</span>}
+                {imp2 && <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[11px] text-muted-foreground/60">{imp2}% implied</span>}
               </div>
             </div>
           </div>
@@ -259,7 +259,7 @@ function ArbCalculator() {
           {/* Stake Inputs */}
           <div className="grid grid-cols-[1fr_28px_1fr] gap-0 items-center pt-2">
             <div className="space-y-1.5">
-              <label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider pl-1">Stake</label>
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pl-1">Stake</label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground/40 text-sm font-bold font-mono">$</span>
                 <input
@@ -277,13 +277,13 @@ function ArbCalculator() {
                   }}
                 />
                 {lastEdited === "b" && effectiveStake1 > 0 && (
-                  <span className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 text-[7px] font-semibold text-nba-green/70">auto</span>
+                  <span className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 text-[11px] font-semibold text-nba-green/70">auto</span>
                 )}
               </div>
             </div>
             <div />
             <div className="space-y-1.5">
-              <label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider pl-1">Stake</label>
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pl-1">Stake</label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground/40 text-sm font-bold font-mono">$</span>
                 <input
@@ -301,7 +301,7 @@ function ArbCalculator() {
                   }}
                 />
                 {lastEdited === "a" && effectiveStake2 > 0 && (
-                  <span className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 text-[7px] font-semibold text-nba-green/70">auto</span>
+                  <span className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 text-[11px] font-semibold text-nba-green/70">auto</span>
                 )}
               </div>
             </div>
@@ -310,7 +310,7 @@ function ArbCalculator() {
           {/* Payout Display */}
           <div className="grid grid-cols-[1fr_28px_1fr] gap-0 items-center pt-2">
             <div className="space-y-1.5">
-              <label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider pl-1">Payout</label>
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pl-1">Payout</label>
               <div
                 className="h-12 rounded-2xl flex items-center justify-center"
                 style={{
@@ -325,7 +325,7 @@ function ArbCalculator() {
             </div>
             <div />
             <div className="space-y-1.5">
-              <label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider pl-1">Payout</label>
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pl-1">Payout</label>
               <div
                 className="h-12 rounded-2xl flex items-center justify-center"
                 style={{
@@ -355,15 +355,15 @@ function ArbCalculator() {
         >
           <div className="grid grid-cols-3 gap-3 text-center">
             <div>
-              <p className="text-[8px] text-muted-foreground/60 font-semibold uppercase tracking-wider mb-1">Total Stake</p>
+              <p className="text-[11px] text-muted-foreground/60 font-semibold uppercase tracking-wider mb-1">Total Stake</p>
               <p className="text-lg font-extrabold font-mono text-foreground">${totalStake > 0 ? totalStake.toFixed(2) : "0.00"}</p>
             </div>
             <div>
-              <p className="text-[8px] text-muted-foreground/60 font-semibold uppercase tracking-wider mb-1">Total Payout</p>
+              <p className="text-[11px] text-muted-foreground/60 font-semibold uppercase tracking-wider mb-1">Total Payout</p>
               <p className="text-lg font-extrabold font-mono text-foreground">${totalPayout > 0 ? totalPayout.toFixed(2) : "0.00"}</p>
             </div>
             <div>
-              <p className="text-[8px] text-muted-foreground/60 font-semibold uppercase tracking-wider mb-1">Profit ({profitPct}%)</p>
+              <p className="text-[11px] text-muted-foreground/60 font-semibold uppercase tracking-wider mb-1">Profit ({profitPct}%)</p>
               <p className={`text-lg font-extrabold font-mono ${profit > 0 ? 'text-nba-green' : profit < 0 ? 'text-nba-red' : 'text-foreground'}`}>
                 {profit > 0 ? '+' : ''}${profit.toFixed(2)}
               </p>
@@ -394,7 +394,7 @@ function ArbCalculator() {
             <p className="text-xs font-bold text-foreground">
               {hasArb ? "Arbitrage Opportunity Found!" : "No Arbitrage Available"}
             </p>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               {hasArb
                 ? `${(100 - totalImplied).toFixed(1)}% edge — guaranteed ${profitPct}% ROI`
                 : `Combined implied: ${totalImplied}% — need below 100%`}
@@ -420,7 +420,7 @@ function ArbCalculator() {
           </div>
           <p className="text-[11px] font-bold text-foreground/80">How it works</p>
         </div>
-        <p className="text-[10px] text-muted-foreground/70 leading-relaxed pl-7">
+        <p className="text-[11px] text-muted-foreground/70 leading-relaxed pl-7">
           Enter {isDecimal ? "decimal" : "American"} odds for both sides. Type a stake on either side and the other auto-calculates for equal payouts. If the combined implied probability drops below 100%, you've locked in a guaranteed profit.
         </p>
       </div>
@@ -588,7 +588,7 @@ function ArbScanner() {
       <div className="flex items-center justify-between">
         <div>
           {lastScan && (
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               Last scan: {lastScan.toLocaleTimeString()} · {arbs.length} found
             </p>
           )}
@@ -621,7 +621,7 @@ function ArbScanner() {
         <div className="flex flex-col items-center justify-center py-16 gap-3">
           <Scan className="w-8 h-8 text-muted-foreground/55" />
           <p className="text-sm font-medium text-muted-foreground">No opportunities found</p>
-          <p className="text-[10px] text-muted-foreground/60 text-center max-w-[240px]">
+          <p className="text-[11px] text-muted-foreground/60 text-center max-w-[240px]">
             Try scanning again later. Opportunities appear when sportsbooks disagree on odds.
           </p>
         </div>
@@ -650,11 +650,11 @@ function ArbScanner() {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-1.5">
-                    {isTrue && <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold text-nba-green" style={{ background: 'hsl(var(--success) / 0.2)' }}>TRUE ARB</span>}
-                    {!isTrue && <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold text-nba-yellow" style={{ background: 'hsl(var(--nba-yellow) / 0.15)' }}>LOW VIG</span>}
+                    {isTrue && <span className="text-[11px] px-1.5 py-0.5 rounded-full font-bold text-nba-green" style={{ background: 'hsl(var(--success) / 0.2)' }}>TRUE ARB</span>}
+                    {!isTrue && <span className="text-[11px] px-1.5 py-0.5 rounded-full font-bold text-nba-yellow" style={{ background: 'hsl(var(--nba-yellow) / 0.15)' }}>LOW VIG</span>}
                   </div>
                   <p className="text-[11px] font-semibold text-foreground mt-1">{arb.event}</p>
-                  <p className="text-[10px] text-muted-foreground">{arb.market}</p>
+                  <p className="text-[11px] text-muted-foreground">{arb.market}</p>
                 </div>
                 <div className="text-right">
                   <div className="flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: isTrue ? 'hsl(var(--success) / 0.15)' : 'hsl(var(--primary) / 0.12)' }}>
@@ -662,19 +662,19 @@ function ArbScanner() {
                       {isTrue ? `+${arb.profitPct}%` : `${arb.totalImplied}%`}
                     </span>
                   </div>
-                  <p className="text-[8px] text-muted-foreground mt-0.5">{isTrue ? "guaranteed" : "combined imp."}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">{isTrue ? "guaranteed" : "combined imp."}</p>
                 </div>
               </div>
 
               {/* Two sides */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-xl p-3" style={{ background: 'hsl(var(--secondary))' }}>
-                  <p className="text-[9px] text-muted-foreground font-medium mb-0.5">{arb.outcome1.book}</p>
+                  <p className="text-[11px] text-muted-foreground font-medium mb-0.5">{arb.outcome1.book}</p>
                   <p className="text-[11px] font-semibold text-foreground mb-0.5">{arb.outcome1.name}</p>
                   <p className="text-sm font-bold font-mono text-accent">{fmt(arb.outcome1.odds)}</p>
                 </div>
                 <div className="rounded-xl p-3" style={{ background: 'hsl(var(--secondary))' }}>
-                  <p className="text-[9px] text-muted-foreground font-medium mb-0.5">{arb.outcome2.book}</p>
+                  <p className="text-[11px] text-muted-foreground font-medium mb-0.5">{arb.outcome2.book}</p>
                   <p className="text-[11px] font-semibold text-foreground mb-0.5">{arb.outcome2.name}</p>
                   <p className="text-sm font-bold font-mono text-accent">{fmt(arb.outcome2.odds)}</p>
                 </div>
@@ -685,7 +685,7 @@ function ArbScanner() {
                 const calc = arbProfit(arb.outcome1.odds, arb.outcome2.odds, 100);
                 if (!calc) return null;
                 return (
-                  <div className="flex items-center justify-between px-3 py-2 rounded-xl text-[10px]" style={{ background: 'hsl(var(--success) / 0.06)' }}>
+                  <div className="flex items-center justify-between px-3 py-2 rounded-xl text-[11px]" style={{ background: 'hsl(var(--success) / 0.06)' }}>
                     <span className="text-muted-foreground">$100 → ${calc.stake1} + ${calc.stake2}</span>
                     <span className="font-bold text-nba-green">= ${calc.profit} profit</span>
                   </div>
@@ -693,7 +693,7 @@ function ArbScanner() {
               })()}
 
               {!isTrue && (
-                <div className="flex items-center justify-between px-3 py-2 rounded-xl text-[10px]" style={{ background: 'hsl(var(--primary) / 0.06)' }}>
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl text-[11px]" style={{ background: 'hsl(var(--primary) / 0.06)' }}>
                   <span className="text-muted-foreground">Overround: {(arb.totalImplied - 100).toFixed(1)}%</span>
                   <span className="font-medium text-accent">Very low vig</span>
                 </div>
@@ -704,7 +704,7 @@ function ArbScanner() {
       </AnimatePresence>
 
       {arbs.length > 0 && (
-        <p className="text-[9px] text-muted-foreground/50 text-center">
+        <p className="text-[11px] text-muted-foreground/50 text-center">
           ⚠️ Odds change rapidly. Verify lines before placing any plays.
         </p>
       )}

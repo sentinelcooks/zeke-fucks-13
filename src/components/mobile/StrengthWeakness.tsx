@@ -53,7 +53,7 @@ export function StrengthWeakness({
         <div className="flex items-center justify-between mb-1">
           <div>
             <h4 className="text-xs font-bold uppercase tracking-widest text-foreground">Matchup Grade</h4>
-            <p className="text-[10px] text-foreground/70 mt-0.5">{playerName} vs {opponentName}</p>
+            <p className="text-[11px] text-foreground/70 mt-0.5">{playerName} vs {opponentName}</p>
           </div>
           {grade.source !== "unavailable" ? (
             <div className="flex items-center gap-3">
@@ -61,19 +61,19 @@ export function StrengthWeakness({
                 <div key={m.label} className="flex items-center gap-3">
                   {idx > 0 && <div className="w-px h-10 bg-border" />}
                   <div className="text-center">
-                    <span className="block text-[9px] font-bold uppercase text-foreground/70">{m.label}</span>
+                    <span className="block text-[11px] font-bold uppercase text-foreground/70">{m.label}</span>
                     <span className={`block text-lg font-black tabular-nums ${idx === 0 ? "text-nba-green" : "text-nba-blue"}`}>{m.value}</span>
                   </div>
                 </div>
               ))}
               {grade.source === "estimated" && (
-                <span className="text-[9px] font-bold uppercase tracking-wider text-nba-yellow border border-nba-yellow/40 rounded px-1.5 py-0.5">Estimated</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-nba-yellow border border-nba-yellow/40 rounded px-1.5 py-0.5">Estimated</span>
               )}
             </div>
           ) : (
             <div className="text-right">
-              <span className="block text-[10px] font-semibold text-muted-foreground/70">Matchup data unavailable</span>
-              <span className="block text-[9px] text-muted-foreground/50 mt-0.5">for this market</span>
+              <span className="block text-[11px] font-semibold text-muted-foreground/70">Matchup data unavailable</span>
+              <span className="block text-[11px] text-muted-foreground/50 mt-0.5">for this market</span>
             </div>
           )}
         </div>
@@ -84,7 +84,7 @@ export function StrengthWeakness({
         <div className="rounded-2xl bg-card border border-border p-4">
           <div className="flex items-center gap-2 mb-3">
             <Swords className="w-3.5 h-3.5 text-nba-green" />
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
               Player Strengths vs {opponentName}
             </h4>
           </div>
@@ -112,7 +112,7 @@ export function StrengthWeakness({
                     className={`h-full rounded-full ${getRatingColor(factor.value)}`}
                   />
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{factor.description}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{factor.description}</p>
               </motion.div>
             ))}
           </div>
@@ -124,7 +124,7 @@ export function StrengthWeakness({
         <div className="rounded-2xl bg-card border border-border p-4">
           <div className="flex items-center gap-2 mb-3">
             <Shield className="w-3.5 h-3.5 text-nba-red" />
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
               {opponentName} Weaknesses
             </h4>
           </div>
@@ -151,7 +151,7 @@ export function StrengthWeakness({
                     className={`h-full rounded-full ${getRatingColor(100 - factor.value)}`}
                   />
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{factor.description}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{factor.description}</p>
               </motion.div>
             ))}
           </div>

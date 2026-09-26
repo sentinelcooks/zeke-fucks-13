@@ -51,7 +51,7 @@ export function PlayerCard({ name, team, position, jersey, headshotUrl }: Player
           <div className="absolute -bottom-1.5 -right-1.5 min-w-[26px] h-[22px] rounded-lg flex items-center justify-center px-1 shadow-lg"
             style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))' }}
           >
-            <span className="text-[9px] font-black text-foreground">#{jersey}</span>
+            <span className="text-[11px] font-black text-foreground">#{jersey}</span>
           </div>
         </div>
 
@@ -59,12 +59,12 @@ export function PlayerCard({ name, team, position, jersey, headshotUrl }: Player
           <h2 className="text-xl font-extrabold text-foreground truncate tracking-tight">{name}</h2>
           <div className="flex items-center gap-2 mt-1.5">
             <span className="text-[11px] font-bold text-accent bg-accent/10 px-2.5 py-0.5 rounded-lg">{team}</span>
-            <span className="text-[10px] text-muted-foreground/65">·</span>
+            <span className="text-[11px] text-muted-foreground/65">·</span>
             <span className="text-[11px] text-muted-foreground/60 font-semibold">{position}</span>
           </div>
           <div className="flex items-center gap-1.5 mt-2">
             <div className="w-1.5 h-1.5 rounded-full bg-nba-green animate-pulse" />
-            <span className="text-[9px] text-muted-foreground/65 font-medium uppercase tracking-wider">Active</span>
+            <span className="text-[11px] text-muted-foreground/65 font-medium uppercase tracking-wider">Active</span>
           </div>
         </div>
       </div>

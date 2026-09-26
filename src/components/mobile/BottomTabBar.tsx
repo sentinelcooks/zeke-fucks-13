@@ -61,7 +61,7 @@ export function BottomTabBar() {
                   navigate(tab.path);
                 }}
                 className={cn(
-                  "flex h-[54px] flex-1 flex-col items-center justify-center gap-px rounded-full text-[10px] font-semibold transition-colors active:scale-95",
+                  "flex h-[54px] flex-1 flex-col items-center justify-center gap-px rounded-full text-[11px] font-semibold transition-colors active:scale-95",
                   isActive ? "bg-fill/15 text-primary" : "text-foreground",
                 )}
               >

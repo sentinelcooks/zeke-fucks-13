@@ -32,7 +32,7 @@ function BookLogo({ bookKey, size = 28 }: { bookKey: string; size?: number }) {
     );
   }
   return (
-    <div className="rounded-lg flex items-center justify-center text-[9px] font-black text-foreground" style={{ width: size, height: size, background: info.color }}>
+    <div className="rounded-lg flex items-center justify-center text-[11px] font-black text-foreground" style={{ width: size, height: size, background: info.color }}>
       {info.abbrev}
     </div>
   );
@@ -135,15 +135,15 @@ const OddsComparison = ({ playerName, propType, line, overUnder, sport = "nba", 
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Trophy className="w-4 h-4 text-accent" />
-            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted-foreground/50">Platform Odds</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/50">Platform Odds</span>
           </div>
           {books.length > 0 && (
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'hsl(var(--success) / 0.08)', border: '1px solid hsl(var(--success) / 0.15)' }}>
                 <div className="w-1.5 h-1.5 rounded-full bg-nba-green animate-pulse" />
-                <span className="text-[7px] font-bold text-nba-green uppercase tracking-wider">Live</span>
+                <span className="text-[11px] font-bold text-nba-green uppercase tracking-wider">Live</span>
               </div>
-              <span className="text-[8px] text-muted-foreground/40 font-medium">{books.length} books</span>
+              <span className="text-[11px] text-muted-foreground/40 font-medium">{books.length} books</span>
             </div>
           )}
         </div>
@@ -151,13 +151,13 @@ const OddsComparison = ({ playerName, propType, line, overUnder, sport = "nba", 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-8 gap-2">
             <Loader2 className="w-5 h-5 animate-spin text-accent/40" />
-            <p className="text-[10px] text-muted-foreground/40">Fetching live odds from {sport === "ufc" ? "fight" : books.length || 5} books...</p>
+            <p className="text-[11px] text-muted-foreground/40">Fetching live odds from {sport === "ufc" ? "fight" : books.length || 5} books...</p>
           </div>
         ) : error ? (
           <div className="flex flex-col items-center py-6 gap-2">
             <AlertTriangle className="w-5 h-5 text-muted-foreground/55" />
             <p className="text-[11px] text-muted-foreground/65">{error}</p>
-            <button onClick={fetchOdds} className="flex items-center gap-1 text-[10px] text-accent font-bold mt-1">
+            <button onClick={fetchOdds} className="flex items-center gap-1 text-[11px] text-accent font-bold mt-1">
               <RefreshCw className="w-3 h-3" /> Retry
             </button>
           </div>
@@ -167,19 +167,19 @@ const OddsComparison = ({ playerName, propType, line, overUnder, sport = "nba", 
             {modelHitRate && bestOdds && bestEV !== null && bestEdge !== null && (
               <div className="grid grid-cols-3 gap-2 mb-3">
                 <div className="rounded-xl px-2.5 py-2 text-center" style={{ background: bestEV > 0 ? 'hsl(var(--success) / 0.08)' : 'hsl(var(--danger) / 0.08)', border: `1px solid ${bestEV > 0 ? 'hsl(var(--success) / 0.15)' : 'hsl(var(--danger) / 0.15)'}` }}>
-                  <p className="text-[7px] text-muted-foreground/45 font-bold uppercase tracking-wider mb-0.5">Best EV</p>
+                  <p className="text-[11px] text-muted-foreground/45 font-bold uppercase tracking-wider mb-0.5">Best EV</p>
                   <p className={`text-[13px] font-black tabular-nums ${bestEV > 0 ? 'text-nba-green' : 'text-danger'}`}>
                     {bestEV > 0 ? "+" : ""}{bestEV.toFixed(1)}%
                   </p>
                 </div>
                 <div className="rounded-xl px-2.5 py-2 text-center" style={{ background: bestEdge > 0 ? 'hsl(var(--success) / 0.08)' : 'hsl(var(--danger) / 0.08)', border: `1px solid ${bestEdge > 0 ? 'hsl(var(--success) / 0.15)' : 'hsl(var(--danger) / 0.15)'}` }}>
-                  <p className="text-[7px] text-muted-foreground/45 font-bold uppercase tracking-wider mb-0.5">Edge</p>
+                  <p className="text-[11px] text-muted-foreground/45 font-bold uppercase tracking-wider mb-0.5">Edge</p>
                   <p className={`text-[13px] font-black tabular-nums ${bestEdge > 0 ? 'text-nba-green' : 'text-danger'}`}>
                     {bestEdge > 0 ? "+" : ""}{bestEdge.toFixed(1)}%
                   </p>
                 </div>
                 <div className="rounded-xl px-2.5 py-2 text-center" style={{ background: 'hsl(var(--card) / 0.5)', border: '1px solid hsl(var(--border) / 0.3)' }}>
-                  <p className="text-[7px] text-muted-foreground/45 font-bold uppercase tracking-wider mb-0.5">
+                  <p className="text-[11px] text-muted-foreground/45 font-bold uppercase tracking-wider mb-0.5">
                     {juiceSaved && juiceSaved > 0 ? "Juice Saved" : "Mkt Impl."}
                   </p>
                   <p className="text-[13px] font-black tabular-nums text-foreground/70">
@@ -193,13 +193,13 @@ const OddsComparison = ({ playerName, propType, line, overUnder, sport = "nba", 
 
             {/* Header row */}
             <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 mb-2 px-1">
-              <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/55">Platform</span>
-              <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/55 text-center w-12">Line</span>
-              <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/55 text-center w-14">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/55">Platform</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/55 text-center w-12">Line</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/55 text-center w-14">
                 {overUnder === "over" ? "Over" : "Under"}
               </span>
               {modelHitRate && (
-                <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/55 text-center w-12">EV</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/55 text-center w-12">EV</span>
               )}
             </div>
 
@@ -229,7 +229,7 @@ const OddsComparison = ({ playerName, propType, line, overUnder, sport = "nba", 
                       {isBest && (
                         <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.2), hsl(var(--primary) / 0.2))', border: '1px solid hsl(var(--primary) / 0.25)' }}>
                           <Crown className="w-2 h-2 text-accent" />
-                          <span className="text-[6px] font-black text-accent uppercase tracking-wider">Best</span>
+                          <span className="text-[11px] font-black text-accent uppercase tracking-wider">Best</span>
                         </div>
                       )}
                     </div>
@@ -240,7 +240,7 @@ const OddsComparison = ({ playerName, propType, line, overUnder, sport = "nba", 
                       <span className={`text-[12px] font-extrabold tabular-nums ${isBest ? 'text-nba-green' : 'text-foreground/60'}`}>
                         {fmt(b.odds)}
                       </span>
-                      <p className="text-[7px] text-muted-foreground/40 tabular-nums">{bookImplied.toFixed(0)}% impl.</p>
+                      <p className="text-[11px] text-muted-foreground/40 tabular-nums">{bookImplied.toFixed(0)}% impl.</p>
                     </div>
                     {modelHitRate && bookEV !== null && (
                       <div className="text-center w-12">
@@ -264,7 +264,7 @@ const OddsComparison = ({ playerName, propType, line, overUnder, sport = "nba", 
                 style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.06), hsl(var(--primary) / 0.06))', border: '1px solid hsl(var(--primary) / 0.1)' }}
               >
                 <Zap className="w-3.5 h-3.5 text-accent shrink-0" />
-                <p className="text-[10px] text-foreground/70 leading-relaxed">
+                <p className="text-[11px] text-foreground/70 leading-relaxed">
                   <span className="font-bold text-accent">{getSportsbookInfo(bestOdds.book).label}</span> has the best line at{" "}
                   <span className="font-bold text-foreground/90">{fmt(bestOdds.odds)}</span>
                   {juiceSaved && juiceSaved > 0.5 && (
@@ -275,7 +275,7 @@ const OddsComparison = ({ playerName, propType, line, overUnder, sport = "nba", 
             )}
 
             <div className="mt-3 pt-3" style={{ borderTop: '1px solid hsl(var(--border) / 0.3)' }}>
-              <p className="text-[8px] text-muted-foreground/55 text-center leading-relaxed">
+              <p className="text-[11px] text-muted-foreground/55 text-center leading-relaxed">
                 Live odds from The Odds API · Always verify before placing bets
               </p>
             </div>

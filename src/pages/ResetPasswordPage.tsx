@@ -100,7 +100,7 @@ export default function ResetPasswordPage() {
             <BrandMark />
           </div>
           <span
-            className="text-[13px] font-bold tracking-[0.22em]"
+            className="text-[13px] font-bold tracking-[0.04em]"
             style={{ color: ACCENT, textShadow: `0 0 12px hsl(var(--primary) / 0.4)` }}
           >
             SENTINEL
@@ -163,7 +163,7 @@ export default function ResetPasswordPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
               <div>
-                <label className="block text-[10px] font-semibold tracking-[0.15em] text-foreground/50 mb-1.5 uppercase">New Password</label>
+                <label className="block text-[11px] font-semibold tracking-[0.04em] text-foreground/50 mb-1.5 uppercase">New Password</label>
                 <div className="relative">
                   <input
                     type={showPassword ? "text" : "password"}
@@ -192,7 +192,7 @@ export default function ResetPasswordPage() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-semibold tracking-[0.15em] text-foreground/50 mb-1.5 uppercase">Confirm Password</label>
+                <label className="block text-[11px] font-semibold tracking-[0.04em] text-foreground/50 mb-1.5 uppercase">Confirm Password</label>
                 <input
                   type={showPassword ? "text" : "password"}
                   placeholder="••••••••"

@@ -140,7 +140,7 @@ export function StatCards({ perf, label }: { perf: Perf | undefined; label?: str
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {cards.map(([k, v]) => (
           <div key={k} className="rounded-xl border border-border/40 bg-card/60 px-3 py-2">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{k}</p>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{k}</p>
             <p className="text-sm font-bold text-foreground tabular-nums">{v}</p>
           </div>
         ))}

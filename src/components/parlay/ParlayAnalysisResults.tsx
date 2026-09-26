@@ -119,7 +119,7 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
               <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ background: `radial-gradient(circle at center, ${overallGrade === 'strong' ? 'hsl(var(--success))' : overallGrade === 'lean' ? 'hsl(var(--nba-yellow))' : 'hsl(var(--danger))'}, transparent 70%)` }} />
             )}
             <card.icon className={`w-4 h-4 mx-auto mb-1 ${card.color}`} />
-            <span className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">{card.label}</span>
+            <span className="block text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5">{card.label}</span>
             <span className={`block text-2xl font-black ${card.color}`}>{card.value}</span>
           </motion.div>
         ))}
@@ -138,7 +138,7 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
            overallGrade === "lean" ? <TrendingUp className="w-4 h-4 text-nba-yellow" /> :
            <AlertTriangle className="w-4 h-4 text-nba-red" />}
           <h3 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Parlay Analysis</h3>
-          <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ml-auto ${getGradeBg(overallGrade)}`}>{overallGrade}</span>
+          <span className={`text-[11px] uppercase font-bold px-2 py-0.5 rounded-full ml-auto ${getGradeBg(overallGrade)}`}>{overallGrade}</span>
         </div>
         <p className="text-sm text-foreground leading-relaxed">{overallWriteup}</p>
       </motion.div>
@@ -158,7 +158,7 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
         <div className="flex items-center gap-4 mb-3">
           <div className="bg-secondary/60 border border-border/50 rounded-xl px-5 py-3 text-center">
             <span className={`block text-2xl font-black ${unitSizing.color}`}>{unitSizing.units}</span>
-            <span className="block text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">Units</span>
+            <span className="block text-[11px] uppercase tracking-wider text-muted-foreground mt-0.5">Units</span>
           </div>
           <div className="flex-1">
             <span className={`block text-sm font-bold mb-1 ${unitSizing.color}`}>{unitSizing.label}</span>
@@ -195,17 +195,17 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-muted-foreground/60">#{leg.legIndex + 1}</span>
-                  <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${SPORT_COLORS[leg.sport] || "bg-accent/15 text-accent"}`}>{leg.sport}</span>
+                  <span className="text-[11px] font-bold text-muted-foreground/60">#{leg.legIndex + 1}</span>
+                  <span className={`text-[11px] font-bold uppercase px-1.5 py-0.5 rounded ${SPORT_COLORS[leg.sport] || "bg-accent/15 text-accent"}`}>{leg.sport}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   {leg.bestBook && (
-                    <span className="text-[9px] font-medium text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20">
+                    <span className="text-[11px] font-medium text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20">
                       Best: {leg.bestBook}
                     </span>
                   )}
                   <span className={`text-sm font-black ${getGradeColor(leg.grade)}`}>{formatConfidence(leg.confidence)}</span>
-                  <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${getGradeBg(leg.grade)}`}>{leg.grade}</span>
+                  <span className={`text-[11px] uppercase font-bold px-2 py-0.5 rounded-full ${getGradeBg(leg.grade)}`}>{leg.grade}</span>
                 </div>
               </div>
               <p className="text-[13px] font-semibold text-foreground mb-2 leading-snug">{leg.pick}</p>
@@ -213,7 +213,7 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
               {leg.keyStats.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {leg.keyStats.map((stat, si) => (
-                    <span key={si} className="text-[10px] bg-secondary/60 border border-border/40 rounded px-2 py-0.5 text-muted-foreground">{stat}</span>
+                    <span key={si} className="text-[11px] bg-secondary/60 border border-border/40 rounded px-2 py-0.5 text-muted-foreground">{stat}</span>
                   ))}
                 </div>
               )}

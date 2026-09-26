@@ -268,8 +268,8 @@ const ScreenHero = memo(function ScreenHero() {
         className="mt-6 rounded-2xl border border-border bg-card p-4"
       >
         <div className="flex items-center justify-between mb-3">
-          <span className="text-[10px] font-black tracking-wider text-foreground/60">TODAY'S PICKS</span>
-          <span className="text-[10px] font-semibold text-primary">View All</span>
+          <span className="text-[11px] font-black tracking-wider text-foreground/60">TODAY'S PICKS</span>
+          <span className="text-[11px] font-semibold text-primary">View All</span>
         </div>
         <div className="flex items-center gap-3">
           <img
@@ -280,13 +280,13 @@ const ScreenHero = memo(function ScreenHero() {
           />
           <div className="flex-1 min-w-0">
             <div className="text-sm font-bold text-foreground">Luka Doncic</div>
-            <div className="text-[10px] text-foreground/50">LAKERS vs DENVER · 8:30 PM</div>
+            <div className="text-[11px] text-foreground/50">LAKERS vs DENVER · 8:30 PM</div>
             <div className="text-[11px] text-foreground mt-0.5 font-semibold">OVER 32.5 Points</div>
           </div>
           <div className="flex flex-col items-end gap-0.5">
-            <span className="px-1.5 py-0.5 rounded bg-nba-green/15 text-nba-green text-[8px] font-bold uppercase tracking-wider">HIGH CONF</span>
+            <span className="px-1.5 py-0.5 rounded bg-nba-green/15 text-nba-green text-[11px] font-bold uppercase tracking-wider">HIGH CONF</span>
             <span className="text-nba-green text-[16px] font-extrabold tabular-nums leading-none">64%</span>
-            <span className="text-[8px] text-muted-foreground/55 uppercase tracking-wider">Confidence</span>
+            <span className="text-[11px] text-muted-foreground/55 uppercase tracking-wider">Confidence</span>
             <span className="text-[11px] font-extrabold tabular-nums text-nba-green mt-0.5">
               <span className="text-muted-foreground/55 font-bold">+EV:</span> 7.2%
             </span>
@@ -296,11 +296,11 @@ const ScreenHero = memo(function ScreenHero() {
         {/* Stats row */}
         <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between">
           <div>
-            <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">YTD ROI</div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">YTD ROI</div>
             <div className="text-base font-black text-nba-green tabular-nums">+18.47%</div>
           </div>
           <div>
-            <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Win Rate</div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Win Rate</div>
             <div className="text-base font-black text-foreground tabular-nums">58.3%</div>
           </div>
           <Sparkline color="hsl(var(--nba-green))" className="w-14 h-10" />
@@ -309,18 +309,18 @@ const ScreenHero = memo(function ScreenHero() {
         {/* AI Analysis Preview */}
         <div className="mt-3 pt-3 border-t border-border space-y-2.5">
           <div className="flex items-center gap-1.5">
-            <span className="px-1.5 py-0.5 rounded-full bg-primary/15 text-primary text-[8px] font-black tracking-wider">
+            <span className="px-1.5 py-0.5 rounded-full bg-primary/15 text-primary text-[11px] font-black tracking-wider">
               IN-DEPTH ANALYSIS
             </span>
-            <span className="text-[8px] text-foreground/40 tracking-wider">SENTINEL AI</span>
+            <span className="text-[11px] text-foreground/40 tracking-wider">SENTINEL AI</span>
           </div>
 
           <div className="space-y-2">
             <div className="flex gap-2">
               <BarChart3 className="w-3 h-3 text-primary flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <div className="text-[9px] font-black tracking-wider text-primary">STATISTICAL EDGE</div>
-                <p className="text-[10px] text-foreground/70 leading-snug">
+                <div className="text-[11px] font-black tracking-wider text-primary">STATISTICAL EDGE</div>
+                <p className="text-[11px] text-foreground/70 leading-snug">
                   Luka is averaging 34.1 PPG over his last 10 games, comfortably above the 32.5 line. Per-36 projection of 35.8 reinforces the over.
                 </p>
               </div>
@@ -329,8 +329,8 @@ const ScreenHero = memo(function ScreenHero() {
             <div className="flex gap-2">
               <Swords className="w-3 h-3 text-primary flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <div className="text-[9px] font-black tracking-wider text-primary">MATCHUP & PACE</div>
-                <p className="text-[10px] text-foreground/70 leading-snug">
+                <div className="text-[11px] font-black tracking-wider text-primary">MATCHUP & PACE</div>
+                <p className="text-[11px] text-foreground/70 leading-snug">
                   Denver allows the 6th-most points to opposing guards. Projected pace of 101.4 favors volume scoring.
                 </p>
               </div>
@@ -339,8 +339,8 @@ const ScreenHero = memo(function ScreenHero() {
             <div className="flex gap-2">
               <TrendingUp className="w-3 h-3 text-primary flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <div className="text-[9px] font-black tracking-wider text-primary">VERDICT & RISK</div>
-                <p className="text-[10px] text-foreground/70 leading-snug">
+                <div className="text-[11px] font-black tracking-wider text-primary">VERDICT & RISK</div>
+                <p className="text-[11px] text-foreground/70 leading-snug">
                   Strong lean OVER 32.5. Wager 1.5 units with 64% model confidence. Key risk: early blowout limiting minutes.
                 </p>
               </div>
@@ -352,15 +352,15 @@ const ScreenHero = memo(function ScreenHero() {
               <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
               <span className="text-[11px] font-black text-primary tracking-wide">TAKE THIS PICK</span>
             </div>
-            <div className="text-[8px] text-foreground/40 tracking-wider mt-0.5 mb-1">
+            <div className="text-[11px] text-foreground/40 tracking-wider mt-0.5 mb-1">
               OVERALL VERDICT — ALL FACTORS COMBINED
             </div>
-            <p className="text-[10px] text-foreground/80 leading-snug">
+            <p className="text-[11px] text-foreground/80 leading-snug">
               Strong play. Luka OVER 32.5 Points checks the boxes. L10 avg 34.1, +EV 7.2%. Recommended sizing: 1.5–2 units.
             </p>
             <div className="mt-2 pt-2 border-t border-primary/15 flex items-center justify-between">
-              <span className="text-[8px] font-bold tracking-wider text-primary">AI CONFIDENCE: 64%</span>
-              <span className="text-[8px] tracking-wider text-foreground/40">POWERED BY SENTINEL AI</span>
+              <span className="text-[11px] font-bold tracking-wider text-primary">AI CONFIDENCE: 64%</span>
+              <span className="text-[11px] tracking-wider text-foreground/40">POWERED BY SENTINEL AI</span>
             </div>
           </div>
         </div>
@@ -401,7 +401,7 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-1.5">
             <BrandMark size={20} className="relative" />
-            <span className="text-[10px] font-bold tracking-widest text-foreground">SENTINEL</span>
+            <span className="text-[11px] font-bold tracking-widest text-foreground">SENTINEL</span>
           </div>
         </div>
         {/* Tabs */}
@@ -414,7 +414,7 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
                 onClick={() => setActiveTab(t)}
                 whileTap={lightweight ? undefined : { scale: 0.96 }}
                 aria-pressed={active}
-                className={`px-2 py-1 rounded-full text-[9px] font-bold whitespace-nowrap transition-colors ${
+                className={`px-2 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition-colors ${
                   active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -437,8 +437,8 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
               {activeTab === "Dashboard" && (
                 <>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[9px] font-black tracking-wider text-foreground/60">TODAY'S TOP PICKS</span>
-                    <span className="text-[9px] font-semibold text-primary">View All</span>
+                    <span className="text-[11px] font-black tracking-wider text-foreground/60">TODAY'S TOP PICKS</span>
+                    <span className="text-[11px] font-semibold text-primary">View All</span>
                   </div>
                   <div className="space-y-1.5">
                     {SCREEN2_PICKS.map((p) => (
@@ -446,16 +446,16 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
                         <img src={p.img} alt={p.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0 bg-card" />
                         <div className="flex-1 min-w-0">
                           <div className="text-[11px] font-bold text-foreground truncate">{p.name}</div>
-                          <div className="text-[9px] text-foreground/50">{p.pick}</div>
+                          <div className="text-[11px] text-foreground/50">{p.pick}</div>
                         </div>
                         <span className="text-primary text-xs font-extrabold tabular-nums">{p.conf}%</span>
-                        <span className="px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[8px] font-black tracking-wider">+EV {p.ev}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[11px] font-black tracking-wider">+EV {p.ev}%</span>
                       </div>
                     ))}
                   </div>
                   <div className="mt-3 rounded-lg bg-background border border-border p-2.5 flex items-center justify-between">
                     <div>
-                      <div className="text-[9px] tracking-wider text-foreground/50">YTD PERFORMANCE</div>
+                      <div className="text-[11px] tracking-wider text-foreground/50">YTD PERFORMANCE</div>
                       <div className="text-lg font-extrabold text-primary tabular-nums">+18.47%</div>
                     </div>
                     <Sparkline className="w-16 h-10" />
@@ -465,8 +465,8 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
                     <div className="relative px-3 py-3 flex items-center gap-2">
                       <Lock className="w-3.5 h-3.5 text-foreground/60" />
                       <div className="flex-1">
-                        <div className="text-[10px] font-bold text-foreground">Advanced Projections & Line Movement</div>
-                        <div className="text-[9px] text-foreground/50">Upgrade to Unlock</div>
+                        <div className="text-[11px] font-bold text-foreground">Advanced Projections & Line Movement</div>
+                        <div className="text-[11px] text-foreground/50">Upgrade to Unlock</div>
                       </div>
                     </div>
                   </div>
@@ -477,10 +477,10 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
                 <>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[9px] font-black tracking-wider text-foreground/60">FREE PICKS · TODAY</span>
-                      <span className="px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[8px] font-black tracking-wider">FREE</span>
+                      <span className="text-[11px] font-black tracking-wider text-foreground/60">FREE PICKS · TODAY</span>
+                      <span className="px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[11px] font-black tracking-wider">FREE</span>
                     </div>
-                    <span className="text-[9px] font-semibold text-primary">View All</span>
+                    <span className="text-[11px] font-semibold text-primary">View All</span>
                   </div>
                   <div className="space-y-1.5">
                     {SCREEN2_PICKS.map((p) => (
@@ -488,19 +488,19 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
                         <img src={p.img} alt={p.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0 bg-card" />
                         <div className="flex-1 min-w-0">
                           <div className="text-[11px] font-bold text-foreground truncate">{p.name}</div>
-                          <div className="text-[9px] text-foreground/50">{p.pick}</div>
+                          <div className="text-[11px] text-foreground/50">{p.pick}</div>
                         </div>
                         <span className="text-primary text-xs font-extrabold tabular-nums">{p.conf}%</span>
-                        <span className="px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[8px] font-black tracking-wider">HIGH CONF</span>
+                        <span className="px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[11px] font-black tracking-wider">HIGH CONF</span>
                       </div>
                     ))}
                   </div>
                   <div className="mt-3 rounded-lg bg-background border border-border p-2.5 flex items-center justify-between">
                     <div>
-                      <div className="text-[9px] tracking-wider text-foreground/50">REFRESHES DAILY · 8AM ET</div>
+                      <div className="text-[11px] tracking-wider text-foreground/50">REFRESHES DAILY · 8AM ET</div>
                       <div className="text-[11px] font-bold text-foreground mt-0.5">3 free plays available</div>
                     </div>
-                    <span className="px-2 py-1 rounded bg-primary/15 text-primary text-[9px] font-black tracking-wider">LIVE</span>
+                    <span className="px-2 py-1 rounded bg-primary/15 text-primary text-[11px] font-black tracking-wider">LIVE</span>
                   </div>
                 </>
               )}
@@ -508,17 +508,17 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
               {activeTab === "Tracker" && (
                 <>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[9px] font-black tracking-wider text-foreground/60">PROFIT TRACKER · 30D</span>
-                    <span className="px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[9px] font-black tabular-nums">+18.0%</span>
+                    <span className="text-[11px] font-black tracking-wider text-foreground/60">PROFIT TRACKER · 30D</span>
+                    <span className="px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[11px] font-black tabular-nums">+18.0%</span>
                   </div>
                   <div className="rounded-lg bg-background border border-border p-3">
                     <div className="flex items-end justify-between mb-2">
                       <div>
-                        <div className="text-[9px] tracking-wider text-foreground/50">BANKROLL</div>
+                        <div className="text-[11px] tracking-wider text-foreground/50">BANKROLL</div>
                         <div className="text-2xl font-extrabold text-primary tabular-nums leading-none">+$1,284</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-[9px] tracking-wider text-foreground/50">UNITS</div>
+                        <div className="text-[11px] tracking-wider text-foreground/50">UNITS</div>
                         <div className="text-sm font-bold text-foreground tabular-nums">+12.84u</div>
                       </div>
                     </div>
@@ -531,14 +531,14 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
                       { label: "STREAK", value: "W6" },
                     ].map((s) => (
                       <div key={s.label} className="rounded-lg bg-background border border-border p-2 text-center">
-                        <div className="text-[8px] tracking-wider text-foreground/50">{s.label}</div>
+                        <div className="text-[11px] tracking-wider text-foreground/50">{s.label}</div>
                         <div className="text-sm font-extrabold text-foreground tabular-nums mt-0.5">{s.value}</div>
                       </div>
                     ))}
                   </div>
                   <div className="mt-2 rounded-lg bg-background border border-border px-2.5 py-2 flex items-center justify-between">
-                    <span className="text-[9px] tracking-wider text-foreground/50">BEST SPORT</span>
-                    <span className="text-[10px] font-bold text-foreground">NBA · 73% Win</span>
+                    <span className="text-[11px] tracking-wider text-foreground/50">BEST SPORT</span>
+                    <span className="text-[11px] font-bold text-foreground">NBA · 73% Win</span>
                   </div>
                 </>
               )}
@@ -546,8 +546,8 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
               {activeTab === "Parlay" && (
                 <>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[9px] font-black tracking-wider text-foreground/60">SLIP BUILDER · 3 LEGS</span>
-                    <span className="text-[9px] font-semibold text-primary">Edit</span>
+                    <span className="text-[11px] font-black tracking-wider text-foreground/60">SLIP BUILDER · 3 LEGS</span>
+                    <span className="text-[11px] font-semibold text-primary">Edit</span>
                   </div>
                   <div className="space-y-1.5">
                     {[
@@ -559,7 +559,7 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
                         <img src={p.img} alt={p.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0 bg-card" />
                         <div className="flex-1 min-w-0">
                           <div className="text-[11px] font-bold text-foreground truncate">{p.name}</div>
-                          <div className="text-[9px] text-foreground/50">{p.pick}</div>
+                          <div className="text-[11px] text-foreground/50">{p.pick}</div>
                         </div>
                         <span className="text-primary text-xs font-extrabold tabular-nums">{p.conf}%</span>
                       </div>
@@ -567,11 +567,11 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
                   </div>
                   <div className="mt-3 rounded-lg bg-background border border-border p-2.5 flex items-center justify-between">
                     <div>
-                      <div className="text-[9px] tracking-wider text-foreground/50">3-LEG PARLAY</div>
+                      <div className="text-[11px] tracking-wider text-foreground/50">3-LEG PARLAY</div>
                       <div className="text-lg font-extrabold text-primary tabular-nums leading-none">+650</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-[9px] tracking-wider text-foreground/50">GRADE</div>
+                      <div className="text-[11px] tracking-wider text-foreground/50">GRADE</div>
                       <div className="text-base font-extrabold text-primary leading-none mt-0.5">A−</div>
                     </div>
                   </div>
@@ -674,7 +674,7 @@ const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { 
 
       {/* Odds format */}
       <div className="mt-6">
-        <p className="text-[10px] font-black tracking-wider text-foreground/60 mb-1">ODDS FORMAT</p>
+        <p className="text-[11px] font-black tracking-wider text-foreground/60 mb-1">ODDS FORMAT</p>
         <p className="text-xs text-foreground/50 mb-3">We'll show odds the way you like them.</p>
         <div className="grid grid-cols-2 gap-3">
           {[
@@ -703,7 +703,7 @@ const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { 
 
       {/* Sports */}
       <div className="mt-6">
-        <p className="text-[10px] font-black tracking-wider text-foreground/60 mb-1">SPORTS YOU BET ON</p>
+        <p className="text-[11px] font-black tracking-wider text-foreground/60 mb-1">SPORTS YOU BET ON</p>
         <p className="text-xs text-foreground/50 mb-3">Select all that apply.</p>
         <div className="grid grid-cols-2 gap-3">
           {SPORTS.map((s) => {
@@ -823,15 +823,15 @@ const ScreenComparison = memo(function ScreenComparison({ onBack, onNext }: { on
           className="rounded-2xl border border-danger/30 bg-card p-2.5"
           style={{ boxShadow: "inset 0 0 30px rgba(255,59,59,0.06)" }}
         >
-          <div className="text-[9px] font-black tracking-wider text-foreground/60 mb-2">WITHOUT SENTINEL</div>
+          <div className="text-[11px] font-black tracking-wider text-foreground/60 mb-2">WITHOUT SENTINEL</div>
           <div className="text-2xl font-extrabold text-danger tabular-nums leading-none">-12.34%</div>
-          <div className="text-[10px] text-foreground/50 mt-1">ROI After 30 Days</div>
+          <div className="text-[11px] text-foreground/50 mt-1">ROI After 30 Days</div>
           <div className="mt-2 flex justify-center"><Sparkline color="hsl(var(--danger))" down className="h-12 w-full max-w-[120px]" /></div>
           <div className="mt-3 space-y-1.5">
             {["Guessing & Hope", "Emotional Bets", "Chasing Losses", "No Real Strategy"].map((t) => (
               <div key={t} className="flex items-center gap-1.5">
                 <X className="w-3 h-3 text-danger flex-shrink-0" strokeWidth={3} />
-                <span className="text-[10px] text-foreground/70">{t}</span>
+                <span className="text-[11px] text-foreground/70">{t}</span>
               </div>
             ))}
           </div>
@@ -843,15 +843,15 @@ const ScreenComparison = memo(function ScreenComparison({ onBack, onNext }: { on
           className="rounded-2xl border border-primary/40 bg-card p-2.5"
           style={{ boxShadow: "inset 0 0 30px hsl(var(--primary) / 0.08), 0 0 24px hsl(var(--primary) / 0.12)" }}
         >
-          <div className="text-[9px] font-black tracking-wider text-primary mb-2">WITH SENTINEL</div>
+          <div className="text-[11px] font-black tracking-wider text-primary mb-2">WITH SENTINEL</div>
           <div className="text-2xl font-extrabold text-primary tabular-nums leading-none">+18.47%</div>
-          <div className="text-[10px] text-foreground/50 mt-1">ROI After 30 Days</div>
+          <div className="text-[11px] text-foreground/50 mt-1">ROI After 30 Days</div>
           <div className="mt-2 flex justify-center"><Sparkline color="hsl(var(--primary))" className="h-12 w-full max-w-[120px]" /></div>
           <div className="mt-3 space-y-1.5">
             {["AI-Powered Picks", "High Confidence & +EV", "Track & Improve", "Smarter Parlays"].map((t) => (
               <div key={t} className="flex items-center gap-1.5">
                 <Check className="w-3 h-3 text-primary flex-shrink-0" strokeWidth={3} />
-                <span className="text-[10px] text-foreground/70">{t}</span>
+                <span className="text-[11px] text-foreground/70">{t}</span>
               </div>
             ))}
           </div>
@@ -874,7 +874,7 @@ const ScreenComparison = memo(function ScreenComparison({ onBack, onNext }: { on
           </p>
           <div className="mt-2 flex items-center gap-2">
             <span className="text-xs font-bold text-foreground">- Mike R.</span>
-            <span className="px-1.5 py-0.5 rounded bg-primary text-primary-foreground text-[8px] font-black tracking-wider flex items-center gap-0.5">
+            <span className="px-1.5 py-0.5 rounded bg-primary text-primary-foreground text-[11px] font-black tracking-wider flex items-center gap-0.5">
               <ShieldCheck className="w-2.5 h-2.5" strokeWidth={3} /> VERIFIED
             </span>
           </div>
@@ -1135,10 +1135,10 @@ function LiveGameMini({ active }: { active?: boolean }) {
             animate={reduce ? undefined : { opacity: [1, 0.3, 1] }}
             transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
           />
-          <span className="text-[10px] font-black uppercase tracking-wider text-nba-red">LIVE</span>
-          <span className="text-[10px] text-muted-foreground/60 tabular-nums ml-1">Q4 · {m}:{s}</span>
+          <span className="text-[11px] font-black uppercase tracking-wider text-nba-red">LIVE</span>
+          <span className="text-[11px] text-muted-foreground/60 tabular-nums ml-1">Q4 · {m}:{s}</span>
         </div>
-        <span className="text-[9px] text-muted-foreground/55">NBA · MLB · NHL</span>
+        <span className="text-[11px] text-muted-foreground/55">NBA · MLB · NHL</span>
       </div>
       <div className="bg-foreground/[0.03] rounded-lg px-3 py-2.5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -1146,7 +1146,7 @@ function LiveGameMini({ active }: { active?: boolean }) {
           <span className="text-xs font-bold text-foreground/90">LAL</span>
           <span className="text-base font-extrabold tabular-nums text-foreground/90 ml-auto">108</span>
         </div>
-        <span className="text-[9px] text-muted-foreground/40 px-1">vs</span>
+        <span className="text-[11px] text-muted-foreground/40 px-1">vs</span>
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <span className="text-base font-extrabold tabular-nums text-nba-green">112</span>
           <span className="text-xs font-bold text-foreground ml-auto">BOS</span>
@@ -1170,8 +1170,8 @@ function AIPickMini() {
         <PickRow key={p.name} pick={p} delay={reduce ? 0 : 0.05 * i} />
       ))}
       <div className="flex items-center justify-between pt-1.5 mt-0.5 border-t border-border/15">
-        <span className="text-[9px] uppercase tracking-wider text-muted-foreground/60">Today's Edge</span>
-        <span className="text-[9px] font-bold text-nba-green">3 of 12 picks</span>
+        <span className="text-[11px] uppercase tracking-wider text-muted-foreground/60">Today's Edge</span>
+        <span className="text-[11px] font-bold text-nba-green">3 of 12 picks</span>
       </div>
     </div>
   );
@@ -1205,15 +1205,15 @@ function PickRow({ pick, delay }: { pick: { name: string; matchup: string; line:
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-[9px] font-black tabular-nums text-nba-green">{pick.conf}</span>
+          <span className="text-[11px] font-black tabular-nums text-nba-green">{pick.conf}</span>
         </div>
       </div>
       <div className="flex flex-col leading-tight min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[11px] font-bold text-foreground truncate">{pick.name}</span>
-          <span className="text-[9px] font-extrabold tabular-nums text-nba-green flex-shrink-0">{pick.ev}</span>
+          <span className="text-[11px] font-extrabold tabular-nums text-nba-green flex-shrink-0">{pick.ev}</span>
         </div>
-        <span className="text-[9px] text-muted-foreground/60 truncate">{pick.matchup} · {pick.line}</span>
+        <span className="text-[11px] text-muted-foreground/60 truncate">{pick.matchup} · {pick.line}</span>
       </div>
     </motion.div>
   );
@@ -1231,11 +1231,11 @@ function ProfitTrackerMini() {
       {/* Top row: bankroll + ROI badge */}
       <div className="flex items-end justify-between gap-2">
         <div className="flex flex-col leading-none">
-          <span className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mb-1">Bankroll · 30D</span>
+          <span className="text-[11px] uppercase tracking-wider text-muted-foreground/60 mb-1">Bankroll · 30D</span>
           <span className="text-xl font-extrabold tabular-nums text-nba-green">+$1,284</span>
         </div>
         <div className="flex flex-col items-end gap-0.5">
-          <span className="text-[9px] uppercase tracking-wider text-muted-foreground/60">ROI</span>
+          <span className="text-[11px] uppercase tracking-wider text-muted-foreground/60">ROI</span>
           <span
             className="text-[11px] font-extrabold tabular-nums text-nba-green px-1.5 py-0.5 rounded"
             style={{ backgroundColor: "hsl(var(--nba-green) / 0.15)" }}
@@ -1284,15 +1284,15 @@ function ProfitTrackerMini() {
       {/* Bottom stats grid */}
       <div className="grid grid-cols-3 gap-2 pt-1.5 border-t border-border/15">
         <div className="flex flex-col">
-          <span className="text-[9px] uppercase tracking-wider text-muted-foreground/55">Record</span>
+          <span className="text-[11px] uppercase tracking-wider text-muted-foreground/55">Record</span>
           <span className="text-[11px] font-bold text-foreground tabular-nums">42-18</span>
         </div>
         <div className="flex flex-col">
-          <span className="text-[9px] uppercase tracking-wider text-muted-foreground/55">Win Rate</span>
+          <span className="text-[11px] uppercase tracking-wider text-muted-foreground/55">Win Rate</span>
           <span className="text-[11px] font-bold text-foreground tabular-nums">70%</span>
         </div>
         <div className="flex flex-col">
-          <span className="text-[9px] uppercase tracking-wider text-muted-foreground/55">Streak</span>
+          <span className="text-[11px] uppercase tracking-wider text-muted-foreground/55">Streak</span>
           <span className="text-[11px] font-bold text-nba-green tabular-nums">W6</span>
         </div>
       </div>

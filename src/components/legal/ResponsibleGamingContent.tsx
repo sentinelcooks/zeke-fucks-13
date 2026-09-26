@@ -23,7 +23,7 @@ const ResponsibleGamingContent = () => (
       >
         1-800-GAMBLER
       </a>
-      <p className="text-[10px] text-muted-foreground/60 mt-1">Free, confidential, 24/7</p>
+      <p className="text-[11px] text-muted-foreground/60 mt-1">Free, confidential, 24/7</p>
     </div>
   </div>
 );

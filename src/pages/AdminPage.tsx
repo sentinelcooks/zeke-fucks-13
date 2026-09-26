@@ -608,7 +608,7 @@ const AdminPage = () => {
                     <div className="bg-card rounded-lg border border-border p-3 text-center">
                       <div className="text-2xl font-bold text-foreground">{(apiKeyStats.usableRequestsRemaining ?? apiKeyStats.totalRemaining ?? 0).toLocaleString()}</div>
                       <div className="text-xs text-muted-foreground mt-1">Spendable now</div>
-                      <div className="text-[10px] text-muted-foreground/70 mt-0.5">
+                      <div className="text-[11px] text-muted-foreground/70 mt-0.5">
                         of {(apiKeyStats.totalRequestsRemainingAllKeys ?? 0).toLocaleString()} on file
                       </div>
                     </div>
@@ -860,7 +860,7 @@ const AdminPage = () => {
                             </div>
                             {s.user_agent && <p className="text-muted-foreground truncate" title={s.user_agent}>UA: {s.user_agent}</p>}
                             <div className="flex gap-3 text-muted-foreground">
-                              <span>Fingerprint: <code className="bg-background px-1 py-0.5 rounded text-[10px]">{s.device_fingerprint?.slice(0, 12)}…</code></span>
+                              <span>Fingerprint: <code className="bg-background px-1 py-0.5 rounded text-[11px]">{s.device_fingerprint?.slice(0, 12)}…</code></span>
                               <span>First seen: {new Date(s.created_at).toLocaleString()}</span>
                               <span>Last seen: {new Date(s.last_seen_at).toLocaleString()}</span>
                             </div>
@@ -944,11 +944,11 @@ const AdminPage = () => {
             {/* Stats Overview */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <div className="glass-card rounded-xl p-4">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Total Responses</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Total Responses</p>
                 <p className="text-2xl font-extrabold text-foreground">{onboardingResponses.length}</p>
               </div>
               <div className="glass-card rounded-xl p-4">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Top Sport</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Top Sport</p>
                 <p className="text-2xl font-extrabold text-foreground">
                   {Object.entries(sportStats).sort((a, b) => b[1] - a[1])[0]?.[0] || "—"}
                 </p>
@@ -957,7 +957,7 @@ const AdminPage = () => {
                 </p>
               </div>
               <div className="glass-card rounded-xl p-4">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Top Style</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Top Style</p>
                 <p className="text-2xl font-extrabold text-foreground">
                   {Object.entries(styleStats).sort((a, b) => b[1] - a[1])[0]?.[0] || "—"}
                 </p>
@@ -966,7 +966,7 @@ const AdminPage = () => {
                 </p>
               </div>
               <div className="glass-card rounded-xl p-4">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Top Referral</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Top Referral</p>
                 <p className="text-2xl font-extrabold text-foreground">
                   {Object.entries(referralStats).sort((a, b) => b[1] - a[1])[0]?.[0] || "—"}
                 </p>
@@ -1051,13 +1051,13 @@ const AdminPage = () => {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border bg-muted/30">
-                        <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">User</th>
-                        <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Referral</th>
-                        <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sports</th>
-                        <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Style</th>
-                        <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Risk</th>
-                        <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Date</th>
-                        <th className="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground"></th>
+                        <th className="text-left py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">User</th>
+                        <th className="text-left py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Referral</th>
+                        <th className="text-left py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Sports</th>
+                        <th className="text-left py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Style</th>
+                        <th className="text-left py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Risk</th>
+                        <th className="text-left py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Date</th>
+                        <th className="text-left py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1082,7 +1082,7 @@ const AdminPage = () => {
                                     <p className="text-xs font-semibold text-foreground truncate max-w-[160px]">
                                       {resolveDisplayName({ display_name: r.display_name, email: r.email }, null, "Unknown")}
                                     </p>
-                                    <p className="text-[10px] text-muted-foreground truncate max-w-[160px]">
+                                    <p className="text-[11px] text-muted-foreground truncate max-w-[160px]">
                                       {r.email || "No email"}
                                     </p>
                                   </div>
@@ -1094,7 +1094,7 @@ const AdminPage = () => {
                               <td className="py-3 px-4">
                                 <div className="flex flex-wrap gap-1">
                                   {(r.sports || []).map((s) => (
-                                    <span key={s} className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${SPORT_COLORS[s] || "bg-muted text-muted-foreground border-border"}`}>
+                                    <span key={s} className={`text-[11px] font-bold px-1.5 py-0.5 rounded border ${SPORT_COLORS[s] || "bg-muted text-muted-foreground border-border"}`}>
                                       {s}
                                     </span>
                                   ))}
@@ -1103,7 +1103,7 @@ const AdminPage = () => {
                               </td>
                               <td className="py-3 px-4">
                                 {r.betting_style ? (
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-accent/10 text-accent border border-accent/20 inline-flex items-center gap-1">
+                                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-accent/10 text-accent border border-accent/20 inline-flex items-center gap-1">
                                     <StyleIcon className="w-3 h-3" /> {r.betting_style}
                                   </span>
                                 ) : (
@@ -1112,7 +1112,7 @@ const AdminPage = () => {
                               </td>
                               <td className="py-3 px-4">
                                 {riskLevel ? (
-                                  <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold ${
                                     riskLevel === "high" ? "bg-destructive/10 text-destructive" :
                                     riskLevel === "low" ? "bg-nba-green/10 text-nba-green" :
                                     "bg-accent/10 text-accent"
@@ -1124,7 +1124,7 @@ const AdminPage = () => {
                                 )}
                               </td>
                               <td className="py-3 px-4">
-                                <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                                <span className="text-[11px] text-muted-foreground whitespace-nowrap">
                                   {new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                                 </span>
                               </td>
@@ -1141,19 +1141,19 @@ const AdminPage = () => {
                                     {/* User Details Grid */}
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                                       <div>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Full Email</p>
+                                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Full Email</p>
                                         <p className="text-xs font-medium text-foreground break-all">{r.email || "Not provided"}</p>
                                       </div>
                                       <div>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Display Name</p>
+                                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Display Name</p>
                                         <p className="text-xs font-medium text-foreground">{r.display_name || "Not set"}</p>
                                       </div>
                                       <div>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">User ID</p>
-                                        <code className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-foreground/70">{r.user_id.slice(0, 12)}…</code>
+                                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">User ID</p>
+                                        <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded text-foreground/70">{r.user_id.slice(0, 12)}…</code>
                                       </div>
                                       <div>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Last Updated</p>
+                                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Last Updated</p>
                                         <p className="text-xs text-foreground/80">{new Date(r.updated_at).toLocaleString()}</p>
                                       </div>
                                     </div>
@@ -1167,34 +1167,34 @@ const AdminPage = () => {
                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                           {r.ai_recommendations.welcome_message && (
                                             <div className="col-span-full">
-                                              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Welcome Message</p>
+                                              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Welcome Message</p>
                                               <p className="text-xs text-foreground/80 leading-relaxed">{r.ai_recommendations.welcome_message}</p>
                                             </div>
                                           )}
                                           {r.ai_recommendations.daily_tip && (
                                             <div className="col-span-full">
-                                              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Daily Tip</p>
+                                              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Daily Tip</p>
                                               <p className="text-xs text-foreground/80 leading-relaxed">{r.ai_recommendations.daily_tip}</p>
                                             </div>
                                           )}
                                           {r.ai_recommendations.bankroll_tip && (
                                             <div>
-                                              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Bankroll Tip</p>
+                                              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Bankroll Tip</p>
                                               <p className="text-xs text-foreground/80">{r.ai_recommendations.bankroll_tip}</p>
                                             </div>
                                           )}
                                           {r.ai_recommendations.focus_sport && (
                                             <div>
-                                              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Focus Sport</p>
+                                              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Focus Sport</p>
                                               <p className="text-xs font-medium text-foreground">{r.ai_recommendations.focus_sport}</p>
                                             </div>
                                           )}
                                           {r.ai_recommendations.recommended_features && (
                                             <div>
-                                              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Recommended Features</p>
+                                              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Recommended Features</p>
                                               <div className="flex flex-wrap gap-1">
                                                 {r.ai_recommendations.recommended_features.map((f: string) => (
-                                                  <span key={f} className="px-2 py-0.5 rounded text-[10px] font-bold bg-muted text-foreground/70 border border-border">
+                                                  <span key={f} className="px-2 py-0.5 rounded text-[11px] font-bold bg-muted text-foreground/70 border border-border">
                                                     {f}
                                                   </span>
                                                 ))}

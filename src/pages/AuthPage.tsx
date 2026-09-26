@@ -471,7 +471,7 @@ const AuthPage = () => {
             >
               <BrandMark />
             </div>
-            <span className="text-[13px] font-bold tracking-[0.22em]" style={{ color: ACCENT, textShadow: `0 0 12px hsl(var(--primary) / 0.4)` }}>
+            <span className="text-[13px] font-bold tracking-[0.04em]" style={{ color: ACCENT, textShadow: `0 0 12px hsl(var(--primary) / 0.4)` }}>
               SENTINEL
             </span>
           </div>
@@ -509,7 +509,7 @@ const AuthPage = () => {
 
               <form onSubmit={handleForgotPassword} className="space-y-4" autoComplete="on">
                 <div>
-                  <label className="block text-[10px] font-semibold tracking-[0.15em] text-foreground/50 mb-1.5 uppercase">Email Address</label>
+                  <label className="block text-[11px] font-semibold tracking-[0.04em] text-foreground/50 mb-1.5 uppercase">Email Address</label>
                   <input
                     type="email"
                     placeholder="you@example.com"
@@ -620,7 +620,7 @@ const AuthPage = () => {
               <BrandMark />
             </div>
             <span
-              className="text-[13px] font-bold tracking-[0.22em]"
+              className="text-[13px] font-bold tracking-[0.04em]"
               style={{ color: ACCENT, textShadow: `0 0 12px hsl(var(--primary) / 0.4)` }}
             >
               SENTINEL
@@ -682,7 +682,7 @@ const AuthPage = () => {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <label className="block text-[10px] font-semibold tracking-[0.15em] text-foreground/50 mb-1.5 uppercase">Display Name</label>
+                <label className="block text-[11px] font-semibold tracking-[0.04em] text-foreground/50 mb-1.5 uppercase">Display Name</label>
                 <input
                   type="text"
                   placeholder="Your name (optional)"
@@ -702,7 +702,7 @@ const AuthPage = () => {
           </AnimatePresence>
 
           <div>
-            <label className="block text-[10px] font-semibold tracking-[0.15em] text-foreground/50 mb-1.5 uppercase">Email Address</label>
+            <label className="block text-[11px] font-semibold tracking-[0.04em] text-foreground/50 mb-1.5 uppercase">Email Address</label>
             <input
               type="email"
               placeholder="you@example.com"
@@ -721,7 +721,7 @@ const AuthPage = () => {
           </div>
 
           <div>
-            <label className="block text-[10px] font-semibold tracking-[0.15em] text-foreground/50 mb-1.5 uppercase">Password</label>
+            <label className="block text-[11px] font-semibold tracking-[0.04em] text-foreground/50 mb-1.5 uppercase">Password</label>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
@@ -808,7 +808,7 @@ const AuthPage = () => {
         {/* Divider */}
         <div className="relative flex items-center gap-3 my-5">
           <div className="flex-1 h-px" style={{ background: 'hsl(var(--foreground) / 0.06)' }} />
-          <span className="text-[10px] tracking-[0.18em] uppercase text-foreground/35 font-medium">
+          <span className="text-[11px] tracking-[0.04em] uppercase text-foreground/35 font-medium">
             or {isSignup ? "sign up" : "continue"} with
           </span>
           <div className="flex-1 h-px" style={{ background: 'hsl(var(--foreground) / 0.06)' }} />
@@ -860,7 +860,7 @@ const AuthPage = () => {
         </div>
 
         {/* Legal microcopy */}
-        <p className="relative text-[10.5px] leading-relaxed text-foreground/40 text-center mt-5 px-2">
+        <p className="relative text-[11px] leading-relaxed text-foreground/40 text-center mt-5 px-2">
           By continuing you agree to our{" "}
           <Link
             to="/legal"

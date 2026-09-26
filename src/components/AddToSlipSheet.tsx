@@ -125,7 +125,7 @@ export function AddToSlipSheet({ open, onOpenChange, pick }: Props) {
                       {bookInfo.logo ? (
                         <img src={bookInfo.logo} alt={bookInfo.label} className="w-4 h-4 rounded-sm object-contain" />
                       ) : (
-                        <span className="text-[9px] font-bold rounded px-1 py-0.5" style={{ background: bookInfo.color, color: "#fff" }}>
+                        <span className="text-[11px] font-bold rounded px-1 py-0.5" style={{ background: bookInfo.color, color: "#fff" }}>
                           {bookInfo.abbrev}
                         </span>
                       )}

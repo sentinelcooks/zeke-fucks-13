@@ -137,7 +137,7 @@ export function BetTypeDropdown({ sport, value, onChange }: BetTypeDropdownProps
 
   return (
     <div ref={containerRef} className="relative">
-      <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Play Type</label>
+      <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">Play Type</label>
       <input
         value={open ? filter : value}
         onChange={(e) => { setFilter(e.target.value); if (!open) setOpen(true); }}
@@ -169,7 +169,7 @@ export function BetTypeDropdown({ sport, value, onChange }: BetTypeDropdownProps
                 <div className="min-w-0">
                   <span className="text-[12px] font-semibold text-foreground">{opt.label}</span>
                   {matchedAlias && matchedAlias !== opt.label.toLowerCase() && (
-                    <span className="text-[9px] text-muted-foreground/40 ml-1.5">({matchedAlias})</span>
+                    <span className="text-[11px] text-muted-foreground/40 ml-1.5">({matchedAlias})</span>
                   )}
                 </div>
               </button>

@@ -55,7 +55,7 @@ export function GameLineCard({
       <div className="flex items-center justify-between gap-3">
         <p className="flex items-baseline gap-2">
           <span className="text-[15px] font-extrabold tabular-nums text-foreground">{time}</span>
-          <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-muted-foreground/55">{dayLabel}</span>
+          <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55">{dayLabel}</span>
         </p>
         <MarketPill status={marketStatus} count={grid.liveMarkets} />
       </div>
@@ -63,7 +63,7 @@ export function GameLineCard({
       <div className="mt-3 grid grid-cols-[minmax(0,1fr)_repeat(3,3.6rem)] items-center gap-x-1.5 gap-y-2">
         <span />
         {["Spread", "Total", "ML"].map((label) => (
-          <span key={label} className="text-center text-[8px] font-bold uppercase tracking-[0.14em] text-muted-foreground/50">
+          <span key={label} className="text-center text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/50">
             {label}
           </span>
         ))}
@@ -73,7 +73,7 @@ export function GameLineCard({
       </div>
 
       {!teamsVerified && (
-        <p className="mt-2.5 text-[9px] font-semibold text-nba-yellow">Team verification pending</p>
+        <p className="mt-2.5 text-[11px] font-semibold text-nba-yellow">Team verification pending</p>
       )}
 
       <div className="mt-3.5 grid grid-cols-2 gap-2">
@@ -105,7 +105,7 @@ function TeamRow({ side, row }: { side: TeamSide; row: GameLineGridRow }) {
       <div className="flex min-w-0 items-center gap-2.5">
         <div className="shrink-0">{side.badge}</div>
         <div className="min-w-0 leading-tight">
-          {city ? <p className="truncate text-[10px] text-muted-foreground/60">{city}</p> : null}
+          {city ? <p className="truncate text-[11px] text-muted-foreground/60">{city}</p> : null}
           <p className="truncate text-[14px] font-bold text-foreground">{nickname}</p>
         </div>
       </div>
@@ -129,7 +129,7 @@ function OddsCell({ cell }: { cell: GridCell }) {
         <>
           {cell.line ? <span className="text-[11px] font-bold tabular-nums text-foreground">{cell.line}</span> : null}
           <span
-            className={`tabular-nums ${cell.line ? "text-[9px] font-semibold" : "text-[12px] font-bold"} ${
+            className={`tabular-nums ${cell.line ? "text-[11px] font-semibold" : "text-[12px] font-bold"} ${
               (cell.price as number) > 0 ? "text-nba-green" : cell.line ? "text-muted-foreground/70" : "text-foreground"
             }`}
           >
@@ -147,7 +147,7 @@ export function MarketPill({ status, count }: { status: MarketStatus; count: num
       // `nba-green` is a hand-written utility in index.css, not a Tailwind
       // colour, so `/10`-style opacity variants would silently do nothing.
       <span
-        className="flex items-center gap-1.5 rounded-full px-2 py-1 text-[9px] font-bold text-nba-green"
+        className="flex items-center gap-1.5 rounded-full px-2 py-1 text-[11px] font-bold text-nba-green"
         style={{ background: "hsl(var(--success) / 0.1)", border: "1px solid hsl(var(--success) / 0.3)" }}
       >
         <span className="h-1.5 w-1.5 rounded-full bg-nba-green" style={{ boxShadow: "0 0 6px hsl(var(--success))" }} />
@@ -156,7 +156,7 @@ export function MarketPill({ status, count }: { status: MarketStatus; count: num
     );
   }
   return (
-    <span className="rounded-full border border-foreground/10 bg-foreground/[0.03] px-2 py-1 text-[9px] font-semibold text-muted-foreground/60">
+    <span className="rounded-full border border-foreground/10 bg-foreground/[0.03] px-2 py-1 text-[11px] font-semibold text-muted-foreground/60">
       {status === "unavailable" ? "Odds unavailable" : "Not posted yet"}
     </span>
   );

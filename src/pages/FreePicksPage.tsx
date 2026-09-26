@@ -484,14 +484,14 @@ const FreePicksPage = () => {
                             return pick.player_name;
                           })()}
                         </span>
-                        <span className="text-[10px] font-medium text-muted-foreground uppercase whitespace-nowrap shrink-0">{pick.sport}</span>
+                        <span className="text-[11px] font-medium text-muted-foreground uppercase whitespace-nowrap shrink-0">{pick.sport}</span>
                         {pick.tier === 'edge' && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-nba-green/15 text-nba-green uppercase tracking-wide whitespace-nowrap shrink-0">
+                          <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-nba-green/15 text-nba-green uppercase tracking-wide whitespace-nowrap shrink-0">
                             Edge
                           </span>
                         )}
                         {pick.bet_type && pick.bet_type !== "prop" && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-accent/15 text-accent uppercase tracking-wide whitespace-nowrap shrink-0">
+                          <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-accent/15 text-accent uppercase tracking-wide whitespace-nowrap shrink-0">
                             {pick.bet_type === "moneyline" ? "ML" : pick.bet_type === "spread" ? "Spread" : "Total"}
                           </span>
                         )}
@@ -551,14 +551,14 @@ const FreePicksPage = () => {
                       })()}
                       {pick.opponent && (!pick.bet_type || pick.bet_type === "prop") && (
                         <div className="pl-3.5 mt-1">
-                          <span className="text-[10px] text-muted-foreground">vs {pick.opponent}</span>
+                          <span className="text-[11px] text-muted-foreground">vs {pick.opponent}</span>
                         </div>
                       )}
                     </div>
                     <div className="flex flex-col items-end gap-0.5 shrink-0">
                       <span className={`text-[15px] font-bold tabular-nums ${conf.text}`}>{Math.round(scoreOf(pick))}%</span>
-                      <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">confidence</span>
-                      {edge > 0 && <span className="text-[10px] font-semibold text-nba-green">{edge}% edge</span>}
+                      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">confidence</span>
+                      {edge > 0 && <span className="text-[11px] font-semibold text-nba-green">{edge}% edge</span>}
                     </div>
                     <ChevronRight className="w-4 h-4 text-muted-foreground/65 shrink-0" />
                   </motion.button>
@@ -626,8 +626,8 @@ const FreePicksPage = () => {
                         <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                           <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${conf.dot}`} />
                           <span className="text-[14px] font-semibold text-foreground truncate min-w-0 flex-1">{pick.player_name}</span>
-                          <span className="text-[10px] font-medium text-muted-foreground uppercase whitespace-nowrap shrink-0">{pick.sport}</span>
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-nba-green/15 text-nba-green uppercase tracking-wide whitespace-nowrap shrink-0">
+                          <span className="text-[11px] font-medium text-muted-foreground uppercase whitespace-nowrap shrink-0">{pick.sport}</span>
+                          <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-nba-green/15 text-nba-green uppercase tracking-wide whitespace-nowrap shrink-0">
                             {hits}/{total} L5
                           </span>
                         </div>
@@ -642,13 +642,13 @@ const FreePicksPage = () => {
                         </div>
                         {pick.opponent && (
                           <div className="pl-3.5 mt-1">
-                            <span className="text-[10px] text-muted-foreground">vs {pick.opponent}</span>
+                            <span className="text-[11px] text-muted-foreground">vs {pick.opponent}</span>
                           </div>
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-0.5 shrink-0">
                         <span className="text-[15px] font-bold tabular-nums text-nba-green">100%</span>
-                        <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">last 5</span>
+                        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">last 5</span>
                       </div>
                       <ChevronRight className="w-4 h-4 text-muted-foreground/65 shrink-0" />
                     </motion.button>
@@ -681,7 +681,7 @@ const FreePicksPage = () => {
                         <div className="flex items-center gap-2">
                           <BarChart3 className="w-3.5 h-3.5 text-accent/60" />
                           <span className="text-[11px] font-bold text-foreground">{leg.player}</span>
-                          <span className={`text-[10px] font-semibold ${leg.direction === "over" ? "text-nba-green" : "text-nba-red"}`}>
+                          <span className={`text-[11px] font-semibold ${leg.direction === "over" ? "text-nba-green" : "text-nba-red"}`}>
                             {leg.direction === "over" ? "Over" : "Under"} {leg.line} {leg.prop}
                           </span>
                         </div>
@@ -691,7 +691,7 @@ const FreePicksPage = () => {
                   </div>
                   <div className="flex items-center gap-2 mt-3 pt-2" style={{ borderTop: "1px solid hsl(var(--border) / 0.2)" }}>
                     <Star className="w-3.5 h-3.5 text-[hsl(var(--nba-yellow))]" />
-                    <span className="text-[9px] text-muted-foreground/65">{sgp.streak_label}</span>
+                    <span className="text-[11px] text-muted-foreground/65">{sgp.streak_label}</span>
                   </div>
                 </motion.div>
               ))}
@@ -717,9 +717,9 @@ const FreePicksPage = () => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="text-[12px] font-bold text-foreground truncate">{prop.player}</span>
-                        <span className="text-[8px] text-muted-foreground/55">vs {prop.opponent.split(" ").pop()}</span>
+                        <span className="text-[11px] text-muted-foreground/55">vs {prop.opponent.split(" ").pop()}</span>
                       </div>
-                      <p className="text-[10px] text-muted-foreground/50">
+                      <p className="text-[11px] text-muted-foreground/50">
                         <span className={prop.direction === "over" ? "text-nba-green" : "text-nba-red"}>
                           {prop.direction === "over" ? "▲" : "▼"} {prop.line}
                         </span>{" "}{formatPropType(prop.prop_type)} · {prop.streak_label}
@@ -727,7 +727,7 @@ const FreePicksPage = () => {
                     </div>
                     <div className="text-right shrink-0">
                       <span className="text-[12px] font-extrabold text-foreground tabular-nums">{formatOdds(prop.odds)}</span>
-                      <p className="text-[9px] text-nba-green font-bold">{prop.streak_games}/{prop.streak_total}</p>
+                      <p className="text-[11px] text-nba-green font-bold">{prop.streak_games}/{prop.streak_total}</p>
                     </div>
                   </motion.div>
                 );

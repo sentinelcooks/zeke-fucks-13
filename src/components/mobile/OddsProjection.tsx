@@ -200,13 +200,13 @@ function EdgeExplainer({ modelRate, impliedRate, edge, ev }: { modelRate: number
               <div className="rounded-xl p-3.5 space-y-2" style={{ background: 'hsl(var(--card) / 0.6)' }}>
                 <div className="flex items-center gap-1.5">
                   <Shield className="w-3 h-3 text-nba-cyan" />
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-[hsl(var(--nba-cyan))]">Edge</span>
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-[hsl(var(--nba-cyan))]">Edge</span>
                 </div>
                 <p className="text-[11px] text-foreground/60 leading-relaxed">
                   Edge is the difference between what <strong className="text-foreground/80">our model thinks will happen</strong> and what the <strong className="text-foreground/80">sportsbooks think</strong>.
                 </p>
                 <div className="rounded-lg p-3 space-y-1.5" style={{ background: 'hsl(var(--card) / 0.7)' }}>
-                  <p className="text-[10px] text-muted-foreground/50 italic">Example with this prop:</p>
+                  <p className="text-[11px] text-muted-foreground/50 italic">Example with this prop:</p>
                   <div className="flex items-center gap-2 text-[11px]">
                     <span className="text-accent font-bold">Our model: {modelRate.toFixed(0)}%</span>
                     <span className="text-muted-foreground/55">—</span>
@@ -214,7 +214,7 @@ function EdgeExplainer({ modelRate, impliedRate, edge, ev }: { modelRate: number
                     <span className="text-muted-foreground/55">=</span>
                     <span className={`font-extrabold ${edge > 0 ? 'text-nba-green' : 'text-nba-red'}`}>{edge > 0 ? '+' : ''}{edge.toFixed(1)}% edge</span>
                   </div>
-                  <p className="text-[10px] text-muted-foreground/65 leading-relaxed mt-1">
+                  <p className="text-[11px] text-muted-foreground/65 leading-relaxed mt-1">
                     {edge > 0 
                       ? `The books are pricing this at ${impliedRate.toFixed(0)}% probability, but our data shows it hits ${modelRate.toFixed(0)}% of the time. That's a mispricing we can capitalize on.`
                       : `The books are pricing this more aggressively than our model suggests. The line may be fairly priced or overvalued.`
@@ -227,7 +227,7 @@ function EdgeExplainer({ modelRate, impliedRate, edge, ev }: { modelRate: number
               <div className="rounded-xl p-3.5 space-y-2" style={{ background: 'hsl(var(--card) / 0.6)' }}>
                 <div className="flex items-center gap-1.5">
                   <TrendingUp className="w-3 h-3 text-nba-green" />
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-nba-green">Expected Value (EV)</span>
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-nba-green">Expected Value (EV)</span>
                 </div>
                 <p className="text-[11px] text-foreground/60 leading-relaxed">
                   EV tells you <strong className="text-foreground/80">how much you'd profit per $100 bet</strong> over time if our model is right. Positive EV (+EV) means the bet is profitable long-term.
@@ -237,7 +237,7 @@ function EdgeExplainer({ modelRate, impliedRate, edge, ev }: { modelRate: number
                     <span className="text-muted-foreground/50">This bet's EV:</span>
                     <span className={`font-extrabold ${ev > 0 ? 'text-nba-green' : 'text-nba-red'}`}>{ev > 0 ? '+' : ''}{ev.toFixed(1)}%</span>
                   </div>
-                  <p className="text-[10px] text-muted-foreground/65 leading-relaxed mt-1.5">
+                  <p className="text-[11px] text-muted-foreground/65 leading-relaxed mt-1.5">
                     {ev > 0
                       ? `For every $100 wagered on bets like this, you'd expect to profit ~$${ev.toFixed(0)} on average over time.`
                       : `This bet would lose ~$${Math.abs(ev).toFixed(0)} per $100 wagered over time. Look for +EV opportunities instead.`
@@ -248,14 +248,14 @@ function EdgeExplainer({ modelRate, impliedRate, edge, ev }: { modelRate: number
 
               {/* Quick tips */}
               <div className="rounded-xl p-3" style={{ background: 'hsl(var(--success) / 0.04)', border: '1px solid hsl(var(--success) / 0.08)' }}>
-                <span className="text-[9px] font-bold uppercase tracking-wider text-nba-green/60 block mb-1.5">💡 Quick Tips</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-nba-green/60 block mb-1.5">💡 Quick Tips</span>
                 <ul className="space-y-1">
                   {[
                     "Edge > 5% = strong mispricing worth betting",
                     "Always bet +EV to be profitable long-term",
                     "Higher edge = more confident the books are wrong",
                   ].map((tip, i) => (
-                    <li key={i} className="flex items-start gap-1.5 text-[10px] text-foreground/50">
+                    <li key={i} className="flex items-start gap-1.5 text-[11px] text-foreground/50">
                       <span className="text-nba-green mt-0.5">•</span>
                       {tip}
                     </li>
@@ -347,8 +347,8 @@ export function OddsProjection({
     return (
       <div className="vision-card p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65">Saved odds</span>
-          <span className="text-[9px] text-muted-foreground/50">scanner snapshot</span>
+          <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65">Saved odds</span>
+          <span className="text-[11px] text-muted-foreground/50">scanner snapshot</span>
         </div>
         {savedOdds ? (
           <div className="grid grid-cols-3 gap-2">
@@ -356,31 +356,31 @@ export function OddsProjection({
               <span className="block text-base font-extrabold tabular-nums text-foreground/90">
                 {americanOdds != null ? formatOdds(americanOdds) : savedOdds}
               </span>
-              <span className="block text-[8px] text-muted-foreground/55 font-bold uppercase">Best price</span>
+              <span className="block text-[11px] text-muted-foreground/55 font-bold uppercase">Best price</span>
             </div>
             <div className="text-center py-2 rounded-lg" style={{ background: 'hsl(var(--card) / 0.6)' }}>
               <span className="block text-base font-extrabold tabular-nums text-foreground/90">
                 {impliedPct != null ? `${impliedPct}%` : "—"}
               </span>
-              <span className="block text-[8px] text-muted-foreground/55 font-bold uppercase">Implied</span>
+              <span className="block text-[11px] text-muted-foreground/55 font-bold uppercase">Implied</span>
             </div>
             <div className="text-center py-2 rounded-lg" style={{ background: 'hsl(var(--card) / 0.6)' }}>
               <span className={`block text-base font-extrabold tabular-nums ${evDisplay ? getEVColor(backendEvPct ?? 0) : "text-foreground/60"}`}>
                 {evDisplay ?? "—"}
               </span>
-              <span className="block text-[8px] text-muted-foreground/55 font-bold uppercase">EV</span>
+              <span className="block text-[11px] text-muted-foreground/55 font-bold uppercase">EV</span>
             </div>
           </div>
         ) : (
           <p className="text-xs text-muted-foreground/65 text-center py-2">Saved odds unavailable</p>
         )}
         {savedBook && savedBookInfo && (
-          <div className="flex items-center justify-center gap-2 text-[10px] text-muted-foreground/55">
+          <div className="flex items-center justify-center gap-2 text-[11px] text-muted-foreground/55">
             <SportsbookLogoBadge
               bookName={savedBook}
               sizeClass="w-6 h-6"
               logoClass="w-4 h-4 object-contain"
-              fallbackClass="text-[8px] font-black text-foreground"
+              fallbackClass="text-[11px] font-black text-foreground"
             />
             <p>Best book at scan time: <span className="text-foreground/75 font-bold uppercase">{savedBookInfo.label}</span></p>
           </div>
@@ -461,7 +461,7 @@ export function OddsProjection({
       )}
       {/* Event context */}
       {data.event && (
-        <div className="flex items-center justify-between text-[10px] text-muted-foreground/65 px-1">
+        <div className="flex items-center justify-between text-[11px] text-muted-foreground/65 px-1">
           <span className="font-medium">{data.event.home} vs {data.event.away}</span>
           <button onClick={fetchOdds} className="flex items-center gap-1 text-accent/60 hover:text-accent transition-colors">
             <RefreshCw className="w-3 h-3" /> Refresh
@@ -500,14 +500,14 @@ export function OddsProjection({
                   <p className={`text-[13px] font-extrabold ${hasPositiveEV ? "text-nba-green" : "text-nba-red"}`}>
                     {hasPositiveEV ? "+EV Opportunity" : "Negative EV"}
                   </p>
-                  <p className="text-[9px] text-muted-foreground/65">
+                  <p className="text-[11px] text-muted-foreground/65">
                     {backendEvPct != null
                       ? `Model EV: ${backendEvPct > 0 ? "+" : ""}${backendEvPct.toFixed(1)}%${liveDrift != null && Math.abs(liveDrift) >= 1 ? ` · Live drift: ${liveDrift > 0 ? "+" : ""}${liveDrift.toFixed(1)}%` : ""}`
                       : "Model vs Market comparison"}
                   </p>
                 </div>
               </div>
-              <div className={`px-2.5 py-1 rounded-lg text-[10px] font-black tracking-wider ${edgeInfo.bg} ${edgeInfo.color}`}>
+              <div className={`px-2.5 py-1 rounded-lg text-[11px] font-black tracking-wider ${edgeInfo.bg} ${edgeInfo.color}`}>
                 {edgeInfo.label}
               </div>
             </div>
@@ -517,32 +517,32 @@ export function OddsProjection({
               <div className="rounded-xl p-2.5 text-center min-w-0 overflow-hidden" style={{ background: 'hsl(var(--card) / 0.7)' }}>
                 <div className="flex items-center justify-center gap-1 mb-1.5">
                   <Zap className="w-3 h-3 text-accent" />
-                  <span className="text-[8px] font-bold uppercase tracking-wider text-accent/60">Our Model</span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-accent/60">Our Model</span>
                 </div>
                 <span className="block text-[16px] font-extrabold tabular-nums text-accent">{compositeModelRate.toFixed(1)}%</span>
-                <span className="block text-[8px] text-muted-foreground/55 mt-0.5">Hit Probability</span>
+                <span className="block text-[11px] text-muted-foreground/55 mt-0.5">Hit Probability</span>
               </div>
               <div className="rounded-xl p-2.5 text-center flex flex-col items-center justify-center min-w-0 overflow-hidden" style={{ background: 'hsl(var(--card) / 0.7)' }}>
-                <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/65 mb-1">Implied</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/65 mb-1">Implied</span>
                 <span className="block text-[16px] font-extrabold tabular-nums text-foreground/60">{bestImplied.toFixed(1)}%</span>
-                <span className="block text-[8px] text-muted-foreground/55 mt-0.5">Best Book</span>
+                <span className="block text-[11px] text-muted-foreground/55 mt-0.5">Best Book</span>
               </div>
               <div className="rounded-xl p-2.5 text-center min-w-0 overflow-hidden" style={{ background: 'hsl(var(--card) / 0.7)' }}>
                 <div className="flex items-center justify-center gap-1 mb-1.5">
                   <Shield className="w-3 h-3 text-nba-cyan" />
-                  <span className="text-[8px] font-bold uppercase tracking-wider text-[hsl(var(--nba-cyan))]/60">Edge</span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[hsl(var(--nba-cyan))]/60">Edge</span>
                 </div>
                 <span className={`block text-[16px] font-extrabold tabular-nums ${getEVColor(bestEV.edge)}`}>
                   {bestEV.edge > 0 ? "+" : ""}{bestEV.edge.toFixed(1)}%
                 </span>
-                <span className="block text-[8px] text-muted-foreground/55 mt-0.5">Model Edge</span>
+                <span className="block text-[11px] text-muted-foreground/55 mt-0.5">Model Edge</span>
               </div>
             </div>
 
             {/* Edge projection bar */}
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/55">Edge Projection</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/55">Edge Projection</span>
                 <span className={`text-[11px] font-extrabold tabular-nums ${getEVColor(bestEV.ev)}`}>
                   EV: {bestEV.ev > 0 ? "+" : ""}{bestEV.ev.toFixed(1)}%
                 </span>
@@ -571,16 +571,16 @@ export function OddsProjection({
                 />
               </div>
               <div className="flex items-center justify-between mt-1">
-                <span className="text-[8px] text-muted-foreground/50">0%</span>
+                <span className="text-[11px] text-muted-foreground/50">0%</span>
                 <div className="flex items-center gap-3">
-                  <span className="flex items-center gap-1 text-[8px] text-muted-foreground/55">
+                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground/55">
                     <span className="w-2 h-1 rounded-full" style={{ background: hasPositiveEV ? 'hsl(var(--success))' : 'hsl(var(--danger))' }} /> Model
                   </span>
-                  <span className="flex items-center gap-1 text-[8px] text-muted-foreground/55">
+                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground/55">
                     <span className="w-2 h-1 rounded-full bg-muted-foreground/55" /> Implied
                   </span>
                 </div>
-                <span className="text-[8px] text-muted-foreground/50">100%</span>
+                <span className="text-[11px] text-muted-foreground/50">100%</span>
               </div>
             </div>
 
@@ -614,7 +614,7 @@ export function OddsProjection({
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Crown className="w-4 h-4 text-nba-green" />
-              <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-nba-green/70">Best Line Available</span>
+              <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-nba-green/70">Best Line Available</span>
             </div>
           </div>
 
@@ -629,12 +629,12 @@ export function OddsProjection({
               />
               <div>
                 <p className="text-[15px] font-extrabold text-foreground">{bestBookInfo.label}</p>
-                <p className="text-[10px] text-muted-foreground/65">{overUnder.toUpperCase()} {bestBook.line}</p>
+                <p className="text-[11px] text-muted-foreground/65">{overUnder.toUpperCase()} {bestBook.line}</p>
               </div>
             </div>
             <div className="text-right">
               <p className="text-2xl font-black tabular-nums font-mono text-nba-green">{formatOdds(bestBook.odds)}</p>
-              <p className="text-[10px] text-muted-foreground/65 tabular-nums">{bestImplied.toFixed(1)}% implied</p>
+              <p className="text-[11px] text-muted-foreground/65 tabular-nums">{bestImplied.toFixed(1)}% implied</p>
             </div>
           </div>
         </div>
@@ -643,8 +643,8 @@ export function OddsProjection({
       {/* ── ALL BOOKS COMPARISON ── */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between px-1 mb-1">
-          <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">All Sportsbooks</span>
-          <span className="text-[9px] text-muted-foreground/50">{books.length} books</span>
+          <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55">All Sportsbooks</span>
+          <span className="text-[11px] text-muted-foreground/50">{books.length} books</span>
         </div>
 
         {booksWithEV.map((book, i) => {
@@ -672,14 +672,14 @@ export function OddsProjection({
                     bookName={book.book}
                     sizeClass="w-9 h-9"
                     logoClass="w-6 h-6 object-contain"
-                    fallbackClass="text-[10px] font-black text-foreground"
+                    fallbackClass="text-[11px] font-black text-foreground"
                   />
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-[12px] font-bold text-foreground/80">{bookInfo.label}</span>
-                      {isBest && <span className="text-[8px] font-black text-nba-green bg-nba-green/10 px-1.5 py-0.5 rounded-md">BEST</span>}
+                      {isBest && <span className="text-[11px] font-black text-nba-green bg-nba-green/10 px-1.5 py-0.5 rounded-md">BEST</span>}
                     </div>
-                    <span className="text-[9px] text-muted-foreground/55">{overUnder.toUpperCase()} {book.line}</span>
+                    <span className="text-[11px] text-muted-foreground/55">{overUnder.toUpperCase()} {book.line}</span>
                   </div>
                 </div>
 
@@ -687,17 +687,17 @@ export function OddsProjection({
                 <div className="flex items-center gap-4">
                   {/* Implied prob */}
                   <div className="text-center">
-                    <span className="block text-[10px] font-bold tabular-nums text-foreground/50">{book.implied.toFixed(1)}%</span>
-                    <span className="block text-[7px] text-muted-foreground/50 uppercase">Implied</span>
+                    <span className="block text-[11px] font-bold tabular-nums text-foreground/50">{book.implied.toFixed(1)}%</span>
+                    <span className="block text-[11px] text-muted-foreground/50 uppercase">Implied</span>
                   </div>
 
                   {/* EV */}
                   {compositeModelRate > 0 && (
                     <div className="text-center min-w-[44px]">
-                      <span className={`block text-[10px] font-bold tabular-nums ${getEVColor(book.ev)}`}>
+                      <span className={`block text-[11px] font-bold tabular-nums ${getEVColor(book.ev)}`}>
                         {book.ev > 0 ? "+" : ""}{book.ev.toFixed(1)}%
                       </span>
-                      <span className="block text-[7px] text-muted-foreground/50 uppercase">EV</span>
+                      <span className="block text-[11px] text-muted-foreground/50 uppercase">EV</span>
                     </div>
                   )}
 
@@ -736,7 +736,7 @@ export function OddsProjection({
 
       {/* ── SUMMARY FOOTER ── */}
       <div className="rounded-xl p-3 text-center space-y-1" style={{ background: 'hsl(var(--card) / 0.4)' }}>
-        <div className="flex items-center justify-center gap-4 text-[10px]">
+        <div className="flex items-center justify-center gap-4 text-[11px]">
           <span className="text-muted-foreground/55">
             Avg implied: <span className="font-bold text-foreground/50 tabular-nums">{avgImplied.toFixed(1)}%</span>
           </span>

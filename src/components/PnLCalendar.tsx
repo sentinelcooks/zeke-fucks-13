@@ -111,7 +111,7 @@ export function PnLCalendar({ plays }: PnLCalendarProps) {
             </div>
             <div>
               <p className="text-[13px] font-bold text-foreground">P&L Calendar</p>
-              <p className="text-[9px] text-muted-foreground/65">Daily profit & loss</p>
+              <p className="text-[11px] text-muted-foreground/65">Daily profit & loss</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -163,7 +163,7 @@ export function PnLCalendar({ plays }: PnLCalendarProps) {
         {/* Day headers */}
         <div className="grid grid-cols-7 gap-1 mb-1">
           {DAYS.map((d, i) => (
-            <div key={i} className="text-center text-[8px] font-bold text-muted-foreground/50 uppercase tracking-widest py-0.5">
+            <div key={i} className="text-center text-[11px] font-bold text-muted-foreground/50 uppercase tracking-widest py-0.5">
               {d}
             </div>
           ))}
@@ -208,11 +208,11 @@ export function PnLCalendar({ plays }: PnLCalendarProps) {
                 `}
                 style={bgStyle}
               >
-                <span className={`text-[10px] font-bold tabular-nums ${isTodayDate ? "text-accent" : hasData ? textColor : "text-muted-foreground/45"}`}>
+                <span className={`text-[11px] font-bold tabular-nums ${isTodayDate ? "text-accent" : hasData ? textColor : "text-muted-foreground/45"}`}>
                   {day}
                 </span>
                 {hasData && (
-                  <span className={`text-[6.5px] font-extrabold tabular-nums mt-0.5 ${textColor}`}>
+                  <span className={`text-[11px] font-extrabold tabular-nums mt-0.5 ${textColor}`}>
                     {fmtProfit(pnl)}
                   </span>
                 )}
@@ -230,14 +230,14 @@ export function PnLCalendar({ plays }: PnLCalendarProps) {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
               <div className="w-2 h-2 rounded-sm" style={{ background: 'hsl(var(--success) / 0.35)' }} />
-              <span className="text-[8px] text-muted-foreground/55 font-semibold">{winDays} green</span>
+              <span className="text-[11px] text-muted-foreground/55 font-semibold">{winDays} green</span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-2 h-2 rounded-sm" style={{ background: 'hsl(var(--danger) / 0.35)' }} />
-              <span className="text-[8px] text-muted-foreground/55 font-semibold">{lossDays} red</span>
+              <span className="text-[11px] text-muted-foreground/55 font-semibold">{lossDays} red</span>
             </div>
           </div>
-          <span className="text-[8px] text-muted-foreground/45 font-medium tabular-nums">
+          <span className="text-[11px] text-muted-foreground/45 font-medium tabular-nums">
             {winDays + lossDays > 0 ? `${Math.round((winDays / (winDays + lossDays)) * 100)}% win rate` : "No data"}
           </span>
         </div>

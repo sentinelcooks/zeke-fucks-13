@@ -100,11 +100,11 @@ export function ModelSignalCard({ score, marketTitle, pickLabel, price, projecti
           <p className="text-[54px] font-black leading-none tracking-tight tabular-nums" style={{ color: tier.color }}>
             {hasScore ? displayed : "--"}
           </p>
-          <p className="mt-1 text-[10px] font-semibold text-muted-foreground/55">out of 100</p>
+          <p className="mt-1 text-[11px] font-semibold text-muted-foreground/55">out of 100</p>
         </div>
       </div>
 
-      <p className="-mt-2 text-[19px] font-black tracking-[0.28em] pl-[0.28em]" style={{ color: tier.color }}>
+      <p className="-mt-2 text-[19px] font-black tracking-[0.04em] pl-[0.28em]" style={{ color: tier.color }}>
         {tier.label}
       </p>
 
@@ -140,7 +140,7 @@ function ProjectionGauge({ projection, line, color, unit }: { projection: number
     <div className="mt-6 px-1">
       <div className="relative px-1 pb-6 pt-5">
         <span
-          className="absolute top-0 -translate-x-1/2 whitespace-nowrap text-[10px] font-bold"
+          className="absolute top-0 -translate-x-1/2 whitespace-nowrap text-[11px] font-bold"
           style={{ left: `${projectionPct}%`, color }}
         >
           Model {projection.toFixed(1)}
@@ -156,14 +156,14 @@ function ProjectionGauge({ projection, line, color, unit }: { projection: number
         </div>
 
         <span
-          className="absolute bottom-0 -translate-x-1/2 whitespace-nowrap text-[10px] font-bold text-muted-foreground"
+          className="absolute bottom-0 -translate-x-1/2 whitespace-nowrap text-[11px] font-bold text-muted-foreground"
           style={{ left: `${linePct}%` }}
         >
           Line {line.toFixed(1)}
         </span>
       </div>
 
-      <div className="flex justify-between text-[9px] text-muted-foreground/45">
+      <div className="flex justify-between text-[11px] text-muted-foreground/45">
         <span>{min.toFixed(1)} {unit}</span>
         <span>{max.toFixed(1)} {unit}</span>
       </div>

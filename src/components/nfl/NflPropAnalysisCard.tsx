@@ -90,9 +90,9 @@ const cleanReason = (r: string) => r.replace(/^unproven:\s*/, "");
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="rounded-xl p-3" style={{ background: "hsl(var(--card) / 0.7)", border: "1px solid hsl(var(--border) / 0.35)" }}>
-      <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-muted-foreground/60">{label}</p>
+      <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/60">{label}</p>
       <p className="mt-1 text-[17px] font-black tabular-nums text-foreground">{value}</p>
-      {sub && <p className="mt-0.5 text-[10px] text-muted-foreground/60">{sub}</p>}
+      {sub && <p className="mt-0.5 text-[11px] text-muted-foreground/60">{sub}</p>}
     </div>
   );
 }
@@ -131,9 +131,9 @@ export function NflPropAnalysisCard({ data }: { data: NflPropAnalysis }) {
             {sideLabel} {data.prop_type === "anytime_td" ? "" : data.line} {label}
           </p>
           {isPick ? (
-            <span className="flex items-center gap-1 rounded-lg bg-nba-green/15 px-2 py-1 text-[10px] font-black text-nba-green"><BadgeCheck className="h-3.5 w-3.5" /> PLAY</span>
+            <span className="flex items-center gap-1 rounded-lg bg-nba-green/15 px-2 py-1 text-[11px] font-black text-nba-green"><BadgeCheck className="h-3.5 w-3.5" /> PLAY</span>
           ) : (
-            <span className="rounded-lg px-2 py-1 text-[10px] font-bold text-nba-yellow" style={{ background: "hsl(var(--nba-yellow) / 0.1)" }}>NOT A PICK</span>
+            <span className="rounded-lg px-2 py-1 text-[11px] font-bold text-nba-yellow" style={{ background: "hsl(var(--nba-yellow) / 0.1)" }}>NOT A PICK</span>
           )}
         </div>
       </div>
@@ -178,8 +178,8 @@ export function NflPropAnalysisCard({ data }: { data: NflPropAnalysis }) {
               </div>
             );
           })}
-          {chosen.push_probability > 0 && <p className="text-[10px] text-muted-foreground/55">Push (exactly {data.line}): {pct(chosen.push_probability)}</p>}
-          <p className="text-[10px] text-muted-foreground/50">Distribution: {chosen.distribution.replace(/_/g, " ")}</p>
+          {chosen.push_probability > 0 && <p className="text-[11px] text-muted-foreground/55">Push (exactly {data.line}): {pct(chosen.push_probability)}</p>}
+          <p className="text-[11px] text-muted-foreground/50">Distribution: {chosen.distribution.replace(/_/g, " ")}</p>
         </div>
       </div>
 
@@ -238,11 +238,11 @@ export function NflPropAnalysisCard({ data }: { data: NflPropAnalysis }) {
               <div key={f.id} className="flex items-start justify-between gap-3 py-2">
                 <div className="min-w-0">
                   <p className="text-[11px] font-semibold text-foreground/90">{f.id}. {f.name}</p>
-                  <p className="text-[10px] text-muted-foreground/55">{f.source}{f.proxy ? " · proxy" : ""}{f.missing ? " · missing" : ""}</p>
+                  <p className="text-[11px] text-muted-foreground/55">{f.source}{f.proxy ? " · proxy" : ""}{f.missing ? " · missing" : ""}</p>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-[11px] tabular-nums text-foreground/85">{f.value === null ? "—" : String(f.value)}</p>
-                  {f.effect !== null && <p className={`text-[10px] tabular-nums ${f.effect > 1.005 ? "text-nba-green" : f.effect < 0.995 ? "text-nba-red" : "text-muted-foreground/50"}`}>×{f.effect.toFixed(3)}</p>}
+                  {f.effect !== null && <p className={`text-[11px] tabular-nums ${f.effect > 1.005 ? "text-nba-green" : f.effect < 0.995 ? "text-nba-red" : "text-muted-foreground/50"}`}>×{f.effect.toFixed(3)}</p>}
                 </div>
               </div>
             ))}
@@ -256,11 +256,11 @@ export function NflPropAnalysisCard({ data }: { data: NflPropAnalysis }) {
           <ul className="space-y-1 text-[11px] text-muted-foreground/75">
             {reasons.map((r) => <li key={r}>• {r}</li>)}
           </ul>
-          {other && <p className="mt-2 text-[10px] text-muted-foreground/50">Other side ({other.side}): model {pct(other.model_probability)}{other.edge_percentage !== null ? `, edge ${signed(other.edge_percentage)}` : ""}.</p>}
+          {other && <p className="mt-2 text-[11px] text-muted-foreground/50">Other side ({other.side}): model {pct(other.model_probability)}{other.edge_percentage !== null ? `, edge ${signed(other.edge_percentage)}` : ""}.</p>}
         </div>
       )}
 
-      <p className="px-1 text-[9px] text-muted-foreground/45">Model {data.model_version} · data quality {pct(chosen.data_quality, 0)}</p>
+      <p className="px-1 text-[11px] text-muted-foreground/45">Model {data.model_version} · data quality {pct(chosen.data_quality, 0)}</p>
     </motion.div>
   );
 }

@@ -122,7 +122,7 @@ export function VerdictBadge({
         </motion.div>
         {/* Always name the metric. An unlabelled big number next to a card
             showing a different one is what made these screens contradict. */}
-        <div className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mt-1">
+        <div className="text-[11px] uppercase tracking-wider text-muted-foreground/60 mt-1">
           {metricLabel}
         </div>
         <div className={`text-sm font-black tracking-[3px] mt-1 ${theme.text}`}>
@@ -132,12 +132,12 @@ export function VerdictBadge({
           {overUnder.toUpperCase()} {line} {propDisplay}
         </div>
         {seasonPct !== null && !showHistoricalHitRate && (
-          <div className="text-[10px] text-muted-foreground/55 mt-1.5">
+          <div className="text-[11px] text-muted-foreground/55 mt-1.5">
             Season hit rate {seasonPct}% · a historical frequency, not this score
           </div>
         )}
         {showDrift && (
-          <div className="text-[10px] text-muted-foreground/55 mt-1">
+          <div className="text-[11px] text-muted-foreground/55 mt-1">
             Published at {savedPct}/100 · re-run just now scores {confPct}/100
           </div>
         )}

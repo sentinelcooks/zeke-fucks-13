@@ -118,7 +118,7 @@ export function StatKV({ label, value, trend, wrap, className }: { label: ReactN
       <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground">{label}</span>
       <span className={cn("text-[17px] font-semibold tabular-nums text-foreground", wrap ? "line-clamp-2 leading-tight" : "truncate")}>
         {trend && (
-          <span aria-hidden="true" className={cn("relative -top-0.5 mr-1 text-[10px]", trend === "up" ? "text-success" : "text-danger")}>
+          <span aria-hidden="true" className={cn("relative -top-0.5 mr-1 text-[11px]", trend === "up" ? "text-success" : "text-danger")}>
             {trend === "up" ? "▲" : "▼"}
           </span>
         )}

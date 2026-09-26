@@ -799,7 +799,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
           <div className="w-6 h-6 rounded-lg bg-accent/10 flex items-center justify-center">
             <FileText className="w-3.5 h-3.5 text-accent" />
           </div>
-          <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-accent">In-Depth Analysis</h3>
+          <h3 className="text-xs font-bold uppercase tracking-[0.04em] text-accent">In-Depth Analysis</h3>
           {loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
         </div>
         {expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground/50" /> : <ChevronDown className="w-4 h-4 text-muted-foreground/50" />}
@@ -844,7 +844,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
 
                       <div className="flex-1 min-w-0">
                         {section.title && (
-                          <h4 className={`text-[11px] font-bold uppercase tracking-[0.12em] mb-1 ${SECTION_COLORS[i] || "text-muted-foreground"}`}>
+                          <h4 className={`text-[11px] font-bold uppercase tracking-[0.04em] mb-1 ${SECTION_COLORS[i] || "text-muted-foreground"}`}>
                             {section.title}
                           </h4>
                         )}
@@ -891,7 +891,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
                           ? "❌ No Bet Recommended"
                           : overallSummary.rating === "take" ? "✅ Take This Pick" : overallSummary.rating === "lean" ? "🤔 Lean Play" : "❌ Fade This Pick"}
                       </span>
-                      <span className="block text-[9px] text-muted-foreground/65 font-bold uppercase tracking-wider mt-0.5">
+                      <span className="block text-[11px] text-muted-foreground/65 font-bold uppercase tracking-wider mt-0.5">
                         {isDirectionalResearch ? "Directional Signal — Calibration Pending" : "Overall Verdict — All Factors Combined"}
                       </span>
                     </div>
@@ -900,7 +900,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
                     {overallSummary.summary}
                   </p>
                   {props.decision?.grade_explanation && (
-                    <p className="text-[10px] text-muted-foreground/55 mt-1.5 font-mono">
+                    <p className="text-[11px] text-muted-foreground/55 mt-1.5 font-mono">
                       {props.decision.grade_explanation}
                     </p>
                   )}
@@ -912,7 +912,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
                     <div className="flex items-center gap-2">
                       <div className={`w-2 h-2 rounded-full ${confPct >= 72 ? "bg-nba-green" : confPct >= 58 ? "bg-nba-blue" : confPct >= 42 ? "bg-nba-yellow" : "bg-nba-red"} animate-pulse`} />
                     </div>
-                    <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground/50">
+                    <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/50">
                       Powered by Sentinel AI
                     </span>
                   </div>

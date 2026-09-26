@@ -157,8 +157,8 @@ function ConfidenceGauge({ value, label, probabilitySupported = false }: { value
   return (
     <div className="flex flex-col items-center justify-center gap-0.5">
       <div className={`text-4xl font-black ${color}`}>{value}{probabilitySupported ? "%" : "/100"}</div>
-      {!probabilitySupported && <div className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/55">Heuristic score</div>}
-      <div className={`text-[10px] font-bold tracking-[2px] uppercase ${color}`}>{label}</div>
+      {!probabilitySupported && <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/55">Heuristic score</div>}
+      <div className={`text-[11px] font-bold tracking-[2px] uppercase ${color}`}>{label}</div>
     </div>
   );
 }
@@ -235,7 +235,7 @@ function TeamSelect({ label, value, onChange, teams }: { label: string; value: s
 
   return (
     <div ref={ref} className="relative">
-      <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2">{label}</label>
+      <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55 mb-2">{label}</label>
       <div className="relative rounded-xl overflow-hidden transition-all duration-300 focus-within:shadow-[0_0_20px_hsl(var(--primary)_/_0.08)]" style={{
         background: 'hsl(var(--card) / 0.6)',
         border: '1px solid hsl(var(--border) / 0.25)',
@@ -267,7 +267,7 @@ function TeamSelect({ label, value, onChange, teams }: { label: string; value: s
             >
               {t.logo && <img src={t.logo} alt="" className="w-6 h-6 object-contain shrink-0" />}
               <span className="truncate text-[13px] font-bold text-foreground">{t.name}</span>
-              <span className="ml-auto text-[10px] text-muted-foreground/65 shrink-0">{t.record}</span>
+              <span className="ml-auto text-[11px] text-muted-foreground/65 shrink-0">{t.record}</span>
             </button>
           ))}
         </div>
@@ -290,7 +290,7 @@ const HomeAwayBadge: React.FC<{ value?: "home" | "away" | null }> = ({ value }) 
   const isHome = value === "home";
   return (
     <span
-      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider ${
         isHome ? "bg-nba-green/15 text-nba-green" : "bg-nba-blue/15 text-nba-blue"
       }`}
     >
@@ -311,7 +311,7 @@ function Section({ title, children, defaultOpen = false }: { title: string; chil
         className="w-full flex items-center justify-between px-4 py-3"
         onClick={() => setOpen(!open)}
       >
-        <h3 className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">{title}</h3>
+        <h3 className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55">{title}</h3>
         <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.3, ease: "easeInOut" }}>
           <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/55" />
         </motion.div>
@@ -344,9 +344,9 @@ function AllSportsbooksCollapsible({ activeMarketBooksWithEV, activeMarketKey, a
         className="w-full flex items-center justify-between px-4 py-3"
         onClick={() => setOpen(!open)}
       >
-        <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">All Sportsbooks</span>
+        <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55">All Sportsbooks</span>
         <div className="flex items-center gap-2">
-          <span className="text-[9px] text-muted-foreground/50">{activeMarketBooksWithEV.length} books</span>
+          <span className="text-[11px] text-muted-foreground/50">{activeMarketBooksWithEV.length} books</span>
           <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.3, ease: "easeInOut" }}>
             <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/55" />
           </motion.div>
@@ -382,15 +382,15 @@ function AllSportsbooksCollapsible({ activeMarketBooksWithEV, activeMarketKey, a
                           {book.logo ? (
                             <img src={book.logo} alt={book.name} className="w-5 h-5 object-contain" />
                           ) : (
-                            <span className="text-[10px] font-black" style={{ color: book.color }}>{book.abbrev}</span>
+                            <span className="text-[11px] font-black" style={{ color: book.color }}>{book.abbrev}</span>
                           )}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-[12px] font-bold text-foreground/80">{book.name}</span>
-                            {isBest && <span className="text-[8px] font-black text-nba-green bg-nba-green/10 px-1.5 py-0.5 rounded-md">BEST</span>}
+                            {isBest && <span className="text-[11px] font-black text-nba-green bg-nba-green/10 px-1.5 py-0.5 rounded-md">BEST</span>}
                           </div>
-                          <span className="text-[9px] text-muted-foreground/55">
+                          <span className="text-[11px] text-muted-foreground/55">
                             {activeMarketKey === "totals"
                               ? `${activeOverUnder.toUpperCase()} ${book.total || ""}`
                               : activeMarketKey === "spreads"
@@ -401,15 +401,15 @@ function AllSportsbooksCollapsible({ activeMarketBooksWithEV, activeMarketKey, a
                       </div>
                       <div className="flex items-center gap-4">
                         <div className="text-center">
-                          <span className="block text-[10px] font-bold tabular-nums text-foreground/50">{book.implied.toFixed(1)}%</span>
-                          <span className="block text-[7px] text-muted-foreground/50 uppercase">Implied</span>
+                          <span className="block text-[11px] font-bold tabular-nums text-foreground/50">{book.implied.toFixed(1)}%</span>
+                          <span className="block text-[11px] text-muted-foreground/50 uppercase">Implied</span>
                         </div>
                         {modelProb && modelProb > 0 && (
                           <div className="text-center min-w-[44px]">
-                            <span className={`block text-[10px] font-bold tabular-nums ${getEVColorLocal(book.ev)}`}>
+                            <span className={`block text-[11px] font-bold tabular-nums ${getEVColorLocal(book.ev)}`}>
                               {book.ev > 0 ? "+" : ""}{book.ev.toFixed(1)}%
                             </span>
-                            <span className="block text-[7px] text-muted-foreground/50 uppercase">EV</span>
+                            <span className="block text-[11px] text-muted-foreground/50 uppercase">EV</span>
                           </div>
                         )}
                         <div className="text-right min-w-[52px]">
@@ -461,10 +461,10 @@ function OtherMarketsCollapsible({ allMarketData, activeMarketKey, marketLabels,
           <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))', boxShadow: '0 4px 12px -2px hsl(var(--primary) / 0.25)' }}>
             <Trophy className="w-3.5 h-3.5 text-foreground" />
           </div>
-          <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">Other Markets</span>
+          <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55">Other Markets</span>
           <div className="flex items-center gap-1 px-2 py-1 rounded-full" style={{ background: 'hsl(var(--card) / 0.5)', border: '1px solid hsl(var(--border) / 0.2)' }}>
             <div className="w-1.5 h-1.5 rounded-full bg-nba-green animate-pulse" />
-            <span className="text-[7px] font-bold text-nba-green uppercase tracking-wider">Live</span>
+            <span className="text-[11px] font-bold text-nba-green uppercase tracking-wider">Live</span>
           </div>
         </div>
         <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.3, ease: "easeInOut" }}>
@@ -490,12 +490,12 @@ function OtherMarketsCollapsible({ allMarketData, activeMarketKey, marketLabels,
                       <div className="w-5 h-5 rounded-md flex items-center justify-center text-accent" style={{ background: 'hsl(var(--primary) / 0.1)' }}>
                         {meta.icon}
                       </div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/70">{meta.label}</span>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-foreground/70">{meta.label}</span>
                     </div>
                     <div className="grid grid-cols-3 gap-1 mb-1.5 px-1">
-                      <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45">Platform</span>
-                      <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 text-center">{meta.col1}</span>
-                      <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45 text-center">{meta.col2}</span>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/45">Platform</span>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/45 text-center">{meta.col1}</span>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/45 text-center">{meta.col2}</span>
                     </div>
                     <div className="space-y-1">
                       {platforms.map((p: any, i: number) => (
@@ -512,10 +512,10 @@ function OtherMarketsCollapsible({ allMarketData, activeMarketKey, marketLabels,
                               {p.logo ? (
                                 <img src={p.logo} alt={p.name} className="w-4 h-4 object-contain" loading="lazy" />
                               ) : (
-                                <span className="text-[8px] font-black text-foreground" style={{ color: p.color }}>{p.abbrev}</span>
+                                <span className="text-[11px] font-black text-foreground" style={{ color: p.color }}>{p.abbrev}</span>
                               )}
                             </div>
-                            <span className="text-[10px] font-bold text-foreground/80 group-hover:text-foreground transition-colors truncate">{p.name}</span>
+                            <span className="text-[11px] font-bold text-foreground/80 group-hover:text-foreground transition-colors truncate">{p.name}</span>
                           </div>
                           <span className="text-[12px] font-extrabold tabular-nums text-center text-foreground/70">{p.t1}</span>
                           <span className="text-[12px] font-extrabold tabular-nums text-center text-foreground/70">{p.t2}</span>
@@ -614,7 +614,7 @@ function H2HTable({ h2h, team1, team2 }: { h2h: any[]; team1: Team; team2: Team 
         <thead>
           <tr className="border-b border-border/50">
             {["Date", team1.abbr, team2.abbr, "Margin", "Total"].map((h) => (
-              <th key={h} className="text-center py-2 px-1.5 text-muted-foreground uppercase tracking-wider font-semibold text-[10px]">{h}</th>
+              <th key={h} className="text-center py-2 px-1.5 text-muted-foreground uppercase tracking-wider font-semibold text-[11px]">{h}</th>
             ))}
           </tr>
         </thead>
@@ -781,7 +781,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
     return (
       <div className="vision-card p-4 text-center">
         <Loader2 className="w-4 h-4 animate-spin mx-auto text-muted-foreground" />
-        <p className="text-[10px] text-muted-foreground/65 mt-1">Fetching live odds...</p>
+        <p className="text-[11px] text-muted-foreground/65 mt-1">Fetching live odds...</p>
       </div>
     );
   }
@@ -795,7 +795,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
             <p className="text-[11px]">Live odds for {team1.shortName || team1.name} vs {team2.shortName || team2.name} aren't posted yet. Analysis still uses our model — odds will appear once books publish them.</p>
             <button
               onClick={loadOdds}
-              className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-bold text-accent hover:text-accent/80 transition-colors"
+              className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-bold text-accent hover:text-accent/80 transition-colors"
             >
               <RefreshCw className="w-3 h-3" /> Retry
             </button>
@@ -937,14 +937,14 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
           <Sparkles className="w-4 h-4 text-accent" />
           <div className="text-left">
             <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-foreground/80">{isPreviewMode ? "Live Odds Preview" : "Odds & EV Analysis"}</span>
-            <p className="text-[9px] text-muted-foreground/55">{team1.name} vs {team2.name}{isPreviewMode ? " · click Analyze Matchup for full analysis" : ""}</p>
+            <p className="text-[11px] text-muted-foreground/55">{team1.name} vs {team2.name}{isPreviewMode ? " · click Analyze Matchup for full analysis" : ""}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {isLive && (
             <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'hsl(var(--success) / 0.08)', border: '1px solid hsl(var(--success) / 0.15)' }}>
               <div className="w-1.5 h-1.5 rounded-full bg-nba-green animate-pulse" />
-              <span className="text-[7px] font-bold text-nba-green uppercase tracking-wider">Live</span>
+              <span className="text-[11px] font-bold text-nba-green uppercase tracking-wider">Live</span>
             </div>
           )}
           <motion.div animate={{ rotate: showOddsSection ? 180 : 0 }} transition={{ duration: 0.25 }}>
@@ -999,11 +999,11 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
                   <p className={`text-[13px] font-extrabold ${hasPositiveEV ? "text-nba-green" : "text-nba-red"}`}>
                     {hasPositiveEV ? "+EV Opportunity" : "Negative EV"}
                   </p>
-                  <p className="text-[9px] text-muted-foreground/65">Model vs Market comparison</p>
+                  <p className="text-[11px] text-muted-foreground/65">Model vs Market comparison</p>
                 </div>
               </div>
               {edgeLabel && (
-                <div className={`px-2.5 py-1 rounded-lg text-[10px] font-black tracking-wider ${edgeLabel.bg} ${edgeLabel.color}`}>
+                <div className={`px-2.5 py-1 rounded-lg text-[11px] font-black tracking-wider ${edgeLabel.bg} ${edgeLabel.color}`}>
                   {edgeLabel.label}
                 </div>
               )}
@@ -1014,34 +1014,34 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
               <div className="rounded-xl p-3 text-center" style={{ background: 'hsl(var(--card) / 0.7)' }}>
                 <div className="flex items-center justify-center gap-1 mb-1.5">
                   <Zap className="w-3 h-3 text-accent" />
-                  <span className="text-[8px] font-bold uppercase tracking-wider text-accent/60">Our Model</span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-accent/60">Our Model</span>
                 </div>
                 <span className="block text-xl font-extrabold tabular-nums text-accent">{modelProb.toFixed(1)}%</span>
-                <span className="block text-[8px] text-muted-foreground/55 mt-0.5">
+                <span className="block text-[11px] text-muted-foreground/55 mt-0.5">
                   {activeBetType === "moneyline" ? "Win Probability" : "Hit Probability"}
                 </span>
               </div>
               <div className="rounded-xl p-3 text-center" style={{ background: 'hsl(var(--card) / 0.7)' }}>
-                <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/65 block mb-1.5">Implied</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/65 block mb-1.5">Implied</span>
                 <span className="block text-xl font-extrabold tabular-nums text-foreground/60">{activeEV.bestImplied.toFixed(1)}%</span>
-                <span className="block text-[8px] text-muted-foreground/55 mt-0.5">Best Book</span>
+                <span className="block text-[11px] text-muted-foreground/55 mt-0.5">Best Book</span>
               </div>
               <div className="rounded-xl p-3 text-center" style={{ background: 'hsl(var(--card) / 0.7)' }}>
                 <div className="flex items-center justify-center gap-1 mb-1.5">
                   <Shield className="w-3 h-3 text-[hsl(var(--nba-cyan))]" />
-                  <span className="text-[8px] font-bold uppercase tracking-wider text-[hsl(var(--nba-cyan))]/60">Edge</span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[hsl(var(--nba-cyan))]/60">Edge</span>
                 </div>
                 <span className={`block text-xl font-extrabold tabular-nums ${getEVColorLocal(activeEV.edge)}`}>
                   {activeEV.edge > 0 ? "+" : ""}{activeEV.edge.toFixed(1)}%
                 </span>
-                <span className="block text-[8px] text-muted-foreground/55 mt-0.5">Model Edge</span>
+                <span className="block text-[11px] text-muted-foreground/55 mt-0.5">Model Edge</span>
               </div>
             </div>
 
             {/* Edge Projection Bar */}
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/55">Edge Projection</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/55">Edge Projection</span>
                 <span className={`text-[11px] font-extrabold tabular-nums ${getEVColorLocal(activeEV.ev)}`}>
                   EV: {activeEV.ev > 0 ? "+" : ""}{activeEV.ev.toFixed(1)}%
                 </span>
@@ -1067,16 +1067,16 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
                 />
               </div>
               <div className="flex items-center justify-between mt-1">
-                <span className="text-[8px] text-muted-foreground/50">0%</span>
+                <span className="text-[11px] text-muted-foreground/50">0%</span>
                 <div className="flex items-center gap-3">
-                  <span className="flex items-center gap-1 text-[8px] text-muted-foreground/55">
+                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground/55">
                     <span className="w-2 h-1 rounded-full" style={{ background: hasPositiveEV ? 'hsl(var(--success))' : 'hsl(var(--danger))' }} /> Model
                   </span>
-                  <span className="flex items-center gap-1 text-[8px] text-muted-foreground/55">
+                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground/55">
                     <span className="w-2 h-1 rounded-full bg-muted-foreground/55" /> Implied
                   </span>
                 </div>
-                <span className="text-[8px] text-muted-foreground/50">100%</span>
+                <span className="text-[11px] text-muted-foreground/50">100%</span>
               </div>
             </div>
           </div>
@@ -1123,7 +1123,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
                   <div className="rounded-xl p-3.5 space-y-2" style={{ background: 'hsl(var(--card) / 0.6)' }}>
                     <div className="flex items-center gap-1.5">
                       <Shield className="w-3 h-3 text-[hsl(var(--nba-cyan))]" />
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-[hsl(var(--nba-cyan))]">Edge</span>
+                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-[hsl(var(--nba-cyan))]">Edge</span>
                     </div>
                     <p className="text-[11px] text-foreground/60 leading-relaxed">
                       Edge is the difference between what <strong className="text-foreground/80">our model thinks will happen</strong> and what the <strong className="text-foreground/80">sportsbooks think</strong>.
@@ -1141,7 +1141,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
                   <div className="rounded-xl p-3.5 space-y-2" style={{ background: 'hsl(var(--card) / 0.6)' }}>
                     <div className="flex items-center gap-1.5">
                       <TrendingUp className="w-3 h-3 text-nba-green" />
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-nba-green">Expected Value (EV)</span>
+                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-nba-green">Expected Value (EV)</span>
                     </div>
                     <p className="text-[11px] text-foreground/60 leading-relaxed">
                       EV tells you <strong className="text-foreground/80">how much you'd profit per $100 bet</strong> over time if our model is right.
@@ -1176,7 +1176,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-3">
               <Crown className="w-4 h-4 text-nba-green" />
-              <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-nba-green/70">Best Line Available</span>
+              <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-nba-green/70">Best Line Available</span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1189,7 +1189,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
                 </div>
                 <div>
                   <p className="text-[15px] font-extrabold text-foreground">{bestBook.name}</p>
-                  <p className="text-[10px] text-muted-foreground/65">
+                  <p className="text-[11px] text-muted-foreground/65">
                     {activeMarketKey === "totals" 
                       ? `${activeOverUnder.toUpperCase()} ${bestBook.total || ""}`
                       : activeMarketKey === "spreads" 
@@ -1200,7 +1200,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
               </div>
               <div className="text-right">
                 <p className="text-2xl font-black tabular-nums font-mono text-nba-green">{formatOdds(bestBook.relevantOdds, oddsFormat)}</p>
-                <p className="text-[10px] text-muted-foreground/65 tabular-nums">{bestBook.implied.toFixed(1)}% implied</p>
+                <p className="text-[11px] text-muted-foreground/65 tabular-nums">{bestBook.implied.toFixed(1)}% implied</p>
               </div>
             </div>
           </div>
@@ -1215,7 +1215,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
             <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))', boxShadow: '0 4px 12px -2px hsl(var(--primary) / 0.25)' }}>
               <Zap className="w-3.5 h-3.5 text-foreground" />
             </div>
-            <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">EV Across All Markets</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55">EV Across All Markets</span>
           </div>
           <div className="grid grid-cols-3 gap-2">
             {evCards.map((card) => {
@@ -1226,19 +1226,19 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
               return (
                 <div key={card.market} className={`rounded-xl p-2.5 flex flex-col gap-2 ${isActive ? "ring-1 ring-accent/30" : ""}`} style={{ background: evBg, border: `1px solid ${evBorder}` }}>
                   <div className="text-center">
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/65 leading-tight block">{card.label}</span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/65 leading-tight block">{card.label}</span>
                     <span className={`text-lg font-extrabold ${evColor} leading-none mt-0.5 block`}>{card.ev >= 0 ? "+" : ""}{card.ev}%</span>
                   </div>
                   <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[9px]">
+                    <div className="flex items-center justify-between text-[11px]">
                       <span className="text-muted-foreground/50">Edge</span>
                       <span className={`font-bold ${evColor}`}>{card.edge >= 0 ? "+" : ""}{card.edge}%</span>
                     </div>
-                    <div className="flex items-center justify-between text-[9px]">
+                    <div className="flex items-center justify-between text-[11px]">
                       <span className="text-muted-foreground/50">Odds</span>
                       <span className="font-bold text-foreground/80">{formatOdds(card.bestOdds, oddsFormat)}</span>
                     </div>
-                    <div className="flex items-center justify-between text-[9px]">
+                    <div className="flex items-center justify-between text-[11px]">
                       <span className="text-muted-foreground/50">Book</span>
                       <span className="font-bold text-foreground/80 truncate max-w-[60px]">{card.bestBook}</span>
                     </div>
@@ -1436,14 +1436,14 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
       )}
 
       {sport === "mlb" && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-medium text-nba-yellow" style={{ background: 'hsl(var(--nba-yellow) / 0.08)', border: '1px solid hsl(var(--nba-yellow) / 0.15)' }}>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-medium text-nba-yellow" style={{ background: 'hsl(var(--nba-yellow) / 0.08)', border: '1px solid hsl(var(--nba-yellow) / 0.15)' }}>
           <span>⚠️</span>
           <span>MLB data is from last season. More info will come as the season progresses to help predict outcomes.</span>
         </div>
       )}
 
       {sport === "wnba" && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-medium text-nba-yellow" style={{ background: 'hsl(var(--nba-yellow) / 0.08)', border: '1px solid hsl(var(--nba-yellow) / 0.15)' }}>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-medium text-nba-yellow" style={{ background: 'hsl(var(--nba-yellow) / 0.08)', border: '1px solid hsl(var(--nba-yellow) / 0.15)' }}>
           <span>WNBA lines use basketball factors with conservative scoring when matchup data is thin.</span>
         </div>
       )}
@@ -1571,8 +1571,8 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                 </div>
                 <p className="text-[11px] leading-relaxed text-muted-foreground">{item.desc}</p>
                 <div className="rounded-lg p-2.5" style={{ background: 'hsl(var(--card) / 0.5)', border: '1px solid hsl(var(--border) / 0.15)' }}>
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-accent/70 block mb-1">Example</span>
-                  <p className="text-[10px] leading-relaxed text-muted-foreground/80">{isDecimalFormat ? item.exampleDecimal : item.exampleAmerican}</p>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-accent/70 block mb-1">Example</span>
+                  <p className="text-[11px] leading-relaxed text-muted-foreground/80">{isDecimalFormat ? item.exampleDecimal : item.exampleAmerican}</p>
                 </div>
               </motion.div>
             </motion.div>
@@ -1595,7 +1595,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
           {betType === "spread" && (
             <div className="space-y-3 pt-1">
               <div>
-              <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2">Spread For</label>
+              <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55 mb-2">Spread For</label>
               <SpreadTeamSelector
                 team1={team1}
                 team2={team2}
@@ -1605,7 +1605,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
               />
               </div>
               <div>
-                <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2">Spread Line</label>
+                <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55 mb-2">Spread Line</label>
                 <div className="rounded-xl overflow-hidden focus-within:shadow-[0_0_12px_hsl(var(--primary)_/_0.06)]" style={{
                   background: 'hsl(var(--card) / 0.5)',
                   border: '1px solid hsl(var(--border) / 0.25)',
@@ -1622,7 +1622,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
             <div className="space-y-3 pt-1">
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2">Direction</label>
+                  <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55 mb-2">Direction</label>
                   <div className="flex rounded-xl p-1 gap-1" style={{
                     background: 'hsl(var(--card) / 0.6)',
                     border: '1px solid hsl(var(--border) / 0.25)',
@@ -1652,7 +1652,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                   </div>
                 </div>
                 <div className="w-24">
-                  <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2 text-center">Total Line</label>
+                  <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55 mb-2 text-center">Total Line</label>
                   <div className="rounded-xl overflow-hidden focus-within:shadow-[0_0_12px_hsl(var(--primary)_/_0.06)]" style={{
                     background: 'hsl(var(--card) / 0.5)',
                     border: '1px solid hsl(var(--border) / 0.25)',
@@ -1710,7 +1710,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
               <div className="flex flex-col items-center text-center w-[30%]">
                 {results.team1?.logo && <img src={results.team1.logo} alt="" className="w-14 h-14 object-contain mb-1.5 drop-shadow-lg" />}
                 <span className="text-xs font-bold text-foreground leading-tight">{results.team1?.shortName}</span>
-                <span className="text-[10px] text-muted-foreground/65">{results.team1?.record}</span>
+                <span className="text-[11px] text-muted-foreground/65">{results.team1?.record}</span>
                 <HomeAwayBadge value={results.team1?.homeAway} />
               </div>
               <div className="flex flex-col items-center text-center w-[40%]">
@@ -1721,7 +1721,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                       <Swords className="w-4 h-4 text-muted-foreground/55" />
                       <span className="text-2xl font-black text-nba-red whitespace-nowrap">{results.team2_pct}<span className="text-sm">{results.probability_supported === true ? "%" : "/100"}</span></span>
                     </div>
-                    <span className="text-[10px] font-bold tracking-[2px] uppercase text-accent">{results.verdict}</span>
+                    <span className="text-[11px] font-bold tracking-[2px] uppercase text-accent">{results.verdict}</span>
                   </>
                 ) : (
                   <ConfidenceGauge value={results.confidence} label={results.verdict} probabilitySupported={results.probability_supported === true} />
@@ -1730,7 +1730,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
               <div className="flex flex-col items-center text-center w-[30%]">
                 {results.team2?.logo && <img src={results.team2.logo} alt="" className="w-14 h-14 object-contain mb-1.5 drop-shadow-lg" />}
                 <span className="text-xs font-bold text-foreground leading-tight">{results.team2?.shortName}</span>
-                <span className="text-[10px] text-muted-foreground/65">{results.team2?.record}</span>
+                <span className="text-[11px] text-muted-foreground/65">{results.team2?.record}</span>
                 <HomeAwayBadge value={results.team2?.homeAway} />
               </div>
             </div>
@@ -1740,7 +1740,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                   <div className="bg-nba-green transition-all duration-700 rounded-l-full" style={{ width: `${results.team1_pct}%` }} />
                   <div className="bg-nba-red transition-all duration-700 rounded-r-full" style={{ width: `${results.team2_pct}%` }} />
                 </div>
-                <div className="flex justify-between mt-1.5 text-[10px] text-muted-foreground/65">
+                <div className="flex justify-between mt-1.5 text-[11px] text-muted-foreground/65">
                   <span>{results.team1?.shortName} {results.team1_pct}{results.probability_supported === true ? "%" : "/100"}</span>
                   <span>{results.team2_pct}{results.probability_supported === true ? "%" : "/100"} {results.team2?.shortName}</span>
                 </div>
@@ -1776,7 +1776,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                   { label: "High", val: highScore },
                 ].map((s) => (
                   <div key={s.label} className="vision-card p-2.5 text-center">
-                    <span className="block text-[8px] font-bold uppercase tracking-[0.15em] text-muted-foreground/45 mb-0.5">{s.label}</span>
+                    <span className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/45 mb-0.5">{s.label}</span>
                     <span className="block text-base font-extrabold text-accent">{s.val}</span>
                   </div>
                 ));
@@ -1809,7 +1809,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
             <Section title="Injury Report">
               <div className="space-y-4">
                 {results.injuries.fetchedAt && (
-                  <p className="text-[10px] text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground">
                     As of {new Date(results.injuries.fetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ESPN
                   </p>
                 )}
@@ -1818,7 +1818,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                     <div className="flex items-center gap-2 mb-2">
                       {team.logo && <img src={team.logo} alt="" className="w-4 h-4 object-contain" />}
                       <span className="text-xs font-bold text-foreground">{team.shortName}</span>
-                      {injuries.length === 0 && <span className="text-[10px] text-nba-green ml-auto">Healthy</span>}
+                      {injuries.length === 0 && <span className="text-[11px] text-nba-green ml-auto">Healthy</span>}
                     </div>
                     {injuries.length > 0 && (
                       <div className="space-y-1">
@@ -1837,7 +1837,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                             <div key={i} className="flex items-center gap-2 py-1 border-b border-border/20 last:border-0">
                               <AlertTriangle className={`w-2.5 h-2.5 shrink-0 ${sc}`} />
                               <span className="text-[11px] font-medium text-foreground">{inj.name}</span>
-                              <span className={`text-[9px] font-bold uppercase tracking-wider ml-auto ${sc}`}>{label}</span>
+                              <span className={`text-[11px] font-bold uppercase tracking-wider ml-auto ${sc}`}>{label}</span>
                             </div>
                           );
                         })}
@@ -1862,15 +1862,15 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                     <div className="grid grid-cols-2 gap-2">
                       <div className="bg-secondary/40 rounded-xl p-3 text-center">
                         <Home className="w-3.5 h-3.5 mx-auto mb-1 text-nba-green" />
-                        <span className="block text-[9px] uppercase tracking-wider text-muted-foreground">Home</span>
+                        <span className="block text-[11px] uppercase tracking-wider text-muted-foreground">Home</span>
                         <span className="block text-sm font-extrabold text-foreground">{splits.home.wins}-{splits.home.losses}</span>
-                        <span className="block text-[10px] text-muted-foreground">{(splits.home.winPct * 100).toFixed(0)}% · {splits.home.ppg.toFixed(1)} PPG</span>
+                        <span className="block text-[11px] text-muted-foreground">{(splits.home.winPct * 100).toFixed(0)}% · {splits.home.ppg.toFixed(1)} PPG</span>
                       </div>
                       <div className="bg-secondary/40 rounded-xl p-3 text-center">
                         <Plane className="w-3.5 h-3.5 mx-auto mb-1 text-nba-blue" />
-                        <span className="block text-[9px] uppercase tracking-wider text-muted-foreground">Away</span>
+                        <span className="block text-[11px] uppercase tracking-wider text-muted-foreground">Away</span>
                         <span className="block text-sm font-extrabold text-foreground">{splits.away.wins}-{splits.away.losses}</span>
-                        <span className="block text-[10px] text-muted-foreground">{(splits.away.winPct * 100).toFixed(0)}% · {splits.away.ppg.toFixed(1)} PPG</span>
+                        <span className="block text-[11px] text-muted-foreground">{(splits.away.winPct * 100).toFixed(0)}% · {splits.away.ppg.toFixed(1)} PPG</span>
                       </div>
                     </div>
                   </div>
@@ -1882,7 +1882,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
           <div className="grid grid-cols-2 gap-2">
             {results.back_to_back && (
               <div className="vision-card p-3">
-                <h3 className="text-[8px] font-bold uppercase tracking-[0.15em] text-muted-foreground/45 mb-2">B2B Status</h3>
+                <h3 className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/45 mb-2">B2B Status</h3>
                 {[{ team: results.team1, b2b: results.back_to_back.team1 }, { team: results.team2, b2b: results.back_to_back.team2 }].map(({ team, b2b }) => (
                   <button
                     key={team.abbr}
@@ -1908,7 +1908,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
             )}
             {results.pace && (
               <div className="vision-card p-3">
-                <h3 className="text-[8px] font-bold uppercase tracking-[0.15em] text-muted-foreground/45 mb-2">Pace</h3>
+                <h3 className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/45 mb-2">Pace</h3>
                 {[{ team: results.team1, pace: results.pace.team1 }, { team: results.team2, pace: results.pace.team2 }].map(({ team, pace }) => (
                   <button
                     key={team.abbr}
@@ -1921,12 +1921,12 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                       {team.logo && <img src={team.logo} alt="" className="w-4 h-4 object-contain" />}
                       <span className="text-[11px] font-semibold text-foreground truncate">{team.shortName}</span>
                       {pace.pace > 0 && (
-                        <span className="ml-auto flex items-center gap-0.5 text-[9px] font-bold text-accent">
+                        <span className="ml-auto flex items-center gap-0.5 text-[11px] font-bold text-accent">
                           <Zap className="w-2.5 h-2.5" />{pace.pace}
                         </span>
                       )}
                     </div>
-                    <div className="flex gap-2 text-[9px] text-muted-foreground/65 mt-0.5 pl-6">
+                    <div className="flex gap-2 text-[11px] text-muted-foreground/65 mt-0.5 pl-6">
                       <span>{pace.recentPpg} {results.sport === 'mlb' ? 'RPG' : results.sport === 'nhl' ? 'GPG' : 'PPG'}</span>
                       <span className={pace.recentPpg - pace.recentOppPpg > 0 ? "text-nba-green" : "text-nba-red"}>
                         {(pace.recentPpg - pace.recentOppPpg) > 0 ? "+" : ""}{(pace.recentPpg - pace.recentOppPpg).toFixed(1)} net
@@ -1962,7 +1962,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
       {/* Footer badges */}
       <div className="flex items-center justify-center gap-3 pt-2 pb-4">
         {["ADVANCED REAL-TIME DATA", "REAL-TIME ODDS", "AI INSIGHTS"].map((badge) => (
-          <span key={badge} className="text-[7px] font-bold uppercase tracking-[0.2em] text-muted-foreground/65 flex items-center gap-1">
+          <span key={badge} className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 flex items-center gap-1">
             <span className="text-muted-foreground/10">•</span> {badge}
           </span>
         ))}
@@ -2014,7 +2014,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                     )}
                     <div>
                       <h3 className="text-sm font-bold text-foreground">What is {unitShort}?</h3>
-                      <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Pace & Scoring Explained</p>
+                      <p className="text-[11px] text-muted-foreground/60 uppercase tracking-wider">Pace & Scoring Explained</p>
                     </div>
                   </div>
                   <div className="space-y-2 text-xs text-foreground/80 leading-relaxed">
@@ -2031,7 +2031,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                   >
                     <div className="flex items-center gap-1.5">
                       <Lightbulb className="w-3 h-3 text-success/80" />
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-success/70">Example</span>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-success/70">Example</span>
                     </div>
                     <p className="text-[11px] text-foreground/70 leading-relaxed">
                       {paceInfo.team.shortName} average <span className="font-semibold text-foreground">{paceInfo.pace.recentPpg} {unitShort}</span> and allow <span className="font-semibold text-foreground">{paceInfo.pace.recentOppPpg}</span> over their last {paceInfo.pace.recentGames} games — a <span className={net >= 0 ? "text-nba-green font-semibold" : "text-nba-red font-semibold"}>{net >= 0 ? "+" : ""}{net.toFixed(1)} net rating</span>.
@@ -2090,7 +2090,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                     )}
                     <div>
                       <h3 className="text-sm font-bold text-foreground">Back-to-Back Status</h3>
-                      <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Fatigue & Rest Explained</p>
+                      <p className="text-[11px] text-muted-foreground/60 uppercase tracking-wider">Fatigue & Rest Explained</p>
                     </div>
                   </div>
                   {b2b?.isB2B ? (
@@ -2107,7 +2107,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                       >
                         <div className="flex items-center gap-1.5">
                           <Lightbulb className="w-3 h-3 text-nba-yellow/80" />
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-nba-yellow/70">Risk Level</span>
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-nba-yellow/70">Risk Level</span>
                         </div>
                         <p className={`text-[11px] font-semibold uppercase tracking-wider ${riskColor}`}>{risk} risk</p>
                       </div>

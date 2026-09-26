@@ -98,7 +98,7 @@ const ProfitCharts = ({ plays }: ProfitChartsProps) => {
     return (
       <div className="rounded-xl px-3.5 py-2.5 text-[11px] shadow-2xl backdrop-blur-xl"
         style={{ background: TOOLTIP_BG, border: `1px solid ${TOOLTIP_BORDER}` }}>
-        <p className="text-muted-foreground/50 text-[9px] font-medium mb-1 tracking-wide">{label}</p>
+        <p className="text-muted-foreground/50 text-[11px] font-medium mb-1 tracking-wide">{label}</p>
         <p className="font-black text-[14px] tabular-nums" style={{ color: val >= 0 ? GREEN : RED }}>
           {fmtProfit(val)}
         </p>
@@ -111,7 +111,7 @@ const ProfitCharts = ({ plays }: ProfitChartsProps) => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <h3 className="text-[11px] font-black text-foreground/90 uppercase tracking-[0.15em]">
+          <h3 className="text-[11px] font-black text-foreground/90 uppercase tracking-[0.04em]">
             Profit Trend
           </h3>
           <div className="flex items-center gap-1">
@@ -144,7 +144,7 @@ const ProfitCharts = ({ plays }: ProfitChartsProps) => {
         ].map((stat) => (
           <div key={stat.label} className="rounded-lg px-2 py-1.5 text-center"
             style={{ background: 'hsl(var(--card) / 0.5)', border: '1px solid hsl(var(--border) / 0.3)' }}>
-            <p className="text-[8px] text-muted-foreground/45 font-semibold uppercase tracking-wider">{stat.label}</p>
+            <p className="text-[11px] text-muted-foreground/45 font-semibold uppercase tracking-wider">{stat.label}</p>
             <p className="text-[11px] font-black tabular-nums mt-0.5" style={{ color: stat.color }}>{stat.value}</p>
           </div>
         ))}
@@ -176,8 +176,8 @@ const ProfitCharts = ({ plays }: ProfitChartsProps) => {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} dy={6} />
-              <YAxis tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false}
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: AXIS_COLOR }} axisLine={false} tickLine={false} dy={6} />
+              <YAxis tick={{ fontSize: 11, fill: AXIS_COLOR }} axisLine={false} tickLine={false}
                 tickFormatter={(v) => fmtProfit(Number(v))} domain={['auto', 'auto']} width={56} />
               <Tooltip content={customTooltip} cursor={{ stroke: 'hsl(var(--muted-foreground) / 0.3)', strokeDasharray: '4 4' }} />
               <ReferenceLine y={0} stroke="hsl(var(--border) / 0.4)" strokeDasharray="4 4" />
@@ -199,8 +199,8 @@ const ProfitCharts = ({ plays }: ProfitChartsProps) => {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} dy={6} padding={{ left: 20, right: 20 }} />
-              <YAxis tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false}
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: AXIS_COLOR }} axisLine={false} tickLine={false} dy={6} padding={{ left: 20, right: 20 }} />
+              <YAxis tick={{ fontSize: 11, fill: AXIS_COLOR }} axisLine={false} tickLine={false}
                 tickFormatter={(v) => fmtProfit(Number(v))} domain={['auto', 'auto']} width={56} />
               <Tooltip content={customTooltip} cursor={{ fill: 'hsl(var(--secondary) / 0.15)', radius: 4 }} />
               <ReferenceLine y={0} stroke="hsl(var(--border) / 0.4)" strokeDasharray="4 4" />

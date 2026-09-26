@@ -45,11 +45,11 @@ export function FloatingParlaySlip() {
               }}
             >
               <div className="flex items-center justify-between px-4 py-3 border-b border-border/10">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-accent">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-accent">
                   Slip ({legs.length} leg{legs.length !== 1 ? "s" : ""})
                 </span>
                 <div className="flex items-center gap-2">
-                  <button onClick={clearSlip} className="text-[9px] text-muted-foreground/65 hover:text-destructive transition-colors">
+                  <button onClick={clearSlip} className="text-[11px] text-muted-foreground/65 hover:text-destructive transition-colors">
                     Clear
                   </button>
                   <button onClick={() => setExpanded(false)}>
@@ -62,7 +62,7 @@ export function FloatingParlaySlip() {
                   <div key={leg.id} className="flex items-center justify-between py-2 border-b border-border/10 last:border-0">
                     <div className="min-w-0 flex-1 space-y-1">
                       <p className="text-[11px] font-bold text-foreground truncate">{leg.player}</p>
-                      <p className="text-[10px] text-muted-foreground/60">
+                      <p className="text-[11px] text-muted-foreground/60">
                         {leg.overUnder.toUpperCase()} {leg.line} {formatDisplayPropType(leg.propType)}
                       </p>
                     </div>

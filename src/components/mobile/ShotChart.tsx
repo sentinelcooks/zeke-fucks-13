@@ -551,7 +551,7 @@ export function ShotChart({ propType = "points", playerName = "", analysisData, 
     return (
       <div className="text-center py-8 text-muted-foreground text-xs">
         <p>No {isMlb ? "hit zone" : isNhl ? "scoring zone" : "shot chart"} data available for this player</p>
-        <p className="mt-1 text-[10px] opacity-60">
+        <p className="mt-1 text-[11px] opacity-60">
           {isMlb ? "Hit data is available for batting props" : isNhl ? "Scoring data is available for goal-scoring props" : "Shot data is only available for scoring-based props"}
         </p>
       </div>
@@ -575,7 +575,7 @@ export function ShotChart({ propType = "points", playerName = "", analysisData, 
   return (
     <div className="w-full max-w-[360px] mx-auto">
       {chartComponent}
-      <p className="text-center text-[9px] text-muted-foreground/50 mt-1">
+      <p className="text-center text-[11px] text-muted-foreground/50 mt-1">
         {subtitle}
       </p>
     </div>

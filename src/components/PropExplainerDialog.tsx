@@ -110,7 +110,7 @@ export function PropExplainerDialog({ propValue, propLabel, sport, bettingLevel,
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-foreground">What is {propLabel}?</h3>
-                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Powered by Sentinel AI</p>
+                  <p className="text-[11px] text-muted-foreground/60 uppercase tracking-wider">Powered by Sentinel AI</p>
                 </div>
               </div>
 
@@ -136,7 +136,7 @@ export function PropExplainerDialog({ propValue, propLabel, sport, bettingLevel,
                   >
                     <div className="flex items-center gap-1.5">
                       <Lightbulb className="w-3 h-3 text-success/80" />
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-success/70">Example</span>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-success/70">Example</span>
                     </div>
                     <p className="text-[11px] text-foreground/70 leading-relaxed">{example}</p>
                   </div>

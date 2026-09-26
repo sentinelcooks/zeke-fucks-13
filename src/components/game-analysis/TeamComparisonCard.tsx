@@ -62,7 +62,7 @@ export function TeamComparisonCard({
       <CardHeading icon={BarChart3} title="Team comparison" />
       {/* Two full club names do not fit beside the heading at phone width, so
           the sides are named on their own row, colour-keyed to their bars. */}
-      <div className="mt-2 flex items-center justify-between gap-3 text-[10px] font-semibold text-muted-foreground/70">
+      <div className="mt-2 flex items-center justify-between gap-3 text-[11px] font-semibold text-muted-foreground/70">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: "hsl(220 72% 60%)" }} />
           <span className="truncate">{awayTeam}</span>

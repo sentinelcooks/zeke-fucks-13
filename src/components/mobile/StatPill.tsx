@@ -24,11 +24,11 @@ export function StatPill({ label, value, subtext, color = "default", delay = 0 }
       transition={{ delay }}
       className="vision-card p-3 text-center"
     >
-      <span className="block text-[8px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-1">{label}</span>
+      <span className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-1">{label}</span>
       <span className={`block text-xl font-black tabular-nums ${colorMap[color]}`}>
         {value ?? "--"}
       </span>
-      {subtext && <span className="block text-[9px] text-muted-foreground/50 mt-0.5">{subtext}</span>}
+      {subtext && <span className="block text-[11px] text-muted-foreground/50 mt-0.5">{subtext}</span>}
     </motion.div>
   );
 }

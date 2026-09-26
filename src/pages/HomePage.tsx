@@ -247,7 +247,7 @@ const HomePage = () => {
       {/* ── QUICK ACCESS — shown first for new users ── */}
       {isNewUser && (
         <motion.div {...stagger(0)}>
-          <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2">Get Started</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55 mb-2">Get Started</p>
           <div className="grid grid-cols-4 gap-2">
             {quickLinks.map((link, i) => (
               <motion.button
@@ -264,8 +264,8 @@ const HomePage = () => {
                   <link.icon className="w-5 h-5 text-foreground" />
                 </div>
                 <div className="text-center">
-                  <span className="text-[9px] font-semibold text-foreground/60 block">{link.label}</span>
-                  <span className="text-[7px] text-muted-foreground/35">{link.desc}</span>
+                  <span className="text-[11px] font-semibold text-foreground/60 block">{link.label}</span>
+                  <span className="text-[11px] text-muted-foreground/35">{link.desc}</span>
                 </div>
               </motion.button>
             ))}
@@ -300,7 +300,7 @@ const HomePage = () => {
                   >
                     <s.icon className="w-4 h-4 text-foreground" />
                   </div>
-                  <span className="text-[7px] font-bold px-1.5 py-0.5 rounded-md text-muted-foreground/65 uppercase tracking-wider"
+                  <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md text-muted-foreground/65 uppercase tracking-wider"
                     style={{ background: 'hsl(var(--secondary) / 0.5)' }}>
                     {s.sub}
                   </span>
@@ -308,7 +308,7 @@ const HomePage = () => {
                 <p className="text-xl font-extrabold text-foreground tabular-nums tracking-tight">
                   <AnimatedNumber value={s.value} />
                 </p>
-                <p className="text-[9px] text-muted-foreground/65 font-semibold mt-0.5 uppercase tracking-wider">{s.label}</p>
+                <p className="text-[11px] text-muted-foreground/65 font-semibold mt-0.5 uppercase tracking-wider">{s.label}</p>
               </div>
             </motion.button>
           ))}
@@ -324,7 +324,7 @@ const HomePage = () => {
         
         <div className="relative z-10 flex items-start justify-between">
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] text-muted-foreground/65 font-bold uppercase tracking-[0.15em]">Welcome back</p>
+            <p className="text-[11px] text-muted-foreground/65 font-bold uppercase tracking-[0.04em]">Welcome back</p>
             <h2 className="text-lg font-extrabold gradient-text mt-0.5 truncate">{resolveDisplayName(profile, user, "User")}</h2>
             <p className="text-[11px] text-muted-foreground/65 mt-1.5 leading-relaxed line-clamp-2">
               {aiRecs?.welcome_message || "Check your latest picks and analytics below."}
@@ -353,7 +353,7 @@ const HomePage = () => {
               <span className={`text-base font-black tabular-nums ${stats.streak > 0 ? "text-nba-green" : "text-nba-red"}`}>
                 {Math.abs(stats.streak)}
               </span>
-              <span className="text-[7px] font-bold uppercase tracking-wider text-muted-foreground/55">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/55">
                 {stats.streak > 0 ? "Win" : "Loss"}
               </span>
             </motion.div>
@@ -376,7 +376,7 @@ const HomePage = () => {
               <Sparkles className="w-3.5 h-3.5 text-foreground" />
             </div>
             <div className="min-w-0">
-              <p className="text-[8px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-0.5">AI Tip</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-0.5">AI Tip</p>
               <p className="text-[11px] text-foreground/80 leading-relaxed font-medium">{aiRecs.daily_tip}</p>
             </div>
           </div>
@@ -391,7 +391,7 @@ const HomePage = () => {
         {/* Performance Ring */}
         <motion.div {...stagger(isNewUser ? 10 : 6)} className="vision-card p-3.5 flex flex-col items-center justify-center relative overflow-hidden">
           <div className="vision-orb w-20 h-20 top-0 left-0" style={{ background: 'hsl(var(--primary))', animationDelay: '-2s' }} />
-          <p className="text-[8px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-1 relative z-10">Performance</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55 mb-1 relative z-10">Performance</p>
           <div className="relative w-24 h-24 my-1">
             <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
               <circle cx="60" cy="60" r={ringRadius} fill="none" stroke="hsl(var(--border) / 0.6)" strokeWidth="6" />
@@ -422,14 +422,14 @@ const HomePage = () => {
               >
                 {stats.hitRate}%
               </motion.span>
-              <span className="text-[8px] text-muted-foreground/55 font-medium">Win Rate</span>
+              <span className="text-[11px] text-muted-foreground/55 font-medium">Win Rate</span>
             </div>
           </div>
           <div className="flex items-center gap-3 mt-0.5 relative z-10">
-            <span className="flex items-center gap-1 text-[9px] text-muted-foreground/65">
+            <span className="flex items-center gap-1 text-[11px] text-muted-foreground/65">
               <span className="w-1.5 h-1.5 rounded-full bg-nba-green animate-glow-pulse" /> {stats.wins}W
             </span>
-            <span className="flex items-center gap-1 text-[9px] text-muted-foreground/65">
+            <span className="flex items-center gap-1 text-[11px] text-muted-foreground/65">
               <span className="w-1.5 h-1.5 rounded-full bg-nba-red" /> {stats.losses}L
             </span>
           </div>
@@ -440,7 +440,7 @@ const HomePage = () => {
           <div className="flex items-center justify-between mb-2.5">
             <div>
               <p className="text-[11px] font-bold text-foreground">Sports</p>
-              <p className="text-[8px] text-muted-foreground/55">Distribution</p>
+              <p className="text-[11px] text-muted-foreground/55">Distribution</p>
             </div>
             <span className="text-base font-extrabold gradient-text-accent tabular-nums">{Object.keys(stats.sportCounts).length}</span>
           </div>
@@ -449,8 +449,8 @@ const HomePage = () => {
               {Object.entries(stats.sportCounts).map(([sport, count], i) => (
                 <div key={sport}>
                   <div className="flex items-center justify-between mb-0.5">
-                    <span className="text-[10px] font-semibold text-foreground/70 uppercase tracking-wide">{sport}</span>
-                    <span className="text-[9px] text-muted-foreground/65 tabular-nums">{count}</span>
+                    <span className="text-[11px] font-semibold text-foreground/70 uppercase tracking-wide">{sport}</span>
+                    <span className="text-[11px] text-muted-foreground/65 tabular-nums">{count}</span>
                   </div>
                   <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'hsl(var(--secondary) / 0.6)' }}>
                     <motion.div
@@ -467,7 +467,7 @@ const HomePage = () => {
           ) : (
             <div className="flex flex-col items-center justify-center py-4 text-center">
               <Activity className="w-4 h-4 text-muted-foreground/65 mb-1.5" />
-              <p className="text-[9px] text-muted-foreground/55">No plays yet</p>
+              <p className="text-[11px] text-muted-foreground/55">No plays yet</p>
             </div>
           )}
         </motion.div>
@@ -485,7 +485,7 @@ const HomePage = () => {
               </div>
               <div>
                 <p className="text-[11px] font-bold text-foreground">Last 7 Days</p>
-                <p className="text-[8px] text-muted-foreground/55">Active performance</p>
+                <p className="text-[11px] text-muted-foreground/55">Active performance</p>
               </div>
             </div>
           </div>
@@ -513,7 +513,7 @@ const HomePage = () => {
                 >
                   {s.value}
                 </motion.p>
-                <p className="text-[7px] text-muted-foreground/55 font-semibold mt-0.5 uppercase tracking-wider">{s.label}</p>
+                <p className="text-[11px] text-muted-foreground/55 font-semibold mt-0.5 uppercase tracking-wider">{s.label}</p>
               </motion.div>
             ))}
           </div>
@@ -524,7 +524,7 @@ const HomePage = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles className="w-3 h-3 text-accent/40" />
-              <span className="text-[9px] text-muted-foreground/35">
+              <span className="text-[11px] text-muted-foreground/35">
                 {stats.bestDay > 0 ? `Best day: ${fmtProfit(stats.bestDay)}` : stats.last7Total > 0
                   ? `${Math.round((stats.last7Wins / Math.max(stats.last7Total, 1)) * 100)}% weekly hit rate`
                   : "No plays this week"
@@ -532,7 +532,7 @@ const HomePage = () => {
               </span>
             </div>
             {stats.streak !== 0 && (
-              <span className={`text-[9px] font-bold tabular-nums ${stats.streak > 0 ? "text-nba-green" : "text-nba-red"}`}>
+              <span className={`text-[11px] font-bold tabular-nums ${stats.streak > 0 ? "text-nba-green" : "text-nba-red"}`}>
                 {Math.abs(stats.streak)} {stats.streak > 0 ? "win" : "loss"} streak
               </span>
             )}
@@ -543,7 +543,7 @@ const HomePage = () => {
       {/* ── QUICK ACCESS — shown at bottom for experienced users ── */}
       {!isNewUser && (
         <div>
-          <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2">Quick Access</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55 mb-2">Quick Access</p>
           <div className="grid grid-cols-4 gap-2">
             {quickLinks.map((link, i) => (
               <motion.button
@@ -559,7 +559,7 @@ const HomePage = () => {
                   style={{ boxShadow: '0 4px 12px -2px hsl(var(--background) / 0.3)' }}>
                   <link.icon className="w-5 h-5 text-foreground" />
                 </div>
-                <span className="text-[9px] font-semibold text-foreground/50">{link.label}</span>
+                <span className="text-[11px] font-semibold text-foreground/50">{link.label}</span>
               </motion.button>
             ))}
           </div>

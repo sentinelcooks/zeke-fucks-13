@@ -76,7 +76,7 @@ type SportFilter = "all" | "nba" | "wnba" | "mlb" | "nhl" | "ufc";
 function VisionInput({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div>
-      <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">{label}</label>
+      <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">{label}</label>
       <input {...props}
         className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/55 outline-none transition-all duration-300 focus:shadow-[0_0_20px_hsl(var(--primary)_/_0.08)]"
         style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}
@@ -88,7 +88,7 @@ function VisionInput({ label, ...props }: { label: string } & React.InputHTMLAtt
 function VisionSelect({ label, children, ...props }: { label: string; children: React.ReactNode } & React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <div>
-      <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">{label}</label>
+      <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">{label}</label>
       <select {...props}
         className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground outline-none transition-all duration-300 appearance-none"
         style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}
@@ -645,11 +645,11 @@ const ProfitTrackerPage = () => {
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="vision-card p-6 text-center">
                   <TrendingUp className="w-7 h-7 mx-auto mb-2 text-muted-foreground/45" />
                   <p className="text-[12px] font-semibold">No Over/Under bets yet</p>
-                  <p className="text-[10px] text-muted-foreground/50 mt-1">Log an Over or Under play to see direction performance</p>
+                  <p className="text-[11px] text-muted-foreground/50 mt-1">Log an Over or Under play to see direction performance</p>
                 </motion.div>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70 px-1">Over / Under Performance</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/70 px-1">Over / Under Performance</p>
                   <div className="grid grid-cols-2 gap-3">
                     {[
                       {
@@ -754,7 +754,7 @@ const ProfitTrackerPage = () => {
                               placeholder={getLinePlaceholder(form.sport, form.bet_type) || (isGameTotal(form.bet_type) ? "224.5" : "0.5")}
                               type="number" step="0.5" value={form.line} onChange={(e) => setForm({ ...form, line: e.target.value })} />
                             <div>
-                              <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Direction</label>
+                              <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">Direction</label>
                               <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsl(var(--border) / 0.25)' }}>
                                 <button type="button" onClick={() => setForm({ ...form, direction: "over" })}
                                   className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "over" ? "text-success" : "text-muted-foreground/50 hover:text-foreground/70"}`}
@@ -774,7 +774,7 @@ const ProfitTrackerPage = () => {
                         {/* Method selector for UFC method markets */}
                         {getDirectionMode(form.sport, form.bet_type) === "method" && (
                           <div className="col-span-2">
-                            <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Method</label>
+                            <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">Method</label>
                             <select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })}
                               className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground outline-none appearance-none"
                               style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}>
@@ -789,7 +789,7 @@ const ProfitTrackerPage = () => {
                         {/* Goes Distance: binary toggle */}
                         {getDirectionMode(form.sport, form.bet_type) === "goes_distance" && (
                           <div className="col-span-2">
-                            <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Result</label>
+                            <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">Result</label>
                             <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsl(var(--border) / 0.25)' }}>
                               <button type="button" onClick={() => setForm({ ...form, direction: "over" })}
                                 className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "over" ? "text-success" : "text-muted-foreground/50 hover:text-foreground/70"}`}
@@ -808,7 +808,7 @@ const ProfitTrackerPage = () => {
                         {/* Inside Distance: binary toggle */}
                         {getDirectionMode(form.sport, form.bet_type) === "inside_distance" && (
                           <div className="col-span-2">
-                            <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Result</label>
+                            <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">Result</label>
                             <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsl(var(--border) / 0.25)' }}>
                               <button type="button" onClick={() => setForm({ ...form, direction: "over" })}
                                 className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "over" ? "text-success" : "text-muted-foreground/50 hover:text-foreground/70"}`}
@@ -828,7 +828,7 @@ const ProfitTrackerPage = () => {
                         {getDirectionMode(form.sport, form.bet_type) === "round_prop" && (
                           <>
                             <div>
-                              <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Round</label>
+                              <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">Round</label>
                               <select value={form.roundNumber} onChange={(e) => setForm({ ...form, roundNumber: e.target.value })}
                                 className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground outline-none appearance-none"
                                 style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}>
@@ -837,7 +837,7 @@ const ProfitTrackerPage = () => {
                               </select>
                             </div>
                             <div>
-                              <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Result</label>
+                              <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">Result</label>
                               <select value={form.roundResult} onChange={(e) => setForm({ ...form, roundResult: e.target.value })}
                                 className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground outline-none appearance-none"
                                 style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}>
@@ -1032,7 +1032,7 @@ const ProfitTrackerPage = () => {
                   <Filter className="w-3 h-3 text-muted-foreground/50" />
                   {(["all", "win", "loss", "pending"] as ResultFilter[]).map((f) => (
                     <button key={f} onClick={() => setResultFilter(f)}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                      className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all ${
                         resultFilter === f ? "bg-accent/15 text-accent" : "text-muted-foreground/60 hover:text-foreground/80"
                       }`}>{f === "all" ? "All" : f === "win" ? "Hits" : f === "loss" ? "Misses" : "Pending"}</button>
                   ))}
@@ -1040,7 +1040,7 @@ const ProfitTrackerPage = () => {
                 <div className="flex items-center gap-1 flex-wrap">
                   {(["all", "nba", "wnba", "mlb", "nhl", "ufc"] as SportFilter[]).map((f) => (
                     <button key={f} onClick={() => setSportFilter(f)}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                      className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all ${
                         sportFilter === f ? "bg-accent/15 text-accent" : "text-muted-foreground/60 hover:text-foreground/80"
                       }`}>{f === "all" ? "All Sports" : f.toUpperCase()}</button>
                   ))}
@@ -1049,7 +1049,7 @@ const ProfitTrackerPage = () => {
                   <div className="flex items-center gap-1.5">
                     <Calendar className="w-3 h-3 text-muted-foreground/50" />
                     <select value={picksDateFilter} onChange={(e) => setPicksDateFilter(e.target.value)}
-                      className="flex-1 rounded-lg px-2 py-1.5 text-[10px] font-bold text-foreground outline-none appearance-none"
+                      className="flex-1 rounded-lg px-2 py-1.5 text-[11px] font-bold text-foreground outline-none appearance-none"
                       style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}>
                       <option value="all">All Dates</option>
                       {picksDates.map(d => (
@@ -1069,7 +1069,7 @@ const ProfitTrackerPage = () => {
                 <div className="vision-card p-8 text-center">
                   <Trophy className="w-8 h-8 mx-auto mb-3 text-muted-foreground/45" />
                   <p className="text-[13px] font-bold text-foreground/80">{picks.length === 0 ? "No Saved Picks Yet" : "No Picks Match Filters"}</p>
-                  <p className="text-[10px] text-muted-foreground/50 mt-1">{picks.length === 0 ? "Save picks from the Free Picks page to build your history" : "Try adjusting your filters"}</p>
+                  <p className="text-[11px] text-muted-foreground/50 mt-1">{picks.length === 0 ? "Save picks from the Free Picks page to build your history" : "Try adjusting your filters"}</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -1080,12 +1080,12 @@ const ProfitTrackerPage = () => {
                         <span className="text-[11px] font-bold text-foreground">
                           {new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
                         </span>
-                        <span className="text-[9px] text-muted-foreground/50">{datePicks.length} pick{datePicks.length !== 1 ? "s" : ""}</span>
+                        <span className="text-[11px] text-muted-foreground/50">{datePicks.length} pick{datePicks.length !== 1 ? "s" : ""}</span>
                         {(() => {
                           const dW = datePicks.filter(p => p.result === "win").length;
                           const dL = datePicks.filter(p => p.result === "loss").length;
                           if (dW + dL === 0) return null;
-                          return <span className="text-[10px] font-bold ml-auto"><span className="text-nba-green">{dW}W</span> - <span className="text-nba-red">{dL}L</span></span>;
+                          return <span className="text-[11px] font-bold ml-auto"><span className="text-nba-green">{dW}W</span> - <span className="text-nba-red">{dL}L</span></span>;
                         })()}
                       </div>
                       <div className="space-y-2">
@@ -1102,15 +1102,15 @@ const ProfitTrackerPage = () => {
                               }} />
                               <div className="flex items-center justify-between mb-1.5">
                                 <div className="flex items-center gap-2">
-                                  <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${
+                                  <span className={`text-[11px] font-extrabold px-1.5 py-0.5 rounded-full ${
                                     pick.hit_rate >= 90 ? "bg-nba-green/15 text-nba-green" : pick.hit_rate >= 80 ? "bg-accent/15 text-accent" : "bg-nba-yellow/15 text-nba-yellow"
                                   }`}>{pick.hit_rate}%</span>
-                                  {pick.odds && <span className="text-[10px] font-bold text-muted-foreground/60">{fmt(pick.odds)}</span>}
-                                  <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md text-muted-foreground/50"
+                                  {pick.odds && <span className="text-[11px] font-bold text-muted-foreground/60">{fmt(pick.odds)}</span>}
+                                  <span className="text-[11px] font-bold uppercase px-1.5 py-0.5 rounded-md text-muted-foreground/50"
                                     style={{ background: 'hsl(var(--secondary) / 0.5)' }}>{pick.sport.toUpperCase()}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
-                                  <span className={`flex items-center gap-0.5 text-[10px] font-bold ${resultConf.color}`}>
+                                  <span className={`flex items-center gap-0.5 text-[11px] font-bold ${resultConf.color}`}>
                                     <ResultIcon className="w-3 h-3" />{resultConf.label}
                                   </span>
                                   <button onClick={() => removePick(pick.id)} className="p-1 rounded-lg text-muted-foreground/40 hover:text-nba-red transition-colors">
@@ -1124,7 +1124,7 @@ const ProfitTrackerPage = () => {
                                 </div>
                                 <div className="min-w-0">
                                   <p className="text-[12px] font-bold text-foreground truncate">{pick.player_name}</p>
-                                  <span className={`text-[10px] font-semibold ${isOver ? "text-nba-green/80" : "text-nba-red/80"}`}>
+                                  <span className={`text-[11px] font-semibold ${isOver ? "text-nba-green/80" : "text-nba-red/80"}`}>
                                     <PropIcon className="w-2.5 h-2.5 inline mr-0.5" />
                                     {isGameTotal(pick.prop_type)
                                       ? `${pick.direction.toUpperCase()} ${pick.line} Total`
@@ -1180,7 +1180,7 @@ const ProfitTrackerPage = () => {
                 <div className="vision-card p-8 text-center">
                   <Layers className="w-8 h-8 mx-auto mb-3 text-muted-foreground/45" />
                   <p className="text-[13px] font-bold text-foreground/80">No Saved Parlays Yet</p>
-                  <p className="text-[10px] text-muted-foreground/50 mt-1">Analyze a parlay in the Parlay Builder and save it</p>
+                  <p className="text-[11px] text-muted-foreground/50 mt-1">Analyze a parlay in the Parlay Builder and save it</p>
                 </div>
               ) : parlays.map((parlay, i) => {
                 const resultConf = RESULT_CONFIG[parlay.result || "pending"];
@@ -1199,7 +1199,7 @@ const ProfitTrackerPage = () => {
                       <div className="flex items-center gap-2">
                         <Layers className="w-3.5 h-3.5 text-accent" />
                         <span className="text-[12px] font-bold text-foreground">{legs.length}-Leg Parlay</span>
-                        <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full ${gradeBg}`}>
+                        <span className={`text-[11px] font-extrabold uppercase px-1.5 py-0.5 rounded-full ${gradeBg}`}>
                           {overallGrade}
                         </span>
                         <span className={`text-[11px] font-extrabold ${gradeText}`}>
@@ -1207,7 +1207,7 @@ const ProfitTrackerPage = () => {
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] text-muted-foreground/50">
+                        <span className="text-[11px] text-muted-foreground/50">
                           {new Date(parlay.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                         </span>
                         <button
@@ -1234,7 +1234,7 @@ const ProfitTrackerPage = () => {
                         { label: "Payout", val: `$${parlay.potential_payout.toFixed(0)}`, color: "text-nba-green" },
                       ].map(s => (
                         <div key={s.label} className="rounded-lg p-1.5 text-center" style={{ background: 'hsl(var(--card) / 0.5)' }}>
-                          <span className="block text-[8px] uppercase tracking-wider text-muted-foreground/50">{s.label}</span>
+                          <span className="block text-[11px] uppercase tracking-wider text-muted-foreground/50">{s.label}</span>
                           <span className={`block text-[11px] font-extrabold ${s.color}`}>{s.val}</span>
                         </div>
                       ))}
@@ -1248,10 +1248,10 @@ const ProfitTrackerPage = () => {
                         const showConf = leg.confidence_source !== "fallback" && leg.confidence > 0;
                         const legResult = (leg.result ?? "").toLowerCase();
                         return (
-                          <div key={li} className="flex items-center justify-between text-[10px] py-1 px-2 rounded-lg" style={{ background: 'hsl(var(--card) / 0.3)' }}>
+                          <div key={li} className="flex items-center justify-between text-[11px] py-1 px-2 rounded-lg" style={{ background: 'hsl(var(--card) / 0.3)' }}>
                             <div className="flex items-center gap-1.5">
                               <span className="text-muted-foreground/50 font-bold">#{li + 1}</span>
-                              <span className="font-bold uppercase text-[8px] text-accent/70">{leg.sport}</span>
+                              <span className="font-bold uppercase text-[11px] text-accent/70">{leg.sport}</span>
                               <button
                                 onClick={() => {
                                   const parsed = parseLegPick(leg.pick);
@@ -1268,7 +1268,7 @@ const ProfitTrackerPage = () => {
                                 {leg.pick}
                               </button>
                               {legResult && legResult !== "pending" && (
-                                <span className={`text-[8px] font-bold uppercase ${legResult === "win" || legResult === "hit" ? "text-nba-green" : legResult === "push" ? "text-muted-foreground" : "text-nba-red"}`}>
+                                <span className={`text-[11px] font-bold uppercase ${legResult === "win" || legResult === "hit" ? "text-nba-green" : legResult === "push" ? "text-muted-foreground" : "text-nba-red"}`}>
                                   {legResult === "win" || legResult === "hit" ? "✓" : legResult === "push" ? "~" : "✗"}
                                 </span>
                               )}
@@ -1283,14 +1283,14 @@ const ProfitTrackerPage = () => {
 
                     {/* Result buttons */}
                     <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid hsl(var(--border) / 0.2)' }}>
-                      <span className="text-[9px] uppercase tracking-wider text-muted-foreground/50 font-semibold">Result</span>
+                      <span className="text-[11px] uppercase tracking-wider text-muted-foreground/50 font-semibold">Result</span>
                       <div className="flex gap-1">
                         {(["pending", "win", "loss"] as const).map(r => {
                           const conf = RESULT_CONFIG[r];
                           const isActive = parlay.result === r;
                           return (
                             <button key={r} onClick={() => updateParlayResult(parlay.id, r)}
-                              className={`flex items-center gap-0.5 px-2 py-1 rounded-lg text-[9px] font-bold transition-all ${
+                              className={`flex items-center gap-0.5 px-2 py-1 rounded-lg text-[11px] font-bold transition-all ${
                                 isActive ? `${conf.bg} ${conf.color} border` : "text-muted-foreground/50 hover:text-foreground/70"
                               }`}>
                               <conf.icon className="w-2.5 h-2.5" />{conf.label}

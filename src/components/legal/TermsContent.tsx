@@ -92,7 +92,7 @@ const TermsContent = () => (
       <h3 className="text-sm font-bold text-foreground mb-2">Limitation of Liability</h3>
       <p className="mb-2">To the maximum extent permitted by law, Sentinel and its affiliates, officers, employees, contractors, licensors, and partners will not be liable for any indirect, incidental, special, consequential, exemplary, or punitive damages, or any loss of profits, revenue, data, goodwill, business opportunity, or other intangible losses, arising out of or related to your use of or inability to use the Services.</p>
       <p className="mb-2">To the maximum extent permitted by law, Sentinel's total liability for all claims relating to the Services will not exceed the greater of: (a) the amount you paid to Sentinel in the 12 months before the event giving rise to the claim, or (b) <strong className="text-foreground">USD $100</strong>.</p>
-      <p className="text-muted-foreground/60 text-[10px]">Some jurisdictions do not allow certain limitations, so parts of this section may not apply to you.</p>
+      <p className="text-muted-foreground/60 text-[11px]">Some jurisdictions do not allow certain limitations, so parts of this section may not apply to you.</p>
     </div>
 
     <div>

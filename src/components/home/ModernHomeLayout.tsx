@@ -1003,7 +1003,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                             <span style={{
                               display: 'none',
                               background: 'hsl(var(--nba-cyan) / 0.15)', color: 'hsl(var(--nba-cyan))',
-                              fontSize: 10, fontWeight: 700, letterSpacing: 1,
+                              fontSize: 11, fontWeight: 700, letterSpacing: 1,
                               borderRadius: 20, padding: '2px 8px',
                               border: '1px solid hsl(var(--nba-cyan) / 0.25)',
                             }}>
@@ -1014,7 +1014,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                             <span style={{
                               display: 'none',
                               background: 'hsl(var(--nba-yellow) / 0.12)', color: 'hsl(var(--nba-yellow))',
-                              fontSize: 8, fontWeight: 800, letterSpacing: 0.8,
+                              fontSize: 11, fontWeight: 800, letterSpacing: 0.8,
                               borderRadius: 20, padding: '2px 7px',
                               border: '1px solid hsl(var(--nba-yellow) / 0.28)',
                             }}>
@@ -1025,7 +1025,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                             <span style={{
                               display: 'none',
                               background: 'hsl(var(--nba-yellow) / 0.12)', color: 'hsl(var(--nba-yellow))',
-                              fontSize: 8, fontWeight: 800, letterSpacing: 0.8,
+                              fontSize: 11, fontWeight: 800, letterSpacing: 0.8,
                               borderRadius: 20, padding: '2px 7px',
                               border: '1px solid hsl(var(--nba-yellow) / 0.28)',
                             }}>
@@ -1121,7 +1121,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
 
                     {isFallbackEdge && (
                       <p className="hidden relative z-10" style={{
-                        fontSize: 9.5, color: 'hsl(var(--nba-yellow))', lineHeight: 1.45,
+                        fontSize: 11, color: 'hsl(var(--nba-yellow))', lineHeight: 1.45,
                         marginBottom: -5,
                       }}>
                         Model lean only. The score and any simulation figures below are not validated win probabilities.

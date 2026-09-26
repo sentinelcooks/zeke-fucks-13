@@ -55,11 +55,11 @@ export function ModelStatTiles({
           className="vision-card px-1 py-3.5 text-center"
           style={{ borderColor: "hsl(var(--border) / 0.35)" }}
         >
-          <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{tile.label}</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tile.label}</p>
           <p className={`mt-1 text-[22px] font-black tabular-nums ${tile.accent ? "text-nba-green" : "text-foreground"}`}>
             {tile.value}
           </p>
-          {tile.label === "Model" && unit ? <p className="text-[8px] text-muted-foreground/45">{unit}</p> : null}
+          {tile.label === "Model" && unit ? <p className="text-[11px] text-muted-foreground/45">{unit}</p> : null}
         </div>
       ))}
     </div>

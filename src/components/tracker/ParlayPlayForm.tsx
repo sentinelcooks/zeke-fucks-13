@@ -139,7 +139,7 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
             <motion.div key={idx} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
               className="relative rounded-xl p-3 space-y-2" style={{ background: 'hsl(var(--card) / 0.4)', border: '1px solid hsl(var(--border) / 0.2)' }}>
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-accent/70">LEG {idx + 1}</span>
+                <span className="text-[11px] font-bold text-accent/70">LEG {idx + 1}</span>
                 {legs.length > 2 && (
                   <button onClick={() => removeLeg(idx)} className="text-muted-foreground/40 hover:text-nba-red transition-colors">
                     <X className="w-3 h-3" />
@@ -148,7 +148,7 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Sport</label>
+                  <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">Sport</label>
                   <select value={leg.sport} onChange={(e) => updateLeg(idx, "sport", e.target.value)}
                     className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground outline-none appearance-none"
                     style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}>
@@ -157,7 +157,7 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">
+                  <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">
                     Odds ({oddsFormat === "decimal" ? "Decimal" : "American"})
                   </label>
                   <input type="number" value={leg.odds} onChange={(e) => updateLeg(idx, "odds", e.target.value)}
@@ -172,14 +172,14 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
                 {dirMode === "over_under" && (
                   <>
                     <div>
-                      <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">{lineLabel}</label>
+                      <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">{lineLabel}</label>
                       <input type="number" step="0.5" placeholder={linePlaceholder} value={leg.line}
                         onChange={(e) => updateLeg(idx, "line", e.target.value)}
                         className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/55 outline-none"
                         style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }} />
                     </div>
                     <div>
-                      <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Direction</label>
+                      <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">Direction</label>
                       <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsl(var(--border) / 0.25)' }}>
                         <button type="button" onClick={() => updateLeg(idx, "direction", "over")}
                           className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${leg.direction === "over" ? "text-success" : "text-muted-foreground/50 hover:text-foreground/70"}`}
@@ -199,7 +199,7 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
                 {/* Method selector for UFC method markets */}
                 {dirMode === "method" && (
                   <div className="col-span-2">
-                    <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Method</label>
+                    <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">Method</label>
                     <select value={leg.method} onChange={(e) => updateLeg(idx, "method", e.target.value)}
                       className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground outline-none appearance-none"
                       style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}>
@@ -212,7 +212,7 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
                 {/* Goes Distance: binary button */}
                 {dirMode === "goes_distance" && (
                   <div className="col-span-2">
-                    <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Result</label>
+                    <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">Result</label>
                     <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsl(var(--border) / 0.25)' }}>
                       <button type="button" onClick={() => updateLeg(idx, "direction", "over")}
                         className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${leg.direction === "over" ? "text-success" : "text-muted-foreground/50 hover:text-foreground/70"}`}
@@ -231,7 +231,7 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
                 {/* Inside Distance: binary button */}
                 {dirMode === "inside_distance" && (
                   <div className="col-span-2">
-                    <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Result</label>
+                    <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">Result</label>
                     <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsl(var(--border) / 0.25)' }}>
                       <button type="button" onClick={() => updateLeg(idx, "direction", "over")}
                         className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${leg.direction === "over" ? "text-success" : "text-muted-foreground/50 hover:text-foreground/70"}`}
@@ -251,7 +251,7 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
                 {dirMode === "round_prop" && (
                   <>
                     <div>
-                      <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Round</label>
+                      <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">Round</label>
                       <select value={leg.roundNumber} onChange={(e) => updateLeg(idx, "roundNumber", e.target.value)}
                         className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground outline-none appearance-none"
                         style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}>
@@ -260,7 +260,7 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Result</label>
+                      <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/65 mb-1.5">Result</label>
                       <select value={leg.roundResult} onChange={(e) => updateLeg(idx, "roundResult", e.target.value)}
                         className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground outline-none appearance-none"
                         style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}>
@@ -278,25 +278,25 @@ export function ParlayPlayForm({ onSave, onCancel }: ParlayPlayFormProps) {
       </AnimatePresence>
 
       <button onClick={addLeg}
-        className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-[10px] font-bold text-accent/70 hover:text-accent transition-colors"
+        className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-bold text-accent/70 hover:text-accent transition-colors"
         style={{ border: '1px dashed hsl(var(--border) / 0.4)' }}>
         <Plus className="w-3 h-3" /> Add Leg
       </button>
 
       <div className="grid grid-cols-3 gap-2 rounded-xl p-2.5" style={{ background: 'hsl(var(--card) / 0.5)' }}>
         <div className="text-center">
-          <span className="block text-[8px] uppercase tracking-wider text-muted-foreground/50">Combined</span>
+          <span className="block text-[11px] uppercase tracking-wider text-muted-foreground/50">Combined</span>
           <span className="block text-[12px] font-extrabold text-accent">
             {oddsFormat === "decimal" ? combinedDecimal.toFixed(2) : (combinedAmerican > 0 ? `+${combinedAmerican}` : combinedAmerican)}
           </span>
         </div>
         <div className="text-center">
-          <label className="block text-[8px] uppercase tracking-wider text-muted-foreground/50">Stake ($)</label>
+          <label className="block text-[11px] uppercase tracking-wider text-muted-foreground/50">Stake ($)</label>
           <input type="number" value={stake} onChange={(e) => setStake(e.target.value)} placeholder="10"
             className="w-full text-center text-[12px] font-extrabold text-foreground bg-transparent outline-none" />
         </div>
         <div className="text-center">
-          <span className="block text-[8px] uppercase tracking-wider text-muted-foreground/50">Payout</span>
+          <span className="block text-[11px] uppercase tracking-wider text-muted-foreground/50">Payout</span>
           <span className="block text-[12px] font-extrabold text-nba-green">${potentialPayout.toFixed(2)}</span>
         </div>
       </div>

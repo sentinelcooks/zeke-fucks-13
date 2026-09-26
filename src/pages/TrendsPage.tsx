@@ -140,7 +140,7 @@ const TrendsPage = () => {
             </div>
             <div>
               <h2 className="text-sm font-extrabold text-foreground tracking-tight">100% Club</h2>
-              <p className="text-[9px] text-muted-foreground/55">Props hitting in 100% of games</p>
+              <p className="text-[11px] text-muted-foreground/55">Props hitting in 100% of games</p>
             </div>
           </div>
 
@@ -161,7 +161,7 @@ const TrendsPage = () => {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1.5">
                       <span className="text-[13px] font-extrabold text-foreground">{prop.player}</span>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-md font-bold text-muted-foreground/50 uppercase"
+                      <span className="text-[11px] px-1.5 py-0.5 rounded-md font-bold text-muted-foreground/50 uppercase"
                         style={{ background: "hsl(var(--secondary) / 0.5)" }}>
                         vs {prop.opponent.split(" ").pop()}
                       </span>
@@ -175,7 +175,7 @@ const TrendsPage = () => {
                   </div>
                   <div className="text-right">
                     <span className="text-[13px] font-extrabold text-foreground tabular-nums">{formatOdds(prop.odds)}</span>
-                    <p className="text-[8px] text-muted-foreground/55 mt-0.5">{prop.book}</p>
+                    <p className="text-[11px] text-muted-foreground/55 mt-0.5">{prop.book}</p>
                   </div>
                 </div>
 
@@ -184,7 +184,7 @@ const TrendsPage = () => {
                   <div className={`w-5 h-5 rounded-md bg-gradient-to-br ${gradient} flex items-center justify-center`}>
                     <Icon className="w-3 h-3 text-foreground" />
                   </div>
-                  <span className="text-[10px] text-muted-foreground/50">
+                  <span className="text-[11px] text-muted-foreground/50">
                     Hit in <span className="text-foreground font-bold">{prop.streak_games}</span> of last {prop.streak_total} games
                   </span>
                   <span className="ml-auto text-[11px] font-extrabold text-nba-green tabular-nums">100%</span>
@@ -205,7 +205,7 @@ const TrendsPage = () => {
             </div>
             <div>
               <h2 className="text-sm font-extrabold text-foreground tracking-tight">Same-Game Parlays</h2>
-              <p className="text-[9px] text-muted-foreground/55">High-confidence SGP combos</p>
+              <p className="text-[11px] text-muted-foreground/55">High-confidence SGP combos</p>
             </div>
           </div>
 
@@ -230,7 +230,7 @@ const TrendsPage = () => {
                     <div className="flex items-center gap-2">
                       <BarChart3 className="w-3.5 h-3.5 text-accent/60" />
                       <span className="text-[11px] font-bold text-foreground">{leg.player}</span>
-                      <span className={`text-[10px] font-semibold ${leg.direction === "over" ? "text-nba-green" : "text-nba-red"}`}>
+                      <span className={`text-[11px] font-semibold ${leg.direction === "over" ? "text-nba-green" : "text-nba-red"}`}>
                         {leg.direction === "over" ? "Over" : "Under"} {leg.line} {leg.prop}
                       </span>
                     </div>
@@ -241,7 +241,7 @@ const TrendsPage = () => {
 
               <div className="flex items-center gap-2 mt-3 pt-2" style={{ borderTop: "1px solid hsl(var(--border) / 0.2)" }}>
                 <Star className="w-3.5 h-3.5 text-[hsl(var(--nba-yellow))]" />
-                <span className="text-[9px] text-muted-foreground/65">{sgp.streak_label}</span>
+                <span className="text-[11px] text-muted-foreground/65">{sgp.streak_label}</span>
               </div>
             </motion.div>
           ))}
@@ -257,7 +257,7 @@ const TrendsPage = () => {
             </div>
             <div>
               <h2 className="text-sm font-extrabold text-foreground tracking-tight">Player Trends</h2>
-              <p className="text-[9px] text-muted-foreground/55">Streaking props across all games</p>
+              <p className="text-[11px] text-muted-foreground/55">Streaking props across all games</p>
             </div>
           </div>
 
@@ -276,9 +276,9 @@ const TrendsPage = () => {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="text-[12px] font-bold text-foreground truncate">{prop.player}</span>
-                    <span className="text-[8px] text-muted-foreground/55">vs {prop.opponent.split(" ").pop()}</span>
+                    <span className="text-[11px] text-muted-foreground/55">vs {prop.opponent.split(" ").pop()}</span>
                   </div>
-                  <p className="text-[10px] text-muted-foreground/50">
+                  <p className="text-[11px] text-muted-foreground/50">
                     <span className={prop.direction === "over" ? "text-nba-green" : "text-nba-red"}>
                       {prop.direction === "over" ? "▲" : "▼"} {prop.line}
                     </span>
@@ -287,7 +287,7 @@ const TrendsPage = () => {
                 </div>
                 <div className="text-right shrink-0">
                   <span className="text-[12px] font-extrabold text-foreground tabular-nums">{formatOdds(prop.odds)}</span>
-                  <p className="text-[9px] text-nba-green font-bold">{prop.streak_games}/{prop.streak_total}</p>
+                  <p className="text-[11px] text-nba-green font-bold">{prop.streak_games}/{prop.streak_total}</p>
                 </div>
               </motion.div>
             );
@@ -299,7 +299,7 @@ const TrendsPage = () => {
         <div className="vision-card p-8 text-center">
           <TrendingUp className="w-8 h-8 text-muted-foreground/65 mx-auto mb-3" />
           <p className="text-[12px] text-muted-foreground/65 font-medium">No trends available right now</p>
-          <p className="text-[10px] text-muted-foreground/50 mt-1">Check back when games are scheduled</p>
+          <p className="text-[11px] text-muted-foreground/50 mt-1">Check back when games are scheduled</p>
         </div>
       )}
     </div>

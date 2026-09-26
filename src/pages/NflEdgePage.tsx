@@ -84,7 +84,7 @@ function ForwardTestBanner() {
 function StatusChip({ status }: { status: "PLAY" | "NO PLAY" }) {
   return (
     <span
-      className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-wide ${
+      className={`rounded-md px-1.5 py-0.5 text-[11px] font-bold tracking-wide ${
         status === "PLAY" ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"
       }`}
     >
@@ -96,7 +96,7 @@ function StatusChip({ status }: { status: "PLAY" | "NO PLAY" }) {
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="truncate text-xs font-semibold tabular-nums text-foreground">{value}</p>
     </div>
   );
@@ -139,7 +139,7 @@ function GameEdgeList({ rows }: { rows: GamePrediction[] }) {
                 <div key={r.market_type} className="rounded-xl bg-background/40 p-2">
                   <div className="mb-1.5 flex items-center justify-between gap-2">
                     <p className="text-xs font-semibold text-foreground">
-                      <span className="mr-1.5 text-[10px] uppercase text-muted-foreground">{r.market_type}</span>
+                      <span className="mr-1.5 text-[11px] uppercase text-muted-foreground">{r.market_type}</span>
                       {r.selection}
                     </p>
                     <StatusChip status={r.status} />
@@ -151,7 +151,7 @@ function GameEdgeList({ rows }: { rows: GamePrediction[] }) {
                     <Metric label="Price" value={price(r.market_price)} />
                   </div>
                   {r.status === "NO PLAY" && r.no_play_reasons[0] && (
-                    <p className="mt-1.5 text-[10px] text-muted-foreground">Why no play: {r.no_play_reasons[0]}</p>
+                    <p className="mt-1.5 text-[11px] text-muted-foreground">Why no play: {r.no_play_reasons[0]}</p>
                   )}
                 </div>
               ))}
@@ -221,7 +221,7 @@ function PropList({ rows }: { rows: PropPrediction[] }) {
             <Metric label="Conf" value={r.confidence.toFixed(0)} />
           </div>
           {r.status === "NO PLAY" && r.no_play_reasons[0] && (
-            <p className="mt-1.5 text-[10px] text-muted-foreground">Why no play: {r.no_play_reasons[0]}</p>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">Why no play: {r.no_play_reasons[0]}</p>
           )}
         </div>
       ))}

@@ -616,7 +616,7 @@ function TeamBadge({ team, fallbackName, size = "regular" }: { team?: TeamDirect
   }
 
   return (
-    <div className={`${dimensions} shrink-0 rounded-xl flex items-center justify-center text-[10px] font-black text-accent`} style={{ background: "hsl(var(--primary) / 0.12)", border: "1px solid hsl(var(--primary) / 0.24)" }}>
+    <div className={`${dimensions} shrink-0 rounded-xl flex items-center justify-center text-[11px] font-black text-accent`} style={{ background: "hsl(var(--primary) / 0.12)", border: "1px solid hsl(var(--primary) / 0.24)" }}>
       {initials || <Shield className="h-4 w-4" />}
     </div>
   );
@@ -640,17 +640,17 @@ function AnalysisCallout({ analysis, full = false }: { analysis?: MarketAnalysis
       <div className="mt-3 space-y-2 rounded-xl p-3" style={{ background: "hsl(var(--success) / 0.08)", border: "1px solid hsl(var(--success) / 0.25)" }}>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-[8px] font-bold uppercase tracking-[0.15em] text-nba-green">Best Bet</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-nba-green">Best Bet</p>
             <p className="mt-0.5 text-[12px] font-extrabold text-foreground">{recommendation.market} · {recommendation.side}</p>
           </div>
           <span className="text-sm font-black text-nba-green">+{recommendation.edge}%</span>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center">
-          <div><p className="text-[7px] font-bold uppercase tracking-wider text-muted-foreground/55">Model</p><p className="mt-0.5 text-[11px] font-bold text-foreground">{recommendation.modelProbability}%</p></div>
-          <div><p className="text-[7px] font-bold uppercase tracking-wider text-muted-foreground/55">Implied</p><p className="mt-0.5 text-[11px] font-bold text-foreground">{recommendation.impliedProbability}%</p></div>
-          <div><p className="text-[7px] font-bold uppercase tracking-wider text-muted-foreground/55">Price</p><p className="mt-0.5 text-[11px] font-bold text-foreground">{formatOdds(recommendation.odds)}</p></div>
+          <div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/55">Model</p><p className="mt-0.5 text-[11px] font-bold text-foreground">{recommendation.modelProbability}%</p></div>
+          <div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/55">Implied</p><p className="mt-0.5 text-[11px] font-bold text-foreground">{recommendation.impliedProbability}%</p></div>
+          <div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/55">Price</p><p className="mt-0.5 text-[11px] font-bold text-foreground">{formatOdds(recommendation.odds)}</p></div>
         </div>
-        <p className="text-[10px] leading-relaxed text-muted-foreground">{recommendation.explanation}</p>
+        <p className="text-[11px] leading-relaxed text-muted-foreground">{recommendation.explanation}</p>
       </div>
     );
   }
@@ -661,19 +661,19 @@ function AnalysisCallout({ analysis, full = false }: { analysis?: MarketAnalysis
       <div className="mt-3 space-y-2 rounded-xl p-3" style={{ background: "hsl(var(--primary) / 0.08)", border: "1px solid hsl(var(--primary) / 0.22)" }}>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-[8px] font-bold uppercase tracking-[0.15em] text-accent">Model Lean · Not a Bet</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-accent">Model Lean · Not a Bet</p>
             <p className="mt-0.5 text-[12px] font-extrabold text-foreground">{lean.market} · {lean.side}</p>
           </div>
           <span className="text-sm font-black text-accent">{lean.heuristicScore}/100</span>
         </div>
         <div className="grid grid-cols-2 gap-2 text-center">
-          <div><p className="text-[7px] font-bold uppercase tracking-wider text-muted-foreground/55">Model score</p><p className="mt-0.5 text-[11px] font-bold text-foreground">Heuristic</p></div>
-          <div><p className="text-[7px] font-bold uppercase tracking-wider text-muted-foreground/55">Live price</p><p className="mt-0.5 text-[11px] font-bold text-foreground">{formatOdds(lean.odds)}</p></div>
+          <div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/55">Model score</p><p className="mt-0.5 text-[11px] font-bold text-foreground">Heuristic</p></div>
+          <div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/55">Live price</p><p className="mt-0.5 text-[11px] font-bold text-foreground">{formatOdds(lean.odds)}</p></div>
         </div>
-        <p className="text-[10px] leading-relaxed text-muted-foreground">{lean.explanation}</p>
-        <p className="text-[9px] leading-relaxed text-muted-foreground/65">This is a low-certainty model signal, not a calibrated probability or betting recommendation.</p>
+        <p className="text-[11px] leading-relaxed text-muted-foreground">{lean.explanation}</p>
+        <p className="text-[11px] leading-relaxed text-muted-foreground/65">This is a low-certainty model signal, not a calibrated probability or betting recommendation.</p>
         {full && "marketsReviewed" in analysis && analysis.marketsReviewed > 0 && (
-          <p className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45">{analysis.marketsReviewed} live markets reviewed</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/45">{analysis.marketsReviewed} live markets reviewed</p>
         )}
       </div>
     );
@@ -686,9 +686,9 @@ function AnalysisCallout({ analysis, full = false }: { analysis?: MarketAnalysis
         <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60" />
         <div>
           <p className="text-[11px] font-bold text-foreground/85">{title}</p>
-          <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground/70">{analysis.message}</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/70">{analysis.message}</p>
           {full && "marketsReviewed" in analysis && analysis.marketsReviewed > 0 && (
-            <p className="mt-1.5 text-[8px] font-bold uppercase tracking-wider text-muted-foreground/45">{analysis.marketsReviewed} live markets reviewed</p>
+            <p className="mt-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/45">{analysis.marketsReviewed} live markets reviewed</p>
           )}
         </div>
       </div>
@@ -774,7 +774,7 @@ function MarketCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-[15px] font-extrabold text-foreground">{title}</h3>
-          <p className="mt-0.5 text-[10px] text-muted-foreground/60">{marketSubtitle(marketKey, snapshot, sport)}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground/60">{marketSubtitle(marketKey, snapshot, sport)}</p>
         </div>
         <button
           type="button"
@@ -823,7 +823,7 @@ function MarketCard({
                         }}
                       />
                     </div>
-                    <p className="mt-1.5 text-[10px] text-muted-foreground/55">{implied}% implied</p>
+                    <p className="mt-1.5 text-[11px] text-muted-foreground/55">{implied}% implied</p>
                   </div>
                 )}
               </div>
@@ -1193,7 +1193,7 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
           </button>
           <div className="min-w-0 flex-1">
             <h2 className="text-[17px] font-black uppercase tracking-[0.03em] text-foreground">Game lines</h2>
-            <p className="text-[10px] text-muted-foreground/60">{selectedEvent.sport_title || sport.toUpperCase()} · {kickoffLabel}</p>
+            <p className="text-[11px] text-muted-foreground/60">{selectedEvent.sport_title || sport.toUpperCase()} · {kickoffLabel}</p>
           </div>
           <button
             type="button"
@@ -1212,14 +1212,14 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
             <div className="flex min-w-0 items-center gap-2.5">
               <TeamBadge team={teams?.away} fallbackName={selectedEvent.away_team} />
               <div className="min-w-0 leading-tight">
-                <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-muted-foreground/50">Away</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/50">Away</p>
                 <p className="truncate text-[16px] font-extrabold text-foreground">{awayName}</p>
               </div>
             </div>
             <span className="text-[15px] font-black text-nba-green">@</span>
             <div className="flex min-w-0 items-center justify-end gap-2.5 text-right">
               <div className="min-w-0 leading-tight">
-                <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-muted-foreground/50">Home</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/50">Home</p>
                 <p className="truncate text-[16px] font-extrabold text-foreground">{homeName}</p>
               </div>
               <TeamBadge team={teams?.home} fallbackName={selectedEvent.home_team} />
@@ -1231,7 +1231,7 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
             </p>
             <MarketPill status={availableMarkets > 0 ? "live" : marketFeedUnavailable ? "unavailable" : "none"} count={availableMarkets} />
           </div>
-          {!teams && <p className="mt-2 text-[9px] font-semibold text-nba-yellow">Team verification pending</p>}
+          {!teams && <p className="mt-2 text-[11px] font-semibold text-nba-yellow">Team verification pending</p>}
         </div>
 
         <div
@@ -1264,12 +1264,12 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
             {fullAnalysis?.state === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radar className="h-4 w-4" />}
             Analyze full game
           </button>
-          {sport === "nfl" && <p className="mt-2 text-[10px] leading-relaxed text-nba-yellow/80">{NFL_FORWARD_NOTE}</p>}
+          {sport === "nfl" && <p className="mt-2 text-[11px] leading-relaxed text-nba-yellow/80">{NFL_FORWARD_NOTE}</p>}
         </div>
 
         <div className="flex items-center justify-between px-1 pt-2">
-          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-foreground/75">Markets</span>
-          <span className="text-[10px] text-muted-foreground/50">Bar = implied probability</span>
+          <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-foreground/75">Markets</span>
+          <span className="text-[11px] text-muted-foreground/50">Bar = implied probability</span>
         </div>
 
         <MarketCard marketKey="h2h" snapshot={snapshots.h2h} title="Moneyline" sport={sport} teams={teams} analysis={marketAnalysesForEvent.h2h} onAnalyze={() => void analyzeSingleMarket(selectedEvent, "h2h")} marketFeedUnavailable={marketFeedUnavailable} />
@@ -1284,15 +1284,15 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
     <section className="space-y-4">
       <div className="vision-card relative overflow-hidden p-4">
         <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-15 blur-2xl" style={{ background: "hsl(var(--primary))" }} />
-        <div className="relative flex items-start justify-between gap-3"><div><p className="text-[8px] font-bold uppercase tracking-[0.15em] text-accent/75">Live Game Lines</p><h2 className="mt-1 text-base font-extrabold text-foreground">Upcoming {sport.toUpperCase()} matchups</h2><p className="mt-1 text-[10px] leading-relaxed text-muted-foreground/65">Published sportsbook odds only. Open a game to compare markets or run a verified analysis.{sport === "nfl" ? ` ${NFL_FORWARD_NOTE}` : ""}</p></div><button type="button" onClick={() => void loadEvents()} disabled={loading} className="rounded-lg p-2 text-muted-foreground/65 transition-colors hover:bg-accent/10 hover:text-accent disabled:opacity-40" aria-label="Refresh live game lines"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></button></div>
+        <div className="relative flex items-start justify-between gap-3"><div><p className="text-[11px] font-bold uppercase tracking-[0.04em] text-accent/75">Live Game Lines</p><h2 className="mt-1 text-base font-extrabold text-foreground">Upcoming {sport.toUpperCase()} matchups</h2><p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/65">Published sportsbook odds only. Open a game to compare markets or run a verified analysis.{sport === "nfl" ? ` ${NFL_FORWARD_NOTE}` : ""}</p></div><button type="button" onClick={() => void loadEvents()} disabled={loading} className="rounded-lg p-2 text-muted-foreground/65 transition-colors hover:bg-accent/10 hover:text-accent disabled:opacity-40" aria-label="Refresh live game lines"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></button></div>
       </div>
 
       {loading && <div className="flex flex-col items-center justify-center py-12 text-center"><Loader2 className="h-6 w-6 animate-spin text-accent" /><p className="mt-3 text-xs font-semibold text-muted-foreground">Loading live sportsbook events…</p></div>}
-      {!loading && error && <div className="rounded-xl p-4 text-center" style={{ background: "hsl(var(--danger) / 0.08)", border: "1px solid hsl(var(--danger) / 0.22)" }}><CircleAlert className="mx-auto h-5 w-5 text-nba-red" /><p className="mt-2 text-xs font-semibold text-foreground">Live lines temporarily unavailable</p><p className="mt-1 text-[10px] text-muted-foreground/70">Please try again shortly.</p></div>}
-      {!loading && !error && groupedEvents.length === 0 && <div className="vision-card p-6 text-center"><CalendarDays className="mx-auto h-6 w-6 text-muted-foreground/45" /><p className="mt-3 text-xs font-semibold text-foreground/80">No upcoming live lines</p><p className="mt-1 text-[10px] leading-relaxed text-muted-foreground/60">Sportsbooks have not posted upcoming {sport.toUpperCase()} game markets yet.</p></div>}
+      {!loading && error && <div className="rounded-xl p-4 text-center" style={{ background: "hsl(var(--danger) / 0.08)", border: "1px solid hsl(var(--danger) / 0.22)" }}><CircleAlert className="mx-auto h-5 w-5 text-nba-red" /><p className="mt-2 text-xs font-semibold text-foreground">Live lines temporarily unavailable</p><p className="mt-1 text-[11px] text-muted-foreground/70">Please try again shortly.</p></div>}
+      {!loading && !error && groupedEvents.length === 0 && <div className="vision-card p-6 text-center"><CalendarDays className="mx-auto h-6 w-6 text-muted-foreground/45" /><p className="mt-3 text-xs font-semibold text-foreground/80">No upcoming live lines</p><p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/60">Sportsbooks have not posted upcoming {sport.toUpperCase()} game markets yet.</p></div>}
 
       {!loading && !error && marketFeedUnavailable && groupedEvents.length > 0 && (
-        <div className="flex items-start gap-2 rounded-xl px-3 py-2.5 text-[10px] leading-relaxed text-muted-foreground/70" style={{ background: "hsl(var(--nba-yellow) / 0.07)", border: "1px solid hsl(var(--nba-yellow) / 0.18)" }}>
+        <div className="flex items-start gap-2 rounded-xl px-3 py-2.5 text-[11px] leading-relaxed text-muted-foreground/70" style={{ background: "hsl(var(--nba-yellow) / 0.07)", border: "1px solid hsl(var(--nba-yellow) / 0.18)" }}>
           <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-nba-yellow" />
           Upcoming games are shown, but live sportsbook markets could not be verified. Refresh to try again; analysis stays disabled until a market is returned.
         </div>
@@ -1301,7 +1301,7 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
       {!loading && !error && groupedEvents.slice(0, visibleDateCount).map((group) => (
         <div key={group.date} className="space-y-2.5">
           <div className="px-1 pt-1">
-            <p className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-nba-green">
+            <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.04em] text-nba-green">
               <span className="h-1.5 w-1.5 rounded-full bg-nba-green" style={{ boxShadow: "0 0 6px hsl(var(--success))" }} />
               {dateLabel(group.date)}
             </p>
@@ -1309,7 +1309,7 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
               <h3 className="text-[17px] font-extrabold tracking-tight text-foreground">
                 {group.games.length} {sport.toUpperCase()} matchup{group.games.length === 1 ? "" : "s"}
               </h3>
-              <span className="shrink-0 text-[10px] text-muted-foreground/55">Published sportsbook odds</span>
+              <span className="shrink-0 text-[11px] text-muted-foreground/55">Published sportsbook odds</span>
             </div>
           </div>
           {group.games.map((event, index) => {

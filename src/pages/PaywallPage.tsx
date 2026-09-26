@@ -39,7 +39,7 @@ interface Plan {
 const PLANS: Plan[] = [
   { id: "weekly",  label: "Weekly",  price: "$9.99",   amount: 9.99,   period: "/week",  periodShort: "/wk" },
   { id: "monthly", label: "Monthly", price: "$39.99",  amount: 39.99,  period: "/month", periodShort: "/mo", badge: "MOST POPULAR" },
-  { id: "yearly",  label: "Yearly",  price: "$219.99", amount: 219.99, period: "/year",  periodShort: "/yr", badge: "Best Long-Term Value" },
+  { id: "yearly",  label: "Yearly",  price: "$219.99", amount: 219.99, period: "/year",  periodShort: "/yr", badge: "Best value" },
 ];
 const WEEKLY_SUBTEXT = "Good for trying it out";
 
@@ -60,13 +60,13 @@ const FEATURES: Feature[] = [
     preview: (
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <div className="px-2 py-1 rounded-md bg-primary/20 text-primary text-[10px] font-black">72% STRONG PICK</div>
-          <span className="text-[10px] text-foreground/50">Over 24.5 Pts</span>
+          <div className="px-2 py-1 rounded-md bg-primary/20 text-primary text-[11px] font-black">72% STRONG PICK</div>
+          <span className="text-[11px] text-foreground/50">Over 24.5 Pts</span>
         </div>
         <div className="grid grid-cols-4 gap-1">
           {[{ l: "Season", v: "68%" }, { l: "L10", v: "80%" }, { l: "L5", v: "100%" }, { l: "H2H", v: "75%" }].map(s => (
             <div key={s.l} className="text-center rounded bg-foreground/5 py-1 px-0.5">
-              <div className="text-[9px] text-foreground/50">{s.l}</div>
+              <div className="text-[11px] text-foreground/50">{s.l}</div>
               <div className="text-[11px] font-bold text-foreground">{s.v}</div>
             </div>
           ))}
@@ -81,9 +81,9 @@ const FEATURES: Feature[] = [
     description: "Know exactly when the books are wrong — see your edge and expected value on every prop.",
     preview: (
       <div className="space-y-1.5">
-        <div className="flex items-center justify-between text-[10px]"><span className="text-foreground/50">Model</span><span className="font-bold text-primary">72%</span></div>
+        <div className="flex items-center justify-between text-[11px]"><span className="text-foreground/50">Model</span><span className="font-bold text-primary">72%</span></div>
         <div className="w-full h-1.5 rounded-full bg-foreground/10 overflow-hidden"><div className="h-full bg-primary" style={{ width: "72%" }} /></div>
-        <div className="flex items-center justify-between text-[10px]"><span className="text-foreground/50">Books Implied</span><span className="font-bold text-danger">52%</span></div>
+        <div className="flex items-center justify-between text-[11px]"><span className="text-foreground/50">Books Implied</span><span className="font-bold text-danger">52%</span></div>
         <div className="w-full h-1.5 rounded-full bg-foreground/10 overflow-hidden"><div className="h-full bg-danger" style={{ width: "52%" }} /></div>
         <div className="text-center pt-1"><span className="text-[11px] font-black text-primary">+20% Edge · +14.2% EV</span></div>
       </div>
@@ -97,10 +97,10 @@ const FEATURES: Feature[] = [
     preview: (
       <div className="rounded-lg border border-border bg-foreground/5 p-2 space-y-1.5">
         <div className="flex items-center justify-between">
-          <div className="text-[10px]"><span className="font-bold text-foreground">DraftKings</span> <span className="text-primary">+150</span></div>
-          <div className="text-[10px]"><span className="font-bold text-foreground">FanDuel</span> <span className="text-primary">-140</span></div>
+          <div className="text-[11px]"><span className="font-bold text-foreground">DraftKings</span> <span className="text-primary">+150</span></div>
+          <div className="text-[11px]"><span className="font-bold text-foreground">FanDuel</span> <span className="text-primary">-140</span></div>
         </div>
-        <div className="text-center"><span className="px-2 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-black">+3.2% GUARANTEED</span></div>
+        <div className="text-center"><span className="px-2 py-0.5 rounded bg-primary/20 text-primary text-[11px] font-black">+3.2% GUARANTEED</span></div>
       </div>
     ),
   },
@@ -113,8 +113,8 @@ const FEATURES: Feature[] = [
       <div className="space-y-1.5">
         {[{ p: "Jokić O24.5 Pts", c: 89 }, { p: "Tatum O7.5 Reb", c: 76 }].map(pick => (
           <div key={pick.p} className="flex items-center justify-between rounded-lg bg-foreground/5 border border-border px-2 py-1.5">
-            <span className="text-[10px] font-semibold text-foreground">{pick.p}</span>
-            <span className={`text-[10px] font-black ${pick.c >= 80 ? "text-primary" : "text-warning"}`}>{pick.c}%</span>
+            <span className="text-[11px] font-semibold text-foreground">{pick.p}</span>
+            <span className={`text-[11px] font-black ${pick.c >= 80 ? "text-primary" : "text-warning"}`}>{pick.c}%</span>
           </div>
         ))}
       </div>
@@ -129,10 +129,10 @@ const FEATURES: Feature[] = [
       <div className="space-y-1">
         {[{ b: "DraftKings", o: "-110", best: true }, { b: "FanDuel", o: "-115" }, { b: "BetMGM", o: "-120" }].map(r => (
           <div key={r.b} className="flex items-center justify-between rounded bg-foreground/5 px-2 py-1">
-            <span className="text-[10px] text-foreground font-medium">{r.b}</span>
+            <span className="text-[11px] text-foreground font-medium">{r.b}</span>
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold text-foreground">{r.o}</span>
-              {r.best && <span className="text-[8px] font-black text-primary bg-primary/20 px-1 rounded">BEST</span>}
+              <span className="text-[11px] font-bold text-foreground">{r.o}</span>
+              {r.best && <span className="text-[11px] font-black text-primary bg-primary/20 px-1 rounded">BEST</span>}
             </div>
           </div>
         ))}
@@ -148,8 +148,8 @@ const FEATURES: Feature[] = [
       <div className="flex gap-1 justify-between">
         {[{ l: "Win Rate", v: "67%" }, { l: "Profit", v: "+$482" }, { l: "ROI", v: "+12.3%" }].map(s => (
           <div key={s.l} className="flex-1 text-center rounded-md bg-foreground/5 py-1 px-1">
-            <div className="text-[8px] text-foreground/50">{s.l}</div>
-            <div className="text-[10px] font-bold text-primary">{s.v}</div>
+            <div className="text-[11px] text-foreground/50">{s.l}</div>
+            <div className="text-[11px] font-bold text-primary">{s.v}</div>
           </div>
         ))}
       </div>
@@ -330,7 +330,7 @@ export default function PaywallPage() {
 
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-4">
-          <div className="text-[11px] font-extrabold tracking-[0.18em] uppercase text-primary">Sentinel Premium</div>
+          <div className="text-[11px] font-extrabold tracking-[0.04em] uppercase text-primary">Sentinel Premium</div>
           <h1 className="text-[30px] leading-[1.05] font-extrabold tracking-tight mt-1">Start Winning With Data</h1>
           <p className="mt-2 text-sm text-foreground/60">AI-powered props. Real edge. Proven results.</p>
         </motion.div>
@@ -381,7 +381,7 @@ export default function PaywallPage() {
                   animation: isSelected ? "card-pulse 3s ease-in-out infinite" : undefined,
                 }}
               >
-                <div className="absolute -top-px left-1/2 -translate-x-1/2 bg-[hsl(var(--nba-yellow))] text-black text-[8px] font-black px-2.5 py-0.5 rounded-b-lg tracking-widest uppercase">
+                <div className="absolute -top-px left-1/2 -translate-x-1/2 bg-[hsl(var(--nba-yellow))] text-black text-[11px] font-black px-2.5 py-0.5 rounded-b-lg tracking-widest uppercase">
                   MOST POPULAR
                 </div>
 
@@ -401,13 +401,13 @@ export default function PaywallPage() {
                       <span className="text-[34px] font-black text-primary tabular-nums leading-none">{priceFor("monthly")}</span>
                       <span className="text-[11px] font-bold text-foreground/50">{monthly.period}</span>
                     </div>
-                    <div className="text-[10px] font-semibold text-foreground/70 mt-1">
+                    <div className="text-[11px] font-semibold text-foreground/70 mt-1">
                       {TRIAL_DAYS} days free, then {priceFor("monthly")}{monthly.period}
                     </div>
                     {copy.monthly.saving && (
                       <div className="flex items-center gap-0.5 mt-1 justify-end">
                         <Check className="w-3 h-3 text-primary" strokeWidth={3} />
-                        <span className="text-[10px] font-semibold text-primary">{copy.monthly.saving}</span>
+                        <span className="text-[11px] font-semibold text-primary">{copy.monthly.saving}</span>
                       </div>
                     )}
                   </div>
@@ -448,7 +448,7 @@ export default function PaywallPage() {
                   }}
                 >
                   {plan.badge && (
-                    <div className="absolute -top-px left-1/2 -translate-x-1/2 bg-secondary text-warning text-[8px] font-black px-2 py-0.5 rounded-b-md tracking-wider uppercase border-x border-b border-border whitespace-nowrap">
+                    <div className="absolute -top-px left-1/2 -translate-x-1/2 bg-secondary text-warning text-[11px] font-black px-2 py-0.5 rounded-b-md tracking-wider uppercase border-x border-b border-border whitespace-nowrap">
                       {plan.badge}
                     </div>
                   )}
@@ -467,20 +467,20 @@ export default function PaywallPage() {
                     <div className={`text-[24px] font-extrabold tabular-nums leading-none ${isSelected ? "text-primary" : isWeekly ? "text-foreground/80" : "text-foreground"}`}>
                       {priceFor(plan.id)}
                     </div>
-                    {subtext && <div className={`text-[10px] mt-1 ${isWeekly ? "text-foreground/50" : "text-foreground/60"}`}>{subtext}</div>}
-                    <div className="text-[9px] font-semibold text-foreground/70 mt-1 leading-tight">
+                    {subtext && <div className={`text-[11px] mt-1 ${isWeekly ? "text-foreground/50" : "text-foreground/60"}`}>{subtext}</div>}
+                    <div className="text-[11px] font-semibold text-foreground/70 mt-1 leading-tight">
                       {TRIAL_DAYS} days free, then {priceFor(plan.id)}{plan.periodShort}
                     </div>
                   </div>
 
                   {extraLine && (
-                    <div className="text-[10px] font-bold text-primary">{extraLine}</div>
+                    <div className="text-[11px] font-bold text-primary">{extraLine}</div>
                   )}
 
                   {saving && (
                     <div className="flex items-start gap-1">
                       <Check className="w-3 h-3 text-primary flex-shrink-0 mt-px" strokeWidth={3} />
-                      <span className="text-[10px] font-semibold text-primary leading-tight">{saving}</span>
+                      <span className="text-[11px] font-semibold text-primary leading-tight">{saving}</span>
                     </div>
                   )}
                 </motion.button>
@@ -507,7 +507,7 @@ export default function PaywallPage() {
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold text-foreground">{f.label}</div>
                     {!isExpanded && (
-                      <div className="text-[10.5px] text-foreground/45 truncate mt-0.5">{f.bullets}</div>
+                      <div className="text-[11px] text-foreground/45 truncate mt-0.5">{f.bullets}</div>
                     )}
                   </div>
                   <ChevronDown className={`w-4 h-4 text-foreground/50 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
@@ -532,7 +532,7 @@ export default function PaywallPage() {
           })}
         </motion.div>
         {/* Trust signal row */}
-        <div className="mt-5 flex items-center gap-3 justify-center text-[10px] text-foreground/40">
+        <div className="mt-5 flex items-center gap-3 justify-center text-[11px] text-foreground/40">
           <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Secure & Encrypted</span>
           <span className="w-1 h-1 rounded-full bg-foreground/20" />
           <span>18+ Bet Responsibly</span>
@@ -578,13 +578,13 @@ export default function PaywallPage() {
             Restore Purchases
           </button>
 
-          <p className="text-[10px] text-foreground/40 mt-3 leading-snug px-1">
+          <p className="text-[11px] text-foreground/40 mt-3 leading-snug px-1">
             Subscription auto-renews at the selected price until cancelled. Cancel anytime in your
             Apple ID subscription settings at least 24 hours before the end of the current period.
             Any unused portion of a free trial is forfeited when purchasing a subscription.
           </p>
 
-          <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] text-foreground/50">
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-foreground/50">
             <button onClick={() => void openExternal(TERMS_URL)} className="underline underline-offset-2 hover:text-foreground/80">
               Terms of Use
             </button>

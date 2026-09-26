@@ -35,7 +35,7 @@ function TeamColumn({ name, sportTitle, side }: { name: string; sportTitle: stri
           loses the half that identifies the team. Two lines keeps the name
           intact at phone width. */}
       <p className="mt-2 line-clamp-2 text-[12.5px] font-bold leading-tight text-foreground">{name}</p>
-      <p className="mt-0.5 text-[10px] text-muted-foreground/55">{side}</p>
+      <p className="mt-0.5 text-[11px] text-muted-foreground/55">{side}</p>
     </div>
   );
 }
@@ -81,11 +81,11 @@ export function MatchupCard({
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
         <TeamColumn name={awayTeam} sportTitle={sportTitle} side="Away" />
         <div className="px-1 text-center">
-          <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-muted-foreground/55">{countdown.label}</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55">{countdown.label}</p>
           <p className={`my-0.5 text-[19px] font-black tabular-nums ${countdown.phase === "live" ? "text-nba-green" : "text-foreground"}`}>
             {countdown.display}
           </p>
-          {venue ? <p className="text-[10px] text-muted-foreground/70">{venue}</p> : null}
+          {venue ? <p className="text-[11px] text-muted-foreground/70">{venue}</p> : null}
         </div>
         <TeamColumn name={homeTeam} sportTitle={sportTitle} side="Home" />
       </div>
@@ -93,7 +93,7 @@ export function MatchupCard({
       {showStarters && (
         <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-t border-foreground/[0.07] pt-3.5">
           <StarterColumn starter={awayStarter} align="left" better={bothEras && awayEra! < homeEra!} />
-          <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/45">Starters</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/45">Starters</span>
           <StarterColumn starter={homeStarter} align="right" better={bothEras && homeEra! < awayEra!} />
         </div>
       )}
@@ -119,7 +119,7 @@ function StarterColumn({
           <span className={`text-[12px] font-bold ${better ? "text-nba-green" : "text-foreground"}`}>{era.toFixed(2)}</span> ERA
         </p>
       ) : (
-        <p className="mt-0.5 text-[10px] text-muted-foreground/45">ERA unavailable</p>
+        <p className="mt-0.5 text-[11px] text-muted-foreground/45">ERA unavailable</p>
       )}
     </div>
   );

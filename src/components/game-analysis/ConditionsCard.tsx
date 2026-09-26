@@ -65,12 +65,12 @@ export function ConditionsCard({ context }: { context?: GameAnalysisContext | nu
             className="rounded-2xl px-1.5 py-3 text-center"
             style={{ background: "hsl(var(--card) / 0.7)", border: "1px solid hsl(var(--border) / 0.35)" }}
           >
-            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{tile.label}</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tile.label}</p>
             <p className="my-1 flex items-center justify-center gap-1 text-[18px] font-bold text-foreground">
               {tile.icon ? <ArrowUp className="h-3.5 w-3.5 text-nba-green" /> : null}
               {tile.value}
             </p>
-            <p className="truncate text-[10px] text-muted-foreground/55">{tile.note}</p>
+            <p className="truncate text-[11px] text-muted-foreground/55">{tile.note}</p>
           </div>
         ))}
       </div>

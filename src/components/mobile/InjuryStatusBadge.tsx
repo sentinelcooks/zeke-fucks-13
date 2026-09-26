@@ -67,7 +67,7 @@ export function InjuryStatusBadge({ status, colorClass, bgClass }: Props) {
     <div className="relative ml-auto" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className={`text-[9px] font-bold px-2 py-1 rounded-lg ${bgClass} ${colorClass} active:scale-95 transition-transform`}
+        className={`text-[11px] font-bold px-2 py-1 rounded-lg ${bgClass} ${colorClass} active:scale-95 transition-transform`}
       >
         {status}
       </button>
