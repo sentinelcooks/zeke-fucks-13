@@ -94,7 +94,7 @@ export default function UfcLegInput({ data, onChange }: Props) {
     <div className="space-y-2">
       <div className="flex gap-2 items-center">
         {renderInput(data.fighter1, 1, sug1, show1, ref1 as any, "Fighter 1...")}
-        <span className="text-[10px] font-black text-accent bg-accent/10 border border-accent/20 px-2 py-1 rounded-lg shrink-0 shadow-[0_0_8px_hsl(var(--primary) / 0.15)]">VS</span>
+        <span className="text-[10px] font-black text-accent bg-accent/10 border border-accent/20 px-2 py-1 rounded-lg shrink-0 shadow-[0_0_8px_hsl(var(--primary)_/_0.15)]">VS</span>
         {renderInput(data.fighter2, 2, sug2, show2, ref2 as any, "Fighter 2...")}
       </div>
       {/* Pick which fighter */}
@@ -103,13 +103,13 @@ export default function UfcLegInput({ data, onChange }: Props) {
           <button onClick={() => onChange({ ...data, pickFighter: "fighter1" })}
             className={`flex-1 py-2 rounded-xl text-[10px] font-bold transition-all border ${
               data.pickFighter === "fighter1"
-                ? "bg-accent/15 border-accent/40 text-accent shadow-[0_0_10px_hsl(var(--primary) / 0.15)]"
+                ? "bg-accent/15 border-accent/40 text-accent shadow-[0_0_10px_hsl(var(--primary)_/_0.15)]"
                 : "bg-secondary/50 border-border/40 text-muted-foreground/50"
             }`}>{data.fighter1.split(" ").pop()}</button>
           <button onClick={() => onChange({ ...data, pickFighter: "fighter2" })}
             className={`flex-1 py-2 rounded-xl text-[10px] font-bold transition-all border ${
               data.pickFighter === "fighter2"
-                ? "bg-accent/15 border-accent/40 text-accent shadow-[0_0_10px_hsl(var(--primary) / 0.15)]"
+                ? "bg-accent/15 border-accent/40 text-accent shadow-[0_0_10px_hsl(var(--primary)_/_0.15)]"
                 : "bg-secondary/50 border-border/40 text-muted-foreground/50"
             }`}>{data.fighter2.split(" ").pop()}</button>
         </div>

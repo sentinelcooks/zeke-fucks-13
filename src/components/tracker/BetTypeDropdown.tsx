@@ -143,7 +143,7 @@ export function BetTypeDropdown({ sport, value, onChange }: BetTypeDropdownProps
         onChange={(e) => { setFilter(e.target.value); if (!open) setOpen(true); }}
         onFocus={() => { setOpen(true); setFilter(""); }}
         placeholder="Select or type..."
-        className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/55 outline-none transition-all duration-300 focus:shadow-[0_0_20px_hsl(var(--primary) / 0.08)]"
+        className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/55 outline-none transition-all duration-300 focus:shadow-[0_0_20px_hsl(var(--primary)_/_0.08)]"
         style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}
       />
       {open && (

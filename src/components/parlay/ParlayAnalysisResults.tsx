@@ -42,9 +42,9 @@ function getGradeBg(grade: string) {
 }
 
 function getGradeGlow(grade: string) {
-  if (grade === "strong") return "shadow-[0_0_15px_hsl(var(--success) / 0.2)]";
-  if (grade === "lean") return "shadow-[0_0_15px_hsl(var(--nba-yellow) / 0.2)]";
-  return "shadow-[0_0_15px_hsl(var(--danger) / 0.2)]";
+  if (grade === "strong") return "shadow-[0_0_15px_hsl(var(--success)_/_0.2)]";
+  if (grade === "lean") return "shadow-[0_0_15px_hsl(var(--nba-yellow)_/_0.2)]";
+  return "shadow-[0_0_15px_hsl(var(--danger)_/_0.2)]";
 }
 
 function getGradeBorderColor(grade: string) {

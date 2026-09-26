@@ -400,7 +400,7 @@ const UnitCalculatorSection = () => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.275 }}
       className={`vision-card overflow-hidden relative z-10 transition-shadow ${
-        showUnitRequiredHighlight && !unitSize ? "ring-1 ring-warning/50 shadow-[0_0_18px_hsl(var(--nba-yellow) / 0.12)]" : ""
+        showUnitRequiredHighlight && !unitSize ? "ring-1 ring-warning/50 shadow-[0_0_18px_hsl(var(--nba-yellow)_/_0.12)]" : ""
       }`}
     >
       <button

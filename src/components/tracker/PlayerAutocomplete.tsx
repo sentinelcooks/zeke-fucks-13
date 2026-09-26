@@ -241,7 +241,7 @@ export function PlayerAutocomplete({ sport, value, onChange, betType = "" }: Pla
           }
         }}
         placeholder={placeholder}
-        className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/55 outline-none transition-all duration-300 focus:shadow-[0_0_20px_hsl(var(--primary) / 0.08)]"
+        className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/55 outline-none transition-all duration-300 focus:shadow-[0_0_20px_hsl(var(--primary)_/_0.08)]"
         style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}
       />
       {open && suggestions.length > 0 && (

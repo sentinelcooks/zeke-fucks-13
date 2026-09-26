@@ -555,7 +555,7 @@ export default function PaywallPage() {
             onClick={handleSubscribe}
             disabled={isLoading}
             style={{ animation: isLoading ? undefined : "pulse-cta 2.5s ease-in-out infinite" }}
-            className="w-full py-[18px] rounded-full bg-primary text-primary-foreground font-extrabold text-[17px] shadow-[0_0_22px_hsl(var(--primary) / 0.25)] disabled:opacity-60 flex items-center justify-center gap-2"
+            className="w-full py-[18px] rounded-full bg-primary text-primary-foreground font-extrabold text-[17px] shadow-[0_0_22px_hsl(var(--primary)_/_0.25)] disabled:opacity-60 flex items-center justify-center gap-2"
           >
             {isLoading ? (
               <>

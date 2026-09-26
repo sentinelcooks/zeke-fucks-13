@@ -144,7 +144,7 @@ function SectionContainer({ children }: { children: React.ReactNode }) {
         @keyframes draw-line { from { stroke-dashoffset: 200 } to { stroke-dashoffset: 0 } }
       `}</style>
       {lightweight ? (
-        <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top,hsl(var(--primary) / 0.16),transparent_46%)]" />
+        <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top,hsl(var(--primary)_/_0.16),transparent_46%)]" />
       ) : (
         /* Atmospheric corner glows stay off the phone compositing path. */
         <div className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -689,7 +689,7 @@ const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { 
                 whileTap={lightweight ? undefined : { scale: 0.97 }}
                 className={`rounded-xl border px-3 py-3 text-left transition-all ${
                   active
-                    ? "border-primary bg-primary/5 shadow-[0_0_18px_hsl(var(--primary) / 0.15)]"
+                    ? "border-primary bg-primary/5 shadow-[0_0_18px_hsl(var(--primary)_/_0.15)]"
                     : "border-border bg-card"
                 }`}
               >
@@ -715,7 +715,7 @@ const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { 
                 whileTap={lightweight ? undefined : { scale: 0.97 }}
                 className={`relative rounded-xl border p-3 transition-all ${
                   active
-                    ? "border-primary bg-primary/5 shadow-[0_0_18px_hsl(var(--primary) / 0.15)]"
+                    ? "border-primary bg-primary/5 shadow-[0_0_18px_hsl(var(--primary)_/_0.15)]"
                     : "border-border bg-card"
                 }`}
               >
@@ -744,7 +744,7 @@ const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { 
           whileTap={lightweight ? undefined : { scale: 0.98 }}
           className={`mt-3 relative w-full rounded-xl border p-3 flex items-center gap-3 transition-all ${
             otherActive
-              ? "border-primary bg-primary/5 shadow-[0_0_18px_hsl(var(--primary) / 0.15)]"
+              ? "border-primary bg-primary/5 shadow-[0_0_18px_hsl(var(--primary)_/_0.15)]"
               : "border-border bg-card"
           }`}
         >

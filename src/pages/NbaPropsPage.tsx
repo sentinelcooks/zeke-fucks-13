@@ -1314,7 +1314,7 @@ const NbaPropsPage = () => {
                 </div>
               </div>
               <div className="relative group">
-                <div className="relative rounded-xl overflow-hidden transition-all duration-300 group-focus-within:shadow-[0_0_20px_hsl(var(--primary) / 0.08)]" style={{
+                <div className="relative rounded-xl overflow-hidden transition-all duration-300 group-focus-within:shadow-[0_0_20px_hsl(var(--primary)_/_0.08)]" style={{
                   background: 'hsl(var(--card) / 0.6)',
                   border: '1px solid hsl(var(--border) / 0.25)',
                 }}>
@@ -1407,7 +1407,7 @@ const NbaPropsPage = () => {
                 </div>
               </div>
               <div className="relative group">
-                <div className="relative rounded-xl overflow-hidden transition-all duration-300 group-focus-within:shadow-[0_0_20px_hsl(var(--primary) / 0.08)]" style={{
+                <div className="relative rounded-xl overflow-hidden transition-all duration-300 group-focus-within:shadow-[0_0_20px_hsl(var(--primary)_/_0.08)]" style={{
                   background: 'hsl(var(--card) / 0.6)',
                   border: '1px solid hsl(var(--border) / 0.25)',
                 }}>
@@ -1537,7 +1537,7 @@ const NbaPropsPage = () => {
             </div>
 
             <div className="relative group">
-              <div className="relative rounded-xl overflow-hidden transition-all duration-300 group-focus-within:shadow-[0_0_20px_hsl(var(--primary) / 0.08)]" style={{
+              <div className="relative rounded-xl overflow-hidden transition-all duration-300 group-focus-within:shadow-[0_0_20px_hsl(var(--primary)_/_0.08)]" style={{
                 background: 'hsl(var(--card) / 0.6)',
                 border: '1px solid hsl(var(--border) / 0.25)',
               }}>
@@ -1785,7 +1785,7 @@ const NbaPropsPage = () => {
 
               <div className="w-24">
                 <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2 text-center">Line</label>
-                <div className="rounded-xl overflow-hidden transition-colors focus-within:shadow-[0_0_12px_hsl(var(--primary) / 0.06)]" style={{
+                <div className="rounded-xl overflow-hidden transition-colors focus-within:shadow-[0_0_12px_hsl(var(--primary)_/_0.06)]" style={{
                   background: 'hsl(var(--card) / 0.5)',
                   border: '1px solid hsl(var(--border) / 0.25)',
                 }}>

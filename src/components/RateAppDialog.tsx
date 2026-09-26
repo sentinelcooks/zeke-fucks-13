@@ -64,7 +64,7 @@ export function RateAppDialog({ open, onClose }: RateAppDialogProps) {
             {[1, 2, 3, 4, 5].map((s) => (
               <Star
                 key={s}
-                className="w-7 h-7 fill-warning text-warning drop-shadow-[0_0_6px_hsl(var(--nba-yellow) / 0.4)]"
+                className="w-7 h-7 fill-warning text-warning drop-shadow-[0_0_6px_hsl(var(--nba-yellow)_/_0.4)]"
               />
             ))}
           </div>
