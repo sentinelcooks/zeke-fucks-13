@@ -20,6 +20,7 @@ Before touching any backend, database, or AI logic, read the relevant sub-doc:
 | [docs/claude/deployment-safety-rules.md](docs/claude/deployment-safety-rules.md) | Any multi-file change, migration, deploy, or Git push |
 | [docs/claude/codebase-memory-rules.md](docs/claude/codebase-memory-rules.md) | Session hygiene, token efficiency, architecture decisions |
 | [docs/claude/nfl-edge-engines.md](docs/claude/nfl-edge-engines.md) | Any NFL model, data ingest, NFL edge function or NFL admin analytics |
+| [docs/claude/ui-theme-rules.md](docs/claude/ui-theme-rules.md) | Any screen or component in `src/`: theme tokens only (Light/Dark), Playbook controls, `ThemedBar` for Chart.js, 11px minimum text |
 
 ## Use Plan Mode First For
 
