@@ -1,60 +1,36 @@
-import { motion } from "framer-motion";
-import sentinelLogo from "@/assets/sentinel-logo.jpg";
+import { useNavigate } from "react-router-dom";
+import { BrandMark } from "@/components/brand/BrandMark";
 
 interface MobileHeaderProps {
   title: string;
   subtitle?: string;
+  /** Up to two letters for the profile button; falls back to a generic label. */
+  initials?: string;
 }
 
-export function MobileHeader({ title }: MobileHeaderProps) {
-  const time = new Date();
-  const dateStr = time.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+/** Sticky glass header: brand mark + screen title, profile button opens Settings. */
+export function MobileHeader({ title, initials }: MobileHeaderProps) {
+  const navigate = useNavigate();
+  const dateStr = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
   return (
-    <header className="sticky top-0 z-40 pt-safe">
-      {/* Solid background — no frosted glass gap at top */}
-      <div className="absolute inset-0" style={{
-        background: 'hsl(228, 30%, 6%)',
-      }} />
-      {/* Bottom border gradient */}
-      <div className="absolute bottom-0 left-0 right-0 h-[1px]"
-        style={{ background: 'linear-gradient(90deg, transparent, hsla(250, 76%, 62%, 0.15), hsla(210, 100%, 60%, 0.08), transparent)' }} />
-
-      {/* Single compact row */}
-      <div className="relative z-10 flex items-center justify-between px-4 pt-1 pb-2.5">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="relative shrink-0">
-            <img
-              src={sentinelLogo}
-              alt="Sentinel"
-              className="w-8 h-8 rounded-lg object-cover"
-              style={{ boxShadow: '0 2px 6px hsla(228, 40%, 4%, 0.4), 0 0 0 1px hsla(228, 30%, 20%, 0.25)' }}
-            />
-            <motion.div
-              className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border-[1.5px] border-background"
-              style={{ background: 'hsl(158, 64%, 52%)' }}
-              animate={{ scale: [1, 1.15, 1] }}
-              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-            />
-          </div>
+    <header className="ios-blur sticky top-0 z-40 pt-safe shadow-[inset_0_-0.5px_0_hsl(var(--hairline))]">
+      <div className="flex items-center justify-between gap-3 px-4 pb-2.5 pt-1.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <BrandMark size={30} />
           <div className="min-w-0">
-            <motion.h1
-              className="text-[15px] font-extrabold text-foreground tracking-tight truncate"
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.25 }}
-            >
-              {title}
-            </motion.h1>
+            <p className="truncate text-[11px] font-semibold uppercase tracking-[0.02em] text-muted-foreground">{dateStr}</p>
+            <h1 className="truncate text-[17px] font-semibold leading-tight text-foreground">{title}</h1>
           </div>
         </div>
-
-        {/* Date pill */}
-        <div className="px-2 py-1 rounded-full flex items-center gap-1.5 shrink-0"
-          style={{ background: 'hsla(228, 20%, 12%, 0.6)', border: '1px solid hsla(228, 20%, 20%, 0.2)' }}>
-          <div className="w-1.5 h-1.5 rounded-full bg-nba-green animate-glow-pulse" />
-          <span className="text-[8px] font-bold text-muted-foreground/65 tracking-wider uppercase">{dateStr}</span>
-        </div>
+        <button
+          type="button"
+          onClick={() => navigate("/dashboard/settings")}
+          aria-label="Settings and account"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-fill/15 text-[15px] font-semibold text-muted-foreground shadow-[inset_0_0_0_0.5px_hsl(var(--hairline))] active:scale-95"
+        >
+          {initials || "Me"}
+        </button>
       </div>
     </header>
   );

@@ -10,14 +10,14 @@ import { UsernamePromptDialog } from "@/components/UsernamePromptDialog";
 import { useAuth } from "@/contexts/AuthContext";
 
 const routeTitles: Record<string, string> = {
-  "/dashboard/home": "Sentinel Dashboard",
+  "/dashboard/home": "Today",
   "/dashboard/games": "Games",
   "/dashboard/analyze": "Analyze",
   "/dashboard/moneyline": "Lines",
-  "/dashboard/picks": "Picks & Trends",
+  "/dashboard/picks": "Picks",
   "/dashboard/free-props": "Free Props",
-  "/dashboard/free-picks": "Picks & Trends",
-  "/dashboard/tracker": "Profit Tracker",
+  "/dashboard/free-picks": "Picks",
+  "/dashboard/tracker": "Tracker",
   "/dashboard/parlay": "Parlay Builder",
   "/dashboard/settings": "Settings",
   "/dashboard/arbitrage": "Arbitrage",
@@ -40,10 +40,18 @@ const DashboardLayout = () => {
     !authLoading && !!user && !!profile && !profileDisplayName && !metaDisplayName && !usernameSaved;
 
   const title = routeTitles[location.pathname] || "Sentinel";
+  const displayName = profileDisplayName || metaDisplayName || user?.email || "";
+  const initials = displayName
+    .replace(/@.*/, "")
+    .split(/[\s._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]!.toUpperCase())
+    .join("");
 
   // Update browser tab title
   useEffect(() => {
-    document.title = title === "Sentinel Dashboard" ? "Sentinel" : `${title} – Sentinel`;
+    document.title = title === "Today" ? "Sentinel" : `${title} – Sentinel`;
   }, [title]);
 
   // Tab-switch scroll restore
@@ -103,17 +111,11 @@ const DashboardLayout = () => {
 
   return (
     <div className="min-h-screen flex flex-col w-full min-w-0 bg-background max-w-[430px] mx-auto relative overflow-x-hidden">
-      {/* Atmospheric glow orbs — bridges onboarding aesthetic */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden z-0">
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[500px] h-[400px] rounded-full opacity-[0.18] blur-[120px]" style={{ background: 'hsl(265 80% 55%)' }} />
-        <div className="absolute bottom-0 right-0 w-[300px] h-[300px] rounded-full opacity-[0.06] blur-[100px]" style={{ background: 'hsl(142 100% 50%)' }} />
-      </div>
-      
       {/* Pinned header */}
-      <MobileHeader title={title} />
-      
-      {/* Main content */}
-      <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden pb-20">
+      <MobileHeader title={title} initials={initials} />
+
+      {/* Main content (bottom padding clears the floating tab bar) */}
+      <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden pb-28">
         <Outlet />
         <AppFooter />
       </main>
@@ -121,7 +123,7 @@ const DashboardLayout = () => {
       {/* Floating parlay slip */}
       <FloatingParlaySlip />
       
-      {/* Vision UI style bottom tabs */}
+      {/* Floating glass tab bar */}
       <BottomTabBar />
       <RateAppDialog open={showRate} onClose={() => setShowRate(false)} />
       <UsernamePromptDialog open={needsUsername} onSaved={() => setUsernameSaved(true)} />

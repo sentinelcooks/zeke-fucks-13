@@ -27,6 +27,8 @@ import { restorePurchases, getSubscriptionManagementURL } from "@/lib/revenuecat
 import { usePremium } from "@/contexts/PremiumContext";
 import { openExternal } from "@/lib/openExternal";
 import { resolveDisplayName } from "@/lib/displayName";
+import { useTheme } from "next-themes";
+import { PillTabs } from "@/components/playbook/controls";
 import {
   isPushSupported,
   requestAndRegisterPush,
@@ -68,6 +70,32 @@ const formatAccessDate = (value: string | null, includeTime: boolean) => {
     ? { dateStyle: "medium", timeStyle: "short" }
     : { dateStyle: "medium" }
   ).format(date);
+};
+
+const APPEARANCE_OPTIONS = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+] as const;
+
+const AppearanceSection = () => {
+  const { theme = "dark", setTheme } = useTheme();
+  return (
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="vision-card overflow-hidden relative z-10">
+      <div className="px-5 py-3 border-b border-border">
+        <span className="text-[13px] font-semibold uppercase tracking-[0.02em] text-muted-foreground">Appearance</span>
+      </div>
+      <div className="px-5 py-4 space-y-3">
+        <PillTabs
+          ariaLabel="Appearance"
+          value={theme as (typeof APPEARANCE_OPTIONS)[number]["value"]}
+          onChange={setTheme}
+          options={[...APPEARANCE_OPTIONS]}
+        />
+        <p className="text-[13px] text-muted-foreground">System matches your iPhone's Light or Dark setting.</p>
+      </div>
+    </motion.div>
+  );
 };
 
 const ContactUsSection = () => {
@@ -1096,42 +1124,28 @@ const SettingsPage = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Appearance */}
+      <AppearanceSection />
+
       {/* Odds Format */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="vision-card overflow-hidden relative z-10">
-        <div className="px-5 py-3 border-b border-border/20">
-          <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">Odds Format</span>
+        <div className="px-5 py-3 border-b border-border">
+          <span className="text-[13px] font-semibold uppercase tracking-[0.02em] text-muted-foreground">Odds Format</span>
         </div>
-        <div className="px-5 py-4 space-y-2">
-          <div className="flex items-center gap-3 mb-3">
-            <Hash className="w-5 h-5 text-accent/60" />
+        <div className="px-5 py-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <Hash className="w-5 h-5 text-primary" />
             <div>
-              <p className="text-[13px] font-bold text-foreground">Display Format</p>
-              <p className="text-[9px] text-muted-foreground/55">Applies to all odds across the app</p>
+              <p className="text-[17px] font-semibold text-foreground">Display Format</p>
+              <p className="text-[13px] text-muted-foreground">Applies to all odds across the app</p>
             </div>
           </div>
-          <div className="flex rounded-xl p-1 gap-1" style={{
-            background: 'hsla(228, 20%, 8%, 0.6)',
-            border: '1px solid hsla(228, 30%, 16%, 0.25)',
-          }}>
-            {ODDS_FORMATS.map((fmt) => (
-              <button
-                key={fmt.value}
-                onClick={() => handleOddsFormatChange(fmt.value as "american" | "decimal")}
-                className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 rounded-lg text-center transition-all duration-300 ${
-                  oddsFormat === fmt.value
-                    ? "text-[hsl(228_30%_8%)]"
-                    : "text-muted-foreground/65 hover:text-foreground/50"
-                }`}
-                style={oddsFormat === fmt.value ? {
-                  background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))',
-                  boxShadow: '0 4px 12px -2px hsla(142,100%,50%,0.3)',
-                } : {}}
-              >
-                <span className="text-[11px] font-bold tracking-wider">{fmt.label}</span>
-                <span className={`text-[9px] font-semibold ${oddsFormat === fmt.value ? "text-[hsl(228_30%_8%)]/75" : "text-muted-foreground/50"}`}>{fmt.example}</span>
-              </button>
-            ))}
-          </div>
+          <PillTabs
+            ariaLabel="Odds format"
+            value={oddsFormat}
+            onChange={(v) => handleOddsFormatChange(v)}
+            options={ODDS_FORMATS.map((fmt) => ({ value: fmt.value as "american" | "decimal", label: fmt.label, sub: fmt.example }))}
+          />
         </div>
       </motion.div>
 
