@@ -7,7 +7,8 @@ import logoNfl from "@/assets/logo-nfl.png";
 import logoUfc from "@/assets/logo-ufc.png";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Clock, Loader2, Calendar, Bell, BellOff, RefreshCw, Swords, Search, ChevronDown, ChevronRight } from "lucide-react";
+import { Clock, Loader2, Calendar, Bell, BellOff, RefreshCw, Swords, Search, ChevronDown, ChevronRight, MapPin } from "lucide-react";
+import { CircleButton } from "@/components/playbook/controls";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -74,15 +75,6 @@ const SPORT_MAP: Record<Exclude<SportFilter, "ufc">, string> = {
   mlb: "baseball_mlb",
   nhl: "icehockey_nhl",
   nfl: "americanfootball_nfl",
-};
-
-const SPORT_COLOR: Record<SportFilter, string> = {
-  nba: "#1D428A",
-  wnba: "#E03A3E",
-  mlb: "#002D72",
-  nhl: "#111111",
-  nfl: "#013369",
-  ufc: "#3a1518",
 };
 
 const SPORT_LOGO: Partial<Record<SportFilter, string>> = {
@@ -722,47 +714,39 @@ const GamesPage = () => {
     return (
       <motion.div {...stagger(index)} className={`vision-card p-4 relative overflow-hidden ${isEnded ? 'opacity-75' : ''}`}>
         {isLive || isHalftime ? (
-          <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full" style={{
-            background: 'hsl(var(--success) / 0.12)',
-            border: '1px solid hsl(var(--success) / 0.25)',
-            animation: 'live-glow 2.5s ease-in-out infinite',
-          }}>
-            <div className="w-1.5 h-1.5 rounded-full bg-success" style={{ animation: 'live-dot 2s ease-in-out infinite' }} />
-            <span className="text-[8px] font-bold uppercase tracking-wider" style={{ color: 'hsl(var(--success))' }}>Live</span>
+          <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-1">
+            <div className="h-1.5 w-1.5 rounded-full bg-success" style={{ animation: 'live-dot 2s ease-in-out infinite' }} />
+            <span className="text-[12px] font-semibold text-success">Live</span>
           </div>
         ) : isEnded ? (
-          <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full" style={{
-            background: 'hsl(var(--muted-foreground) / 0.12)',
-            border: '1px solid hsl(var(--muted-foreground) / 0.25)',
-          }}>
-            <span className="text-[8px] font-bold uppercase tracking-wider" style={{ color: 'hsl(var(--muted-foreground))' }}>Ended</span>
+          <div className="absolute top-3 right-3 z-10 flex items-center rounded-full bg-fill/15 px-2.5 py-1">
+            <span className="text-[12px] font-semibold text-muted-foreground">Final</span>
           </div>
         ) : (
-          <button
+          <CircleButton
+            size="sm"
             onClick={(e) => { e.stopPropagation(); toggleNotification(game.id, `${game.away_team} vs ${game.home_team}`, game.commence_time, game.sport_key, game.home_team, game.away_team); }}
-            className="absolute top-3 right-3 z-10 p-1.5 rounded-full transition-all"
-            style={{
-              background: isNotified ? 'hsl(var(--primary) / 0.15)' : 'transparent',
-              border: isNotified ? '1px solid hsl(var(--primary) / 0.3)' : '1px solid transparent',
-            }}
+            aria-label={isNotified ? "Turn off game alert" : "Alert me before this game"}
+            aria-pressed={isNotified}
+            className={`absolute top-3 right-3 z-10 ${isNotified ? "text-primary" : "text-muted-foreground"}`}
           >
-            {isNotified ? <Bell className="w-3.5 h-3.5 text-accent" /> : <BellOff className="w-3.5 h-3.5 text-muted-foreground/40" />}
-          </button>
+            {isNotified ? <Bell /> : <BellOff />}
+          </CircleButton>
         )}
 
         <div className="flex items-center justify-between mb-3 pr-16">
-          <div className="flex items-center gap-2">
-            <Clock className="w-3 h-3 text-muted-foreground/55" />
-            <span className="text-[10px] font-bold text-muted-foreground/65 uppercase tracking-wider">
+          <div className="flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-[13px] font-semibold text-muted-foreground">
               {isEnded ? "Final" : isLive || isHalftime ? "Live" : formatTime(game.commence_time)}
             </span>
           </div>
           {(isLive || isHalftime) ? (
-            <span className="text-[10px] font-bold whitespace-nowrap shrink-0 ml-2" style={{ color: 'hsl(var(--success))' }}>
+            <span className="text-[13px] font-semibold whitespace-nowrap shrink-0 ml-2 text-success">
               {isHalftime ? "Halftime" : getLiveDetail()}
             </span>
           ) : (
-            <span className="text-[10px] font-medium whitespace-nowrap shrink-0 ml-2" style={{ color: "hsl(var(--muted-foreground))" }}>
+            <span className="text-[13px] whitespace-nowrap shrink-0 ml-2 text-muted-foreground">
               {spreadLabel} · {totalLabel}
             </span>
           )}
@@ -771,30 +755,30 @@ const GamesPage = () => {
         {/* Teams + ML */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-muted-foreground/55 uppercase w-8">Away</span>
+            <span className="w-10 text-[11px] font-semibold uppercase text-muted-foreground">Away</span>
             {(() => {
               const url = game.away_logo || (sport === "wnba" ? "" : getTeamLogoUrl(game.away_team, sport as "nba" | "mlb" | "nhl" | "nfl"));
               const initials = game.away_team.split(" ").map(w => w[0]).join("").slice(0, 2);
               return url ? (
-                <img src={url} alt="" className="w-5 h-5 object-contain" onError={(e) => {
+                <img src={url} alt="" className="h-7 w-7 object-contain" onError={(e) => {
                   const el = e.currentTarget;
                   const fallback = document.createElement("div");
-                  fallback.className = "w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-muted-foreground shrink-0";
+                  fallback.className = "h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold text-muted-foreground shrink-0";
                   fallback.style.background = "hsl(var(--secondary) / 0.6)";
                   fallback.textContent = initials;
                   el.parentElement?.replaceChild(fallback, el);
                 }} />
               ) : (
-                <div className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-muted-foreground shrink-0" style={{ background: "hsl(var(--secondary) / 0.6)" }}>{initials}</div>
+                <div className="h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold text-muted-foreground shrink-0" style={{ background: "hsl(var(--secondary) / 0.6)" }}>{initials}</div>
               );
             })()}
-            <span className={`text-[13px] font-bold flex-1 truncate ${awayWon ? 'text-success' : 'text-foreground'}`}>{game.away_team}</span>
+            <span className={`text-[17px] font-semibold flex-1 truncate ${awayWon ? 'text-success' : 'text-foreground'}`}>{game.away_team}</span>
             {odds?.awayEV != null && !isEnded && !isLive && (
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md" style={{ background: evColor(odds.awayEV), color: evTextColor(odds.awayEV) }}>
+              <span className="text-[12px] font-semibold px-2 py-0.5 rounded-full" style={{ background: evColor(odds.awayEV), color: evTextColor(odds.awayEV) }}>
                 {odds.awayEV > 0 ? "+" : ""}{odds.awayEV}% EV
               </span>
             )}
-            <span className="text-[12px] font-bold shrink-0" style={{
+            <span className="text-[17px] font-semibold tabular-nums shrink-0" style={{
               color: (isLive || isEnded) && hasScore
                 ? awayWon ? 'hsl(var(--success))' : 'hsl(var(--foreground))'
                 : mlColor(odds?.awayML ?? null)
@@ -802,32 +786,32 @@ const GamesPage = () => {
               {(isLive || isEnded) && hasScore ? game.score!.away ?? '-' : odds?.awayML ? fmt(odds.awayML) : 'Odds unavailable'}
             </span>
           </div>
-          <div className="h-px w-full" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--secondary) / 0.5), transparent)' }} />
+          <div className="h-px w-full bg-border" />
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-muted-foreground/55 uppercase w-8">Home</span>
+            <span className="w-10 text-[11px] font-semibold uppercase text-muted-foreground">Home</span>
             {(() => {
               const url = game.home_logo || (sport === "wnba" ? "" : getTeamLogoUrl(game.home_team, sport as "nba" | "mlb" | "nhl" | "nfl"));
               const initials = game.home_team.split(" ").map(w => w[0]).join("").slice(0, 2);
               return url ? (
-                <img src={url} alt="" className="w-5 h-5 object-contain" onError={(e) => {
+                <img src={url} alt="" className="h-7 w-7 object-contain" onError={(e) => {
                   const el = e.currentTarget;
                   const fallback = document.createElement("div");
-                  fallback.className = "w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-muted-foreground shrink-0";
+                  fallback.className = "h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold text-muted-foreground shrink-0";
                   fallback.style.background = "hsl(var(--secondary) / 0.6)";
                   fallback.textContent = initials;
                   el.parentElement?.replaceChild(fallback, el);
                 }} />
               ) : (
-                <div className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-muted-foreground shrink-0" style={{ background: "hsl(var(--secondary) / 0.6)" }}>{initials}</div>
+                <div className="h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold text-muted-foreground shrink-0" style={{ background: "hsl(var(--secondary) / 0.6)" }}>{initials}</div>
               );
             })()}
-            <span className={`text-[13px] font-bold flex-1 truncate ${homeWon ? 'text-success' : 'text-foreground'}`}>{game.home_team}</span>
+            <span className={`text-[17px] font-semibold flex-1 truncate ${homeWon ? 'text-success' : 'text-foreground'}`}>{game.home_team}</span>
             {odds?.homeEV != null && !isEnded && !isLive && (
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md" style={{ background: evColor(odds.homeEV), color: evTextColor(odds.homeEV) }}>
+              <span className="text-[12px] font-semibold px-2 py-0.5 rounded-full" style={{ background: evColor(odds.homeEV), color: evTextColor(odds.homeEV) }}>
                 {odds.homeEV > 0 ? "+" : ""}{odds.homeEV}% EV
               </span>
             )}
-            <span className="text-[12px] font-bold shrink-0" style={{
+            <span className="text-[17px] font-semibold tabular-nums shrink-0" style={{
               color: (isLive || isEnded) && hasScore
                 ? homeWon ? 'hsl(var(--success))' : 'hsl(var(--foreground))'
                 : mlColor(odds?.homeML ?? null)
@@ -841,20 +825,20 @@ const GamesPage = () => {
         {odds && !isEnded && !isLive && (odds.homeSpread != null || odds.totalLine != null) && (
           <div className="mt-3 grid grid-cols-2 gap-2">
             {odds.homeSpread != null && (
-              <div className="rounded-lg px-2.5 py-1.5" style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.2)' }}>
-                <div className="text-[8px] font-bold text-muted-foreground/50 uppercase tracking-wider mb-0.5">Spread</div>
+              <div className="rounded-xl bg-secondary/60 px-3 py-2">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground mb-0.5">Spread</div>
                 <div className="flex justify-between items-center">
-                  <span className="text-[11px] font-bold text-foreground">{spreadLabel}</span>
-                  <span className="text-[10px] text-muted-foreground/65">{odds.homeSpreadOdds ? fmt(odds.homeSpreadOdds) : ""}</span>
+                  <span className="text-[15px] font-semibold tabular-nums text-foreground">{spreadLabel}</span>
+                  <span className="text-[13px] tabular-nums text-muted-foreground">{odds.homeSpreadOdds ? fmt(odds.homeSpreadOdds) : ""}</span>
                 </div>
               </div>
             )}
             {odds.totalLine != null && (
-              <div className="rounded-lg px-2.5 py-1.5" style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.2)' }}>
-                <div className="text-[8px] font-bold text-muted-foreground/50 uppercase tracking-wider mb-0.5">Total</div>
+              <div className="rounded-xl bg-secondary/60 px-3 py-2">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground mb-0.5">Total</div>
                 <div className="flex justify-between items-center">
-                  <span className="text-[11px] font-bold text-foreground">{odds.totalLine}</span>
-                  <span className="text-[10px] text-muted-foreground/65">
+                  <span className="text-[15px] font-semibold tabular-nums text-foreground">{odds.totalLine}</span>
+                  <span className="text-[13px] tabular-nums text-muted-foreground">
                     O {odds.overOdds ? fmt(odds.overOdds) : "—"} / U {odds.underOdds ? fmt(odds.underOdds) : "—"}
                   </span>
                 </div>
@@ -863,7 +847,7 @@ const GamesPage = () => {
           </div>
         )}
         {!hasDisplayedOdds && !isEnded && !isLive && !isHalftime && (
-          <div className="mt-3 text-center text-[10px] font-medium text-muted-foreground/65">
+          <div className="mt-3 text-center text-[13px] text-muted-foreground">
             Odds unavailable
           </div>
         )}
@@ -879,17 +863,9 @@ const GamesPage = () => {
               },
             });
           }}
-          className="mt-3 w-full flex items-center justify-center gap-2 transition-all hover:opacity-80"
-          style={{
-            background: "hsl(var(--card))",
-            border: "1px solid hsl(var(--border))",
-            borderRadius: "10px",
-            color: "hsl(var(--muted-foreground))",
-            fontSize: "13px",
-            height: "36px",
-          }}
+          className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-primary/10 text-[15px] font-semibold text-primary transition-opacity active:opacity-70"
         >
-          <Search className="w-3.5 h-3.5" />
+          <Search className="h-4 w-4" />
           Analyze Matchup
         </button>
       </motion.div>
@@ -908,11 +884,11 @@ const GamesPage = () => {
         {src ? (
           <img src={src} alt={name} className="w-full h-full object-cover object-top scale-[1.35]" onError={(e) => {
             (e.target as HTMLImageElement).style.display = 'none';
-            (e.target as HTMLImageElement).parentElement!.innerHTML = '<div class="w-full h-full flex items-center justify-center"><span class="text-sm">🥊</span></div>';
+            (e.target as HTMLImageElement).parentElement!.innerHTML = `<div class="w-full h-full flex items-center justify-center text-[13px] font-semibold text-muted-foreground">${name.split(" ").map((w) => w[0]).join("").slice(0, 2)}</div>`;
           }} />
         ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <span className="text-sm">🥊</span>
+          <div className="w-full h-full flex items-center justify-center text-[13px] font-semibold text-muted-foreground">
+            {name.split(" ").map((w) => w[0]).join("").slice(0, 2)}
           </div>
         )}
       </div>
@@ -990,45 +966,34 @@ const GamesPage = () => {
     <motion.div {...stagger(index)} className={`vision-card p-4 relative overflow-hidden ${isFinal ? 'opacity-75' : ''}`}>
       <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
         {fight.isMainEvent && (
-          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{
-            background: 'hsl(var(--primary) / 0.12)',
-            border: '1px solid hsl(var(--primary) / 0.2)',
-          }}>
-            <span className="text-[8px] font-bold text-accent uppercase tracking-wider">Main Event</span>
+          <div className="flex items-center rounded-full bg-primary/10 px-2.5 py-1">
+            <span className="text-[12px] font-semibold text-primary">Main event</span>
           </div>
         )}
         {isLive ? (
-          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{
-            background: 'hsl(var(--success) / 0.12)',
-            border: '1px solid hsl(var(--success) / 0.25)',
-            animation: 'live-glow 2.5s ease-in-out infinite',
-          }}>
-            <div className="w-1.5 h-1.5 rounded-full bg-success" style={{ animation: 'live-dot 2s ease-in-out infinite' }} />
-            <span className="text-[8px] font-bold uppercase tracking-wider" style={{ color: 'hsl(var(--success))' }}>Live</span>
+          <div className="flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-1">
+            <div className="h-1.5 w-1.5 rounded-full bg-success" style={{ animation: 'live-dot 2s ease-in-out infinite' }} />
+            <span className="text-[12px] font-semibold text-success">Live</span>
           </div>
         ) : isFinal ? (
-          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{
-            background: 'hsl(var(--muted-foreground) / 0.12)',
-            border: '1px solid hsl(var(--muted-foreground) / 0.25)',
-          }}>
-            <span className="text-[8px] font-bold uppercase tracking-wider" style={{ color: 'hsl(var(--muted-foreground))' }}>Final</span>
+          <div className="flex items-center rounded-full bg-fill/15 px-2.5 py-1">
+            <span className="text-[12px] font-semibold text-muted-foreground">Final</span>
           </div>
         ) : (
-          <button
+          <CircleButton
+            size="sm"
             onClick={(e) => { e.stopPropagation(); toggleNotification(fight.id, fightLabel, fight.time, "mma_ufc", fight.fighter1, fight.fighter2); }}
-            className="p-1.5 rounded-full transition-all relative z-10 pointer-events-auto"
-            style={{
-              background: isNotified ? 'hsl(var(--primary) / 0.15)' : 'transparent',
-              border: isNotified ? '1px solid hsl(var(--primary) / 0.3)' : '1px solid transparent',
-            }}
+            aria-label={isNotified ? "Turn off fight alert" : "Alert me before this fight"}
+            aria-pressed={isNotified}
+            className={`relative z-10 pointer-events-auto ${isNotified ? "text-primary" : "text-muted-foreground"}`}
           >
-            {isNotified ? <Bell className="w-3.5 h-3.5 text-accent" /> : <BellOff className="w-3.5 h-3.5 text-muted-foreground/40" />}
-          </button>
+            {isNotified ? <Bell /> : <BellOff />}
+          </CircleButton>
         )}
       </div>
       {isLive && (
         <div className="mt-1 mb-1">
-          <span className="text-[10px] font-bold whitespace-nowrap" style={{ color: 'hsl(var(--success))' }}>
+          <span className="text-[13px] font-semibold whitespace-nowrap text-success">
             {liveDetail}
           </span>
         </div>
@@ -1036,42 +1001,42 @@ const GamesPage = () => {
       <div className="grid grid-cols-[auto_1fr_auto_1fr_auto] items-center gap-1.5 mt-5 pr-1">
         <FighterAvatar id={fight.fighter1Id} name={fight.fighter1} />
         <div className="min-w-0">
-          <span className="text-[11px] font-bold text-foreground block leading-tight">{fight.fighter1}</span>
+          <span className="text-[15px] font-semibold text-foreground block leading-tight">{fight.fighter1}</span>
           {fightOdds.f1ML != null && (
             <div className="flex items-center gap-1 mt-0.5">
-              <span className="text-[10px] font-bold" style={{ color: mlColor(fightOdds.f1ML) }}>{fmt(fightOdds.f1ML)}</span>
+              <span className="text-[13px] font-semibold tabular-nums" style={{ color: mlColor(fightOdds.f1ML) }}>{fmt(fightOdds.f1ML)}</span>
               {fightOdds.f1EV != null && !isLive && !isFinal && (
-                <span className="text-[8px] font-bold px-1 py-0.5 rounded" style={{ background: evColor(fightOdds.f1EV), color: evTextColor(fightOdds.f1EV) }}>
+                <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: evColor(fightOdds.f1EV), color: evTextColor(fightOdds.f1EV) }}>
                   {fightOdds.f1EV > 0 ? "+" : ""}{fightOdds.f1EV}%
                 </span>
               )}
             </div>
           )}
         </div>
-        <span className="text-[10px] font-extrabold text-muted-foreground/50 justify-self-center px-1">VS</span>
+        <span className="text-[12px] font-semibold text-muted-foreground justify-self-center px-1">vs</span>
         <div className="min-w-0 text-right">
-          <span className="text-[11px] font-bold text-foreground block leading-tight">{fight.fighter2}</span>
+          <span className="text-[15px] font-semibold text-foreground block leading-tight">{fight.fighter2}</span>
           {fightOdds.f2ML != null && (
             <div className="flex items-center justify-end gap-1 mt-0.5">
               {fightOdds.f2EV != null && !isLive && !isFinal && (
-                <span className="text-[8px] font-bold px-1 py-0.5 rounded" style={{ background: evColor(fightOdds.f2EV), color: evTextColor(fightOdds.f2EV) }}>
+                <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: evColor(fightOdds.f2EV), color: evTextColor(fightOdds.f2EV) }}>
                   {fightOdds.f2EV > 0 ? "+" : ""}{fightOdds.f2EV}%
                 </span>
               )}
-              <span className="text-[10px] font-bold" style={{ color: mlColor(fightOdds.f2ML) }}>{fmt(fightOdds.f2ML)}</span>
+              <span className="text-[13px] font-semibold tabular-nums" style={{ color: mlColor(fightOdds.f2ML) }}>{fmt(fightOdds.f2ML)}</span>
             </div>
           )}
         </div>
         <FighterAvatar id={fight.fighter2Id} name={fight.fighter2} />
       </div>
       {fight.weightClass && (
-        <p className="text-[9px] text-muted-foreground/55 mt-2 text-center">{fight.weightClass}</p>
+        <p className="text-[12px] text-muted-foreground mt-2 text-center">{fight.weightClass}</p>
       )}
       <button
         onClick={() => navigate("/dashboard/ufc", { state: { fighter1: fight.fighter1, fighter2: fight.fighter2, source: "ufc-games-schedule", returnTo: "/dashboard/games", selectedSport: "ufc" } })}
-        className="mt-3 w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold text-primary bg-primary/[0.08] border border-primary/15 hover:bg-primary/[0.14] transition-all"
+        className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-primary/10 text-[15px] font-semibold text-primary transition-opacity active:opacity-70"
       >
-        <Search className="w-3.5 h-3.5" />
+        <Search className="h-4 w-4" />
         Analyze Fight
       </button>
     </motion.div>
@@ -1104,20 +1069,17 @@ const GamesPage = () => {
         <motion.div key={eventIdx} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: eventIdx * 0.1 }}
           className="space-y-3">
           {/* Event Header */}
-          <div className="vision-card p-4 relative overflow-hidden">
-            <div className="absolute inset-0 opacity-[0.03]" style={{
-              background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--danger)))',
-            }} />
-            <div className="relative">
-              <h3 className="text-[14px] font-extrabold text-foreground">{event.name}</h3>
-              <div className="flex items-center gap-2 mt-1">
-                <Calendar className="w-3 h-3 text-muted-foreground/55" />
-                <span className="text-[10px] text-muted-foreground/65 font-medium">{formatFullDate(event.date)}</span>
-              </div>
-              {event.venue && (
-                <p className="text-[9px] text-muted-foreground/55 mt-0.5">📍 {event.venue}</p>
-              )}
+          <div className="vision-card p-4">
+            <h3 className="text-[20px] font-semibold text-foreground">{event.name}</h3>
+            <div className="mt-1 flex items-center gap-1.5 text-[13px] text-muted-foreground">
+              <Calendar className="h-3.5 w-3.5" />
+              <span>{formatFullDate(event.date)}</span>
             </div>
+            {event.venue && (
+              <p className="mt-0.5 flex items-center gap-1.5 text-[13px] text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5" /> {event.venue}
+              </p>
+            )}
           </div>
 
           {/* Card Sections */}
@@ -1130,11 +1092,11 @@ const GamesPage = () => {
                     <div className="w-1.5 h-1.5 rounded-full" style={{
                       background: section === "Main Card" ? 'hsl(var(--primary))' : section === "Prelims" ? 'hsl(var(--success))' : 'hsl(var(--muted-foreground))',
                     }} />
-                    <span className="text-[10px] font-bold uppercase tracking-[0.15em]" style={{
+                    <span className="text-[13px] font-semibold uppercase tracking-[0.02em]" style={{
                       color: section === "Main Card" ? 'hsl(var(--primary))' : section === "Prelims" ? 'hsl(var(--success))' : 'hsl(var(--muted-foreground) / 0.5)',
                     }}>{section}</span>
-                    <span className="text-[9px] text-muted-foreground/50">{groupedFights[section].length} fight{groupedFights[section].length !== 1 ? "s" : ""}</span>
-                    <ChevronDown className="w-3 h-3 text-muted-foreground/65 ml-auto transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                    <span className="text-[13px] text-muted-foreground">{groupedFights[section].length} fight{groupedFights[section].length !== 1 ? "s" : ""}</span>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto transition-transform duration-200 group-data-[state=open]:rotate-180" />
                   </div>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
@@ -1164,17 +1126,11 @@ const GamesPage = () => {
   return (
     <div className="px-4 pt-2 pb-4 space-y-4 relative">
       <style>{`
-        @keyframes live-glow {
-          0%, 100% { box-shadow: 0 0 8px hsl(var(--success) / 0.3); }
-          50% { box-shadow: 0 0 18px hsl(var(--success) / 0.55); }
-        }
         @keyframes live-dot {
           0%, 100% { opacity: 1; transform: scale(1); }
           50% { opacity: 0.3; transform: scale(0.7); }
         }
       `}</style>
-      <div className="vision-orb w-48 h-48 -top-10 -right-10 transition-all duration-500" style={{ background: SPORT_COLOR[sport] }} />
-      <div className="vision-orb w-36 h-36 top-[500px] -left-12" style={{ background: 'hsl(var(--nba-yellow))', animationDelay: '-4s' }} />
 
       
 
@@ -1183,23 +1139,21 @@ const GamesPage = () => {
         <div
           ref={sportScrollRef}
           onScroll={updateSportScrollHint}
-          className="flex w-full max-w-full p-1 rounded-xl overflow-x-auto overscroll-x-contain scrollbar-hide gap-1"
-          style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}
+          role="tablist"
+          aria-label="Sport"
+          className="flex w-full max-w-full gap-0.5 overflow-x-auto overscroll-x-contain rounded-full bg-card p-1 scrollbar-hide shadow-[inset_0_0_0_0.5px_hsl(var(--hairline))]"
         >
           {VISIBLE_GAMES_SPORT_OPTIONS.map((s) => {
             const isActive = sport === s;
-            const color = SPORT_COLOR[s];
             return (
               <button
                 key={s}
+                role="tab"
+                aria-selected={isActive}
                 onClick={() => setSport(s)}
-                className={`min-h-[44px] min-w-[82px] shrink-0 sm:flex-1 px-3 py-2.5 text-[13px] font-bold rounded-lg transition-all flex items-center justify-center gap-2 whitespace-nowrap ${
-                  isActive ? "text-white shadow-lg" : "text-muted-foreground/65 hover:text-muted-foreground/60"
+                className={`flex min-h-[40px] min-w-[82px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 text-[15px] transition-colors sm:flex-1 ${
+                  isActive ? "bg-pill font-semibold text-foreground shadow-[inset_0_0_0_0.5px_hsl(var(--hairline))]" : "font-medium text-muted-foreground"
                 }`}
-                style={isActive ? {
-                  background: `linear-gradient(135deg, ${color}, ${color}dd)`,
-                  boxShadow: `0 4px 16px -2px ${color}55`,
-                } : undefined}
               >
                 <img src={SPORT_LOGO[s]} alt={s} className={`${SPORT_LOGO_SIZE[s]} object-contain shrink-0`} />
                 <span className="whitespace-nowrap leading-none">{s.toUpperCase()}</span>
@@ -1209,19 +1163,19 @@ const GamesPage = () => {
         </div>
         <div
           aria-hidden="true"
-          className={`pointer-events-none absolute inset-y-0 left-0 w-8 rounded-l-xl transition-opacity duration-200 ${
+          className={`pointer-events-none absolute inset-y-0 left-0 w-8 rounded-l-full transition-opacity duration-200 ${
             sportScrollHint.left ? "opacity-100" : "opacity-0"
           }`}
           style={{ background: 'linear-gradient(90deg, hsl(var(--card) / 0.95), hsl(var(--card) / 0))' }}
         />
         <div
           aria-hidden="true"
-          className={`pointer-events-none absolute inset-y-0 right-0 flex w-14 items-center justify-end rounded-r-xl pr-1.5 transition-opacity duration-200 ${
+          className={`pointer-events-none absolute inset-y-0 right-0 flex w-14 items-center justify-end rounded-r-full pr-1.5 transition-opacity duration-200 ${
             sportScrollHint.right ? "opacity-100" : "opacity-0"
           }`}
           style={{ background: 'linear-gradient(270deg, hsl(var(--card) / 0.96), hsl(var(--card) / 0))' }}
         >
-          <div className="flex h-7 w-7 items-center justify-center rounded-full border border-primary/20 bg-background/75 text-primary shadow-[0_0_16px_hsl(var(--primary) / 0.14)] backdrop-blur-sm">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full border border-primary/20 bg-background/75 text-primary shadow-[0_0_16px_hsl(var(--primary)_/_0.14)] backdrop-blur-sm">
             <ChevronRight className="h-4 w-4" />
           </div>
         </div>
@@ -1229,12 +1183,12 @@ const GamesPage = () => {
 
       {/* Timezone info */}
       <div className="flex items-center justify-between relative z-10">
-        <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground/55">
-          <Calendar className="w-3 h-3" />
-          <span className="font-bold uppercase tracking-wider">{tz.replace(/_/g, " ")}</span>
+        <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+          <Calendar className="h-3.5 w-3.5" />
+          <span>{tz.replace(/_/g, " ")}</span>
         </div>
-        <button onClick={() => fetchGames(sport, false, true)} className="flex items-center gap-1 text-[9px] text-accent/60 font-bold">
-          <RefreshCw className="w-3 h-3" /> Refresh
+        <button onClick={() => fetchGames(sport, false, true)} className="flex min-h-[44px] items-center gap-1 text-[15px] font-medium text-primary">
+          <RefreshCw className="h-4 w-4" /> Refresh
         </button>
       </div>
 
@@ -1290,19 +1244,19 @@ const GamesPage = () => {
                   <CollapsibleTrigger className="w-full">
                     <div className="vision-card p-3 flex items-center justify-between cursor-pointer group">
                       <div className="flex items-center gap-2">
-                        <Calendar className="w-3.5 h-3.5 text-accent/50" />
-                        <span className="text-[12px] font-bold text-foreground/80">
+                        <Calendar className="h-4 w-4 text-primary" />
+                        <span className="text-[15px] font-semibold text-foreground">
                           {isToday ? "Today" : displayDate}
                         </span>
                         {isToday && (
-                          <span className="text-[10px] text-muted-foreground/65">({displayDate})</span>
+                          <span className="text-[13px] text-muted-foreground">({displayDate})</span>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-muted-foreground/55">
+                        <span className="text-[13px] text-muted-foreground">
                           {dateGames.length} game{dateGames.length !== 1 ? "s" : ""}
                         </span>
-                        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/65 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                        <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
                       </div>
                     </div>
                   </CollapsibleTrigger>
