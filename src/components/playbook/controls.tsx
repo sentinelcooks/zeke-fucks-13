@@ -111,12 +111,12 @@ export function gradeFor(v: number) {
   return v >= 70 ? "A" : v >= 65 ? "A−" : v >= 60 ? "B+" : v >= 55 ? "B" : v >= 50 ? "C+" : "C";
 }
 
-/** Small uppercase label over a value, with an optional ▲/▼ trend. */
-export function StatKV({ label, value, trend, className }: { label: ReactNode; value: ReactNode; trend?: "up" | "down"; className?: string }) {
+/** Small uppercase label over a value, with an optional ▲/▼ trend. `wrap` allows two lines. */
+export function StatKV({ label, value, trend, wrap, className }: { label: ReactNode; value: ReactNode; trend?: "up" | "down"; wrap?: boolean; className?: string }) {
   return (
     <div className={cn("flex min-w-0 flex-col", className)}>
       <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground">{label}</span>
-      <span className="truncate text-[17px] font-semibold tabular-nums text-foreground">
+      <span className={cn("text-[17px] font-semibold tabular-nums text-foreground", wrap ? "line-clamp-2 leading-tight" : "truncate")}>
         {trend && (
           <span aria-hidden="true" className={cn("relative -top-0.5 mr-1 text-[10px]", trend === "up" ? "text-success" : "text-danger")}>
             {trend === "up" ? "▲" : "▼"}

@@ -49,6 +49,8 @@ const NflEdgePage = lazy(() => import("./pages/NflEdgePage"));
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
 const PaywallPage = lazy(() => import("./pages/PaywallPage"));
 const WelcomeConfirmationPage = lazy(() => import("./pages/WelcomeConfirmationPage"));
+// Dev-only component gallery; the ternary lets production builds drop it entirely.
+const PlaybookPreview = import.meta.env.DEV ? lazy(() => import("./pages/dev/PlaybookPreview")) : null;
 
 const queryClient = new QueryClient();
 
@@ -268,6 +270,9 @@ function AppRoutes() {
           <Route path="legal" element={<LegalPage />} />
         </Route>
 
+        {PlaybookPreview && (
+          <Route path="/dev/playbook" element={<Suspense fallback={<LoadingSpinner />}><PlaybookPreview /></Suspense>} />
+        )}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </>

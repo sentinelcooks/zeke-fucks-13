@@ -23,10 +23,9 @@ import WrittenAnalysis from "@/components/WrittenAnalysis";
 
 import { PropExplainerDialog, usePropExplainerAutoShow } from "@/components/PropExplainerDialog";
 
-import { PlayerCard } from "@/components/mobile/PlayerCard";
 import { VerdictBadge } from "@/components/mobile/VerdictBadge";
 import { StatPill } from "@/components/mobile/StatPill";
-import { HitRateRing } from "@/components/mobile/HitRateRing";
+import { PropAnalysisHero } from "@/components/playbook/PropAnalysisHero";
 import { ShotChart } from "@/components/mobile/ShotChart";
 import { OddsProjection } from "@/components/mobile/OddsProjection";
 import { SavedPickStatPanel } from "@/components/mobile/SavedPickStatPanel";
@@ -39,21 +38,6 @@ import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 import { withClientPlatform } from "@/lib/edgeFunctionPath";
 import { isSportTemporarilyHidden } from "@/lib/sportAvailability";
 
-import { ThemedBar as Bar } from "@/components/charts/ThemedBar";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  LineController,
-  PointElement,
-  Title,
-  Tooltip,
-  Legend,
-} from "chart.js";
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, LineController, PointElement, Title, Tooltip, Legend);
 
 // ── NBA Prop Categories ──
 interface PropOption {
@@ -285,57 +269,6 @@ function fmtDate(raw: string) {
   const d = new Date(raw);
   if (isNaN(d.getTime())) return raw;
   return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
-}
-
-function GameChart({ data }: { data: any }) {
-  const games = data.game_log || [];
-  const labels = games.map((g: any) => fmtDate(g.date));
-  const values = games.map((g: any) => g.stat_value);
-  const lineval = data.line;
-
-  const colors = values.map((v: number) =>
-    data.over_under === "over"
-      ? v > lineval ? "hsl(var(--success) / 0.8)" : "hsl(var(--danger) / 0.35)"
-      : v < lineval ? "hsl(var(--success) / 0.8)" : "hsl(var(--danger) / 0.35)"
-  );
-
-  return (
-    <div className="h-[220px]">
-      <Bar
-        data={{
-          labels,
-          datasets: [
-            {
-              label: data.prop_display,
-              data: values,
-              backgroundColor: colors,
-              borderRadius: 6,
-              barPercentage: 0.55,
-            } as any,
-            {
-              label: `Line (${lineval})`,
-              data: Array(labels.length).fill(lineval),
-              type: "line" as any,
-              borderColor: "hsl(var(--primary) / 0.5)",
-              borderDash: [6, 4],
-              borderWidth: 2,
-              pointRadius: 0,
-              fill: false,
-            },
-          ],
-        }}
-        options={{
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { ticks: { color: "hsl(var(--muted-foreground) / 0.6)", font: { size: 9 } }, grid: { display: false } },
-            y: { ticks: { color: "hsl(var(--muted-foreground) / 0.6)", font: { size: 9 } }, grid: { color: "hsl(var(--secondary) / 0.4)" }, beginAtZero: true },
-          },
-        }}
-      />
-    </div>
-  );
 }
 
 function GamesTable({ games, line, overUnder, propType }: { games: any[]; line: number; overUnder: string; propType: string }) {
@@ -2044,300 +1977,30 @@ const NbaPropsPage = () => {
         {mode === "props" && sport !== "nfl" && results?._isUfc && (
           <ErrorBoundary>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
-              {/* Analysis Complete Banner */}
-              <motion.div
-                initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                className="flex items-center justify-between p-3 rounded-xl"
-                style={{ background: 'linear-gradient(135deg, hsl(var(--success) / 0.08), hsl(var(--primary) / 0.04))', border: '1px solid hsl(var(--success) / 0.12)' }}
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-nba-green animate-glow-pulse" />
-                  <span className="text-[10px] font-bold text-nba-green uppercase tracking-wider">Matchup Analysis Complete</span>
-                </div>
-              </motion.div>
+              <PropAnalysisHero
+                sport={sport}
+                playerName={results.player?.full_name || player}
+                teamName={results.player?.team_name}
+                position={results.player?.position}
+                jersey={results.player?.jersey}
+                headshotUrl={results.player?.headshot_url}
+                propLabel={formatDisplayPropType(results.prop_display || propType)}
+                propType={results.prop_type || propType}
+                line={Number(results.line)}
+                direction={results.over_under === "under" ? "under" : "over"}
+                gameLog={results.game_log}
+                h2hRows={[...(prev.games || []), ...(h2h.games || [])]}
+                opponentLabel={
+                  results.next_game
+                    ? `${results.next_game.is_home ? "vs" : "@"} ${results.next_game.opponent_abbr || results.next_game.opponent_name || ""}`.trim()
+                    : h2h.opponent ? `vs ${h2h.opponent}` : null
+                }
+                modelScore={typeof results.confidence === "number" ? results.confidence : results.confidence?.overall_confidence}
+                modelIsProbability={results.probability_supported === true && results.score_kind === "calibrated_probability"}
+                onModelPress={() => document.getElementById("model-verdict")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+              />
 
-              {/* Fighter Cards with full bio */}
-              <div className="grid grid-cols-2 gap-2">
-                {[results.fighter1, results.fighter2].map((f: any, idx: number) => (
-                  <motion.div key={idx} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + idx * 0.1 }}
-                    className="vision-card p-4 text-center">
-                    {f?.image_url && <img src={f.image_url} alt={f.name} className="w-16 h-16 rounded-xl object-cover mx-auto mb-2 bg-secondary/30" />}
-                    <p className={`text-[13px] font-bold ${idx === 0 ? "text-accent" : "text-nba-blue"}`}>{f?.name}</p>
-                    <p className="text-[10px] text-muted-foreground/50">{f?.record}</p>
-                    <p className="text-[9px] text-muted-foreground/55">{f?.weight_class}</p>
-                    {/* Bio details */}
-                    <div className="grid grid-cols-2 gap-1 mt-3 text-[9px]">
-                      {f?.age && (
-                        <div className="rounded-lg py-1.5" style={{ background: 'hsl(var(--card) / 0.6)' }}>
-                          <span className="block text-muted-foreground/65 uppercase font-bold">Age</span>
-                          <span className="block text-sm font-extrabold text-foreground">{f.age}</span>
-                        </div>
-                      )}
-                      {f?.height && (
-                        <div className="rounded-lg py-1.5" style={{ background: 'hsl(var(--card) / 0.6)' }}>
-                          <span className="block text-muted-foreground/65 uppercase font-bold">Height</span>
-                          <span className="block text-sm font-extrabold text-foreground">{f.height}</span>
-                        </div>
-                      )}
-                      {f?.reach && (
-                        <div className="rounded-lg py-1.5" style={{ background: 'hsl(var(--card) / 0.6)' }}>
-                          <span className="block text-muted-foreground/65 uppercase font-bold">Reach</span>
-                          <span className="block text-sm font-extrabold text-foreground">{f.reach}</span>
-                        </div>
-                      )}
-                      <div className="rounded-lg py-1.5" style={{ background: 'hsl(var(--card) / 0.6)' }}>
-                        <span className="block text-muted-foreground/65 uppercase font-bold">Stance</span>
-                        <span className="block text-sm font-extrabold text-foreground">{f?.stance || "Orthodox"}</span>
-                      </div>
-                    </div>
-                    {/* Win method breakdown */}
-                    <div className="grid grid-cols-3 gap-1 mt-2">
-                      {[
-                        { label: "KO", val: f?.stats?.ko_wins },
-                        { label: "SUB", val: f?.stats?.sub_wins },
-                        { label: "DEC", val: f?.stats?.dec_wins },
-                      ].map(s => (
-                        <div key={s.label}>
-                          <span className="block text-[8px] text-muted-foreground/65 uppercase">{s.label}</span>
-                          <span className="block text-sm font-extrabold text-foreground">{s.val ?? 0}</span>
-                        </div>
-                      ))}
-                    </div>
-                    {/* Win streak */}
-                    {f?.win_streak > 0 && (
-                      <div className="mt-2 flex items-center justify-center gap-1">
-                        <Trophy className="w-3 h-3 text-success" />
-                        <span className="text-[10px] font-bold text-success">{f.win_streak} Win Streak</span>
-                      </div>
-                    )}
-                  </motion.div>
-                ))}
-              </div>
-
-              {/* Top Pick */}
-              {results.best_bet && (
-                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3, type: "spring" }}
-                  className="vision-card p-5 text-center relative overflow-hidden"
-                  style={{
-                    borderColor: results.best_bet.confidence === "strong" ? 'hsl(var(--success) / 0.3)' : results.best_bet.confidence === "lean" ? 'hsl(var(--primary) / 0.3)' : 'hsl(var(--nba-yellow) / 0.3)',
-                  }}>
-                  <div className="absolute inset-0 opacity-[0.04]" style={{
-                    background: `radial-gradient(circle at center, ${results.best_bet.confidence === "strong" ? "hsl(var(--success))" : results.best_bet.confidence === "lean" ? "hsl(var(--primary))" : "hsl(var(--nba-yellow))"}, transparent 70%)`,
-                  }} />
-                  <Trophy className={`w-5 h-5 mx-auto mb-1 ${results.best_bet.confidence === "strong" ? "text-nba-green" : results.best_bet.confidence === "lean" ? "text-nba-blue" : "text-nba-yellow"}`} />
-                  <span className="text-[9px] uppercase tracking-[0.15em] text-muted-foreground/65 font-bold">Top Pick</span>
-                  <p className={`text-lg font-extrabold mt-1 ${results.best_bet.confidence === "strong" ? "text-nba-green" : results.best_bet.confidence === "lean" ? "text-nba-blue" : "text-nba-yellow"}`}>
-                    {results.best_bet.bet}
-                  </p>
-                  {results.best_bet.probability && (
-                    <p className={`text-2xl font-black tabular-nums ${results.best_bet.confidence === "strong" ? "text-nba-green" : results.best_bet.confidence === "lean" ? "text-nba-blue" : "text-nba-yellow"}`}>
-                      {results.best_bet.probability}%
-                    </p>
-                  )}
-                  <span className={`inline-block text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full mt-1 ${
-                    results.best_bet.confidence === "strong" ? "bg-nba-green/15 text-nba-green" : results.best_bet.confidence === "lean" ? "bg-nba-blue/15 text-nba-blue" : "bg-nba-yellow/15 text-nba-yellow"
-                  }`}>{results.best_bet.confidence}</span>
-                  <p className="text-[11px] text-muted-foreground/50 mt-2 leading-relaxed">{results.best_bet.reasoning}</p>
-                </motion.div>
-              )}
-
-              {/* Stats Comparison */}
-              <div className="grid grid-cols-3 gap-2">
-                <StatPill label="Comb. SLpM" value={(results.combined_strikes_per_min || 0).toFixed(1)} color="default" delay={0.35} />
-                <StatPill label="Avg Rounds" value={(results.combined_avg_rounds || 0).toFixed(1)} color="blue" delay={0.4} />
-                <StatPill label="Finish %" value={`${(results.combined_finish_rate || 0).toFixed(0)}%`} color="red" delay={0.45} />
-              </div>
-
-              {/* Physical Comparison */}
-              {(results.fighter1?.height || results.fighter1?.reach || results.fighter1?.age) && (
-                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} className="vision-card p-4">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-3 block">Physical Comparison</span>
-                  <div className="space-y-2">
-                    {[
-                      { label: "Age", v1: results.fighter1?.age, v2: results.fighter2?.age, unit: "" },
-                      { label: "Height", v1: results.fighter1?.height, v2: results.fighter2?.height },
-                      { label: "Reach", v1: results.fighter1?.reach, v2: results.fighter2?.reach },
-                      { label: "Stance", v1: results.fighter1?.stance, v2: results.fighter2?.stance },
-                    ].filter(r => r.v1 || r.v2).map(({ label, v1, v2 }) => (
-                      <div key={label} className="flex items-center justify-between py-1.5 border-b border-border/10 last:border-0">
-                        <span className="text-[11px] font-bold text-accent tabular-nums">{v1 || "--"}</span>
-                        <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/65">{label}</span>
-                        <span className="text-[11px] font-bold text-nba-blue tabular-nums">{v2 || "--"}</span>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-
-              {/* Comparison Bars */}
-              {results.comparison && (
-                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="vision-card p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[10px] font-bold text-accent">{results.fighter1?.name}</span>
-                    <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">Head to Head</span>
-                    <span className="text-[10px] font-bold text-nba-blue">{results.fighter2?.name}</span>
-                  </div>
-                  {[
-                    { label: "Strikes/Min", k: "strikes_per_min" },
-                    { label: "Str Absorbed/Min", k: "strikes_absorbed_per_min" },
-                    { label: "Finish Rate", k: "finish_rate", fmt: (v: number) => `${v}%` },
-                    { label: "KO Rate", k: "ko_rate", fmt: (v: number) => `${v}%` },
-                    { label: "Sub Rate", k: "sub_rate", fmt: (v: number) => `${v}%` },
-                    { label: "TD Avg", k: "takedown_avg" },
-                    { label: "Avg Rounds", k: "avg_fight_rounds" },
-                    { label: "Win Streak", k: "win_streak", fmt: (v: number) => `${v}` },
-                  ].map(({ label, k, fmt }) => {
-                    const v1 = results.comparison[k]?.fighter1 || 0;
-                    const v2 = results.comparison[k]?.fighter2 || 0;
-                    const max = Math.max(v1, v2, 0.1);
-                    const format = fmt || ((v: number) => typeof v === 'number' ? v.toFixed(1) : v);
-                    return (
-                      <div key={k} className="py-2">
-                        <div className="flex justify-between text-[9px] uppercase tracking-wider text-muted-foreground/65 mb-1">
-                          <span className="font-bold">{format(v1)}</span>
-                          <span className="font-semibold">{label}</span>
-                          <span className="font-bold">{format(v2)}</span>
-                        </div>
-                        <div className="flex gap-1 h-1.5">
-                          <div className="flex-1 flex justify-end">
-                            <div className="rounded-l-full transition-all" style={{ width: `${(v1 / max) * 100}%`, background: 'hsl(var(--primary))' }} />
-                          </div>
-                          <div className="flex-1">
-                            <div className="rounded-r-full transition-all" style={{ width: `${(v2 / max) * 100}%`, background: 'hsl(var(--primary))' }} />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </motion.div>
-              )}
-
-              {/* Striking Stats Detail */}
-              {(results.fighter1?.stats?.str_accuracy || results.fighter2?.stats?.str_accuracy) && (
-                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="vision-card p-4">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-3 block">Detailed Stats</span>
-                  <div className="space-y-2">
-                    {[
-                      { label: "Str. Accuracy", v1: results.fighter1?.stats?.str_accuracy, v2: results.fighter2?.stats?.str_accuracy },
-                      { label: "Str. Defense", v1: results.fighter1?.stats?.str_defense, v2: results.fighter2?.stats?.str_defense },
-                      { label: "TD Accuracy", v1: results.fighter1?.stats?.td_accuracy, v2: results.fighter2?.stats?.td_accuracy },
-                      { label: "TD Defense", v1: results.fighter1?.stats?.td_defense, v2: results.fighter2?.stats?.td_defense },
-                      { label: "Sub Avg", v1: results.fighter1?.stats?.sub_avg?.toFixed(1), v2: results.fighter2?.stats?.sub_avg?.toFixed(1) },
-                    ].filter(r => r.v1 || r.v2).map(({ label, v1, v2 }) => (
-                      <div key={label} className="flex items-center justify-between py-1.5 border-b border-border/10 last:border-0">
-                        <span className="text-[11px] font-bold text-accent tabular-nums">{v1 || "--"}</span>
-                        <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/65">{label}</span>
-                        <span className="text-[11px] font-bold text-nba-blue tabular-nums">{v2 || "--"}</span>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-
-              {/* Round Predictions */}
-              {results.round_predictions?.length > 0 && (
-                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="vision-card p-4">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-3 block">Round Predictions</span>
-                  <div className="space-y-2">
-                    {results.round_predictions.map((rp: any, i: number) => (
-                      <div key={i} className="rounded-xl p-3" style={{
-                        background: rp.confidence === "strong" ? 'hsl(var(--success) / 0.06)' : rp.confidence === "lean" ? 'hsl(var(--primary) / 0.06)' : 'hsl(var(--secondary) / 0.4)',
-                        border: `1px solid ${rp.confidence === "strong" ? 'hsl(var(--success) / 0.15)' : rp.confidence === "lean" ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--secondary) / 0.2)'}`,
-                      }}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className={`text-[12px] font-bold ${rp.confidence === "strong" ? "text-nba-green" : rp.confidence === "lean" ? "text-nba-blue" : "text-muted-foreground"}`}>{rp.bet}</span>
-                          {rp.probability && <span className={`text-[11px] font-extrabold ${rp.confidence === "strong" ? "text-nba-green" : rp.confidence === "lean" ? "text-nba-blue" : "text-muted-foreground/50"}`}>{rp.probability}%</span>}
-                        </div>
-                        <p className="text-[10px] text-muted-foreground/50 leading-relaxed">{rp.reasoning}</p>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-
-              {/* ML Pick */}
-              {results.ml_pick && (
-                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="vision-card p-4 text-center">
-                  <Zap className={`w-4 h-4 mx-auto mb-1 ${results.ml_pick.confidence === "strong" ? "text-nba-green" : "text-nba-blue"}`} />
-                  <span className="text-[9px] uppercase tracking-[0.15em] text-muted-foreground/65 font-bold">Moneyline Pick</span>
-                  <p className={`text-lg font-extrabold mt-1 ${results.ml_pick.confidence === "strong" ? "text-nba-green" : results.ml_pick.confidence === "lean" ? "text-nba-blue" : "text-nba-yellow"}`}>
-                    {results.ml_pick.pick}
-                  </p>
-                  {results.ml_pick.probability && <p className="text-2xl font-black tabular-nums text-foreground">{results.ml_pick.probability}%</p>}
-                  <p className="text-[10px] text-muted-foreground/50 mt-2 leading-relaxed">{results.ml_pick.reasoning}</p>
-                </motion.div>
-              )}
-
-              {/* Recent Fights Table */}
-              {(results.fighter1?.recent_fights?.length > 0 || results.fighter2?.recent_fights?.length > 0) && (
-                <Section title="Recent Fights" icon={<BarChart3 className="w-3.5 h-3.5" />}>
-                  {[results.fighter1, results.fighter2].map((f: any, fIdx: number) => (
-                    <div key={fIdx} className={fIdx > 0 ? "mt-4 pt-4 border-t border-border/15" : ""}>
-                      <span className={`text-[10px] font-bold uppercase tracking-wider mb-2 block ${fIdx === 0 ? "text-accent" : "text-nba-blue"}`}>{f?.name}</span>
-                      <div className="overflow-x-auto scrollbar-hide -mx-5 px-5">
-                        <table className="w-full text-[10px]">
-                          <thead>
-                            <tr className="border-b border-border/30">
-                              {["Date", "Opponent", "Result", "Method", "Round"].map(h => (
-                                <th key={h} className="text-center py-2 px-1 text-muted-foreground/65 uppercase tracking-wider font-bold whitespace-nowrap">{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(f?.recent_fights || []).slice(0, 6).map((fight: any, i: number) => (
-                              <tr key={i} className="border-b border-border/15">
-                                <td className="text-center py-2 px-1 text-muted-foreground/50 whitespace-nowrap">{fight.date}</td>
-                                <td className="text-center py-2 px-1 font-medium text-foreground/80 whitespace-nowrap">{fight.opponent}</td>
-                                <td className={`text-center py-2 px-1 font-bold ${fight.result === "W" ? "text-success" : "text-danger"}`}>{fight.result}</td>
-                                <td className="text-center py-2 px-1 text-muted-foreground/60 whitespace-nowrap">{fight.method}</td>
-                                <td className="text-center py-2 px-1 text-foreground/70">{fight.round || `R${fight.roundNum}`}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ))}
-                </Section>
-              )}
-            </motion.div>
-          </ErrorBoundary>
-        )}
-
-        {/* NBA/MLB Results */}
-        {mode === "props" && sport !== "nfl" && results && !results._isUfc && (
-          <ErrorBoundary>
-            <motion.div ref={resultsRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
-
-              {/* Analysis Complete Banner */}
-              <motion.div
-                initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ delay: 0.05 }}
-                className="flex items-center justify-between p-3 rounded-xl"
-                style={{ background: 'linear-gradient(135deg, hsl(var(--success) / 0.08), hsl(var(--primary) / 0.04))', border: '1px solid hsl(var(--success) / 0.12)' }}
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-nba-green animate-glow-pulse" />
-                  <span className="text-[10px] font-bold text-nba-green uppercase tracking-wider">Analysis Complete</span>
-                </div>
-                <span className="text-[9px] text-muted-foreground/55 font-medium">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-              </motion.div>
-
-              {results.player && (
-                <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                  <PlayerCard
-                    name={results.player.full_name}
-                    team={results.player.team_name}
-                    position={results.player.position}
-                    jersey={results.player.jersey}
-                    headshotUrl={results.player.headshot_url}
-                  />
-                </motion.div>
-              )}
-
-              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.15, type: "spring" }}>
+              <motion.div id="model-verdict" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.15, type: "spring" }}>
                 {/* The headline is the model score, for every sport.
                     MLB used to swap in season_hit_rate here, so a card reading
                     "70 MODEL SCORE" opened on a bare "72%" — that 72 was the
@@ -2420,14 +2083,6 @@ const NbaPropsPage = () => {
                   evPct={results._savedAvgValue ?? null}
                 />
               )}
-              {results._savedCanonicalOnly !== true && (
-                <div className="grid grid-cols-4 gap-2">
-                  <StatPill label="Season" value={results.season_hit_rate?.avg ?? "--"} delay={0.2} />
-                  <StatPill label="L10" value={results.last_10?.avg ?? "--"} delay={0.25} />
-                  <StatPill label="L5" value={results.last_5?.avg ?? "--"} delay={0.3} />
-                  <StatPill label={`vs ${h2h.opponent || results.next_game?.opponent_name || "OPP"}`} value={h2h.avg ?? "--"} delay={0.35} />
-                </div>
-              )}
 
               {/* Season averages detail row */}
               {results.season_averages && (
@@ -2462,16 +2117,6 @@ const NbaPropsPage = () => {
                 </motion.div>
               )}
 
-              {results._savedCanonicalOnly !== true && (
-                <Section title="Hit Rates" icon={<Target className="w-3.5 h-3.5" />}>
-                  <div className="flex justify-between gap-1 px-0 py-2">
-                    <HitRateRing rate={results.season_hit_rate?.rate || 0} hits={results.season_hit_rate?.hits || 0} total={results.season_hit_rate?.total || 0} label="Season" delay={0} />
-                    <HitRateRing rate={results.last_10?.rate || 0} hits={results.last_10?.hits || 0} total={results.last_10?.total || 0} label="L10" delay={0.1} />
-                    <HitRateRing rate={results.last_5?.rate || 0} hits={results.last_5?.hits || 0} total={results.last_5?.total || 0} label="L5" delay={0.2} />
-                    <HitRateRing rate={h2h.rate || 0} hits={h2h.hits || 0} total={h2h.total || 0} label={`vs ${h2h.opponent || results.next_game?.opponent_name || "OPP"}`} delay={0.3} />
-                  </div>
-                </Section>
-              )}
 
               {sport === "mlb" && Array.isArray(results.mlb_factors) && results.mlb_factors.length > 0 && (
                 <Section title="Model Factors" defaultOpen={false} icon={<Activity className="w-3.5 h-3.5" />}>
@@ -2537,8 +2182,9 @@ const NbaPropsPage = () => {
                 </Section>
               )}
 
-              <Section title="Game Log" icon={<BarChart3 className="w-3.5 h-3.5" />}>
-                <GameChart data={results} />
+              <Section title="Game Log" defaultOpen={false} icon={<BarChart3 className="w-3.5 h-3.5" />}>
+                {/* game_log is oldest-first; show the most recent games at the top. */}
+                <GamesTable games={[...(results.game_log || [])].reverse()} line={results.line} overUnder={results.over_under} propType={results.prop_type} />
               </Section>
 
               {results.next_game && (
