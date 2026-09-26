@@ -13,7 +13,21 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["-apple-system", "BlinkMacSystemFont", '"SF Pro Text"', '"SF Pro Display"', '"Helvetica Neue"', '"Segoe UI"', "Roboto", "sans-serif"],
+        mono: ['"SF Mono"', "ui-monospace", "Menlo", "Consolas", "monospace"],
+      },
       colors: {
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        danger: "hsl(var(--danger))",
+        warning: "hsl(var(--warning))",
+        fill: "hsl(var(--fill))",
+        pill: "hsl(var(--pill))",
+        hairline: "hsl(var(--hairline))",
+        glass: "hsl(var(--glass))",
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

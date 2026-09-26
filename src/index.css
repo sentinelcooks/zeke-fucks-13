@@ -1,80 +1,158 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Playbook theme.
+ * Light values live on :root, dark values on .dark (set by next-themes, see ThemeSync).
+ * Components must use these tokens — never hardcoded colors — so both themes work.
+ */
 @layer base {
   :root {
-    /* Vision UI inspired deep navy palette */
-    --background: 228 22% 5%;
-    --foreground: 220 20% 97%;
+    --background: 240 24% 96%;
+    --foreground: 0 0% 0%;
 
-    --card: 228 24% 9%;
-    --card-foreground: 220 20% 97%;
-    --card-hover: 228 22% 13%;
-    --card-elevated: 228 24% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+    --card-hover: 240 10% 97%;
+    --card-elevated: 0 0% 100%;
 
-    --popover: 228 24% 9%;
-    --popover-foreground: 220 20% 97%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
 
-    --primary: 142 100% 50%;
-    --primary-foreground: 0 0% 0%;
-    --primary-glow: 142 100% 50% / 0.3;
-    --primary-dim: 142 100% 50% / 0.15;
+    /* Brand tint (cobalt) */
+    --primary: 228 100% 56%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 228 100% 56% / 0.2;
+    --primary-dim: 228 100% 56% / 0.1;
 
-    --secondary: 228 20% 14%;
-    --secondary-foreground: 228 12% 86%;
+    --secondary: 240 11% 91%;
+    --secondary-foreground: 0 0% 0%;
 
-    --muted: 228 20% 12%;
-    --muted-foreground: 228 12% 82%;
+    --muted: 240 11% 93%;
+    --muted-foreground: 240 3% 43%;
 
-    --accent: 142 100% 50%;
-    --accent-foreground: 0 0% 0%;
+    --accent: 228 100% 56%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 356 100% 42%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 228 18% 15%;
-    --input: 228 20% 11%;
-    --ring: 142 100% 50%;
+    --border: 240 6% 85%;
+    --input: 240 11% 91%;
+    --ring: 228 100% 56%;
 
     --radius: 1rem;
 
-    /* Semantic sport colors */
-    --nba-green: 158 64% 52%;
-    --nba-green-dim: 158 64% 52% / 0.12;
-    --nba-red: 0 72% 51%;
-    --nba-red-dim: 0 72% 51% / 0.12;
-    --nba-yellow: 43 96% 56%;
-    --nba-yellow-dim: 43 96% 56% / 0.12;
-    --nba-blue: 211 100% 60%;
-    --nba-blue-dim: 211 100% 50% / 0.12;
-    --nba-purple: 250 76% 62%;
-    --nba-cyan: 190 90% 55%;
+    /* Results and state */
+    --success: 135 59% 34%;
+    --success-foreground: 0 0% 100%;
+    --danger: 356 100% 42%;
+    --warning: 22 100% 39%;
 
-    /* Vision UI gradient tokens */
-    --gradient-card: linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.94) 19.41%, hsla(228, 30%, 8%, 0.49) 76.65%);
-    --gradient-card-border: linear-gradient(127.09deg, hsla(228, 30%, 22%, 0.6) 19.41%, hsla(228, 30%, 12%, 0.2) 76.65%);
-    --gradient-blue: linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%));
-    --gradient-green: linear-gradient(135deg, hsl(158 64% 52%), hsl(175 55% 42%));
-    --gradient-red: linear-gradient(135deg, hsl(0 72% 51%), hsl(340 65% 47%));
-    --gradient-purple: linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%));
-    --gradient-cyan: linear-gradient(135deg, hsl(190 90% 55%), hsl(210 100% 60%));
+    /* Surfaces for the Playbook controls */
+    --fill: 240 3% 47%;          /* use with alpha: bg-fill/15 */
+    --pill: 240 6% 91%;          /* selected pill in capsule tabs */
+    --hairline: 0 0% 0% / 0.09;  /* control outlines */
+    --glass: 0 0% 100% / 0.76;   /* floating tab bar and headers */
 
-    --sidebar-background: 228 28% 6%;
-    --sidebar-foreground: 228 10% 72%;
-    --sidebar-primary: 142 100% 50%;
+    /* Legacy sport tokens, mapped onto the Playbook palette */
+    --nba-green: var(--success);
+    --nba-green-dim: 135 59% 34% / 0.12;
+    --nba-red: var(--danger);
+    --nba-red-dim: 356 100% 42% / 0.1;
+    --nba-yellow: 38 92% 42%;
+    --nba-yellow-dim: 38 92% 42% / 0.12;
+    --nba-blue: var(--primary);
+    --nba-blue-dim: 228 100% 56% / 0.1;
+    --nba-purple: var(--primary);
+    --nba-cyan: 199 100% 32%;
+
+    --gradient-card: linear-gradient(hsl(var(--card)), hsl(var(--card)));
+    --gradient-card-border: linear-gradient(hsl(var(--border)), hsl(var(--border)));
+    --gradient-blue: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)));
+    --gradient-green: linear-gradient(135deg, hsl(var(--success)), hsl(var(--success)));
+    --gradient-red: linear-gradient(135deg, hsl(var(--danger)), hsl(var(--danger)));
+    --gradient-purple: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)));
+    --gradient-cyan: linear-gradient(135deg, hsl(var(--nba-cyan)), hsl(var(--primary)));
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 240 3% 43%;
+    --sidebar-primary: 228 100% 56%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 228 20% 14%;
-    --sidebar-accent-foreground: 228 20% 98%;
-    --sidebar-border: 228 20% 16%;
-    --sidebar-ring: 142 100% 50%;
+    --sidebar-accent: 240 11% 93%;
+    --sidebar-accent-foreground: 0 0% 0%;
+    --sidebar-border: 240 6% 85%;
+    --sidebar-ring: 228 100% 56%;
 
-  /* Mobile safe areas */
+    /* Mobile safe areas */
     --safe-top: env(safe-area-inset-top, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
-    --tab-height: 56px;
+    --tab-height: 64px;
+
+    color-scheme: light;
+  }
+
+  .dark {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+
+    --card: 240 3% 11%;
+    --card-foreground: 0 0% 100%;
+    --card-hover: 240 2% 15%;
+    --card-elevated: 240 2% 17%;
+
+    --popover: 240 3% 11%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 228 100% 68%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 228 100% 68% / 0.25;
+    --primary-dim: 228 100% 68% / 0.18;
+
+    --secondary: 240 2% 17%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 240 3% 14%;
+    --muted-foreground: 240 4% 64%;
+
+    --accent: 228 100% 68%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 3 100% 61%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 3% 20%;
+    --input: 240 3% 14%;
+    --ring: 228 100% 68%;
+
+    --success: 135 64% 50%;
+    --success-foreground: 140 100% 7%;
+    --danger: 3 100% 61%;
+    --warning: 35 100% 52%;
+
+    --fill: 240 4% 49%;
+    --pill: 240 2% 23%;
+    --hairline: 0 0% 100% / 0.12;
+    --glass: 240 3% 16% / 0.74;
+
+    --nba-green-dim: 135 64% 50% / 0.16;
+    --nba-red-dim: 3 100% 61% / 0.16;
+    --nba-yellow: 45 100% 55%;
+    --nba-yellow-dim: 45 100% 55% / 0.14;
+    --nba-blue-dim: 228 100% 68% / 0.18;
+    --nba-cyan: 199 100% 70%;
+
+    --sidebar-background: 240 3% 11%;
+    --sidebar-foreground: 240 4% 64%;
+    --sidebar-primary: 228 100% 68%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 2% 17%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 240 3% 20%;
+    --sidebar-ring: 228 100% 68%;
+
+    color-scheme: dark;
   }
 }
 
@@ -95,7 +173,9 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', 'Plus Jakarta Sans', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    /* SF Pro on iOS/macOS (built in, nothing to download); system fonts elsewhere. */
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
+    letter-spacing: -0.01em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-tap-highlight-color: transparent;
@@ -113,78 +193,37 @@
 }
 
 @layer utilities {
-  /* Vision UI frosted glass */
+  /* Frosted glass (floating bars, sticky headers) */
   .ios-blur {
-    background: hsla(228, 24%, 7%, 0.72);
-    backdrop-filter: saturate(180%) blur(20px);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    background: hsl(var(--glass));
+    backdrop-filter: saturate(180%) blur(24px);
+    -webkit-backdrop-filter: saturate(180%) blur(24px);
   }
 
   .ios-blur-heavy {
-    background: hsla(228, 24%, 6%, 0.88);
+    background: hsl(var(--glass));
     backdrop-filter: saturate(200%) blur(40px);
     -webkit-backdrop-filter: saturate(200%) blur(40px);
   }
 
-  /* Vision UI glassmorphic card */
-  .vision-card {
-    background: linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.94) 19.41%, hsla(228, 30%, 8%, 0.49) 76.65%);
-    border: 1px solid hsla(228, 30%, 22%, 0.35);
+  /* Cards: flat surface with a hairline outline (legacy class names kept) */
+  .vision-card,
+  .vision-card-glow,
+  .vision-card-animated {
+    position: relative;
+    background: hsl(var(--card));
+    box-shadow: inset 0 0 0 0.5px hsl(var(--hairline));
+    border: 0;
     border-radius: 1.25rem;
-    backdrop-filter: blur(12px);
   }
 
   .stat-tabs::-webkit-scrollbar {
     display: none;
   }
 
-  .vision-card-glow {
-    background: linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.94) 19.41%, hsla(228, 30%, 8%, 0.49) 76.65%);
-    border: 1px solid hsla(250, 76%, 62%, 0.15);
-    border-radius: 1.25rem;
-    backdrop-filter: blur(12px);
-    box-shadow: 0 8px 32px -4px hsla(250, 76%, 62%, 0.08);
-  }
-
-  /* Animated gradient border */
-  .vision-card-animated {
-    position: relative;
-    border-radius: 1.25rem;
-    backdrop-filter: blur(12px);
-    background: linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.94) 19.41%, hsla(228, 30%, 8%, 0.49) 76.65%);
-    border: 1px solid hsla(228, 30%, 22%, 0.35);
-    overflow: hidden;
-  }
-
-  .vision-card-animated::before {
-    content: '';
-    position: absolute;
-    inset: -1px;
-    border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(
-      var(--gradient-angle, 0deg),
-      hsla(250, 76%, 62%, 0.4),
-      hsla(190, 90%, 55%, 0.2),
-      hsla(228, 30%, 22%, 0.1),
-      hsla(250, 76%, 62%, 0.4)
-    );
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    animation: rotate-gradient 4s linear infinite;
-    pointer-events: none;
-    z-index: 1;
-  }
-
-  /* Floating glow orb */
+  /* Decorative glow orbs are retired in Playbook */
   .vision-orb {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(60px);
-    opacity: 0.08;
-    animation: float-orb 8s ease-in-out infinite;
-    pointer-events: none;
+    display: none;
   }
 
   /* iOS grouped card style */
@@ -196,7 +235,6 @@
     @apply bg-card rounded-xl mx-4;
   }
 
-  /* iOS list row */
   .ios-row {
     @apply flex items-center justify-between py-3 px-4;
   }
@@ -205,30 +243,16 @@
     @apply border-t border-border;
   }
 
-  /* iOS section header */
   .ios-section-header {
     @apply text-[13px] font-semibold text-muted-foreground uppercase tracking-wide px-5 py-1.5;
   }
 
-  /* Glow effects */
-  .glow-green {
-    box-shadow: 0 0 20px hsl(158 64% 52% / 0.15),
-                0 0 60px hsl(158 64% 52% / 0.05);
-  }
-
-  .glow-red {
-    box-shadow: 0 0 20px hsl(0 72% 51% / 0.15),
-                0 0 60px hsl(0 72% 51% / 0.05);
-  }
-
-  .glow-purple {
-    box-shadow: 0 0 20px hsl(250 76% 62% / 0.2),
-                0 0 60px hsl(250 76% 62% / 0.08);
-  }
-
+  /* Glows are retired; keep the class names as no-ops */
+  .glow-green,
+  .glow-red,
+  .glow-purple,
   .glow-blue {
-    box-shadow: 0 0 24px hsl(211 100% 60% / 0.2),
-                0 0 60px hsl(211 100% 60% / 0.06);
+    box-shadow: none;
   }
 
   .text-nba-green { color: hsl(var(--nba-green)); }
@@ -258,32 +282,22 @@
   }
 
   .font-mono {
-    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
   }
 
-  /* Vision UI gradient text */
+  /* Former gradient text: solid token colors */
   .gradient-text {
-    background: linear-gradient(135deg, hsl(0 0% 100%), hsl(220 20% 70%));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: hsl(var(--foreground));
   }
 
   .gradient-text-accent {
-    background: linear-gradient(135deg, hsl(250 76% 62%), hsl(190 90% 55%));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: hsl(var(--primary));
   }
 
   .gradient-text-green {
-    background: linear-gradient(135deg, hsl(158 64% 52%), hsl(175 55% 42%));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: hsl(var(--success));
   }
 
-  /* Rotating gradient border animation */
   @keyframes rotate-gradient {
     0% { --gradient-angle: 0deg; }
     100% { --gradient-angle: 360deg; }
@@ -295,7 +309,6 @@
     inherits: false;
   }
 
-  /* Floating orb animation */
   @keyframes float-orb {
     0%, 100% { transform: translate(0, 0) scale(1); }
     25% { transform: translate(15px, -20px) scale(1.1); }
@@ -303,7 +316,6 @@
     75% { transform: translate(20px, 15px) scale(1.05); }
   }
 
-  /* Pulse ring animation */
   @keyframes pulse-ring {
     0% { transform: scale(0.95); opacity: 0.5; }
     50% { transform: scale(1.05); opacity: 1; }
@@ -313,7 +325,6 @@
     animation: pulse-ring 2s ease-in-out infinite;
   }
 
-  /* iOS spring animation */
   @keyframes ios-spring-in {
     0% { transform: scale(0.92); opacity: 0; }
     60% { transform: scale(1.02); }
@@ -323,30 +334,21 @@
     animation: ios-spring-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
-  /* Shimmer animation */
   @keyframes shimmer {
     0% { background-position: -200% 0; }
     100% { background-position: 200% 0; }
   }
   .animate-shimmer {
-    background: linear-gradient(90deg, transparent, hsla(250, 76%, 62%, 0.06), transparent);
+    background: linear-gradient(90deg, transparent, hsl(var(--fill) / 0.12), transparent);
     background-size: 200% 100%;
     animation: shimmer 3s ease-in-out infinite;
   }
 
-  /* Subtle grain texture overlay */
+  /* Grain overlay retired */
   .vision-grain::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    opacity: 0.025;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-    pointer-events: none;
-    z-index: 0;
+    content: none;
   }
 
-  /* Counter / number ticker animation */
   @keyframes count-up {
     0% { opacity: 0; transform: translateY(12px); }
     100% { opacity: 1; transform: translateY(0); }
@@ -355,16 +357,14 @@
     animation: count-up 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
   }
 
-  /* Glow pulse for status indicators */
   @keyframes glow-pulse {
-    0%, 100% { box-shadow: 0 0 4px 1px hsl(158 64% 52% / 0.4); }
-    50% { box-shadow: 0 0 12px 3px hsl(158 64% 52% / 0.7); }
+    0%, 100% { box-shadow: 0 0 0 0 hsl(var(--success) / 0.4); }
+    50% { box-shadow: 0 0 0 4px hsl(var(--success) / 0); }
   }
   .animate-glow-pulse {
     animation: glow-pulse 2s ease-in-out infinite;
   }
 
-  /* Slide in from bottom */
   @keyframes slide-up-fade {
     0% { opacity: 0; transform: translateY(24px); }
     100% { opacity: 1; transform: translateY(0); }
@@ -373,16 +373,10 @@
     animation: slide-up-fade 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
   }
 
-  /* Breathing glow on cards */
-  @keyframes breathe {
-    0%, 100% { box-shadow: 0 0 0 0 hsla(250, 76%, 62%, 0); }
-    50% { box-shadow: 0 0 20px 2px hsla(250, 76%, 62%, 0.06); }
-  }
   .animate-breathe {
-    animation: breathe 4s ease-in-out infinite;
+    animation: none;
   }
 
-  /* Sparkle float */
   @keyframes sparkle-float {
     0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0; }
     10% { opacity: 1; }
@@ -391,23 +385,21 @@
     100% { transform: translateY(-40px) rotate(360deg); }
   }
 
-  /* Gradient line separator */
   .gradient-divider {
     height: 1px;
-    background: linear-gradient(90deg, transparent, hsla(228, 18%, 15%, 0.6), transparent);
+    background: hsl(var(--border));
   }
 
-  /* Progress bar gradient */
   .progress-gradient {
-    background: linear-gradient(90deg, hsl(250 76% 62%), hsl(190 90% 55%));
+    background: hsl(var(--primary));
   }
 
   .progress-gradient-green {
-    background: linear-gradient(90deg, hsl(158 64% 52% / 0.8), hsl(158 64% 52% / 0.3));
+    background: hsl(var(--success));
   }
 
   .progress-gradient-red {
-    background: linear-gradient(90deg, hsl(0 72% 51% / 0.8), hsl(0 72% 51% / 0.3));
+    background: hsl(var(--danger));
   }
 }
 
@@ -424,4 +416,13 @@
 @keyframes skeleton-pulse {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 0.8; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
