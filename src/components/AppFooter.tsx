@@ -17,7 +17,7 @@ const AppFooter = () => {
 
   return (
     <footer className="px-4 pt-8 pb-6 mt-4">
-      <div className="h-px w-full mb-5" style={{ background: 'linear-gradient(90deg, transparent, hsla(228, 18%, 25%, 0.5), transparent)' }} />
+      <div className="h-px w-full mb-5" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--secondary) / 0.5), transparent)' }} />
 
       <div className="flex flex-wrap justify-center gap-x-3 gap-y-1.5 mb-4">
         {FOOTER_LINKS.map((link) => (

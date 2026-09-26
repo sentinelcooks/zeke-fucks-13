@@ -57,7 +57,7 @@ function Backtest({ bt }: { bt: PropSummary["backtest"] }) {
               <td className="px-3 py-1.5">{num(r.mae, 2)}</td>
               <td className="px-3 py-1.5">{num(r.rmse, 2)}</td>
               <td className="px-3 py-1.5">{num(r.bias, 2)}</td>
-              <td className={`px-3 py-1.5 ${r.pit_ece > 0.08 ? "text-amber-400" : ""}`}>{num(r.pit_ece, 3)}</td>
+              <td className={`px-3 py-1.5 ${r.pit_ece > 0.08 ? "text-warning" : ""}`}>{num(r.pit_ece, 3)}</td>
               <td className="px-3 py-1.5">{num(r.over_ece_proxy_line, 3)}</td>
             </tr>
           ))}

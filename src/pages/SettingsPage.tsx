@@ -146,8 +146,8 @@ const ContactUsSection = () => {
           onClick={() => setOpen(true)}
           className="w-full vision-card px-5 py-4 flex items-center gap-3 hover:bg-secondary/20 transition-colors"
         >
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))' }}>
-            <MessageSquare className="w-4 h-4 text-white" />
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--success)))' }}>
+            <MessageSquare className="w-4 h-4 text-foreground" />
           </div>
           <div className="text-left flex-1">
             <p className="text-[13px] font-bold text-foreground">Contact Us</p>
@@ -166,7 +166,7 @@ const ContactUsSection = () => {
             </DialogHeader>
             {sent ? (
               <div className="flex flex-col items-center justify-center py-8 gap-3 text-center">
-                <CheckCircle className="w-12 h-12 text-green-400" />
+                <CheckCircle className="w-12 h-12 text-success" />
                 <p className="text-foreground font-semibold text-base">Message Sent!</p>
                 <p className="text-muted-foreground text-xs">We'll review your message and respond shortly.</p>
                 <Button variant="ghost" onClick={handleClose} className="mt-2 text-xs text-accent">Close</Button>
@@ -325,7 +325,7 @@ const UnitCalculatorSection = () => {
               <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-1">
                 Current 1U
               </p>
-              <p className="text-2xl font-bold" style={{ color: "hsl(142 100% 50%)" }}>
+              <p className="text-2xl font-bold" style={{ color: "hsl(var(--primary))" }}>
                 {fmt(manualUnitNum)}
               </p>
             </div>
@@ -363,7 +363,7 @@ const UnitCalculatorSection = () => {
       resultNode = (
         <div className="space-y-3">
           {showCustomWarning && (
-            <p className="text-[10px] text-amber-400/80 text-center">
+            <p className="text-[10px] text-warning/80 text-center">
               Most users keep units between 1–3% for safer bankroll management.
             </p>
           )}
@@ -372,7 +372,7 @@ const UnitCalculatorSection = () => {
               <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-1">
                 Recommended Unit Size
               </p>
-              <p className="text-2xl font-bold" style={{ color: "hsl(142 100% 50%)" }}>
+              <p className="text-2xl font-bold" style={{ color: "hsl(var(--primary))" }}>
                 {fmt(unit)}
               </p>
             </div>
@@ -400,7 +400,7 @@ const UnitCalculatorSection = () => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.275 }}
       className={`vision-card overflow-hidden relative z-10 transition-shadow ${
-        showUnitRequiredHighlight && !unitSize ? "ring-1 ring-amber-400/50 shadow-[0_0_18px_hsla(38,92%,50%,0.12)]" : ""
+        showUnitRequiredHighlight && !unitSize ? "ring-1 ring-warning/50 shadow-[0_0_18px_hsl(var(--nba-yellow) / 0.12)]" : ""
       }`}
     >
       <button
@@ -410,9 +410,9 @@ const UnitCalculatorSection = () => {
       >
         <div
           className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-          style={{ background: "linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))" }}
+          style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--success)))" }}
         >
-          <Calculator className="w-4 h-4 text-white" />
+          <Calculator className="w-4 h-4 text-foreground" />
         </div>
         <div className="flex-1">
           <p className="text-[13px] font-bold text-foreground">Unit Size Calculator</p>
@@ -428,8 +428,8 @@ const UnitCalculatorSection = () => {
       {isUnitCalculatorOpen && (
       <div className="px-5 pb-5 pt-4 space-y-4 border-t border-border/20">
         {showUnitRequiredHighlight && !unitSize && (
-          <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2.5">
-            <p className="text-[11px] font-semibold text-amber-300">
+          <div className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-2.5">
+            <p className="text-[11px] font-semibold text-warning">
               Enter a valid unit size below to display profit/loss in units.
             </p>
           </div>
@@ -441,8 +441,8 @@ const UnitCalculatorSection = () => {
           <div
             className="flex rounded-xl p-1 gap-1"
             style={{
-              background: "hsla(228, 20%, 8%, 0.6)",
-              border: "1px solid hsla(228, 30%, 16%, 0.25)",
+              background: "hsl(var(--card) / 0.6)",
+              border: "1px solid hsl(var(--border) / 0.25)",
             }}
           >
             {([
@@ -454,14 +454,14 @@ const UnitCalculatorSection = () => {
                 onClick={() => setSetupMode(opt.value)}
                 className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 rounded-lg text-center transition-all duration-300 ${
                   setupMode === opt.value
-                    ? "text-[hsl(228_30%_8%)]"
+                    ? "text-card"
                     : "text-muted-foreground/65 hover:text-foreground/50"
                 }`}
                 style={
                   setupMode === opt.value
                     ? {
-                        background: "linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))",
-                        boxShadow: "0 4px 12px -2px hsla(142,100%,50%,0.3)",
+                        background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--success)))",
+                        boxShadow: "0 4px 12px -2px hsl(var(--primary) / 0.3)",
                       }
                     : {}
                 }
@@ -491,7 +491,7 @@ const UnitCalculatorSection = () => {
                   value={bankroll}
                   onChange={(e) => setBankroll(e.target.value)}
                   className={`bg-secondary/50 border-border/40 rounded-xl h-10 text-sm pl-7 placeholder:text-muted-foreground/50 ${
-                    showUnitRequiredHighlight && !unitSize ? "border-amber-400/60 ring-1 ring-amber-400/25" : ""
+                    showUnitRequiredHighlight && !unitSize ? "border-warning/60 ring-1 ring-warning/25" : ""
                   }`}
                 />
               </div>
@@ -503,8 +503,8 @@ const UnitCalculatorSection = () => {
               <div
                 className="flex rounded-xl p-1 gap-1 flex-wrap"
                 style={{
-                  background: "hsla(228, 20%, 8%, 0.6)",
-                  border: "1px solid hsla(228, 30%, 16%, 0.25)",
+                  background: "hsl(var(--card) / 0.6)",
+                  border: "1px solid hsl(var(--border) / 0.25)",
                 }}
               >
                 {RISK_PRESETS.map((preset) => (
@@ -513,14 +513,14 @@ const UnitCalculatorSection = () => {
                     onClick={() => setRiskPreset(preset.value)}
                     className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 rounded-lg text-center transition-all duration-300 min-w-[60px] ${
                       riskPreset === preset.value
-                        ? "text-[hsl(228_30%_8%)]"
+                        ? "text-card"
                         : "text-muted-foreground/65 hover:text-foreground/50"
                     }`}
                     style={
                       riskPreset === preset.value
                         ? {
-                            background: "linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))",
-                            boxShadow: "0 4px 12px -2px hsla(142,100%,50%,0.3)",
+                            background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--success)))",
+                            boxShadow: "0 4px 12px -2px hsl(var(--primary) / 0.3)",
                           }
                         : {}
                     }
@@ -530,7 +530,7 @@ const UnitCalculatorSection = () => {
                       <span
                         className={`text-[9px] font-semibold ${
                           riskPreset === preset.value
-                            ? "text-[hsl(228_30%_8%)]/75"
+                            ? "text-card/75"
                             : "text-muted-foreground/50"
                         }`}
                       >
@@ -584,7 +584,7 @@ const UnitCalculatorSection = () => {
                 value={manualUnit}
                 onChange={(e) => setManualUnit(e.target.value)}
                 className={`bg-secondary/50 border-border/40 rounded-xl h-10 text-sm pl-7 placeholder:text-muted-foreground/50 ${
-                  showUnitRequiredHighlight && !unitSize ? "border-amber-400/60 ring-1 ring-amber-400/25" : ""
+                  showUnitRequiredHighlight && !unitSize ? "border-warning/60 ring-1 ring-warning/25" : ""
                 }`}
               />
             </div>
@@ -667,9 +667,9 @@ const ProfitDisplayModeSection = () => {
         <div className="flex items-center gap-3 mb-1">
           <div
             className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: "linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))" }}
+            style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--success)))" }}
           >
-            <DollarSign className="w-4 h-4 text-white" />
+            <DollarSign className="w-4 h-4 text-foreground" />
           </div>
           <div>
             <p className="text-[13px] font-bold text-foreground">Display Format</p>
@@ -679,8 +679,8 @@ const ProfitDisplayModeSection = () => {
         <div
           className="flex rounded-xl p-1 gap-1"
           style={{
-            background: "hsla(228, 20%, 8%, 0.6)",
-            border: "1px solid hsla(228, 30%, 16%, 0.25)",
+            background: "hsl(var(--card) / 0.6)",
+            border: "1px solid hsl(var(--border) / 0.25)",
           }}
         >
           {PROFIT_DISPLAY_MODES.map((opt) => (
@@ -689,14 +689,14 @@ const ProfitDisplayModeSection = () => {
               onClick={() => handleModeChange(opt.value)}
               className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 rounded-lg text-center transition-all duration-300 ${
                 mode === opt.value
-                  ? "text-[hsl(228_30%_8%)]"
+                  ? "text-card"
                   : "text-muted-foreground/65 hover:text-foreground/50"
               }`}
               style={
                 mode === opt.value
                   ? {
-                      background: "linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))",
-                      boxShadow: "0 4px 12px -2px hsla(142,100%,50%,0.3)",
+                      background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--success)))",
+                      boxShadow: "0 4px 12px -2px hsl(var(--primary) / 0.3)",
                     }
                   : {}
               }
@@ -706,14 +706,14 @@ const ProfitDisplayModeSection = () => {
           ))}
         </div>
         {showHint && (
-          <div className="rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2.5 text-center space-y-2">
-            <p className="text-[11px] font-semibold text-amber-300">
+          <div className="rounded-xl border border-warning/25 bg-warning/10 px-3 py-2.5 text-center space-y-2">
+            <p className="text-[11px] font-semibold text-warning">
               Set your unit size to display profit/loss in units.
             </p>
             <button
               type="button"
               onClick={() => window.dispatchEvent(new Event(SHOW_UNIT_CALCULATOR_EVENT))}
-              className="text-[10px] font-bold uppercase tracking-wider text-amber-300/85 hover:text-amber-200 transition-colors"
+              className="text-[10px] font-bold uppercase tracking-wider text-warning/85 hover:text-warning transition-colors"
             >
               Set Unit Size
             </button>
@@ -991,7 +991,7 @@ const SettingsPage = () => {
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pt-2 pb-4 space-y-4 relative">
-      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(142 100% 50%)' }} />
+      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(var(--primary))' }} />
 
       
 
@@ -1005,8 +1005,8 @@ const SettingsPage = () => {
           onClick={openAccount}
           className="w-full px-5 py-4 flex items-center gap-3 text-left hover:bg-secondary/20 active:bg-secondary/30 transition-colors"
         >
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))' }}>
-            <User className="w-5 h-5 text-white" />
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--success)))' }}>
+            <User className="w-5 h-5 text-foreground" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[13px] font-bold text-foreground truncate">
@@ -1306,7 +1306,7 @@ const SettingsPage = () => {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="px-4 py-2 rounded-full text-[11px] font-bold text-accent-foreground flex items-center gap-2"
-            style={{ background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))' }}
+            style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--success)))' }}
           >
             <Check className="w-3 h-3" /> Saved
           </motion.div>

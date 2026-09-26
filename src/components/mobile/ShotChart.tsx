@@ -18,34 +18,34 @@ interface ShotChartProps {
 }
 
 function getZoneFill(pct: number): string {
-  if (pct >= 55) return "hsl(158 64% 52% / 0.85)";
-  if (pct >= 48) return "hsl(158 64% 52% / 0.65)";
-  if (pct >= 42) return "hsl(158 64% 52% / 0.45)";
-  if (pct >= 35) return "hsl(43 96% 56% / 0.55)";
-  return "hsl(0 72% 51% / 0.5)";
+  if (pct >= 55) return "hsl(var(--success) / 0.85)";
+  if (pct >= 48) return "hsl(var(--success) / 0.65)";
+  if (pct >= 42) return "hsl(var(--success) / 0.45)";
+  if (pct >= 35) return "hsl(var(--nba-yellow) / 0.55)";
+  return "hsl(var(--danger) / 0.5)";
 }
 
 function getZoneStroke(pct: number): string {
-  if (pct >= 55) return "hsl(158 64% 52% / 0.6)";
-  if (pct >= 48) return "hsl(158 64% 52% / 0.4)";
-  if (pct >= 42) return "hsl(158 64% 52% / 0.3)";
-  if (pct >= 35) return "hsl(43 96% 56% / 0.4)";
-  return "hsl(0 72% 51% / 0.4)";
+  if (pct >= 55) return "hsl(var(--success) / 0.6)";
+  if (pct >= 48) return "hsl(var(--success) / 0.4)";
+  if (pct >= 42) return "hsl(var(--success) / 0.3)";
+  if (pct >= 35) return "hsl(var(--nba-yellow) / 0.4)";
+  return "hsl(var(--danger) / 0.4)";
 }
 
 function getTextFill(pct: number): string {
-  if (pct >= 48) return "hsl(158 64% 95%)";
-  if (pct >= 42) return "hsl(0 0% 95%)";
-  if (pct >= 35) return "hsl(43 96% 92%)";
-  return "hsl(0 72% 92%)";
+  if (pct >= 48) return "hsl(var(--success))";
+  if (pct >= 42) return "hsl(var(--foreground))";
+  if (pct >= 35) return "hsl(var(--nba-yellow))";
+  return "hsl(var(--danger))";
 }
 
 function getTrailColor(pct: number): string {
-  if (pct >= 55) return "hsl(158 64% 52%)";
-  if (pct >= 48) return "hsl(158 64% 52%)";
-  if (pct >= 42) return "hsl(158 64% 52%)";
-  if (pct >= 35) return "hsl(43 96% 56%)";
-  return "hsl(0 72% 51%)";
+  if (pct >= 55) return "hsl(var(--success))";
+  if (pct >= 48) return "hsl(var(--success))";
+  if (pct >= 42) return "hsl(var(--success))";
+  if (pct >= 35) return "hsl(var(--nba-yellow))";
+  return "hsl(var(--danger))";
 }
 
 function getRadius(attempts: number, allAttempts: number[]): number {
@@ -116,41 +116,41 @@ function NhlRink({ zones }: { zones: CourtZone[] }) {
       </defs>
 
       {/* Background - ice surface */}
-      <rect x="0" y="0" width="100" height="100" rx="12" fill="hsl(210 20% 8%)" stroke="hsl(210 15% 18%)" strokeWidth="0.4" />
+      <rect x="0" y="0" width="100" height="100" rx="12" fill="hsl(var(--card))" stroke="hsl(var(--border))" strokeWidth="0.4" />
 
       {/* Rink boards outline */}
-      <rect x="3" y="3" width="94" height="94" rx="10" fill="none" stroke="hsl(210 15% 22%)" strokeWidth="0.5" />
+      <rect x="3" y="3" width="94" height="94" rx="10" fill="none" stroke="hsl(var(--border))" strokeWidth="0.5" />
 
       {/* Center ice line */}
-      <line x1="3" y1="30" x2="97" y2="30" stroke="hsl(0 72% 45% / 0.3)" strokeWidth="0.6" />
+      <line x1="3" y1="30" x2="97" y2="30" stroke="hsl(var(--danger) / 0.3)" strokeWidth="0.6" />
 
       {/* Center circle */}
       <circle cx="50" cy="30" r="8" fill="none" stroke="hsl(210 50% 45% / 0.2)" strokeWidth="0.35" />
       <circle cx="50" cy="30" r="0.8" fill="hsl(210 50% 45% / 0.3)" />
 
       {/* Blue line */}
-      <line x1="3" y1="48" x2="97" y2="48" stroke="hsl(210 80% 50% / 0.25)" strokeWidth="0.8" />
+      <line x1="3" y1="48" x2="97" y2="48" stroke="hsl(var(--primary) / 0.25)" strokeWidth="0.8" />
 
       {/* Offensive zone faceoff circles */}
-      <circle cx="25" cy="68" r="8" fill="none" stroke="hsl(0 72% 45% / 0.15)" strokeWidth="0.35" />
-      <circle cx="75" cy="68" r="8" fill="none" stroke="hsl(0 72% 45% / 0.15)" strokeWidth="0.35" />
-      <circle cx="25" cy="68" r="0.6" fill="hsl(0 72% 45% / 0.3)" />
-      <circle cx="75" cy="68" r="0.6" fill="hsl(0 72% 45% / 0.3)" />
+      <circle cx="25" cy="68" r="8" fill="none" stroke="hsl(var(--danger) / 0.15)" strokeWidth="0.35" />
+      <circle cx="75" cy="68" r="8" fill="none" stroke="hsl(var(--danger) / 0.15)" strokeWidth="0.35" />
+      <circle cx="25" cy="68" r="0.6" fill="hsl(var(--danger) / 0.3)" />
+      <circle cx="75" cy="68" r="0.6" fill="hsl(var(--danger) / 0.3)" />
 
       {/* Goal crease */}
-      <path d="M 43 93 Q 43 86 50 86 Q 57 86 57 93" fill="hsl(210 80% 50% / 0.08)" stroke="hsl(210 80% 50% / 0.25)" strokeWidth="0.4" />
+      <path d="M 43 93 Q 43 86 50 86 Q 57 86 57 93" fill="hsl(var(--primary) / 0.08)" stroke="hsl(var(--primary) / 0.25)" strokeWidth="0.4" />
 
       {/* Goal net */}
       <g filter="url(#nhlGoalGlow)">
-        <rect x="46" y="93" width="8" height="3" rx="0.5" fill="none" stroke="hsl(0 72% 50% / 0.5)" strokeWidth="0.5" />
-        <line x1="47" y1="93" x2="47" y2="96" stroke="hsl(0 72% 50% / 0.2)" strokeWidth="0.3" />
-        <line x1="49" y1="93" x2="49" y2="96" stroke="hsl(0 72% 50% / 0.2)" strokeWidth="0.3" />
-        <line x1="51" y1="93" x2="51" y2="96" stroke="hsl(0 72% 50% / 0.2)" strokeWidth="0.3" />
-        <line x1="53" y1="93" x2="53" y2="96" stroke="hsl(0 72% 50% / 0.2)" strokeWidth="0.3" />
+        <rect x="46" y="93" width="8" height="3" rx="0.5" fill="none" stroke="hsl(var(--danger) / 0.5)" strokeWidth="0.5" />
+        <line x1="47" y1="93" x2="47" y2="96" stroke="hsl(var(--danger) / 0.2)" strokeWidth="0.3" />
+        <line x1="49" y1="93" x2="49" y2="96" stroke="hsl(var(--danger) / 0.2)" strokeWidth="0.3" />
+        <line x1="51" y1="93" x2="51" y2="96" stroke="hsl(var(--danger) / 0.2)" strokeWidth="0.3" />
+        <line x1="53" y1="93" x2="53" y2="96" stroke="hsl(var(--danger) / 0.2)" strokeWidth="0.3" />
       </g>
 
       {/* Goal line */}
-      <line x1="10" y1="93" x2="90" y2="93" stroke="hsl(0 72% 45% / 0.2)" strokeWidth="0.4" />
+      <line x1="10" y1="93" x2="90" y2="93" stroke="hsl(var(--danger) / 0.2)" strokeWidth="0.4" />
 
       {/* Shot arc trails */}
       {zones.filter(z => !["PP Goals", "EV Goals"].includes(z.label)).map((zone, i) => {
@@ -219,7 +219,7 @@ function NhlRink({ zones }: { zones: CourtZone[] }) {
             y={zone.cy + 2.8}
             textAnchor="middle"
             dominantBaseline="central"
-            fill="hsl(0 0% 45%)"
+            fill="hsl(var(--muted-foreground))"
             fontSize="1.8"
             fontWeight="500"
             fontFamily="-apple-system, 'SF Pro Display', 'Inter', sans-serif"
@@ -279,16 +279,16 @@ function BasketballCourt({ zones }: { zones: CourtZone[] }) {
       </defs>
 
       {/* Background */}
-      <rect x="0" y="0" width="100" height="100" rx="2" fill="hsl(0 0% 8%)" stroke="hsl(0 0% 16%)" strokeWidth="0.4" />
+      <rect x="0" y="0" width="100" height="100" rx="2" fill="hsl(var(--card))" stroke="hsl(var(--border))" strokeWidth="0.4" />
 
       {/* Paint / Key */}
-      <rect x="31" y="68" width="38" height="30" fill="none" stroke="hsl(0 0% 20%)" strokeWidth="0.35" />
+      <rect x="31" y="68" width="38" height="30" fill="none" stroke="hsl(var(--border))" strokeWidth="0.35" />
 
       {/* Free throw circle */}
-      <circle cx="50" cy="68" r="12" fill="none" stroke="hsl(0 0% 20%)" strokeWidth="0.35" />
+      <circle cx="50" cy="68" r="12" fill="none" stroke="hsl(var(--border))" strokeWidth="0.35" />
 
       {/* 3-point arc */}
-      <path d="M 6 98 L 6 70 Q 6 22 50 22 Q 94 22 94 70 L 94 98" fill="none" stroke="hsl(0 0% 20%)" strokeWidth="0.35" />
+      <path d="M 6 98 L 6 70 Q 6 22 50 22 Q 94 22 94 70 L 94 98" fill="none" stroke="hsl(var(--border))" strokeWidth="0.35" />
 
       {/* Shot arc trails */}
       {zones.map((zone, i) => {
@@ -303,10 +303,10 @@ function BasketballCourt({ zones }: { zones: CourtZone[] }) {
 
       {/* Basket with glow */}
       <g filter="url(#basketGlow)">
-        <circle cx="50" cy="92" r="1.4" fill="none" stroke="hsl(158 64% 52% / 0.6)" strokeWidth="0.5" />
-        <rect x="47.5" y="93.4" width="5" height="0.6" fill="hsl(158 64% 52% / 0.3)" rx="0.3" />
+        <circle cx="50" cy="92" r="1.4" fill="none" stroke="hsl(var(--success) / 0.6)" strokeWidth="0.5" />
+        <rect x="47.5" y="93.4" width="5" height="0.6" fill="hsl(var(--success) / 0.3)" rx="0.3" />
       </g>
-      <line x1="44" y1="94.5" x2="56" y2="94.5" stroke="hsl(0 0% 22%)" strokeWidth="0.4" />
+      <line x1="44" y1="94.5" x2="56" y2="94.5" stroke="hsl(var(--border))" strokeWidth="0.4" />
 
       {/* Stat zones */}
       {zones.map((zone, i) => (
@@ -350,7 +350,7 @@ function BasketballCourt({ zones }: { zones: CourtZone[] }) {
             y={zone.cy + 2.8}
             textAnchor="middle"
             dominantBaseline="central"
-            fill="hsl(0 0% 45%)"
+            fill="hsl(var(--muted-foreground))"
             fontSize="1.8"
             fontWeight="500"
             fontFamily="-apple-system, 'SF Pro Display', 'Inter', sans-serif"
@@ -430,22 +430,22 @@ function BaseballDiamond({ zones }: { zones: CourtZone[] }) {
       {/* Bases */}
       {/* Home plate */}
       <g filter="url(#mlbGlow)">
-        <path d="M 48 88 L 50 91 L 52 88 L 51 86.5 L 49 86.5 Z" fill="hsl(0 0% 85% / 0.4)" stroke="hsl(0 0% 70% / 0.5)" strokeWidth="0.3" />
+        <path d="M 48 88 L 50 91 L 52 88 L 51 86.5 L 49 86.5 Z" fill="hsl(var(--muted-foreground) / 0.4)" stroke="hsl(var(--muted-foreground) / 0.5)" strokeWidth="0.3" />
       </g>
       {/* First base */}
-      <rect x="70.5" y="63.5" width="3" height="3" transform="rotate(45 72 65)" fill="hsl(0 0% 85% / 0.25)" stroke="hsl(0 0% 50% / 0.3)" strokeWidth="0.3" />
+      <rect x="70.5" y="63.5" width="3" height="3" transform="rotate(45 72 65)" fill="hsl(var(--muted-foreground) / 0.25)" stroke="hsl(var(--muted-foreground) / 0.3)" strokeWidth="0.3" />
       {/* Second base */}
-      <rect x="48.5" y="40.5" width="3" height="3" transform="rotate(45 50 42)" fill="hsl(0 0% 85% / 0.25)" stroke="hsl(0 0% 50% / 0.3)" strokeWidth="0.3" />
+      <rect x="48.5" y="40.5" width="3" height="3" transform="rotate(45 50 42)" fill="hsl(var(--muted-foreground) / 0.25)" stroke="hsl(var(--muted-foreground) / 0.3)" strokeWidth="0.3" />
       {/* Third base */}
-      <rect x="26.5" y="63.5" width="3" height="3" transform="rotate(45 28 65)" fill="hsl(0 0% 85% / 0.25)" stroke="hsl(0 0% 50% / 0.3)" strokeWidth="0.3" />
+      <rect x="26.5" y="63.5" width="3" height="3" transform="rotate(45 28 65)" fill="hsl(var(--muted-foreground) / 0.25)" stroke="hsl(var(--muted-foreground) / 0.3)" strokeWidth="0.3" />
 
       {/* Pitcher's mound */}
       <circle cx="50" cy="65" r="2" fill="hsl(30 20% 15% / 0.4)" stroke="hsl(30 15% 25%)" strokeWidth="0.3" />
-      <rect x="49" y="64.5" width="2" height="1" fill="hsl(0 0% 70% / 0.3)" rx="0.2" />
+      <rect x="49" y="64.5" width="2" height="1" fill="hsl(var(--muted-foreground) / 0.3)" rx="0.2" />
 
       {/* Foul lines */}
-      <line x1="50" y1="88" x2="5" y2="43" stroke="hsl(0 0% 30% / 0.25)" strokeWidth="0.3" />
-      <line x1="50" y1="88" x2="95" y2="43" stroke="hsl(0 0% 30% / 0.25)" strokeWidth="0.3" />
+      <line x1="50" y1="88" x2="5" y2="43" stroke="hsl(var(--border) / 0.25)" strokeWidth="0.3" />
+      <line x1="50" y1="88" x2="95" y2="43" stroke="hsl(var(--border) / 0.25)" strokeWidth="0.3" />
 
       {/* Hit arc trails */}
       {zones.filter(z => z.label !== "Walks").map((zone, i) => {
@@ -514,7 +514,7 @@ function BaseballDiamond({ zones }: { zones: CourtZone[] }) {
             y={zone.cy + 2.8}
             textAnchor="middle"
             dominantBaseline="central"
-            fill="hsl(0 0% 45%)"
+            fill="hsl(var(--muted-foreground))"
             fontSize="1.8"
             fontWeight="500"
             fontFamily="-apple-system, 'SF Pro Display', 'Inter', sans-serif"

@@ -54,7 +54,7 @@ export function OddsTabsCard({
     <AnalysisCard>
       <CardHeading icon={Zap} title="Odds" />
 
-      <div role="tablist" aria-label="Markets" className="mt-3 grid gap-1 rounded-xl p-1" style={{ background: "hsla(228,24%,10%,0.8)", gridTemplateColumns: `repeat(${available.length}, minmax(0, 1fr))` }}>
+      <div role="tablist" aria-label="Markets" className="mt-3 grid gap-1 rounded-xl p-1" style={{ background: "hsl(var(--card) / 0.8)", gridTemplateColumns: `repeat(${available.length}, minmax(0, 1fr))` }}>
         {available.map((key) => (
           <button
             key={key}
@@ -63,7 +63,7 @@ export function OddsTabsCard({
             aria-selected={key === active}
             onClick={() => setActive(key)}
             className={`rounded-lg py-2 text-[12px] font-semibold transition-colors ${
-              key === active ? "bg-white/[0.08] text-foreground" : "text-muted-foreground hover:text-foreground/80"
+              key === active ? "bg-foreground/[0.08] text-foreground" : "text-muted-foreground hover:text-foreground/80"
             }`}
           >
             {TAB_LABELS[key]}
@@ -80,8 +80,8 @@ export function OddsTabsCard({
                 key={`${quote.side}-${index}`}
                 className="mt-1.5 flex items-center justify-between gap-3 rounded-xl px-3.5 py-3"
                 style={{
-                  background: isPick ? `color-mix(in srgb, ${tierColor} 7%, hsla(228,24%,10%,0.8))` : "hsla(228,24%,10%,0.8)",
-                  border: `1px solid ${isPick ? `color-mix(in srgb, ${tierColor} 50%, transparent)` : "hsla(228,30%,22%,0.35)"}`,
+                  background: isPick ? `color-mix(in srgb, ${tierColor} 7%, hsl(var(--card) / 0.8))` : "hsl(var(--card) / 0.8)",
+                  border: `1px solid ${isPick ? `color-mix(in srgb, ${tierColor} 50%, transparent)` : "hsl(var(--secondary) / 0.35)"}`,
                 }}
               >
                 <span className="flex min-w-0 items-center gap-2 text-[13px] font-semibold text-foreground">

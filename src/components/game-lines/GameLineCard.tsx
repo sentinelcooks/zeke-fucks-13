@@ -81,7 +81,7 @@ export function GameLineCard({
           type="button"
           onClick={onViewLines}
           className="flex items-center justify-center gap-1.5 rounded-xl py-3 text-[12px] font-bold text-foreground/85 transition-colors hover:text-foreground"
-          style={{ background: "hsla(228,24%,14%,0.9)", border: "1px solid hsla(228,30%,22%,0.5)" }}
+          style={{ background: "hsl(var(--secondary) / 0.9)", border: "1px solid hsl(var(--border) / 0.5)" }}
         >
           View lines <ChevronRight className="h-3.5 w-3.5" />
         </button>
@@ -89,7 +89,7 @@ export function GameLineCard({
           type="button"
           onClick={onAnalyze}
           disabled={!canAnalyze}
-          className="flex items-center justify-center gap-1.5 rounded-xl bg-nba-green py-3 text-[12px] font-bold text-[#06140d] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
+          className="flex items-center justify-center gap-1.5 rounded-xl bg-success py-3 text-[12px] font-bold text-success-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
         >
           <Radar className="h-3.5 w-3.5" /> Analyze
         </button>
@@ -121,7 +121,7 @@ function OddsCell({ cell }: { cell: GridCell }) {
   return (
     <div
       className="flex h-11 flex-col items-center justify-center rounded-lg text-center"
-      style={{ background: "hsla(228,24%,10%,0.85)", border: "1px solid hsla(228,30%,22%,0.45)" }}
+      style={{ background: "hsl(var(--card) / 0.85)", border: "1px solid hsl(var(--border) / 0.45)" }}
     >
       {empty ? (
         <span className="text-[12px] text-muted-foreground/35">–</span>
@@ -148,15 +148,15 @@ export function MarketPill({ status, count }: { status: MarketStatus; count: num
       // colour, so `/10`-style opacity variants would silently do nothing.
       <span
         className="flex items-center gap-1.5 rounded-full px-2 py-1 text-[9px] font-bold text-nba-green"
-        style={{ background: "hsla(158,64%,52%,0.1)", border: "1px solid hsla(158,64%,52%,0.3)" }}
+        style={{ background: "hsl(var(--success) / 0.1)", border: "1px solid hsl(var(--success) / 0.3)" }}
       >
-        <span className="h-1.5 w-1.5 rounded-full bg-nba-green" style={{ boxShadow: "0 0 6px hsl(158 64% 52%)" }} />
+        <span className="h-1.5 w-1.5 rounded-full bg-nba-green" style={{ boxShadow: "0 0 6px hsl(var(--success))" }} />
         {count} market{count === 1 ? "" : "s"} live
       </span>
     );
   }
   return (
-    <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[9px] font-semibold text-muted-foreground/60">
+    <span className="rounded-full border border-foreground/10 bg-foreground/[0.03] px-2 py-1 text-[9px] font-semibold text-muted-foreground/60">
       {status === "unavailable" ? "Odds unavailable" : "Not posted yet"}
     </span>
   );

@@ -27,7 +27,7 @@ import {
   Lightbulb,
   RefreshCw,
 } from "lucide-react";
-import { Bar } from "react-chartjs-2";
+import { ThemedBar as Bar } from "@/components/charts/ThemedBar";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -117,8 +117,8 @@ function SegmentedControl<T extends string>({
 }) {
   return (
     <div className="relative flex rounded-xl p-1 gap-1 overflow-x-auto" style={{
-      background: 'hsla(228, 20%, 8%, 0.6)',
-      border: '1px solid hsla(228, 30%, 16%, 0.25)',
+      background: 'hsl(var(--card) / 0.6)',
+      border: '1px solid hsl(var(--border) / 0.25)',
     }}>
       {options.map((opt) => {
         const active = value === opt.value;
@@ -133,8 +133,8 @@ function SegmentedControl<T extends string>({
                 layoutId={layoutId}
                 className="absolute inset-0 rounded-lg"
                 style={{
-                  background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))',
-                  boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.3)',
+                  background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))',
+                  boxShadow: '0 4px 12px -2px hsl(var(--primary) / 0.3)',
                 }}
                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
               />
@@ -177,7 +177,7 @@ function H2HChart({ h2h, team1, team2 }: { h2h: any[]; team1: Team; team2: Team 
             { label: team2.shortName, data: h2h.map((g) => g.team2_score), backgroundColor: team2.color + "cc", borderRadius: 4, barPercentage: 0.7 },
           ],
         }}
-        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: "#7a8299", font: { size: 11 } } } }, scales: { x: { ticks: { color: "#7a8299", font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: "#7a8299" }, grid: { color: "rgba(30,42,69,0.5)" }, beginAtZero: true } } }}
+        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: "hsl(var(--muted-foreground))", font: { size: 11 } } } }, scales: { x: { ticks: { color: "hsl(var(--muted-foreground))", font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: "hsl(var(--muted-foreground))" }, grid: { color: "hsl(var(--border) / 0.6)" }, beginAtZero: true } } }}
       />
     </div>
   );
@@ -187,15 +187,15 @@ function TotalChart({ h2h, line }: { h2h: any[]; line: number }) {
   if (!h2h.length) return null;
   const labels = h2h.map((g) => { const d = new Date(g.date); return `${d.getMonth() + 1}/${d.getDate()}`; });
   const totals = h2h.map((g) => g.team1_score + g.team2_score);
-  const colors = totals.map((t) => (t > line ? "rgba(0,212,170,0.85)" : "rgba(255,71,87,0.7)"));
+  const colors = totals.map((t) => (t > line ? "hsl(var(--success) / 0.85)" : "hsl(var(--danger) / 0.75)"));
   return (
     <div className="h-[230px]">
       <Bar
         data={{ labels, datasets: [
           { label: "Combined Score", data: totals, backgroundColor: colors, borderRadius: 4, barPercentage: 0.65 },
-          { label: `Line (${line})`, data: Array(labels.length).fill(line), type: "line" as any, borderColor: "rgba(255,255,255,0.5)", borderDash: [6, 4], borderWidth: 2, pointRadius: 0, fill: false } as any,
+          { label: `Line (${line})`, data: Array(labels.length).fill(line), type: "line" as any, borderColor: "hsl(var(--foreground) / 0.5)", borderDash: [6, 4], borderWidth: 2, pointRadius: 0, fill: false } as any,
         ] }}
-        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: "#7a8299", font: { size: 11 } } } }, scales: { x: { ticks: { color: "#7a8299", font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: "#7a8299" }, grid: { color: "rgba(30,42,69,0.5)" }, beginAtZero: true } } }}
+        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: "hsl(var(--muted-foreground))", font: { size: 11 } } } }, scales: { x: { ticks: { color: "hsl(var(--muted-foreground))", font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: "hsl(var(--muted-foreground))" }, grid: { color: "hsl(var(--border) / 0.6)" }, beginAtZero: true } } }}
       />
     </div>
   );
@@ -205,12 +205,12 @@ function DifferentialChart({ h2h, team1 }: { h2h: any[]; team1: Team }) {
   if (!h2h.length) return null;
   const labels = h2h.map((g) => { const d = new Date(g.date); return `${d.getMonth() + 1}/${d.getDate()}`; });
   const diffs = h2h.map((g) => g.team1_score - g.team2_score);
-  const colors = diffs.map((d) => (d > 0 ? "rgba(0,212,170,0.85)" : "rgba(255,71,87,0.7)"));
+  const colors = diffs.map((d) => (d > 0 ? "hsl(var(--success) / 0.85)" : "hsl(var(--danger) / 0.75)"));
   return (
     <div className="h-[200px]">
       <Bar
         data={{ labels, datasets: [{ label: `${team1.shortName} Diff`, data: diffs, backgroundColor: colors, borderRadius: 4, barPercentage: 0.6 }] }}
-        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: "#7a8299", font: { size: 11 } } } }, scales: { x: { ticks: { color: "#7a8299", font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: "#7a8299" }, grid: { color: "rgba(30,42,69,0.5)" } } } }}
+        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: "hsl(var(--muted-foreground))", font: { size: 11 } } } }, scales: { x: { ticks: { color: "hsl(var(--muted-foreground))", font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: "hsl(var(--muted-foreground))" }, grid: { color: "hsl(var(--border) / 0.6)" } } } }}
       />
     </div>
   );
@@ -236,9 +236,9 @@ function TeamSelect({ label, value, onChange, teams }: { label: string; value: s
   return (
     <div ref={ref} className="relative">
       <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2">{label}</label>
-      <div className="relative rounded-xl overflow-hidden transition-all duration-300 focus-within:shadow-[0_0_20px_hsla(250,76%,62%,0.08)]" style={{
-        background: 'hsla(228, 20%, 10%, 0.6)',
-        border: '1px solid hsla(228, 30%, 20%, 0.25)',
+      <div className="relative rounded-xl overflow-hidden transition-all duration-300 focus-within:shadow-[0_0_20px_hsl(var(--primary) / 0.08)]" style={{
+        background: 'hsl(var(--card) / 0.6)',
+        border: '1px solid hsl(var(--border) / 0.25)',
       }}>
         {selected && !open && selected.logo && (
           <img src={selected.logo} alt="" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 object-contain" />
@@ -254,8 +254,8 @@ function TeamSelect({ label, value, onChange, teams }: { label: string; value: s
       </div>
       {open && filtered.length > 0 && (
         <div className="absolute z-50 mt-2 w-full max-h-56 overflow-y-auto rounded-2xl shadow-2xl shadow-black/60" style={{
-          background: 'linear-gradient(127.09deg, hsla(228, 30%, 12%, 0.98) 19.41%, hsla(228, 30%, 6%, 0.95) 76.65%)',
-          border: '1px solid hsla(228, 30%, 22%, 0.3)',
+          background: 'linear-gradient(127.09deg, hsl(var(--card) / 0.98) 19.41%, hsl(var(--background) / 0.95) 76.65%)',
+          border: '1px solid hsl(var(--border) / 0.3)',
           backdropFilter: 'blur(20px)',
         }}>
           {filtered.map((t) => (
@@ -274,8 +274,8 @@ function TeamSelect({ label, value, onChange, teams }: { label: string; value: s
       )}
       {open && filtered.length === 0 && query && (
         <div className="absolute z-50 mt-2 w-full rounded-2xl p-4 text-sm text-muted-foreground/65 text-center" style={{
-          background: 'linear-gradient(127.09deg, hsla(228, 30%, 12%, 0.98) 19.41%, hsla(228, 30%, 6%, 0.95) 76.65%)',
-          border: '1px solid hsla(228, 30%, 22%, 0.3)',
+          background: 'linear-gradient(127.09deg, hsl(var(--card) / 0.98) 19.41%, hsl(var(--background) / 0.95) 76.65%)',
+          border: '1px solid hsl(var(--border) / 0.3)',
         }}>
           No teams match "{query}"
         </div>
@@ -305,7 +305,7 @@ function Section({ title, children, defaultOpen = false }: { title: string; chil
   const [open, setOpen] = React.useState(defaultOpen);
   return (
     <div className="vision-card overflow-hidden relative">
-      <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(250,76%,62%,0.12), transparent)' }} />
+      <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--primary) / 0.12), transparent)' }} />
       <button
         type="button"
         className="w-full flex items-center justify-between px-4 py-3"
@@ -338,7 +338,7 @@ function AllSportsbooksCollapsible({ activeMarketBooksWithEV, activeMarketKey, a
   const [open, setOpen] = useState(false);
   return (
     <div className="vision-card overflow-hidden relative">
-      <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(250,76%,62%,0.12), transparent)' }} />
+      <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--primary) / 0.12), transparent)' }} />
       <button
         type="button"
         className="w-full flex items-center justify-between px-4 py-3"
@@ -372,13 +372,13 @@ function AllSportsbooksCollapsible({ activeMarketBooksWithEV, activeMarketKey, a
                     transition={{ delay: 0.15 + i * 0.05 }}
                     className={`relative rounded-xl overflow-hidden transition-all ${isBest ? "ring-1 ring-nba-green/20" : ""}`}
                     style={{
-                      background: 'linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.7) 19.41%, hsla(228, 30%, 8%, 0.4) 76.65%)',
-                      border: '1px solid hsla(228, 30%, 22%, 0.2)',
+                      background: 'linear-gradient(127.09deg, hsl(var(--secondary) / 0.7) 19.41%, hsl(var(--card) / 0.4) 76.65%)',
+                      border: '1px solid hsl(var(--border) / 0.2)',
                     }}
                   >
                     <div className="flex items-center justify-between px-4 py-3.5">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden" style={{ background: 'hsla(228, 20%, 14%, 0.6)', border: '1px solid hsla(228, 20%, 22%, 0.3)' }}>
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden" style={{ background: 'hsl(var(--secondary) / 0.6)', border: '1px solid hsl(var(--border) / 0.3)' }}>
                           {book.logo ? (
                             <img src={book.logo} alt={book.name} className="w-5 h-5 object-contain" />
                           ) : (
@@ -421,15 +421,15 @@ function AllSportsbooksCollapsible({ activeMarketBooksWithEV, activeMarketKey, a
                     </div>
                     {modelProb && modelProb > 0 && (
                       <div className="px-4 pb-2.5">
-                        <div className="h-1 rounded-full overflow-hidden" style={{ background: 'hsla(228, 20%, 12%, 0.8)' }}>
+                        <div className="h-1 rounded-full overflow-hidden" style={{ background: 'hsl(var(--card) / 0.8)' }}>
                           <motion.div
                             initial={{ width: 0 }}
                             animate={{ width: `${Math.min(Math.max(book.edge + 50, 0), 100)}%` }}
                             transition={{ duration: 0.6, delay: 0.2 + i * 0.05 }}
                             className="h-full rounded-full"
                             style={{ background: book.edge > 0
-                              ? 'linear-gradient(90deg, hsl(158 64% 52% / 0.6), hsl(158 64% 52% / 0.3))'
-                              : 'linear-gradient(90deg, hsl(0 72% 51% / 0.5), hsl(0 72% 51% / 0.2))'
+                              ? 'linear-gradient(90deg, hsl(var(--success) / 0.6), hsl(var(--success) / 0.3))'
+                              : 'linear-gradient(90deg, hsl(var(--danger) / 0.5), hsl(var(--danger) / 0.2))'
                             }}
                           />
                         </div>
@@ -451,18 +451,18 @@ function OtherMarketsCollapsible({ allMarketData, activeMarketKey, marketLabels,
   const [open, setOpen] = useState(false);
   return (
     <div className="vision-card overflow-hidden relative">
-      <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(250,76%,62%,0.15), transparent)' }} />
+      <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--primary) / 0.15), transparent)' }} />
       <button
         type="button"
         className="w-full flex items-center justify-between px-4 py-3"
         onClick={() => setOpen(!open)}
       >
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))', boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.25)' }}>
-            <Trophy className="w-3.5 h-3.5 text-white" />
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))', boxShadow: '0 4px 12px -2px hsl(var(--primary) / 0.25)' }}>
+            <Trophy className="w-3.5 h-3.5 text-foreground" />
           </div>
           <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">Other Markets</span>
-          <div className="flex items-center gap-1 px-2 py-1 rounded-full" style={{ background: 'hsla(228, 20%, 12%, 0.5)', border: '1px solid hsla(228, 20%, 20%, 0.2)' }}>
+          <div className="flex items-center gap-1 px-2 py-1 rounded-full" style={{ background: 'hsl(var(--card) / 0.5)', border: '1px solid hsl(var(--border) / 0.2)' }}>
             <div className="w-1.5 h-1.5 rounded-full bg-nba-green animate-pulse" />
             <span className="text-[7px] font-bold text-nba-green uppercase tracking-wider">Live</span>
           </div>
@@ -487,7 +487,7 @@ function OtherMarketsCollapsible({ allMarketData, activeMarketKey, marketLabels,
                 return (
                   <div key={marketKey}>
                     <div className="flex items-center gap-1.5 mb-2">
-                      <div className="w-5 h-5 rounded-md flex items-center justify-center text-accent" style={{ background: 'hsla(250, 76%, 62%, 0.1)' }}>
+                      <div className="w-5 h-5 rounded-md flex items-center justify-center text-accent" style={{ background: 'hsl(var(--primary) / 0.1)' }}>
                         {meta.icon}
                       </div>
                       <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/70">{meta.label}</span>
@@ -505,14 +505,14 @@ function OtherMarketsCollapsible({ allMarketData, activeMarketKey, marketLabels,
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: i * 0.04 }}
                           className="grid grid-cols-3 gap-1 items-center py-2 px-2 rounded-xl transition-all duration-200 group cursor-default"
-                          style={{ background: 'hsla(228,20%,10%,0.3)', border: '1px solid transparent' }}
+                          style={{ background: 'hsl(var(--card) / 0.3)', border: '1px solid transparent' }}
                         >
                           <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-md flex items-center justify-center overflow-hidden" style={{ background: 'hsla(228, 20%, 14%, 0.6)', border: '1px solid hsla(228, 20%, 22%, 0.3)' }}>
+                            <div className="w-6 h-6 rounded-md flex items-center justify-center overflow-hidden" style={{ background: 'hsl(var(--secondary) / 0.6)', border: '1px solid hsl(var(--border) / 0.3)' }}>
                               {p.logo ? (
                                 <img src={p.logo} alt={p.name} className="w-4 h-4 object-contain" loading="lazy" />
                               ) : (
-                                <span className="text-[8px] font-black text-white" style={{ color: p.color }}>{p.abbrev}</span>
+                                <span className="text-[8px] font-black text-foreground" style={{ color: p.color }}>{p.abbrev}</span>
                               )}
                             </div>
                             <span className="text-[10px] font-bold text-foreground/80 group-hover:text-foreground transition-colors truncate">{p.name}</span>
@@ -571,9 +571,9 @@ function SpreadTeamSelector({
         onClick={() => setSpreadOpen(!spreadOpen)}
         className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-[13px] font-medium text-left transition-all"
         style={{
-          background: 'hsla(228, 20%, 10%, 0.6)',
-          border: spreadOpen ? '1px solid hsla(250, 76%, 62%, 0.3)' : '1px solid hsla(228, 30%, 20%, 0.25)',
-          boxShadow: spreadOpen ? '0 0 20px -8px hsla(250, 76%, 62%, 0.15)' : 'none',
+          background: 'hsl(var(--card) / 0.6)',
+          border: spreadOpen ? '1px solid hsl(var(--primary) / 0.3)' : '1px solid hsl(var(--secondary) / 0.25)',
+          boxShadow: spreadOpen ? '0 0 20px -8px hsl(var(--primary) / 0.15)' : 'none',
         }}
       >
         {selectedOpt?.logo && <img src={selectedOpt.logo} alt="" className="w-5 h-5 object-contain" />}
@@ -582,8 +582,8 @@ function SpreadTeamSelector({
       </button>
       {spreadOpen && spreadOptions.length > 0 && (
         <div className="absolute z-50 mt-2 w-full rounded-2xl shadow-2xl shadow-black/60 overflow-hidden" style={{
-          background: 'linear-gradient(127.09deg, hsla(228, 30%, 12%, 0.98) 19.41%, hsla(228, 30%, 6%, 0.95) 76.65%)',
-          border: '1px solid hsla(228, 30%, 22%, 0.3)',
+          background: 'linear-gradient(127.09deg, hsl(var(--card) / 0.98) 19.41%, hsl(var(--background) / 0.95) 76.65%)',
+          border: '1px solid hsl(var(--border) / 0.3)',
           backdropFilter: 'blur(20px)',
         }}>
           {spreadOptions.map((opt) => (
@@ -942,7 +942,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
         </div>
         <div className="flex items-center gap-2">
           {isLive && (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'hsla(158, 64%, 52%, 0.08)', border: '1px solid hsla(158, 64%, 52%, 0.15)' }}>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'hsl(var(--success) / 0.08)', border: '1px solid hsl(var(--success) / 0.15)' }}>
               <div className="w-1.5 h-1.5 rounded-full bg-nba-green animate-pulse" />
               <span className="text-[7px] font-bold text-nba-green uppercase tracking-wider">Live</span>
             </div>
@@ -977,11 +977,11 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
           animate={{ opacity: 1, y: 0 }}
           className="relative rounded-2xl overflow-hidden p-5"
           style={{
-            background: 'linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.94) 19.41%, hsla(228, 30%, 8%, 0.49) 76.65%)',
-            border: `1px solid ${hasPositiveEV ? 'hsla(158,64%,52%,0.25)' : 'hsla(228,30%,22%,0.3)'}`,
+            background: 'linear-gradient(127.09deg, hsl(var(--secondary) / 0.94) 19.41%, hsl(var(--card) / 0.49) 76.65%)',
+            border: `1px solid ${hasPositiveEV ? 'hsl(var(--success) / 0.25)' : 'hsl(var(--secondary) / 0.3)'}`,
           }}
         >
-          {hasPositiveEV && <div className="absolute inset-0 bg-gradient-to-b from-[hsla(158,64%,52%,0.06)] to-transparent pointer-events-none" />}
+          {hasPositiveEV && <div className="absolute inset-0 bg-gradient-to-b from-success/6 to-transparent pointer-events-none" />}
           <div className="relative z-10">
             {/* EV Verdict Banner */}
             <div className="flex items-center justify-between mb-4">
@@ -1011,7 +1011,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
 
             {/* Model vs Implied Grid */}
             <div className="grid grid-cols-3 gap-2 mb-4">
-              <div className="rounded-xl p-3 text-center" style={{ background: 'hsla(228, 20%, 10%, 0.7)' }}>
+              <div className="rounded-xl p-3 text-center" style={{ background: 'hsl(var(--card) / 0.7)' }}>
                 <div className="flex items-center justify-center gap-1 mb-1.5">
                   <Zap className="w-3 h-3 text-accent" />
                   <span className="text-[8px] font-bold uppercase tracking-wider text-accent/60">Our Model</span>
@@ -1021,12 +1021,12 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
                   {activeBetType === "moneyline" ? "Win Probability" : "Hit Probability"}
                 </span>
               </div>
-              <div className="rounded-xl p-3 text-center" style={{ background: 'hsla(228, 20%, 10%, 0.7)' }}>
+              <div className="rounded-xl p-3 text-center" style={{ background: 'hsl(var(--card) / 0.7)' }}>
                 <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/65 block mb-1.5">Implied</span>
                 <span className="block text-xl font-extrabold tabular-nums text-foreground/60">{activeEV.bestImplied.toFixed(1)}%</span>
                 <span className="block text-[8px] text-muted-foreground/55 mt-0.5">Best Book</span>
               </div>
-              <div className="rounded-xl p-3 text-center" style={{ background: 'hsla(228, 20%, 10%, 0.7)' }}>
+              <div className="rounded-xl p-3 text-center" style={{ background: 'hsl(var(--card) / 0.7)' }}>
                 <div className="flex items-center justify-center gap-1 mb-1.5">
                   <Shield className="w-3 h-3 text-[hsl(var(--nba-cyan))]" />
                   <span className="text-[8px] font-bold uppercase tracking-wider text-[hsl(var(--nba-cyan))]/60">Edge</span>
@@ -1046,10 +1046,10 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
                   EV: {activeEV.ev > 0 ? "+" : ""}{activeEV.ev.toFixed(1)}%
                 </span>
               </div>
-              <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: 'hsla(228, 20%, 12%, 0.8)' }}>
+              <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: 'hsl(var(--card) / 0.8)' }}>
                 <div
                   className="absolute top-0 left-0 h-full rounded-full opacity-30"
-                  style={{ width: `${Math.min(activeEV.bestImplied, 100)}%`, background: 'hsl(228 10% 45%)' }}
+                  style={{ width: `${Math.min(activeEV.bestImplied, 100)}%`, background: 'hsl(var(--muted-foreground))' }}
                 />
                 <motion.div
                   initial={{ width: 0 }}
@@ -1057,8 +1057,8 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
                   transition={{ duration: 0.8, delay: 0.2 }}
                   className="absolute top-0 left-0 h-full rounded-full"
                   style={{ background: hasPositiveEV
-                    ? 'linear-gradient(90deg, hsl(158 64% 52% / 0.8), hsl(158 64% 52% / 0.4))'
-                    : 'linear-gradient(90deg, hsl(0 72% 51% / 0.7), hsl(0 72% 51% / 0.3))'
+                    ? 'linear-gradient(90deg, hsl(var(--success) / 0.8), hsl(var(--success) / 0.4))'
+                    : 'linear-gradient(90deg, hsl(var(--danger) / 0.7), hsl(var(--danger) / 0.3))'
                   }}
                 />
                 <div
@@ -1070,7 +1070,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
                 <span className="text-[8px] text-muted-foreground/50">0%</span>
                 <div className="flex items-center gap-3">
                   <span className="flex items-center gap-1 text-[8px] text-muted-foreground/55">
-                    <span className="w-2 h-1 rounded-full" style={{ background: hasPositiveEV ? 'hsl(158 64% 52%)' : 'hsl(0 72% 51%)' }} /> Model
+                    <span className="w-2 h-1 rounded-full" style={{ background: hasPositiveEV ? 'hsl(var(--success))' : 'hsl(var(--danger))' }} /> Model
                   </span>
                   <span className="flex items-center gap-1 text-[8px] text-muted-foreground/55">
                     <span className="w-2 h-1 rounded-full bg-muted-foreground/55" /> Implied
@@ -1090,8 +1090,8 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
           animate={{ opacity: 1, y: 0 }}
           className="rounded-2xl overflow-hidden"
           style={{
-            background: 'linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.94) 19.41%, hsla(228, 30%, 8%, 0.49) 76.65%)',
-            border: '1px solid hsla(250,76%,62%,0.15)',
+            background: 'linear-gradient(127.09deg, hsl(var(--secondary) / 0.94) 19.41%, hsl(var(--card) / 0.49) 76.65%)',
+            border: '1px solid hsl(var(--primary) / 0.15)',
           }}
         >
           <button
@@ -1120,7 +1120,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
                 className="overflow-hidden"
               >
                 <div className="px-4 pb-4 space-y-3">
-                  <div className="rounded-xl p-3.5 space-y-2" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+                  <div className="rounded-xl p-3.5 space-y-2" style={{ background: 'hsl(var(--card) / 0.6)' }}>
                     <div className="flex items-center gap-1.5">
                       <Shield className="w-3 h-3 text-[hsl(var(--nba-cyan))]" />
                       <span className="text-[10px] font-extrabold uppercase tracking-wider text-[hsl(var(--nba-cyan))]">Edge</span>
@@ -1128,7 +1128,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
                     <p className="text-[11px] text-foreground/60 leading-relaxed">
                       Edge is the difference between what <strong className="text-foreground/80">our model thinks will happen</strong> and what the <strong className="text-foreground/80">sportsbooks think</strong>.
                     </p>
-                    <div className="rounded-lg p-3" style={{ background: 'hsla(228, 20%, 8%, 0.7)' }}>
+                    <div className="rounded-lg p-3" style={{ background: 'hsl(var(--card) / 0.7)' }}>
                       <div className="flex items-center gap-2 text-[11px]">
                         <span className="text-accent font-bold">Our model: {modelProb.toFixed(0)}%</span>
                         <span className="text-muted-foreground/55">—</span>
@@ -1138,7 +1138,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-xl p-3.5 space-y-2" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+                  <div className="rounded-xl p-3.5 space-y-2" style={{ background: 'hsl(var(--card) / 0.6)' }}>
                     <div className="flex items-center gap-1.5">
                       <TrendingUp className="w-3 h-3 text-nba-green" />
                       <span className="text-[10px] font-extrabold uppercase tracking-wider text-nba-green">Expected Value (EV)</span>
@@ -1146,7 +1146,7 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
                     <p className="text-[11px] text-foreground/60 leading-relaxed">
                       EV tells you <strong className="text-foreground/80">how much you'd profit per $100 bet</strong> over time if our model is right.
                     </p>
-                    <div className="rounded-lg p-3" style={{ background: 'hsla(228, 20%, 8%, 0.7)' }}>
+                    <div className="rounded-lg p-3" style={{ background: 'hsl(var(--card) / 0.7)' }}>
                       <div className="flex items-center gap-2 text-[11px]">
                         <span className="text-muted-foreground/50">This bet's EV:</span>
                         <span className={`font-extrabold ${activeEV.ev > 0 ? 'text-nba-green' : 'text-nba-red'}`}>{activeEV.ev > 0 ? '+' : ''}{activeEV.ev.toFixed(1)}%</span>
@@ -1168,11 +1168,11 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
           transition={{ delay: 0.1 }}
           className="relative rounded-2xl overflow-hidden p-4"
           style={{
-            background: 'linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.94) 19.41%, hsla(228, 30%, 8%, 0.49) 76.65%)',
-            border: '1px solid hsla(158,64%,52%,0.2)',
+            background: 'linear-gradient(127.09deg, hsl(var(--secondary) / 0.94) 19.41%, hsl(var(--card) / 0.49) 76.65%)',
+            border: '1px solid hsl(var(--success) / 0.2)',
           }}
         >
-          <div className="absolute inset-0 bg-gradient-to-b from-[hsla(158,64%,52%,0.04)] to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-b from-success/4 to-transparent pointer-events-none" />
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-3">
               <Crown className="w-4 h-4 text-nba-green" />
@@ -1180,11 +1180,11 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl flex items-center justify-center overflow-hidden" style={{ background: 'hsla(228, 20%, 14%, 0.6)', border: '1px solid hsla(228, 20%, 22%, 0.3)' }}>
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center overflow-hidden" style={{ background: 'hsl(var(--secondary) / 0.6)', border: '1px solid hsl(var(--border) / 0.3)' }}>
                   {bestBook.logo ? (
                     <img src={bestBook.logo} alt={bestBook.name} className="w-7 h-7 object-contain" />
                   ) : (
-                    <span className="text-[12px] font-black text-white">{bestBook.abbrev}</span>
+                    <span className="text-[12px] font-black text-foreground">{bestBook.abbrev}</span>
                   )}
                 </div>
                 <div>
@@ -1210,10 +1210,10 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
       {/* ── EV ACROSS ALL MARKETS ── */}
       {!isPreviewMode && evCards.length > 1 && (
         <div className="vision-card p-4 relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(158,64%,52%,0.15), transparent)' }} />
+          <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--success) / 0.15), transparent)' }} />
           <div className="flex items-center gap-2 mb-4">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))', boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.25)' }}>
-              <Zap className="w-3.5 h-3.5 text-white" />
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))', boxShadow: '0 4px 12px -2px hsl(var(--primary) / 0.25)' }}>
+              <Zap className="w-3.5 h-3.5 text-foreground" />
             </div>
             <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">EV Across All Markets</span>
           </div>
@@ -1221,8 +1221,8 @@ function MoneylinePlatformOdds({ team1, team2, sport, modelProb, probabilitySupp
             {evCards.map((card) => {
               const isActive = card.market === activeMarketKey;
               const evColor = card.ev >= 5 ? "text-nba-green" : card.ev >= 0 ? "text-nba-yellow" : "text-nba-red";
-              const evBg = card.ev >= 5 ? "hsla(158, 64%, 52%, 0.08)" : card.ev >= 0 ? "hsla(43, 96%, 56%, 0.08)" : "hsla(0, 72%, 51%, 0.08)";
-              const evBorder = card.ev >= 5 ? "hsla(158, 64%, 52%, 0.15)" : card.ev >= 0 ? "hsla(43, 96%, 56%, 0.15)" : "hsla(0, 72%, 51%, 0.15)";
+              const evBg = card.ev >= 5 ? "hsl(var(--success) / 0.08)" : card.ev >= 0 ? "hsl(var(--nba-yellow) / 0.08)" : "hsl(var(--danger) / 0.08)";
+              const evBorder = card.ev >= 5 ? "hsl(var(--success) / 0.15)" : card.ev >= 0 ? "hsl(var(--nba-yellow) / 0.15)" : "hsl(var(--danger) / 0.15)";
               return (
                 <div key={card.market} className={`rounded-xl p-2.5 flex flex-col gap-2 ${isActive ? "ring-1 ring-accent/30" : ""}`} style={{ background: evBg, border: `1px solid ${evBorder}` }}>
                   <div className="text-center">
@@ -1436,14 +1436,14 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
       )}
 
       {sport === "mlb" && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-medium text-nba-yellow" style={{ background: 'hsla(43, 96%, 56%, 0.08)', border: '1px solid hsla(43, 96%, 56%, 0.15)' }}>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-medium text-nba-yellow" style={{ background: 'hsl(var(--nba-yellow) / 0.08)', border: '1px solid hsl(var(--nba-yellow) / 0.15)' }}>
           <span>⚠️</span>
           <span>MLB data is from last season. More info will come as the season progresses to help predict outcomes.</span>
         </div>
       )}
 
       {sport === "wnba" && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-medium text-nba-yellow" style={{ background: 'hsla(43, 96%, 56%, 0.08)', border: '1px solid hsla(43, 96%, 56%, 0.15)' }}>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-medium text-nba-yellow" style={{ background: 'hsl(var(--nba-yellow) / 0.08)', border: '1px solid hsl(var(--nba-yellow) / 0.15)' }}>
           <span>WNBA lines use basketball factors with conservative scoring when matchup data is thin.</span>
         </div>
       )}
@@ -1456,15 +1456,15 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
       )}
 
       {!teamsLoading && teamsError && (
-        <div className="flex items-center gap-2 py-2 px-3 rounded-lg text-xs text-red-400/80" style={{ background: 'hsla(0, 60%, 15%, 0.4)', border: '1px solid hsla(0, 60%, 30%, 0.3)' }}>
+        <div className="flex items-center gap-2 py-2 px-3 rounded-lg text-xs text-danger/80" style={{ background: 'hsl(var(--danger) / 0.4)', border: '1px solid hsl(var(--danger) / 0.3)' }}>
           ⚠️ {teamsError}
         </div>
       )}
 
       {/* Analysis Type — with info icons */}
       <div className="relative flex rounded-xl p-1 gap-1" style={{
-        background: 'hsla(228, 20%, 8%, 0.6)',
-        border: '1px solid hsla(228, 30%, 16%, 0.25)',
+        background: 'hsl(var(--card) / 0.6)',
+        border: '1px solid hsl(var(--border) / 0.25)',
       }}>
         {([
           { value: "moneyline" as BetType, label: "Moneyline", icon: <DollarSign className="w-3.5 h-3.5" /> },
@@ -1483,8 +1483,8 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                   layoutId="lines-bettype"
                   className="absolute inset-0 rounded-lg"
                   style={{
-                    background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))',
-                    boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.3)',
+                    background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))',
+                    boxShadow: '0 4px 12px -2px hsl(var(--primary) / 0.3)',
                   }}
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 />
@@ -1514,7 +1514,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
               desc: "The simplest bet — pick which team wins the game outright. No point spread is involved.",
               exampleAmerican: "Lakers are -150 favorites vs Celtics +130. Bet $150 on Lakers to win $100 profit, or bet $100 on Celtics to win $130 profit.",
               exampleDecimal: "Lakers are 1.67 favorites vs Celtics at 2.30. Bet $100 on Lakers for a $167 payout, or $100 on Celtics for a $230 payout.",
-              color: "hsl(250 76% 62%)",
+              color: "hsl(var(--primary))",
             },
             spread: {
               icon: <Scale className="w-4 h-4" />,
@@ -1522,7 +1522,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
               desc: "The favorite must win by more than the spread, while the underdog can lose by less than the spread (or win outright) for the bet to hit.",
               exampleAmerican: "Lakers -5.5 at -110 means they must win by 6+ points. Celtics +5.5 at -110 means they can lose by up to 5 points and the bet still wins.",
               exampleDecimal: "Lakers -5.5 at 1.91 means they must win by 6+ points. Celtics +5.5 at 1.91 means they can lose by up to 5 points and the bet still wins.",
-              color: "hsl(210 100% 60%)",
+              color: "hsl(var(--primary))",
             },
             total: {
               icon: <Target className="w-4 h-4" />,
@@ -1534,7 +1534,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
               exampleDecimal: sport === "mlb" ? "Total set at 8.5 (1.91 both sides) — if the final score is Dodgers 5, Mets 4 (total 9), the Over wins. If it's 3-2 (5), the Under wins."
                 : sport === "nhl" ? "Total set at 5.5 (1.91 both sides) — if the final score is Rangers 4, Bruins 3 (total 7), the Over wins. If it's 2-1 (3), the Under wins."
                 : "Total set at 215.5 (1.91 both sides) — if the final score is Lakers 112, Celtics 108 (total 220), the Over wins. If it's 105-104 (209), the Under wins.",
-              color: "hsl(158 64% 52%)",
+              color: "hsl(var(--success))",
             },
           };
           const item = betInfoData[showBetInfo];
@@ -1555,14 +1555,14 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                 onClick={(e) => e.stopPropagation()}
                 className="relative w-full max-w-sm rounded-2xl p-5 space-y-4"
                 style={{
-                  background: 'linear-gradient(127.09deg, hsla(228, 30%, 12%, 0.98) 19.41%, hsla(228, 30%, 6%, 0.95) 76.65%)',
-                  border: '1px solid hsla(228, 30%, 22%, 0.3)',
+                  background: 'linear-gradient(127.09deg, hsl(var(--card) / 0.98) 19.41%, hsl(var(--background) / 0.95) 76.65%)',
+                  border: '1px solid hsl(var(--border) / 0.3)',
                   boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
                 }}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white" style={{ background: item.color }}>
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-foreground" style={{ background: item.color }}>
                       {item.icon}
                     </div>
                     <h3 className="text-sm font-bold text-foreground">{item.title}</h3>
@@ -1570,7 +1570,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                   <button onClick={() => setShowBetInfo(null)} className="text-muted-foreground hover:text-foreground text-lg leading-none">&times;</button>
                 </div>
                 <p className="text-[11px] leading-relaxed text-muted-foreground">{item.desc}</p>
-                <div className="rounded-lg p-2.5" style={{ background: 'hsla(228,20%,8%,0.5)', border: '1px solid hsla(228,30%,16%,0.15)' }}>
+                <div className="rounded-lg p-2.5" style={{ background: 'hsl(var(--card) / 0.5)', border: '1px solid hsl(var(--border) / 0.15)' }}>
                   <span className="text-[9px] font-bold uppercase tracking-wider text-accent/70 block mb-1">Example</span>
                   <p className="text-[10px] leading-relaxed text-muted-foreground/80">{isDecimalFormat ? item.exampleDecimal : item.exampleAmerican}</p>
                 </div>
@@ -1606,9 +1606,9 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
               </div>
               <div>
                 <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2">Spread Line</label>
-                <div className="rounded-xl overflow-hidden focus-within:shadow-[0_0_12px_hsla(250,76%,62%,0.06)]" style={{
-                  background: 'hsla(228, 20%, 10%, 0.5)',
-                  border: '1px solid hsla(228, 30%, 20%, 0.25)',
+                <div className="rounded-xl overflow-hidden focus-within:shadow-[0_0_12px_hsl(var(--primary) / 0.06)]" style={{
+                  background: 'hsl(var(--card) / 0.5)',
+                  border: '1px solid hsl(var(--border) / 0.25)',
                 }}>
                   <input type="number" value={spreadLine} onChange={(e) => setSpreadLine(e.target.value)} placeholder="-5.5" step="0.5"
                     className="w-full bg-transparent px-3 py-3 text-[13px] font-medium text-foreground placeholder:text-muted-foreground/65 focus:outline-none" />
@@ -1624,8 +1624,8 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                 <div className="flex-1">
                   <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2">Direction</label>
                   <div className="flex rounded-xl p-1 gap-1" style={{
-                    background: 'hsla(228, 20%, 8%, 0.6)',
-                    border: '1px solid hsla(228, 30%, 16%, 0.25)',
+                    background: 'hsl(var(--card) / 0.6)',
+                    border: '1px solid hsl(var(--border) / 0.25)',
                   }}>
                     <motion.button
                       onClick={() => setOverUnder("over")}
@@ -1633,7 +1633,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                       className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-[11px] font-bold tracking-wider transition-all duration-300 ${
                         overUnder === "over" ? "text-background" : "text-muted-foreground/35 hover:text-foreground/50"
                       }`}
-                      style={overUnder === "over" ? { background: 'hsl(158 64% 52%)', boxShadow: '0 4px 12px -2px hsla(158,64%,52%,0.3)' } : {}}
+                      style={overUnder === "over" ? { background: 'hsl(var(--success))', boxShadow: '0 4px 12px -2px hsl(var(--success) / 0.3)' } : {}}
                     >
                       <TrendingUp className="w-3 h-3" />
                       OVER
@@ -1644,7 +1644,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                       className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-[11px] font-bold tracking-wider transition-all duration-300 ${
                         overUnder === "under" ? "text-white" : "text-muted-foreground/35 hover:text-foreground/50"
                       }`}
-                      style={overUnder === "under" ? { background: 'hsl(0 72% 51%)', boxShadow: '0 4px 12px -2px hsla(0,72%,51%,0.3)' } : {}}
+                      style={overUnder === "under" ? { background: 'hsl(var(--danger))', boxShadow: '0 4px 12px -2px hsl(var(--danger) / 0.3)' } : {}}
                     >
                       <TrendingDown className="w-3 h-3" />
                       UNDER
@@ -1653,9 +1653,9 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                 </div>
                 <div className="w-24">
                   <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2 text-center">Total Line</label>
-                  <div className="rounded-xl overflow-hidden focus-within:shadow-[0_0_12px_hsla(250,76%,62%,0.06)]" style={{
-                    background: 'hsla(228, 20%, 10%, 0.5)',
-                    border: '1px solid hsla(228, 30%, 20%, 0.25)',
+                  <div className="rounded-xl overflow-hidden focus-within:shadow-[0_0_12px_hsl(var(--primary) / 0.06)]" style={{
+                    background: 'hsl(var(--card) / 0.5)',
+                    border: '1px solid hsl(var(--border) / 0.25)',
                   }}>
                     <input type="number" value={totalLine} onChange={(e) => setTotalLine(e.target.value)} placeholder={sport === "ncaab" ? "140.5" : sport === "mlb" ? "8.5" : sport === "nhl" ? "5.5" : sport === "wnba" ? "165.5" : "215.5"} step="0.5" min="0"
                       className="w-full bg-transparent py-2.5 text-center text-lg font-extrabold text-foreground placeholder:text-muted-foreground/12 focus:outline-none tabular-nums" />
@@ -1673,8 +1673,8 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
           whileTap={{ scale: 0.97 }}
           className="w-full py-3.5 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           style={{
-            background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))',
-            boxShadow: '0 4px 20px -4px hsla(250,76%,62%,0.4)',
+            background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))',
+            boxShadow: '0 4px 20px -4px hsl(var(--primary) / 0.4)',
           }}
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
@@ -1705,7 +1705,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
         >
           {/* Matchup Hero Card */}
           <div className="vision-card p-5 relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(250,76%,62%,0.2), transparent)' }} />
+            <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--primary) / 0.2), transparent)' }} />
             <div className="flex items-center justify-between">
               <div className="flex flex-col items-center text-center w-[30%]">
                 {results.team1?.logo && <img src={results.team1.logo} alt="" className="w-14 h-14 object-contain mb-1.5 drop-shadow-lg" />}
@@ -1736,7 +1736,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
             </div>
             {betType === "moneyline" && (
               <div className="mt-4">
-                <div className="flex h-2 rounded-full overflow-hidden" style={{ background: 'hsla(228,20%,10%,0.5)' }}>
+                <div className="flex h-2 rounded-full overflow-hidden" style={{ background: 'hsl(var(--card) / 0.5)' }}>
                   <div className="bg-nba-green transition-all duration-700 rounded-l-full" style={{ width: `${results.team1_pct}%` }} />
                   <div className="bg-nba-red transition-all duration-700 rounded-r-full" style={{ width: `${results.team2_pct}%` }} />
                 </div>
@@ -1888,8 +1888,8 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                     key={team.abbr}
                     type="button"
                     onClick={() => setB2bInfo({ team, b2b })}
-                    className="w-full flex items-center gap-2 py-1.5 border-b last:border-0 hover:bg-white/5 transition-colors rounded-sm px-1 -mx-1 text-left"
-                    style={{ borderColor: 'hsla(228,18%,18%,0.3)' }}
+                    className="w-full flex items-center gap-2 py-1.5 border-b last:border-0 hover:bg-foreground/5 transition-colors rounded-sm px-1 -mx-1 text-left"
+                    style={{ borderColor: 'hsl(var(--border) / 0.3)' }}
                   >
                     {team.logo && <img src={team.logo} alt="" className="w-4 h-4 object-contain" />}
                     <span className="text-[11px] font-semibold text-foreground truncate">{team.shortName}</span>
@@ -1914,8 +1914,8 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                     key={team.abbr}
                     type="button"
                     onClick={() => setPaceInfo({ team, pace })}
-                    className="w-full text-left py-1.5 border-b last:border-0 hover:bg-white/5 transition-colors rounded-sm px-1 -mx-1"
-                    style={{ borderColor: 'hsla(228,18%,18%,0.3)' }}
+                    className="w-full text-left py-1.5 border-b last:border-0 hover:bg-foreground/5 transition-colors rounded-sm px-1 -mx-1"
+                    style={{ borderColor: 'hsl(var(--border) / 0.3)' }}
                   >
                     <div className="flex items-center gap-2">
                       {team.logo && <img src={team.logo} alt="" className="w-4 h-4 object-contain" />}
@@ -1992,12 +1992,12 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                 onClick={(e) => e.stopPropagation()}
                 className="relative w-full max-w-sm rounded-2xl overflow-hidden"
                 style={{
-                  background: "linear-gradient(145deg, hsla(228, 25%, 12%, 0.95), hsla(228, 25%, 8%, 0.98))",
-                  border: "1px solid hsla(250, 76%, 62%, 0.15)",
-                  boxShadow: "0 25px 50px -12px hsla(0, 0%, 0%, 0.5), 0 0 40px -10px hsla(250, 76%, 62%, 0.15)",
+                  background: "linear-gradient(145deg, hsl(var(--card) / 0.95), hsl(var(--card) / 0.98))",
+                  border: "1px solid hsl(var(--primary) / 0.15)",
+                  boxShadow: "0 25px 50px -12px hsla(0, 0%, 0%, 0.5), 0 0 40px -10px hsl(var(--primary) / 0.15)",
                 }}
               >
-                <div className="absolute top-0 left-0 right-0 h-px" style={{ background: "linear-gradient(90deg, transparent, hsla(250,76%,62%,0.3), transparent)" }} />
+                <div className="absolute top-0 left-0 right-0 h-px" style={{ background: "linear-gradient(90deg, transparent, hsl(var(--primary) / 0.3), transparent)" }} />
                 <button
                   onClick={() => setPaceInfo(null)}
                   className="absolute top-3 right-3 p-1.5 rounded-lg text-muted-foreground/50 hover:text-foreground hover:bg-secondary/50 transition-all z-10"
@@ -2008,7 +2008,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                 <div className="p-5 space-y-4">
                   <div className="flex items-center gap-3">
                     {paceInfo.team.logo && (
-                      <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 flex items-center justify-center bg-white/5" style={{ border: "1px solid hsla(250, 76%, 62%, 0.2)" }}>
+                      <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 flex items-center justify-center bg-foreground/5" style={{ border: "1px solid hsl(var(--primary) / 0.2)" }}>
                         <img src={paceInfo.team.logo} alt="" className="w-7 h-7 object-contain" />
                       </div>
                     )}
@@ -2025,13 +2025,13 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                   <div
                     className="rounded-xl p-3.5 space-y-1.5"
                     style={{
-                      background: "linear-gradient(135deg, hsla(158, 64%, 52%, 0.08), hsla(158, 64%, 52%, 0.03))",
-                      border: "1px solid hsla(158, 64%, 52%, 0.12)",
+                      background: "linear-gradient(135deg, hsl(var(--success) / 0.08), hsl(var(--success) / 0.03))",
+                      border: "1px solid hsl(var(--success) / 0.12)",
                     }}
                   >
                     <div className="flex items-center gap-1.5">
-                      <Lightbulb className="w-3 h-3 text-emerald-400/80" />
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400/70">Example</span>
+                      <Lightbulb className="w-3 h-3 text-success/80" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-success/70">Example</span>
                     </div>
                     <p className="text-[11px] text-foreground/70 leading-relaxed">
                       {paceInfo.team.shortName} average <span className="font-semibold text-foreground">{paceInfo.pace.recentPpg} {unitShort}</span> and allow <span className="font-semibold text-foreground">{paceInfo.pace.recentOppPpg}</span> over their last {paceInfo.pace.recentGames} games — a <span className={net >= 0 ? "text-nba-green font-semibold" : "text-nba-red font-semibold"}>{net >= 0 ? "+" : ""}{net.toFixed(1)} net rating</span>.
@@ -2068,12 +2068,12 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                 onClick={(e) => e.stopPropagation()}
                 className="relative w-full max-w-sm rounded-2xl overflow-hidden"
                 style={{
-                  background: "linear-gradient(145deg, hsla(228, 25%, 12%, 0.95), hsla(228, 25%, 8%, 0.98))",
-                  border: "1px solid hsla(250, 76%, 62%, 0.15)",
-                  boxShadow: "0 25px 50px -12px hsla(0, 0%, 0%, 0.5), 0 0 40px -10px hsla(250, 76%, 62%, 0.15)",
+                  background: "linear-gradient(145deg, hsl(var(--card) / 0.95), hsl(var(--card) / 0.98))",
+                  border: "1px solid hsl(var(--primary) / 0.15)",
+                  boxShadow: "0 25px 50px -12px hsla(0, 0%, 0%, 0.5), 0 0 40px -10px hsl(var(--primary) / 0.15)",
                 }}
               >
-                <div className="absolute top-0 left-0 right-0 h-px" style={{ background: "linear-gradient(90deg, transparent, hsla(250,76%,62%,0.3), transparent)" }} />
+                <div className="absolute top-0 left-0 right-0 h-px" style={{ background: "linear-gradient(90deg, transparent, hsl(var(--primary) / 0.3), transparent)" }} />
                 <button
                   onClick={() => setB2bInfo(null)}
                   className="absolute top-3 right-3 p-1.5 rounded-lg text-muted-foreground/50 hover:text-foreground hover:bg-secondary/50 transition-all z-10"
@@ -2084,7 +2084,7 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                 <div className="p-5 space-y-4">
                   <div className="flex items-center gap-3">
                     {team.logo && (
-                      <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 flex items-center justify-center bg-white/5" style={{ border: "1px solid hsla(250, 76%, 62%, 0.2)" }}>
+                      <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 flex items-center justify-center bg-foreground/5" style={{ border: "1px solid hsl(var(--primary) / 0.2)" }}>
                         <img src={team.logo} alt="" className="w-7 h-7 object-contain" />
                       </div>
                     )}
@@ -2101,8 +2101,8 @@ const MoneyLineSection: React.FC<MoneyLineSectionProps> = ({ embeddedSport, hide
                       <div
                         className="rounded-xl p-3.5 space-y-1.5"
                         style={{
-                          background: "linear-gradient(135deg, hsla(45, 93%, 58%, 0.08), hsla(45, 93%, 58%, 0.03))",
-                          border: "1px solid hsla(45, 93%, 58%, 0.12)",
+                          background: "linear-gradient(135deg, hsl(var(--nba-yellow) / 0.08), hsl(var(--nba-yellow) / 0.03))",
+                          border: "1px solid hsl(var(--nba-yellow) / 0.12)",
                         }}
                       >
                         <div className="flex items-center gap-1.5">

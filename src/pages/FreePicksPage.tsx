@@ -146,9 +146,9 @@ const STREAK_ICONS: Record<string, typeof Flame> = {
   home_away: MapPin,
 };
 const STREAK_COLORS: Record<string, string> = {
-  recent_form: "from-[hsl(30,100%,50%)] to-[hsl(15,100%,55%)]",
-  vs_opponent: "from-[hsl(142,100%,50%)] to-[hsl(158,64%,52%)]",
-  home_away: "from-[hsl(190,90%,55%)] to-[hsl(158,64%,52%)]",
+  recent_form: "from-[hsl(var(--nba-yellow))] to-[hsl(15,100%,55%)]",
+  vs_opponent: "from-primary to-success",
+  home_away: "from-[hsl(var(--nba-cyan))] to-success",
 };
 
 const stagger = (i: number) => ({
@@ -318,8 +318,8 @@ const FreePicksPage = () => {
   return (
     <div className="flex flex-col min-h-full relative">
       {/* Ambient orbs */}
-      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: "hsl(142 100% 50%)" }} />
-      <div className="vision-orb w-36 h-36 top-[600px] -left-12" style={{ background: "hsl(30 100% 50%)", animationDelay: "-3s" }} />
+      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: "hsl(var(--primary))" }} />
+      <div className="vision-orb w-36 h-36 top-[600px] -left-12" style={{ background: "hsl(var(--nba-yellow))", animationDelay: "-3s" }} />
 
       
 
@@ -343,15 +343,15 @@ const FreePicksPage = () => {
                     : "text-muted-foreground/50 hover:text-muted-foreground/70"
                 }`}
                 style={active
-                  ? { background: "linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))" }
-                  : { background: "hsla(228, 20%, 12%, 0.6)", border: "1px solid hsla(228, 20%, 18%, 0.3)" }
+                  ? { background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--success)))" }
+                  : { background: "hsl(var(--card) / 0.6)", border: "1px solid hsl(var(--border) / 0.3)" }
                 }
               >
                 <Icon className="w-3.5 h-3.5" />
                 {tab.label}
                 {count > 0 && (
                   <span className={`text-[9px] px-1 py-0.5 rounded-md font-bold ${
-                    active ? "bg-white/20" : "bg-secondary"
+                    active ? "bg-foreground/20" : "bg-secondary"
                   }`}>
                     {count}
                   </span>
@@ -421,7 +421,7 @@ const FreePicksPage = () => {
             </div>
           </div>
           {isStale && (
-            <div className="mt-1.5 flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-medium text-nba-yellow" style={{ background: "hsla(43, 96%, 56%, 0.08)", border: "1px solid hsla(43, 96%, 56%, 0.12)" }}>
+            <div className="mt-1.5 flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-medium text-nba-yellow" style={{ background: "hsl(var(--nba-yellow) / 0.08)", border: "1px solid hsl(var(--nba-yellow) / 0.12)" }}>
               <span>⚠️</span>
               <span>No picks for today yet — showing most recent from {formattedDate}</span>
             </div>
@@ -600,7 +600,7 @@ const FreePicksPage = () => {
             <EmptyState message="No picks with a perfect last-5 streak today" />
           ) : (
             <div className="space-y-3">
-              <SectionHeader icon={Trophy} gradient="from-[hsl(43,96%,56%)] to-[hsl(30,90%,50%)]" title="100% Club" subtitle="Today's picks hitting in all of the player's last 5 games" />
+              <SectionHeader icon={Trophy} gradient="from-[hsl(var(--nba-yellow))] to-[hsl(var(--nba-yellow))]" title="100% Club" subtitle="Today's picks hitting in all of the player's last 5 games" />
               <div className="ios-card overflow-hidden divide-y divide-border">
                 {club100Picks.map((pick, i) => {
                   const conf = getConfidenceColor(pick.hit_rate);
@@ -691,11 +691,11 @@ const FreePicksPage = () => {
             <EmptyState message="No SGP combos available right now" />
           ) : (
             <div className="space-y-3">
-              <SectionHeader icon={Zap} gradient="from-[hsl(142,100%,50%)] to-[hsl(158,64%,52%)]" title="Same-Game Parlays" subtitle="High-confidence SGP combos" />
+              <SectionHeader icon={Zap} gradient="from-primary to-success" title="Same-Game Parlays" subtitle="High-confidence SGP combos" />
               {sgps.map((sgp, si) => (
                 <motion.div key={`sgp-${si}`} {...stagger(si)} className="vision-card p-4 relative overflow-hidden">
                   <div className="absolute -top-6 -right-6 w-20 h-20 opacity-[0.05] pointer-events-none"
-                    style={{ background: "radial-gradient(circle, hsl(142 100% 50%), transparent)" }} />
+                    style={{ background: "radial-gradient(circle, hsl(var(--primary)), transparent)" }} />
                   <div className="flex items-center justify-between mb-3 relative z-10">
                     <span className="text-[12px] font-extrabold text-foreground">{sgp.matchup}</span>
                     <span className="text-[11px] font-extrabold text-nba-green tabular-nums">{sgp.combined_hit_pct}%</span>
@@ -703,7 +703,7 @@ const FreePicksPage = () => {
                   <div className="space-y-2 relative z-10">
                     {sgp.legs.map((leg, li) => (
                       <div key={li} className="flex items-center justify-between px-3 py-2 rounded-xl"
-                        style={{ background: "hsla(228, 20%, 10%, 0.5)", border: "1px solid hsla(228, 20%, 18%, 0.2)" }}>
+                        style={{ background: "hsl(var(--card) / 0.5)", border: "1px solid hsl(var(--border) / 0.2)" }}>
                         <div className="flex items-center gap-2">
                           <BarChart3 className="w-3.5 h-3.5 text-accent/60" />
                           <span className="text-[11px] font-bold text-foreground">{leg.player}</span>
@@ -715,8 +715,8 @@ const FreePicksPage = () => {
                       </div>
                     ))}
                   </div>
-                  <div className="flex items-center gap-2 mt-3 pt-2" style={{ borderTop: "1px solid hsla(228, 20%, 18%, 0.2)" }}>
-                    <Star className="w-3.5 h-3.5 text-[hsl(43,96%,56%)]" />
+                  <div className="flex items-center gap-2 mt-3 pt-2" style={{ borderTop: "1px solid hsl(var(--border) / 0.2)" }}>
+                    <Star className="w-3.5 h-3.5 text-[hsl(var(--nba-yellow))]" />
                     <span className="text-[9px] text-muted-foreground/65">{sgp.streak_label}</span>
                   </div>
                 </motion.div>
@@ -731,14 +731,14 @@ const FreePicksPage = () => {
             <EmptyState message="No player trends available right now" />
           ) : (
             <div className="space-y-3">
-              <SectionHeader icon={TrendingUp} gradient="from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)]" title="Player Trends" subtitle="Streaking props across all games" />
+              <SectionHeader icon={TrendingUp} gradient="from-success to-success" title="Player Trends" subtitle="Streaking props across all games" />
               {trends.slice(0, 20).map((prop, i) => {
                 const Icon = STREAK_ICONS[prop.streak_type] || Flame;
                 const gradient = STREAK_COLORS[prop.streak_type] || STREAK_COLORS.recent_form;
                 return (
                   <motion.div key={`trend-${i}`} {...stagger(i)} className="vision-card p-3.5 flex items-center gap-3">
                     <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0`}>
-                      <Icon className="w-4 h-4 text-white" />
+                      <Icon className="w-4 h-4 text-foreground" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
@@ -789,7 +789,7 @@ function SectionHeader({ icon: Icon, gradient, title, subtitle }: { icon: typeof
   return (
     <div className="flex items-center gap-2">
       <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg`}>
-        <Icon className="w-4 h-4 text-white" />
+        <Icon className="w-4 h-4 text-foreground" />
       </div>
       <div>
         <h2 className="text-sm font-extrabold text-foreground tracking-tight">{title}</h2>

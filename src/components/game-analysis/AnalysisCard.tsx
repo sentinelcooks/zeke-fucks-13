@@ -16,7 +16,7 @@ export function AnalysisCard({
   className?: string;
 }) {
   return (
-    <section className={`vision-card p-4 ${className}`} style={{ borderColor: "hsla(228,30%,22%,0.35)" }}>
+    <section className={`vision-card p-4 ${className}`} style={{ borderColor: "hsl(var(--border) / 0.35)" }}>
       {children}
     </section>
   );

@@ -77,8 +77,8 @@ function VisionInput({ label, ...props }: { label: string } & React.InputHTMLAtt
     <div>
       <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">{label}</label>
       <input {...props}
-        className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/55 outline-none transition-all duration-300 focus:shadow-[0_0_20px_hsla(142,100%,50%,0.08)]"
-        style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}
+        className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/55 outline-none transition-all duration-300 focus:shadow-[0_0_20px_hsl(var(--primary) / 0.08)]"
+        style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}
       />
     </div>
   );
@@ -90,7 +90,7 @@ function VisionSelect({ label, children, ...props }: { label: string; children: 
       <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">{label}</label>
       <select {...props}
         className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground outline-none transition-all duration-300 appearance-none"
-        style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}
+        style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}
       >{children}</select>
     </div>
   );
@@ -560,8 +560,8 @@ const ProfitTrackerPage = () => {
 
   return (
     <div className="flex flex-col min-h-full relative">
-      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(142 100% 50%)' }} />
-      <div className="vision-orb w-36 h-36 top-[600px] -left-12" style={{ background: 'hsl(145 60% 45%)', animationDelay: '-4s' }} />
+      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(var(--primary))' }} />
+      <div className="vision-orb w-36 h-36 top-[600px] -left-12" style={{ background: 'hsl(var(--success))', animationDelay: '-4s' }} />
 
       
 
@@ -576,13 +576,13 @@ const ProfitTrackerPage = () => {
               }`}>
               {tab === key && (
                 <motion.div layoutId="tracker-tab-bg" className="absolute inset-0 rounded-xl"
-                  style={{ background: 'linear-gradient(135deg, hsl(var(--accent)), hsl(158 64% 52%))' }}
+                  style={{ background: 'linear-gradient(135deg, hsl(var(--accent)), hsl(var(--success)))' }}
                   transition={{ type: "spring", stiffness: 400, damping: 28 }} />
               )}
               <Icon className="relative z-10 w-3.5 h-3.5" />
               <span className="relative z-10">{label}</span>
               {count && count > 0 && (
-                <span className="relative z-10 text-[8px] px-1.5 py-0.5 rounded-full bg-white/20 font-bold">{count}</span>
+                <span className="relative z-10 text-[8px] px-1.5 py-0.5 rounded-full bg-foreground/20 font-bold">{count}</span>
               )}
             </button>
           ))}
@@ -597,26 +597,26 @@ const ProfitTrackerPage = () => {
                 {[
                   {
                     icon: DollarSign, label: "Profit", value: fmtProfit(playStats.totalProfit),
-                    gradient: playStats.totalProfit >= 0 ? "from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)]" : "from-[hsl(0,72%,51%)] to-[hsl(340,65%,47%)]",
-                    glow: playStats.totalProfit >= 0 ? "hsla(158,64%,52%,0.15)" : "hsla(0,72%,51%,0.15)",
+                    gradient: playStats.totalProfit >= 0 ? "from-success to-success" : "from-danger to-danger",
+                    glow: playStats.totalProfit >= 0 ? "hsl(var(--success) / 0.15)" : "hsl(var(--danger) / 0.15)",
                     sub: playStats.totalProfit >= 0 ? "in profit" : "down",
                   },
                   {
                     icon: TrendingUp, label: "ROI", value: `${playStats.roi.toFixed(1)}%`,
-                    gradient: playStats.roi >= 0 ? "from-[hsl(190,90%,55%)] to-[hsl(158,64%,52%)]" : "from-[hsl(0,72%,51%)] to-[hsl(340,65%,47%)]",
-                    glow: playStats.roi >= 0 ? "hsla(190,90%,55%,0.15)" : "hsla(0,72%,51%,0.15)",
+                    gradient: playStats.roi >= 0 ? "from-[hsl(var(--nba-cyan))] to-success" : "from-danger to-danger",
+                    glow: playStats.roi >= 0 ? "hsl(var(--nba-cyan) / 0.15)" : "hsl(var(--danger) / 0.15)",
                     sub: `${playStats.roi >= 0 ? "+" : ""}${playStats.roi.toFixed(1)}%`,
                   },
                   {
                     icon: Trophy, label: "Record", value: `${playStats.wins}W – ${playStats.losses}L`,
-                    gradient: "from-[hsl(142,100%,50%)] to-[hsl(158,64%,52%)]",
-                    glow: "hsla(142,100%,50%,0.15)",
+                    gradient: "from-primary to-success",
+                    glow: "hsl(var(--primary) / 0.15)",
                     sub: `${allPlays.length} total`,
                   },
                   {
                     icon: Clock, label: "Pending", value: playStats.pending,
-                    gradient: "from-[hsl(43,96%,56%)] to-[hsl(30,90%,50%)]",
-                    glow: "hsla(43,96%,56%,0.15)",
+                    gradient: "from-[hsl(var(--nba-yellow))] to-[hsl(var(--nba-yellow))]",
+                    glow: "hsl(var(--nba-yellow) / 0.15)",
                     sub: "unsettled",
                   },
                 ].map((s, i) => (
@@ -634,10 +634,10 @@ const ProfitTrackerPage = () => {
                       <div className="flex items-center justify-between mb-3">
                         <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.gradient} flex items-center justify-center shadow-lg transition-all group-hover:shadow-xl group-hover:scale-105`}
                           style={{ boxShadow: `0 4px 14px -2px ${s.glow}` }}>
-                          <s.icon className="w-5 h-5 text-white" />
+                          <s.icon className="w-5 h-5 text-foreground" />
                         </div>
                         <span className="text-[8px] font-bold px-2 py-0.5 rounded-md text-muted-foreground/65 uppercase tracking-wider"
-                          style={{ background: 'hsla(228, 20%, 15%, 0.5)' }}>{s.sub}</span>
+                          style={{ background: 'hsl(var(--secondary) / 0.5)' }}>{s.sub}</span>
                       </div>
                       <p className="text-2xl font-extrabold text-foreground tabular-nums tracking-tight">
                         <motion.span key={String(s.value)} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
@@ -667,16 +667,16 @@ const ProfitTrackerPage = () => {
                         stat: overUnderStats.over,
                         icon: TrendingUp,
                         label: "Over",
-                        gradient: "from-[hsl(142,100%,50%)] to-[hsl(158,64%,52%)]",
-                        glow: "hsla(142,100%,50%,0.15)",
+                        gradient: "from-primary to-success",
+                        glow: "hsl(var(--primary) / 0.15)",
                       },
                       {
                         key: "under" as const,
                         stat: overUnderStats.under,
                         icon: TrendingDown,
                         label: "Under",
-                        gradient: "from-[hsl(0,72%,51%)] to-[hsl(340,65%,47%)]",
-                        glow: "hsla(0,72%,51%,0.15)",
+                        gradient: "from-danger to-danger",
+                        glow: "hsl(var(--danger) / 0.15)",
                       },
                     ].map((b, i) => (
                       <motion.div
@@ -693,10 +693,10 @@ const ProfitTrackerPage = () => {
                           <div className="flex items-center justify-between mb-3">
                             <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${b.gradient} flex items-center justify-center shadow-lg transition-all group-hover:shadow-xl group-hover:scale-105`}
                               style={{ boxShadow: `0 4px 14px -2px ${b.glow}` }}>
-                              <b.icon className="w-5 h-5 text-white" />
+                              <b.icon className="w-5 h-5 text-foreground" />
                             </div>
                             <span className="text-[8px] font-bold px-2 py-0.5 rounded-md text-muted-foreground/65 uppercase tracking-wider"
-                              style={{ background: 'hsla(228, 20%, 15%, 0.5)' }}>{b.stat.winRate}%</span>
+                              style={{ background: 'hsl(var(--secondary) / 0.5)' }}>{b.stat.winRate}%</span>
                           </div>
                           <p className="text-2xl font-extrabold text-foreground tabular-nums tracking-tight">
                             {b.stat.wins}<span className="text-muted-foreground/50">W</span> – {b.stat.losses}<span className="text-muted-foreground/50">L</span>
@@ -726,20 +726,20 @@ const ProfitTrackerPage = () => {
               <div className="flex gap-2">
                 <motion.button whileTap={{ scale: 0.95 }} onClick={() => { setShowForm(!showForm); setShowParlayForm(false); }}
                   className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[12px] font-bold tracking-wider text-accent-foreground"
-                  style={{ background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))', boxShadow: '0 4px 12px -2px hsla(142,100%,50%,0.3)' }}>
+                  style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--success)))', boxShadow: '0 4px 12px -2px hsl(var(--primary) / 0.3)' }}>
                   {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                   {showForm ? "Cancel" : "Add Play"}
                 </motion.button>
                 <motion.button whileTap={{ scale: 0.95 }} onClick={() => { setShowParlayForm(!showParlayForm); setShowForm(false); }}
                   className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[12px] font-bold tracking-wider"
-                  style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(142, 100%, 50%, 0.3)', color: showParlayForm ? 'hsl(0 72% 51%)' : 'hsl(142 100% 50%)' }}>
+                  style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--primary) / 0.3)', color: showParlayForm ? 'hsl(var(--danger))' : 'hsl(var(--primary))' }}>
                   {showParlayForm ? <X className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
                   {showParlayForm ? "Cancel" : "Add Parlay"}
                 </motion.button>
                 {plays.length > 0 && (
                   <motion.button whileTap={{ scale: 0.95 }} onClick={exportToCSV}
                     className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[12px] font-bold tracking-wider text-muted-foreground/60 hover:text-foreground/80 transition-colors"
-                    style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+                    style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}>
                     <Download className="w-4 h-4" />
                   </motion.button>
                 )}
@@ -752,8 +752,8 @@ const ProfitTrackerPage = () => {
                     transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }} className="relative z-20 overflow-visible mb-4">
                     <div className="vision-card p-4 space-y-3">
                       <div className="flex items-center gap-2.5 mb-1">
-                        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))', boxShadow: '0 4px 12px -2px hsla(142,100%,50%,0.25)' }}>
-                          <Plus className="w-3.5 h-3.5 text-white" />
+                        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--success)))', boxShadow: '0 4px 12px -2px hsl(var(--primary) / 0.25)' }}>
+                          <Plus className="w-3.5 h-3.5 text-foreground" />
                         </div>
                         <span className="text-[13px] font-bold text-foreground">New Play</span>
                       </div>
@@ -774,15 +774,15 @@ const ProfitTrackerPage = () => {
                               type="number" step="0.5" value={form.line} onChange={(e) => setForm({ ...form, line: e.target.value })} />
                             <div>
                               <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Direction</label>
-                              <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+                              <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsl(var(--border) / 0.25)' }}>
                                 <button type="button" onClick={() => setForm({ ...form, direction: "over" })}
-                                  className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "over" ? "text-emerald-400" : "text-muted-foreground/50 hover:text-foreground/70"}`}
-                                  style={{ background: form.direction === "over" ? 'hsla(160, 84%, 39%, 0.12)' : 'hsla(228, 20%, 10%, 0.6)' }}>
+                                  className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "over" ? "text-success" : "text-muted-foreground/50 hover:text-foreground/70"}`}
+                                  style={{ background: form.direction === "over" ? 'hsl(var(--success) / 0.12)' : 'hsl(var(--card) / 0.6)' }}>
                                   OVER
                                 </button>
                                 <button type="button" onClick={() => setForm({ ...form, direction: "under" })}
-                                  className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "under" ? "text-red-400" : "text-muted-foreground/50 hover:text-foreground/70"}`}
-                                  style={{ background: form.direction === "under" ? 'hsla(0, 84%, 60%, 0.12)' : 'hsla(228, 20%, 10%, 0.6)' }}>
+                                  className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "under" ? "text-danger" : "text-muted-foreground/50 hover:text-foreground/70"}`}
+                                  style={{ background: form.direction === "under" ? 'hsl(var(--danger) / 0.12)' : 'hsl(var(--card) / 0.6)' }}>
                                   UNDER
                                 </button>
                               </div>
@@ -796,7 +796,7 @@ const ProfitTrackerPage = () => {
                             <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Method</label>
                             <select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })}
                               className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground outline-none appearance-none"
-                              style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+                              style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}>
                               <option value="">Select method...</option>
                               {["KO/TKO", "Submission", "Decision", "KO/TKO or Submission", "KO/TKO or Decision", "Submission or Decision"].map((m) => (
                                 <option key={m} value={m}>{m}</option>
@@ -809,15 +809,15 @@ const ProfitTrackerPage = () => {
                         {getDirectionMode(form.sport, form.bet_type) === "goes_distance" && (
                           <div className="col-span-2">
                             <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Result</label>
-                            <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+                            <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsl(var(--border) / 0.25)' }}>
                               <button type="button" onClick={() => setForm({ ...form, direction: "over" })}
-                                className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "over" ? "text-emerald-400" : "text-muted-foreground/50 hover:text-foreground/70"}`}
-                                style={{ background: form.direction === "over" ? 'hsla(160, 84%, 39%, 0.12)' : 'hsla(228, 20%, 10%, 0.6)' }}>
+                                className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "over" ? "text-success" : "text-muted-foreground/50 hover:text-foreground/70"}`}
+                                style={{ background: form.direction === "over" ? 'hsl(var(--success) / 0.12)' : 'hsl(var(--card) / 0.6)' }}>
                                 GOES DISTANCE
                               </button>
                               <button type="button" onClick={() => setForm({ ...form, direction: "under" })}
-                                className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "under" ? "text-red-400" : "text-muted-foreground/50 hover:text-foreground/70"}`}
-                                style={{ background: form.direction === "under" ? 'hsla(0, 84%, 60%, 0.12)' : 'hsla(228, 20%, 10%, 0.6)' }}>
+                                className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "under" ? "text-danger" : "text-muted-foreground/50 hover:text-foreground/70"}`}
+                                style={{ background: form.direction === "under" ? 'hsl(var(--danger) / 0.12)' : 'hsl(var(--card) / 0.6)' }}>
                                 DOES NOT
                               </button>
                             </div>
@@ -828,15 +828,15 @@ const ProfitTrackerPage = () => {
                         {getDirectionMode(form.sport, form.bet_type) === "inside_distance" && (
                           <div className="col-span-2">
                             <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Result</label>
-                            <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+                            <div className="flex rounded-xl overflow-hidden h-[42px]" style={{ border: '1px solid hsl(var(--border) / 0.25)' }}>
                               <button type="button" onClick={() => setForm({ ...form, direction: "over" })}
-                                className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "over" ? "text-emerald-400" : "text-muted-foreground/50 hover:text-foreground/70"}`}
-                                style={{ background: form.direction === "over" ? 'hsla(160, 84%, 39%, 0.12)' : 'hsla(228, 20%, 10%, 0.6)' }}>
+                                className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "over" ? "text-success" : "text-muted-foreground/50 hover:text-foreground/70"}`}
+                                style={{ background: form.direction === "over" ? 'hsl(var(--success) / 0.12)' : 'hsl(var(--card) / 0.6)' }}>
                                 INSIDE DISTANCE
                               </button>
                               <button type="button" onClick={() => setForm({ ...form, direction: "under" })}
-                                className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "under" ? "text-red-400" : "text-muted-foreground/50 hover:text-foreground/70"}`}
-                                style={{ background: form.direction === "under" ? 'hsla(0, 84%, 60%, 0.12)' : 'hsla(228, 20%, 10%, 0.6)' }}>
+                                className={`flex-1 text-[11px] font-bold tracking-wide transition-all ${form.direction === "under" ? "text-danger" : "text-muted-foreground/50 hover:text-foreground/70"}`}
+                                style={{ background: form.direction === "under" ? 'hsl(var(--danger) / 0.12)' : 'hsl(var(--card) / 0.6)' }}>
                                 NOT INSIDE
                               </button>
                             </div>
@@ -850,7 +850,7 @@ const ProfitTrackerPage = () => {
                               <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Round</label>
                               <select value={form.roundNumber} onChange={(e) => setForm({ ...form, roundNumber: e.target.value })}
                                 className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground outline-none appearance-none"
-                                style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+                                style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}>
                                 <option value="">Round...</option>
                                 {["1","2","3","4","5"].map((r) => <option key={r} value={r}>Round {r}</option>)}
                               </select>
@@ -859,7 +859,7 @@ const ProfitTrackerPage = () => {
                               <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-1.5">Result</label>
                               <select value={form.roundResult} onChange={(e) => setForm({ ...form, roundResult: e.target.value })}
                                 className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground outline-none appearance-none"
-                                style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+                                style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}>
                                 <option value="">Result...</option>
                                 <option value="ends">Fight Ends This Round</option>
                                 <option value="starts">Fight Starts This Round</option>
@@ -876,7 +876,7 @@ const ProfitTrackerPage = () => {
                       </div>
                       <motion.button whileTap={{ scale: 0.95 }} onClick={addPlay}
                         className="w-full py-3 rounded-xl text-[12px] font-bold tracking-wider text-accent-foreground"
-                        style={{ background: 'linear-gradient(135deg, hsl(142 100% 50%), hsl(158 64% 52%))', boxShadow: '0 4px 12px -2px hsla(142,100%,50%,0.3)' }}>
+                        style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--success)))', boxShadow: '0 4px 12px -2px hsl(var(--primary) / 0.3)' }}>
                         Save Play
                       </motion.button>
                     </div>
@@ -898,7 +898,7 @@ const ProfitTrackerPage = () => {
               <div className="vision-card p-3 space-y-2">
                 <input type="text" placeholder="Search player..." value={playsSearch} onChange={(e) => setPlaysSearch(e.target.value)}
                   className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/55 outline-none"
-                  style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }} />
+                  style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }} />
                 <div className="flex items-center gap-1 flex-wrap">
                   <Filter className="w-3 h-3 text-muted-foreground/50" />
                   {(["all", "win", "loss", "pending"] as ResultFilter[]).map((f) => (
@@ -921,7 +921,7 @@ const ProfitTrackerPage = () => {
                     <Calendar className="w-3 h-3 text-muted-foreground/50" />
                     <select value={playsDateFilter} onChange={(e) => setPlaysDateFilter(e.target.value)}
                       className="flex-1 rounded-lg px-2 py-1.5 text-[10px] font-bold text-foreground outline-none appearance-none"
-                      style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+                      style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}>
                       <option value="all">All Dates</option>
                       {playsDates.map(d => (
                         <option key={d} value={d}>{new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</option>
@@ -935,7 +935,7 @@ const ProfitTrackerPage = () => {
               <div className="space-y-2">
                 {playsLoading ? (
                   <div className="flex justify-center py-16">
-                    <div className="w-8 h-8 rounded-full animate-spin" style={{ border: '3px solid hsla(228,30%,20%,0.3)', borderTopColor: 'hsl(142 100% 50%)' }} />
+                    <div className="w-8 h-8 rounded-full animate-spin" style={{ border: '3px solid hsl(var(--border) / 0.3)', borderTopColor: 'hsl(var(--primary))' }} />
                   </div>
                 ) : filteredPlays.length === 0 ? (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="vision-card p-8 text-center">
@@ -947,18 +947,18 @@ const ProfitTrackerPage = () => {
                   <motion.div key={p.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
                     className="vision-card p-4 relative overflow-hidden">
                     <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl" style={{
-                      background: p.result === "win" ? 'hsl(145 60% 45%)' : p.result === "loss" ? 'hsl(0 72% 51%)' : 'hsl(142 100% 50%)',
+                      background: p.result === "win" ? 'hsl(var(--success))' : p.result === "loss" ? 'hsl(var(--danger))' : 'hsl(var(--primary))',
                     }} />
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-[9px] font-bold uppercase tracking-[0.15em] px-1.5 py-0.5 rounded-md text-muted-foreground/50"
-                            style={{ background: 'hsla(228, 20%, 15%, 0.5)', border: '1px solid hsla(228, 20%, 22%, 0.3)' }}>
+                            style={{ background: 'hsl(var(--secondary) / 0.5)', border: '1px solid hsl(var(--border) / 0.3)' }}>
                             {p.sport.toUpperCase()}
                           </span>
                           {(p as any)._isParlay && (
                             <span className="text-[9px] font-bold uppercase tracking-[0.15em] px-1.5 py-0.5 rounded-md text-accent"
-                              style={{ background: 'hsla(142, 100%, 50%, 0.12)', border: '1px solid hsla(142, 100%, 50%, 0.25)' }}>
+                              style={{ background: 'hsl(var(--primary) / 0.12)', border: '1px solid hsl(var(--primary) / 0.25)' }}>
                               PARLAY
                             </span>
                           )}
@@ -978,13 +978,13 @@ const ProfitTrackerPage = () => {
                         {p.result === "pending" ? (
                           <div className="flex gap-1">
                             <motion.button whileTap={{ scale: 0.9 }} onClick={() => (p as any)._isParlay ? updateParlayResult(p.id, "win") : updatePlayResult(p.id, "win")}
-                              className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white" style={{ background: 'hsl(145 60% 45%)' }}>W</motion.button>
+                              className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white" style={{ background: 'hsl(var(--success))' }}>W</motion.button>
                             <motion.button whileTap={{ scale: 0.9 }} onClick={() => (p as any)._isParlay ? updateParlayResult(p.id, "loss") : updatePlayResult(p.id, "loss")}
-                              className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white" style={{ background: 'hsl(0 72% 51%)' }}>L</motion.button>
+                              className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white" style={{ background: 'hsl(var(--danger))' }}>L</motion.button>
                             {!(p as any)._isParlay && (
                               <motion.button whileTap={{ scale: 0.9 }} onClick={() => updatePlayResult(p.id, "push")}
                                 className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-muted-foreground"
-                                style={{ background: 'hsla(228, 20%, 15%, 0.5)', border: '1px solid hsla(228, 20%, 22%, 0.3)' }}>P</motion.button>
+                                style={{ background: 'hsl(var(--secondary) / 0.5)', border: '1px solid hsl(var(--border) / 0.3)' }}>P</motion.button>
                             )}
                           </div>
                         ) : (
@@ -1015,9 +1015,9 @@ const ProfitTrackerPage = () => {
               {/* Stats — Dashboard-style */}
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { icon: CheckCircle2, label: "Hits", value: pickStats.wins, gradient: "from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)]", glow: "hsla(158,64%,52%,0.15)", sub: "wins" },
-                  { icon: XCircle, label: "Misses", value: pickStats.losses, gradient: "from-[hsl(0,72%,51%)] to-[hsl(340,65%,47%)]", glow: "hsla(0,72%,51%,0.15)", sub: "losses" },
-                  { icon: Target, label: "Win Rate", value: `${pickStats.winRate}%`, gradient: pickStats.winRate >= 50 ? "from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)]" : "from-[hsl(0,72%,51%)] to-[hsl(340,65%,47%)]", glow: pickStats.winRate >= 50 ? "hsla(158,64%,52%,0.15)" : "hsla(0,72%,51%,0.15)", sub: pickStats.winRate >= 55 ? "above avg" : "tracking" },
+                  { icon: CheckCircle2, label: "Hits", value: pickStats.wins, gradient: "from-success to-success", glow: "hsl(var(--success) / 0.15)", sub: "wins" },
+                  { icon: XCircle, label: "Misses", value: pickStats.losses, gradient: "from-danger to-danger", glow: "hsl(var(--danger) / 0.15)", sub: "losses" },
+                  { icon: Target, label: "Win Rate", value: `${pickStats.winRate}%`, gradient: pickStats.winRate >= 50 ? "from-success to-success" : "from-danger to-danger", glow: pickStats.winRate >= 50 ? "hsl(var(--success) / 0.15)" : "hsl(var(--danger) / 0.15)", sub: pickStats.winRate >= 55 ? "above avg" : "tracking" },
                 ].map((s, i) => (
                   <motion.div key={s.label} initial={{ opacity: 0, y: 20, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ delay: i * 0.07, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
@@ -1028,10 +1028,10 @@ const ProfitTrackerPage = () => {
                       <div className="flex items-center justify-between mb-2">
                         <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${s.gradient} flex items-center justify-center shadow-lg`}
                           style={{ boxShadow: `0 4px 14px -2px ${s.glow}` }}>
-                          <s.icon className="w-4 h-4 text-white" />
+                          <s.icon className="w-4 h-4 text-foreground" />
                         </div>
                         <span className="text-[7px] font-bold px-1.5 py-0.5 rounded-md text-muted-foreground/65 uppercase tracking-wider"
-                          style={{ background: 'hsla(228, 20%, 15%, 0.5)' }}>{s.sub}</span>
+                          style={{ background: 'hsl(var(--secondary) / 0.5)' }}>{s.sub}</span>
                       </div>
                       <p className="text-xl font-extrabold text-foreground tabular-nums tracking-tight">{s.value}</p>
                       <p className="text-[9px] text-muted-foreground/65 font-semibold mt-0.5 uppercase tracking-wider">{s.label}</p>
@@ -1041,9 +1041,9 @@ const ProfitTrackerPage = () => {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { icon: Layers, label: "Total", value: pickStats.total, gradient: "from-[hsl(142,100%,50%)] to-[hsl(158,64%,52%)]", glow: "hsla(142,100%,50%,0.15)", sub: "all time" },
-                  { icon: Clock, label: "Pending", value: pickStats.pending, gradient: "from-[hsl(43,96%,56%)] to-[hsl(30,90%,50%)]", glow: "hsla(43,96%,56%,0.15)", sub: "unsettled" },
-                  { icon: Zap, label: "Streak", value: pickStats.streak > 0 ? `${pickStats.streak}W` : pickStats.streakType === "loss" ? `${pickStats.streak}L` : "--", gradient: pickStats.streakType === "win" ? "from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)]" : "from-[hsl(190,90%,55%)] to-[hsl(158,64%,52%)]", glow: "hsla(190,90%,55%,0.15)", sub: pickStats.streakType || "none" },
+                  { icon: Layers, label: "Total", value: pickStats.total, gradient: "from-primary to-success", glow: "hsl(var(--primary) / 0.15)", sub: "all time" },
+                  { icon: Clock, label: "Pending", value: pickStats.pending, gradient: "from-[hsl(var(--nba-yellow))] to-[hsl(var(--nba-yellow))]", glow: "hsl(var(--nba-yellow) / 0.15)", sub: "unsettled" },
+                  { icon: Zap, label: "Streak", value: pickStats.streak > 0 ? `${pickStats.streak}W` : pickStats.streakType === "loss" ? `${pickStats.streak}L` : "--", gradient: pickStats.streakType === "win" ? "from-success to-success" : "from-[hsl(var(--nba-cyan))] to-success", glow: "hsl(var(--nba-cyan) / 0.15)", sub: pickStats.streakType || "none" },
                 ].map((s, i) => (
                   <motion.div key={s.label} initial={{ opacity: 0, y: 20, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ delay: (i + 3) * 0.07, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
@@ -1054,10 +1054,10 @@ const ProfitTrackerPage = () => {
                       <div className="flex items-center justify-between mb-2">
                         <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${s.gradient} flex items-center justify-center shadow-lg`}
                           style={{ boxShadow: `0 4px 14px -2px ${s.glow}` }}>
-                          <s.icon className="w-4 h-4 text-white" />
+                          <s.icon className="w-4 h-4 text-foreground" />
                         </div>
                         <span className="text-[7px] font-bold px-1.5 py-0.5 rounded-md text-muted-foreground/65 uppercase tracking-wider"
-                          style={{ background: 'hsla(228, 20%, 15%, 0.5)' }}>{s.sub}</span>
+                          style={{ background: 'hsl(var(--secondary) / 0.5)' }}>{s.sub}</span>
                       </div>
                       <p className="text-xl font-extrabold text-foreground tabular-nums tracking-tight">{s.value}</p>
                       <p className="text-[9px] text-muted-foreground/65 font-semibold mt-0.5 uppercase tracking-wider">{s.label}</p>
@@ -1070,7 +1070,7 @@ const ProfitTrackerPage = () => {
               <div className="vision-card p-3 space-y-2">
                 <input type="text" placeholder="Search player..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/55 outline-none"
-                  style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }} />
+                  style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }} />
                 <div className="flex items-center gap-1 flex-wrap">
                   <Filter className="w-3 h-3 text-muted-foreground/50" />
                   {(["all", "win", "loss", "pending"] as ResultFilter[]).map((f) => (
@@ -1093,7 +1093,7 @@ const ProfitTrackerPage = () => {
                     <Calendar className="w-3 h-3 text-muted-foreground/50" />
                     <select value={picksDateFilter} onChange={(e) => setPicksDateFilter(e.target.value)}
                       className="flex-1 rounded-lg px-2 py-1.5 text-[10px] font-bold text-foreground outline-none appearance-none"
-                      style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}>
+                      style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}>
                       <option value="all">All Dates</option>
                       {picksDates.map(d => (
                         <option key={d} value={d}>{new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</option>
@@ -1106,7 +1106,7 @@ const ProfitTrackerPage = () => {
               {/* Pick Cards */}
               {picksLoading ? (
                 <div className="flex justify-center py-16">
-                  <div className="w-8 h-8 rounded-full animate-spin" style={{ border: '3px solid hsla(228,30%,20%,0.3)', borderTopColor: 'hsl(142 100% 50%)' }} />
+                  <div className="w-8 h-8 rounded-full animate-spin" style={{ border: '3px solid hsl(var(--border) / 0.3)', borderTopColor: 'hsl(var(--primary))' }} />
                 </div>
               ) : filteredPicks.length === 0 ? (
                 <div className="vision-card p-8 text-center">
@@ -1141,7 +1141,7 @@ const ProfitTrackerPage = () => {
                             <motion.div key={pick.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
                               className="vision-card p-3 relative overflow-hidden">
                               <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl" style={{
-                                background: pick.result === "win" ? 'hsl(145 60% 45%)' : pick.result === "loss" ? 'hsl(0 72% 51%)' : 'hsl(43 96% 56%)',
+                                background: pick.result === "win" ? 'hsl(var(--success))' : pick.result === "loss" ? 'hsl(var(--danger))' : 'hsl(var(--nba-yellow))',
                               }} />
                               <div className="flex items-center justify-between mb-1.5">
                                 <div className="flex items-center gap-2">
@@ -1150,7 +1150,7 @@ const ProfitTrackerPage = () => {
                                   }`}>{pick.hit_rate}%</span>
                                   {pick.odds && <span className="text-[10px] font-bold text-muted-foreground/60">{fmt(pick.odds)}</span>}
                                   <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md text-muted-foreground/50"
-                                    style={{ background: 'hsla(228, 20%, 15%, 0.5)' }}>{pick.sport.toUpperCase()}</span>
+                                    style={{ background: 'hsl(var(--secondary) / 0.5)' }}>{pick.sport.toUpperCase()}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                   <span className={`flex items-center gap-0.5 text-[10px] font-bold ${resultConf.color}`}>
@@ -1192,10 +1192,10 @@ const ProfitTrackerPage = () => {
               {/* Stats — Dashboard-style */}
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { icon: Layers, label: "Total", value: parlayStats.total, gradient: "from-[hsl(142,100%,50%)] to-[hsl(158,64%,52%)]", glow: "hsla(142,100%,50%,0.15)", sub: "all time" },
-                  { icon: Target, label: "Win Rate", value: `${parlayStats.winRate}%`, gradient: parlayStats.winRate >= 50 ? "from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)]" : "from-[hsl(0,72%,51%)] to-[hsl(340,65%,47%)]", glow: parlayStats.winRate >= 50 ? "hsla(158,64%,52%,0.15)" : "hsla(0,72%,51%,0.15)", sub: parlayStats.winRate >= 50 ? "strong" : "tracking" },
-                  { icon: CheckCircle2, label: "Wins", value: parlayStats.wins, gradient: "from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)]", glow: "hsla(158,64%,52%,0.15)", sub: "hits" },
-                  { icon: Clock, label: "Pending", value: parlayStats.pending, gradient: "from-[hsl(43,96%,56%)] to-[hsl(30,90%,50%)]", glow: "hsla(43,96%,56%,0.15)", sub: "unsettled" },
+                  { icon: Layers, label: "Total", value: parlayStats.total, gradient: "from-primary to-success", glow: "hsl(var(--primary) / 0.15)", sub: "all time" },
+                  { icon: Target, label: "Win Rate", value: `${parlayStats.winRate}%`, gradient: parlayStats.winRate >= 50 ? "from-success to-success" : "from-danger to-danger", glow: parlayStats.winRate >= 50 ? "hsl(var(--success) / 0.15)" : "hsl(var(--danger) / 0.15)", sub: parlayStats.winRate >= 50 ? "strong" : "tracking" },
+                  { icon: CheckCircle2, label: "Wins", value: parlayStats.wins, gradient: "from-success to-success", glow: "hsl(var(--success) / 0.15)", sub: "hits" },
+                  { icon: Clock, label: "Pending", value: parlayStats.pending, gradient: "from-[hsl(var(--nba-yellow))] to-[hsl(var(--nba-yellow))]", glow: "hsl(var(--nba-yellow) / 0.15)", sub: "unsettled" },
                 ].map((s, i) => (
                   <motion.div key={s.label} initial={{ opacity: 0, y: 20, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ delay: i * 0.07, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
@@ -1206,10 +1206,10 @@ const ProfitTrackerPage = () => {
                       <div className="flex items-center justify-between mb-3">
                         <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.gradient} flex items-center justify-center shadow-lg transition-all group-hover:shadow-xl group-hover:scale-105`}
                           style={{ boxShadow: `0 4px 14px -2px ${s.glow}` }}>
-                          <s.icon className="w-5 h-5 text-white" />
+                          <s.icon className="w-5 h-5 text-foreground" />
                         </div>
                         <span className="text-[8px] font-bold px-2 py-0.5 rounded-md text-muted-foreground/65 uppercase tracking-wider"
-                          style={{ background: 'hsla(228, 20%, 15%, 0.5)' }}>{s.sub}</span>
+                          style={{ background: 'hsl(var(--secondary) / 0.5)' }}>{s.sub}</span>
                       </div>
                       <p className="text-2xl font-extrabold text-foreground tabular-nums tracking-tight">{s.value}</p>
                       <p className="text-[10px] text-muted-foreground/65 font-semibold mt-0.5 uppercase tracking-wider">{s.label}</p>
@@ -1221,7 +1221,7 @@ const ProfitTrackerPage = () => {
               {/* Parlay Cards */}
               {picksLoading ? (
                 <div className="flex justify-center py-16">
-                  <div className="w-8 h-8 rounded-full animate-spin" style={{ border: '3px solid hsla(228,30%,20%,0.3)', borderTopColor: 'hsl(142 100% 50%)' }} />
+                  <div className="w-8 h-8 rounded-full animate-spin" style={{ border: '3px solid hsl(var(--border) / 0.3)', borderTopColor: 'hsl(var(--primary))' }} />
                 </div>
               ) : parlays.length === 0 ? (
                 <div className="vision-card p-8 text-center">
@@ -1238,7 +1238,7 @@ const ProfitTrackerPage = () => {
                   <motion.div key={parlay.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
                     className="vision-card p-4 relative overflow-hidden">
                     <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl" style={{
-                      background: parlay.result === "win" ? 'hsl(145 60% 45%)' : parlay.result === "loss" ? 'hsl(0 72% 51%)' : 'hsl(142 100% 50%)',
+                      background: parlay.result === "win" ? 'hsl(var(--success))' : parlay.result === "loss" ? 'hsl(var(--danger))' : 'hsl(var(--primary))',
                     }} />
 
                     {/* Header */}
@@ -1280,7 +1280,7 @@ const ProfitTrackerPage = () => {
                         { label: "Stake", val: `$${parlay.stake}`, color: "text-foreground" },
                         { label: "Payout", val: `$${parlay.potential_payout.toFixed(0)}`, color: "text-nba-green" },
                       ].map(s => (
-                        <div key={s.label} className="rounded-lg p-1.5 text-center" style={{ background: 'hsla(228, 20%, 10%, 0.5)' }}>
+                        <div key={s.label} className="rounded-lg p-1.5 text-center" style={{ background: 'hsl(var(--card) / 0.5)' }}>
                           <span className="block text-[8px] uppercase tracking-wider text-muted-foreground/50">{s.label}</span>
                           <span className={`block text-[11px] font-extrabold ${s.color}`}>{s.val}</span>
                         </div>
@@ -1295,7 +1295,7 @@ const ProfitTrackerPage = () => {
                         const showConf = leg.confidence_source !== "fallback" && leg.confidence > 0;
                         const legResult = (leg.result ?? "").toLowerCase();
                         return (
-                          <div key={li} className="flex items-center justify-between text-[10px] py-1 px-2 rounded-lg" style={{ background: 'hsla(228, 20%, 10%, 0.3)' }}>
+                          <div key={li} className="flex items-center justify-between text-[10px] py-1 px-2 rounded-lg" style={{ background: 'hsl(var(--card) / 0.3)' }}>
                             <div className="flex items-center gap-1.5">
                               <span className="text-muted-foreground/50 font-bold">#{li + 1}</span>
                               <span className="font-bold uppercase text-[8px] text-accent/70">{leg.sport}</span>
@@ -1329,7 +1329,7 @@ const ProfitTrackerPage = () => {
                     </div>
 
                     {/* Result buttons */}
-                    <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid hsla(228, 20%, 20%, 0.2)' }}>
+                    <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid hsl(var(--border) / 0.2)' }}>
                       <span className="text-[9px] uppercase tracking-wider text-muted-foreground/50 font-semibold">Result</span>
                       <div className="flex gap-1">
                         {(["pending", "win", "loss"] as const).map(r => {

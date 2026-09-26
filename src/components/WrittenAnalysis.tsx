@@ -788,7 +788,7 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
       className={`rounded-2xl border ${borderColor} overflow-hidden`}
-      style={{ background: "hsla(228, 20%, 6%, 0.7)", backdropFilter: "blur(20px)" }}
+      style={{ background: "hsl(var(--background) / 0.7)", backdropFilter: "blur(20px)" }}
     >
       {/* Header */}
       <button
@@ -864,12 +864,12 @@ const WrittenAnalysis = (props: WrittenAnalysisProps) => {
                   className="rounded-xl p-4 relative overflow-hidden"
                   style={{
                     background: overallSummary.rating === "take"
-                      ? "linear-gradient(135deg, hsla(158, 64%, 52%, 0.08), hsla(158, 64%, 52%, 0.02))"
+                      ? "linear-gradient(135deg, hsl(var(--success) / 0.08), hsl(var(--success) / 0.02))"
                       : overallSummary.rating === "lean"
-                        ? "linear-gradient(135deg, hsla(210, 100%, 60%, 0.08), hsla(210, 100%, 60%, 0.02))"
-                        : "linear-gradient(135deg, hsla(0, 72%, 51%, 0.08), hsla(0, 72%, 51%, 0.02))",
+                        ? "linear-gradient(135deg, hsl(var(--primary) / 0.08), hsl(var(--primary) / 0.02))"
+                        : "linear-gradient(135deg, hsl(var(--danger) / 0.08), hsl(var(--danger) / 0.02))",
                     border: `1px solid ${
-                      overallSummary.rating === "take" ? "hsla(158,64%,52%,0.2)" : overallSummary.rating === "lean" ? "hsla(210,100%,60%,0.2)" : "hsla(0,72%,51%,0.2)"
+                      overallSummary.rating === "take" ? "hsl(var(--success) / 0.2)" : overallSummary.rating === "lean" ? "hsl(var(--primary) / 0.2)" : "hsl(var(--danger) / 0.2)"
                     }`,
                   }}
                 >

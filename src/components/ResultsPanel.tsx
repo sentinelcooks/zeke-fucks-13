@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bar } from "react-chartjs-2";
+import { ThemedBar as Bar } from "@/components/charts/ThemedBar";
 import { normalizeConfidencePercent, normalizeVerdict } from "@/lib/matchupGrade";
 import {
   Chart as ChartJS,
@@ -108,8 +108,8 @@ function GameChart({ data }: { data: any }) {
 
   const colors = values.map((v: number) =>
     data.over_under === "over"
-      ? v > lineval ? "rgba(0, 212, 170, 0.85)" : "rgba(255, 71, 87, 0.6)"
-      : v < lineval ? "rgba(0, 212, 170, 0.85)" : "rgba(255, 71, 87, 0.6)"
+      ? v > lineval ? "hsl(var(--success) / 0.85)" : "hsl(var(--danger) / 0.75)"
+      : v < lineval ? "hsl(var(--success) / 0.85)" : "hsl(var(--danger) / 0.75)"
   );
 
   return (
@@ -129,7 +129,7 @@ function GameChart({ data }: { data: any }) {
               label: `Line (${lineval})`,
               data: Array(labels.length).fill(lineval),
               type: "line" as any,
-              borderColor: "rgba(255,255,255,0.5)",
+              borderColor: "hsl(var(--foreground) / 0.5)",
               borderDash: [6, 4],
               borderWidth: 2,
               pointRadius: 0,
@@ -141,11 +141,11 @@ function GameChart({ data }: { data: any }) {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { labels: { color: "#7a8299", font: { size: 11 } } },
+            legend: { labels: { color: "hsl(var(--muted-foreground))", font: { size: 11 } } },
           },
           scales: {
-            x: { ticks: { color: "#7a8299", font: { size: 10 }, maxRotation: 45 }, grid: { display: false } },
-            y: { ticks: { color: "#7a8299" }, grid: { color: "rgba(30,42,69,0.5)" }, beginAtZero: true },
+            x: { ticks: { color: "hsl(var(--muted-foreground))", font: { size: 10 }, maxRotation: 45 }, grid: { display: false } },
+            y: { ticks: { color: "hsl(var(--muted-foreground))" }, grid: { color: "hsl(var(--border) / 0.6)" }, beginAtZero: true },
           },
         }}
       />

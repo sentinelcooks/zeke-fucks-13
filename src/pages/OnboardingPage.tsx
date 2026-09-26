@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import type { ComponentType, ReactNode } from "react";
 import { ArrowLeft, Lock, TrendingUp, Brain, BarChart3, Calendar, Check, X, Sparkles, ShieldCheck, Swords, CheckCircle2, ChevronDown } from "lucide-react";
-import logo from "@/assets/sentinel-lock.jpg";
+import { BrandMark } from "@/components/brand/BrandMark";
 
 /* ─────────── Direct CDN image sources ─────────── */
 const ESPN_HEADSHOTS = {
@@ -79,7 +79,7 @@ function ProgressDots({ current, total }: { current: number; total: number }) {
   const lightweight = useLightweightMotion();
   return (
     <div className="flex items-center gap-2 mb-6">
-      <span className="text-xs font-bold text-white/60 tabular-nums">
+      <span className="text-xs font-bold text-foreground/60 tabular-nums">
         {current} / {total}
       </span>
       <div className="flex gap-1.5 ml-1 items-center">
@@ -92,21 +92,21 @@ function ProgressDots({ current, total }: { current: number; total: number }) {
               animate={lightweight ? undefined : {
                 width: isActive ? 28 : 14,
                 backgroundColor: isActive
-                  ? "#00FF6A"
+                  ? "hsl(var(--primary))"
                   : isCompleted
-                  ? "rgba(0,255,106,0.7)"
-                  : "#2A2A2A",
+                  ? "hsl(var(--primary) / 0.7)"
+                  : "hsl(var(--secondary))",
                 boxShadow: isActive
-                  ? "0 0 12px rgba(0,255,106,0.8), 0 0 24px rgba(0,255,106,0.45), 0 0 4px rgba(0,255,106,1)"
+                  ? "0 0 12px hsl(var(--primary) / 0.8), 0 0 24px hsl(var(--primary) / 0.45), 0 0 4px hsl(var(--primary) / 1)"
                   : isCompleted
-                  ? "0 0 6px rgba(0,255,106,0.35)"
+                  ? "0 0 6px hsl(var(--primary) / 0.35)"
                   : "0 0 0 rgba(0,0,0,0)",
               }}
               transition={lightweight ? { duration: 0 } : { duration: 0.25, ease: "easeOut" }}
               className="h-1.5 rounded-full"
               style={lightweight ? {
                 width: isActive ? 28 : 14,
-                backgroundColor: isActive ? "#00FF6A" : isCompleted ? "rgba(0,255,106,0.7)" : "#2A2A2A",
+                backgroundColor: isActive ? "hsl(var(--primary))" : isCompleted ? "hsl(var(--primary) / 0.7)" : "hsl(var(--secondary))",
               } : undefined}
             />
           );
@@ -125,8 +125,8 @@ function GreenCTA({ children, onClick, disabled }: { children: React.ReactNode; 
       onClick={onClick}
       className={`w-full py-4 rounded-full font-extrabold text-base transition-all ${
         disabled
-          ? "bg-[#1a1a1a] text-white/40 cursor-not-allowed"
-          : "bg-[#00FF6A] text-black shadow-lg shadow-[#00FF6A]/20 hover:shadow-[#00FF6A]/40"
+          ? "bg-card text-muted-foreground/60 cursor-not-allowed"
+          : "bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:shadow-primary/40"
       }`}
       style={!disabled && !lightweight ? { animation: "pulse-cta 2.5s ease-in-out infinite" } : undefined}
     >
@@ -138,19 +138,19 @@ function GreenCTA({ children, onClick, disabled }: { children: React.ReactNode; 
 function SectionContainer({ children }: { children: React.ReactNode }) {
   const lightweight = useLightweightMotion();
   return (
-    <div className="relative min-h-screen-safe w-full bg-[#0A0A0A] text-white overflow-x-hidden">
+    <div className="relative min-h-screen-safe w-full bg-background text-foreground overflow-x-hidden">
       <style>{`
-        @keyframes pulse-cta { 0%,100% { box-shadow: 0 0 0 0 rgba(0,255,106,0.35) } 50% { box-shadow: 0 0 24px 6px rgba(0,255,106,0.45) } }
+        @keyframes pulse-cta { 0%,100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.35) } 50% { box-shadow: 0 0 24px 6px hsl(var(--primary) / 0.45) } }
         @keyframes draw-line { from { stroke-dashoffset: 200 } to { stroke-dashoffset: 0 } }
       `}</style>
       {lightweight ? (
-        <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top,rgba(123,47,255,0.16),transparent_46%)]" />
+        <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top,hsl(var(--primary) / 0.16),transparent_46%)]" />
       ) : (
         /* Atmospheric corner glows stay off the phone compositing path. */
         <div className="pointer-events-none fixed inset-0 overflow-hidden">
-          <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[520px] h-[420px] rounded-full bg-[#7B2FFF]/30 blur-[120px]" />
-          <div className="absolute -bottom-32 -left-32 w-[420px] h-[420px] rounded-full bg-[#641EDC]/20 blur-[120px]" />
-          <div className="absolute bottom-0 right-0 w-[360px] h-[320px] rounded-full bg-[#00FF6A]/[0.05] blur-[120px]" />
+          <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[520px] h-[420px] rounded-full bg-primary/30 blur-[120px]" />
+          <div className="absolute -bottom-32 -left-32 w-[420px] h-[420px] rounded-full bg-primary/20 blur-[120px]" />
+          <div className="absolute bottom-0 right-0 w-[360px] h-[320px] rounded-full bg-primary/[0.05] blur-[120px]" />
         </div>
       )}
       <div className="relative z-10 mx-auto max-w-md px-5 py-6 pb-safe-plus-4 pt-safe-plus-4">
@@ -161,7 +161,7 @@ function SectionContainer({ children }: { children: React.ReactNode }) {
 }
 
 /* ─────────── Mini sparkline ─────────── */
-function Sparkline({ color = "#00FF6A", down = false, className = "" }: { color?: string; down?: boolean; className?: string }) {
+function Sparkline({ color = "hsl(var(--primary))", down = false, className = "" }: { color?: string; down?: boolean; className?: string }) {
   const lightweight = useLightweightMotion();
   const points = down
     ? [[2, 10], [12, 18], [22, 15], [32, 28], [42, 30], [52, 38]]
@@ -169,8 +169,9 @@ function Sparkline({ color = "#00FF6A", down = false, className = "" }: { color?
   const polyPts = points.map((p) => p.join(",")).join(" ");
   const last = points[points.length - 1];
   const fillPath = `M${points[0][0]},40 L${polyPts.split(" ").join(" L")} L${last[0]},40 Z`;
-  const gradId = `sg-${color.replace("#", "")}-${down ? "d" : "u"}`;
-  const clipId = `sc-${color.replace("#", "")}-${down ? "d" : "u"}`;
+  const colorKey = color.replace(/[^a-z0-9]/gi, "");
+  const gradId = `sg-${colorKey}-${down ? "d" : "u"}`;
+  const clipId = `sc-${colorKey}-${down ? "d" : "u"}`;
   return (
     <svg viewBox="0 0 54 40" className={className} fill="none" preserveAspectRatio="none" overflow="hidden">
       <defs>
@@ -185,7 +186,7 @@ function Sparkline({ color = "#00FF6A", down = false, className = "" }: { color?
       <g clipPath={`url(#${clipId})`}>
         {/* Subtle grid */}
         {[10, 20, 30].map((y) => (
-          <line key={y} x1="0" y1={y} x2="54" y2={y} stroke="#FFFFFF" strokeOpacity="0.04" strokeWidth="0.5" />
+          <line key={y} x1="0" y1={y} x2="54" y2={y} stroke="hsl(var(--foreground))" strokeOpacity="0.06" strokeWidth="0.5" />
         ))}
         {/* Gradient fill under line */}
         <motion.path
@@ -202,7 +203,6 @@ function Sparkline({ color = "#00FF6A", down = false, className = "" }: { color?
           strokeWidth={1.8}
           strokeLinecap="round"
           strokeLinejoin="round"
-          style={lightweight ? undefined : { filter: `drop-shadow(0 0 4px ${color}) drop-shadow(0 0 8px ${color}80)` }}
           initial={lightweight ? false : { pathLength: 0 }}
           animate={{ pathLength: 1 }}
           transition={lightweight ? { duration: 0 } : { duration: 1.1, ease: "easeOut" }}
@@ -247,22 +247,17 @@ const ScreenHero = memo(function ScreenHero() {
 
       <motion.div initial={lightweight ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : pageT} className="flex flex-col items-center text-center">
         <div className="relative mb-3">
-          {!lightweight && <div className="absolute -inset-3 rounded-3xl bg-[#00FF6A]/40 blur-2xl" />}
-          {!lightweight && <div className="absolute -inset-1 rounded-2xl bg-[#00FF6A]/30 blur-xl" />}
-          <img
-            src={logo}
-            alt="Sentinel"
-            className="relative w-16 h-16 rounded-2xl"
-            style={lightweight ? undefined : { boxShadow: "0 0 32px 4px rgba(0,255,106,0.45), 0 0 64px 8px rgba(0,255,106,0.2)" }}
-          />
+          {!lightweight && <div className="absolute -inset-3 rounded-3xl bg-primary/40 blur-2xl" />}
+          {!lightweight && <div className="absolute -inset-1 rounded-2xl bg-primary/30 blur-xl" />}
+          <BrandMark size={64} className="relative" />
         </div>
-        <p className="text-[11px] font-extrabold tracking-[0.4em] text-white/80 mb-6">SENTINEL</p>
+        <p className="text-[11px] font-extrabold tracking-[0.4em] text-foreground/80 mb-6">SENTINEL</p>
 
         <h1 className="text-[34px] leading-[1.05] font-extrabold text-center tracking-tight">
           Stop guessing.<br />
-          <span className="text-[#00FF6A]">Start winning.</span>
+          <span className="text-primary">Start winning.</span>
         </h1>
-        <p className="mt-3 text-sm text-white/60 text-center max-w-xs">
+        <p className="mt-3 text-sm text-foreground/60 text-center max-w-xs">
           AI-powered props, data-backed decisions, real edge.
         </p>
       </motion.div>
@@ -270,23 +265,23 @@ const ScreenHero = memo(function ScreenHero() {
       {/* App preview card */}
       <motion.div
         initial={lightweight ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : { ...pageT, delay: 0.1 }}
-        className="mt-6 rounded-2xl border border-[#2A2A2A] bg-[#141414] p-4"
+        className="mt-6 rounded-2xl border border-border bg-card p-4"
       >
         <div className="flex items-center justify-between mb-3">
-          <span className="text-[10px] font-black tracking-wider text-white/60">TODAY'S PICKS</span>
-          <span className="text-[10px] font-semibold text-[#00FF6A]">View All</span>
+          <span className="text-[10px] font-black tracking-wider text-foreground/60">TODAY'S PICKS</span>
+          <span className="text-[10px] font-semibold text-primary">View All</span>
         </div>
         <div className="flex items-center gap-3">
           <img
             src={ESPN_HEADSHOTS.lukaDoncic}
             alt="Luka Doncic"
-            className="w-11 h-11 rounded-full object-cover flex-shrink-0 border border-[#2A2A2A] bg-[#1a1a1a]"
+            className="w-11 h-11 rounded-full object-cover flex-shrink-0 border border-border bg-card"
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-bold text-white">Luka Doncic</div>
-            <div className="text-[10px] text-white/50">LAKERS vs DENVER · 8:30 PM</div>
-            <div className="text-[11px] text-white mt-0.5 font-semibold">OVER 32.5 Points</div>
+            <div className="text-sm font-bold text-foreground">Luka Doncic</div>
+            <div className="text-[10px] text-foreground/50">LAKERS vs DENVER · 8:30 PM</div>
+            <div className="text-[11px] text-foreground mt-0.5 font-semibold">OVER 32.5 Points</div>
           </div>
           <div className="flex flex-col items-end gap-0.5">
             <span className="px-1.5 py-0.5 rounded bg-nba-green/15 text-nba-green text-[8px] font-bold uppercase tracking-wider">HIGH CONF</span>
@@ -312,60 +307,60 @@ const ScreenHero = memo(function ScreenHero() {
         </div>
 
         {/* AI Analysis Preview */}
-        <div className="mt-3 pt-3 border-t border-[#2A2A2A] space-y-2.5">
+        <div className="mt-3 pt-3 border-t border-border space-y-2.5">
           <div className="flex items-center gap-1.5">
-            <span className="px-1.5 py-0.5 rounded-full bg-[#00FF6A]/15 text-[#00FF6A] text-[8px] font-black tracking-wider">
+            <span className="px-1.5 py-0.5 rounded-full bg-primary/15 text-primary text-[8px] font-black tracking-wider">
               IN-DEPTH ANALYSIS
             </span>
-            <span className="text-[8px] text-white/40 tracking-wider">SENTINEL AI</span>
+            <span className="text-[8px] text-foreground/40 tracking-wider">SENTINEL AI</span>
           </div>
 
           <div className="space-y-2">
             <div className="flex gap-2">
-              <BarChart3 className="w-3 h-3 text-[#3B82F6] flex-shrink-0 mt-0.5" />
+              <BarChart3 className="w-3 h-3 text-primary flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <div className="text-[9px] font-black tracking-wider text-[#3B82F6]">STATISTICAL EDGE</div>
-                <p className="text-[10px] text-white/70 leading-snug">
+                <div className="text-[9px] font-black tracking-wider text-primary">STATISTICAL EDGE</div>
+                <p className="text-[10px] text-foreground/70 leading-snug">
                   Luka is averaging 34.1 PPG over his last 10 games, comfortably above the 32.5 line. Per-36 projection of 35.8 reinforces the over.
                 </p>
               </div>
             </div>
 
             <div className="flex gap-2">
-              <Swords className="w-3 h-3 text-[#00FF6A] flex-shrink-0 mt-0.5" />
+              <Swords className="w-3 h-3 text-primary flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <div className="text-[9px] font-black tracking-wider text-[#00FF6A]">MATCHUP & PACE</div>
-                <p className="text-[10px] text-white/70 leading-snug">
+                <div className="text-[9px] font-black tracking-wider text-primary">MATCHUP & PACE</div>
+                <p className="text-[10px] text-foreground/70 leading-snug">
                   Denver allows the 6th-most points to opposing guards. Projected pace of 101.4 favors volume scoring.
                 </p>
               </div>
             </div>
 
             <div className="flex gap-2">
-              <TrendingUp className="w-3 h-3 text-[#A78BFA] flex-shrink-0 mt-0.5" />
+              <TrendingUp className="w-3 h-3 text-primary flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <div className="text-[9px] font-black tracking-wider text-[#A78BFA]">VERDICT & RISK</div>
-                <p className="text-[10px] text-white/70 leading-snug">
+                <div className="text-[9px] font-black tracking-wider text-primary">VERDICT & RISK</div>
+                <p className="text-[10px] text-foreground/70 leading-snug">
                   Strong lean OVER 32.5. Wager 1.5 units with 64% model confidence. Key risk: early blowout limiting minutes.
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-lg bg-[#00FF6A]/[0.08] border border-[#00FF6A]/25 p-2.5">
+          <div className="rounded-lg bg-primary/[0.08] border border-primary/25 p-2.5">
             <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#00FF6A]" />
-              <span className="text-[11px] font-black text-[#00FF6A] tracking-wide">TAKE THIS PICK</span>
+              <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
+              <span className="text-[11px] font-black text-primary tracking-wide">TAKE THIS PICK</span>
             </div>
-            <div className="text-[8px] text-white/40 tracking-wider mt-0.5 mb-1">
+            <div className="text-[8px] text-foreground/40 tracking-wider mt-0.5 mb-1">
               OVERALL VERDICT — ALL FACTORS COMBINED
             </div>
-            <p className="text-[10px] text-white/80 leading-snug">
+            <p className="text-[10px] text-foreground/80 leading-snug">
               Strong play. Luka OVER 32.5 Points checks the boxes. L10 avg 34.1, +EV 7.2%. Recommended sizing: 1.5–2 units.
             </p>
-            <div className="mt-2 pt-2 border-t border-[#00FF6A]/15 flex items-center justify-between">
-              <span className="text-[8px] font-bold tracking-wider text-[#00FF6A]">AI CONFIDENCE: 64%</span>
-              <span className="text-[8px] tracking-wider text-white/40">POWERED BY SENTINEL AI</span>
+            <div className="mt-2 pt-2 border-t border-primary/15 flex items-center justify-between">
+              <span className="text-[8px] font-bold tracking-wider text-primary">AI CONFIDENCE: 64%</span>
+              <span className="text-[8px] tracking-wider text-foreground/40">POWERED BY SENTINEL AI</span>
             </div>
           </div>
         </div>
@@ -395,18 +390,18 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
         <h1 className="text-[32px] leading-[1.05] font-extrabold tracking-tight">
           See What You're<br />Missing.
         </h1>
-        <p className="mt-2 text-sm text-white/60">Pros don't guess. They use data.</p>
+        <p className="mt-2 text-sm text-foreground/60">Pros don't guess. They use data.</p>
       </motion.div>
 
       <motion.div
         initial={lightweight ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : pageT}
-        className="mt-5 rounded-2xl border border-[#2A2A2A] bg-[#141414] p-3.5"
+        className="mt-5 rounded-2xl border border-border bg-card p-3.5"
       >
         {/* App header */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-1.5">
-            <img src={logo} alt="" className="w-5 h-5 rounded-md" />
-            <span className="text-[10px] font-bold tracking-widest text-white">SENTINEL</span>
+            <BrandMark size={20} className="relative" />
+            <span className="text-[10px] font-bold tracking-widest text-foreground">SENTINEL</span>
           </div>
         </div>
         {/* Tabs */}
@@ -420,7 +415,7 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
                 whileTap={lightweight ? undefined : { scale: 0.96 }}
                 aria-pressed={active}
                 className={`px-2 py-1 rounded-full text-[9px] font-bold whitespace-nowrap transition-colors ${
-                  active ? "bg-[#00FF6A] text-black" : "text-white/50 hover:text-white/80"
+                  active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {t}
@@ -442,36 +437,36 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
               {activeTab === "Dashboard" && (
                 <>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[9px] font-black tracking-wider text-white/60">TODAY'S TOP PICKS</span>
-                    <span className="text-[9px] font-semibold text-[#00FF6A]">View All</span>
+                    <span className="text-[9px] font-black tracking-wider text-foreground/60">TODAY'S TOP PICKS</span>
+                    <span className="text-[9px] font-semibold text-primary">View All</span>
                   </div>
                   <div className="space-y-1.5">
                     {SCREEN2_PICKS.map((p) => (
-                      <div key={p.name} className="flex items-center gap-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] px-2 py-1.5">
-                        <img src={p.img} alt={p.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0 bg-[#1a1a1a]" />
+                      <div key={p.name} className="flex items-center gap-2 rounded-lg bg-background border border-border px-2 py-1.5">
+                        <img src={p.img} alt={p.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0 bg-card" />
                         <div className="flex-1 min-w-0">
-                          <div className="text-[11px] font-bold text-white truncate">{p.name}</div>
-                          <div className="text-[9px] text-white/50">{p.pick}</div>
+                          <div className="text-[11px] font-bold text-foreground truncate">{p.name}</div>
+                          <div className="text-[9px] text-foreground/50">{p.pick}</div>
                         </div>
-                        <span className="text-[#00FF6A] text-xs font-extrabold tabular-nums">{p.conf}%</span>
-                        <span className="px-1.5 py-0.5 rounded bg-[#00FF6A]/15 text-[#00FF6A] text-[8px] font-black tracking-wider">+EV {p.ev}%</span>
+                        <span className="text-primary text-xs font-extrabold tabular-nums">{p.conf}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[8px] font-black tracking-wider">+EV {p.ev}%</span>
                       </div>
                     ))}
                   </div>
-                  <div className="mt-3 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] p-2.5 flex items-center justify-between">
+                  <div className="mt-3 rounded-lg bg-background border border-border p-2.5 flex items-center justify-between">
                     <div>
-                      <div className="text-[9px] tracking-wider text-white/50">YTD PERFORMANCE</div>
-                      <div className="text-lg font-extrabold text-[#00FF6A] tabular-nums">+18.47%</div>
+                      <div className="text-[9px] tracking-wider text-foreground/50">YTD PERFORMANCE</div>
+                      <div className="text-lg font-extrabold text-primary tabular-nums">+18.47%</div>
                     </div>
                     <Sparkline className="w-16 h-10" />
                   </div>
-                  <div className="mt-2 relative rounded-lg overflow-hidden border border-[#2A2A2A]">
-                    <div className="absolute inset-0 backdrop-blur-sm bg-[#0A0A0A]/80" />
+                  <div className="mt-2 relative rounded-lg overflow-hidden border border-border">
+                    <div className="absolute inset-0 backdrop-blur-sm bg-background/80" />
                     <div className="relative px-3 py-3 flex items-center gap-2">
-                      <Lock className="w-3.5 h-3.5 text-white/60" />
+                      <Lock className="w-3.5 h-3.5 text-foreground/60" />
                       <div className="flex-1">
-                        <div className="text-[10px] font-bold text-white">Advanced Projections & Line Movement</div>
-                        <div className="text-[9px] text-white/50">Upgrade to Unlock</div>
+                        <div className="text-[10px] font-bold text-foreground">Advanced Projections & Line Movement</div>
+                        <div className="text-[9px] text-foreground/50">Upgrade to Unlock</div>
                       </div>
                     </div>
                   </div>
@@ -482,30 +477,30 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
                 <>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[9px] font-black tracking-wider text-white/60">FREE PICKS · TODAY</span>
-                      <span className="px-1.5 py-0.5 rounded bg-[#00FF6A]/15 text-[#00FF6A] text-[8px] font-black tracking-wider">FREE</span>
+                      <span className="text-[9px] font-black tracking-wider text-foreground/60">FREE PICKS · TODAY</span>
+                      <span className="px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[8px] font-black tracking-wider">FREE</span>
                     </div>
-                    <span className="text-[9px] font-semibold text-[#00FF6A]">View All</span>
+                    <span className="text-[9px] font-semibold text-primary">View All</span>
                   </div>
                   <div className="space-y-1.5">
                     {SCREEN2_PICKS.map((p) => (
-                      <div key={p.name} className="flex items-center gap-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] px-2 py-1.5">
-                        <img src={p.img} alt={p.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0 bg-[#1a1a1a]" />
+                      <div key={p.name} className="flex items-center gap-2 rounded-lg bg-background border border-border px-2 py-1.5">
+                        <img src={p.img} alt={p.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0 bg-card" />
                         <div className="flex-1 min-w-0">
-                          <div className="text-[11px] font-bold text-white truncate">{p.name}</div>
-                          <div className="text-[9px] text-white/50">{p.pick}</div>
+                          <div className="text-[11px] font-bold text-foreground truncate">{p.name}</div>
+                          <div className="text-[9px] text-foreground/50">{p.pick}</div>
                         </div>
-                        <span className="text-[#00FF6A] text-xs font-extrabold tabular-nums">{p.conf}%</span>
-                        <span className="px-1.5 py-0.5 rounded bg-[#00FF6A]/15 text-[#00FF6A] text-[8px] font-black tracking-wider">HIGH CONF</span>
+                        <span className="text-primary text-xs font-extrabold tabular-nums">{p.conf}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[8px] font-black tracking-wider">HIGH CONF</span>
                       </div>
                     ))}
                   </div>
-                  <div className="mt-3 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] p-2.5 flex items-center justify-between">
+                  <div className="mt-3 rounded-lg bg-background border border-border p-2.5 flex items-center justify-between">
                     <div>
-                      <div className="text-[9px] tracking-wider text-white/50">REFRESHES DAILY · 8AM ET</div>
-                      <div className="text-[11px] font-bold text-white mt-0.5">3 free plays available</div>
+                      <div className="text-[9px] tracking-wider text-foreground/50">REFRESHES DAILY · 8AM ET</div>
+                      <div className="text-[11px] font-bold text-foreground mt-0.5">3 free plays available</div>
                     </div>
-                    <span className="px-2 py-1 rounded bg-[#00FF6A]/15 text-[#00FF6A] text-[9px] font-black tracking-wider">LIVE</span>
+                    <span className="px-2 py-1 rounded bg-primary/15 text-primary text-[9px] font-black tracking-wider">LIVE</span>
                   </div>
                 </>
               )}
@@ -513,18 +508,18 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
               {activeTab === "Tracker" && (
                 <>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[9px] font-black tracking-wider text-white/60">PROFIT TRACKER · 30D</span>
-                    <span className="px-1.5 py-0.5 rounded bg-[#00FF6A]/15 text-[#00FF6A] text-[9px] font-black tabular-nums">+18.0%</span>
+                    <span className="text-[9px] font-black tracking-wider text-foreground/60">PROFIT TRACKER · 30D</span>
+                    <span className="px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[9px] font-black tabular-nums">+18.0%</span>
                   </div>
-                  <div className="rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] p-3">
+                  <div className="rounded-lg bg-background border border-border p-3">
                     <div className="flex items-end justify-between mb-2">
                       <div>
-                        <div className="text-[9px] tracking-wider text-white/50">BANKROLL</div>
-                        <div className="text-2xl font-extrabold text-[#00FF6A] tabular-nums leading-none">+$1,284</div>
+                        <div className="text-[9px] tracking-wider text-foreground/50">BANKROLL</div>
+                        <div className="text-2xl font-extrabold text-primary tabular-nums leading-none">+$1,284</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-[9px] tracking-wider text-white/50">UNITS</div>
-                        <div className="text-sm font-bold text-white tabular-nums">+12.84u</div>
+                        <div className="text-[9px] tracking-wider text-foreground/50">UNITS</div>
+                        <div className="text-sm font-bold text-foreground tabular-nums">+12.84u</div>
                       </div>
                     </div>
                     <Sparkline className="w-full h-12" />
@@ -535,15 +530,15 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
                       { label: "WIN RATE", value: "70%" },
                       { label: "STREAK", value: "W6" },
                     ].map((s) => (
-                      <div key={s.label} className="rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] p-2 text-center">
-                        <div className="text-[8px] tracking-wider text-white/50">{s.label}</div>
-                        <div className="text-sm font-extrabold text-white tabular-nums mt-0.5">{s.value}</div>
+                      <div key={s.label} className="rounded-lg bg-background border border-border p-2 text-center">
+                        <div className="text-[8px] tracking-wider text-foreground/50">{s.label}</div>
+                        <div className="text-sm font-extrabold text-foreground tabular-nums mt-0.5">{s.value}</div>
                       </div>
                     ))}
                   </div>
-                  <div className="mt-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] px-2.5 py-2 flex items-center justify-between">
-                    <span className="text-[9px] tracking-wider text-white/50">BEST SPORT</span>
-                    <span className="text-[10px] font-bold text-white">NBA · 73% Win</span>
+                  <div className="mt-2 rounded-lg bg-background border border-border px-2.5 py-2 flex items-center justify-between">
+                    <span className="text-[9px] tracking-wider text-foreground/50">BEST SPORT</span>
+                    <span className="text-[10px] font-bold text-foreground">NBA · 73% Win</span>
                   </div>
                 </>
               )}
@@ -551,8 +546,8 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
               {activeTab === "Parlay" && (
                 <>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[9px] font-black tracking-wider text-white/60">SLIP BUILDER · 3 LEGS</span>
-                    <span className="text-[9px] font-semibold text-[#00FF6A]">Edit</span>
+                    <span className="text-[9px] font-black tracking-wider text-foreground/60">SLIP BUILDER · 3 LEGS</span>
+                    <span className="text-[9px] font-semibold text-primary">Edit</span>
                   </div>
                   <div className="space-y-1.5">
                     {[
@@ -560,24 +555,24 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
                       { img: ESPN_HEADSHOTS.lukaDoncic, name: "L. Doncic", pick: "OVER 8.5 AST", conf: 61 },
                       { img: ESPN_HEADSHOTS.austinMatthews, name: "A. Matthews", pick: "OVER 3.5 SOG", conf: 59 },
                     ].map((p) => (
-                      <div key={p.name} className="flex items-center gap-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] px-2 py-1.5">
-                        <img src={p.img} alt={p.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0 bg-[#1a1a1a]" />
+                      <div key={p.name} className="flex items-center gap-2 rounded-lg bg-background border border-border px-2 py-1.5">
+                        <img src={p.img} alt={p.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0 bg-card" />
                         <div className="flex-1 min-w-0">
-                          <div className="text-[11px] font-bold text-white truncate">{p.name}</div>
-                          <div className="text-[9px] text-white/50">{p.pick}</div>
+                          <div className="text-[11px] font-bold text-foreground truncate">{p.name}</div>
+                          <div className="text-[9px] text-foreground/50">{p.pick}</div>
                         </div>
-                        <span className="text-[#00FF6A] text-xs font-extrabold tabular-nums">{p.conf}%</span>
+                        <span className="text-primary text-xs font-extrabold tabular-nums">{p.conf}%</span>
                       </div>
                     ))}
                   </div>
-                  <div className="mt-3 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] p-2.5 flex items-center justify-between">
+                  <div className="mt-3 rounded-lg bg-background border border-border p-2.5 flex items-center justify-between">
                     <div>
-                      <div className="text-[9px] tracking-wider text-white/50">3-LEG PARLAY</div>
-                      <div className="text-lg font-extrabold text-[#00FF6A] tabular-nums leading-none">+650</div>
+                      <div className="text-[9px] tracking-wider text-foreground/50">3-LEG PARLAY</div>
+                      <div className="text-lg font-extrabold text-primary tabular-nums leading-none">+650</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-[9px] tracking-wider text-white/50">GRADE</div>
-                      <div className="text-base font-extrabold text-[#00FF6A] leading-none mt-0.5">A−</div>
+                      <div className="text-[9px] tracking-wider text-foreground/50">GRADE</div>
+                      <div className="text-base font-extrabold text-primary leading-none mt-0.5">A−</div>
                     </div>
                   </div>
                 </>
@@ -590,7 +585,7 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
       {/* Social proof */}
       <motion.div
         initial={lightweight ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : { ...pageT, delay: 0.05 }}
-        className="mt-4 rounded-2xl border border-[#2A2A2A] bg-[#141414] p-3 flex items-center gap-3"
+        className="mt-4 rounded-2xl border border-border bg-card p-3 flex items-center gap-3"
       >
         <div className="flex -space-x-2">
           {[11, 12, 13].map((i) => (
@@ -598,13 +593,13 @@ const ScreenValue = memo(function ScreenValue({ onNext }: { onNext: () => void }
               key={i}
               src={`https://i.pravatar.cc/80?img=${i}`}
               alt="user"
-              className="w-8 h-8 rounded-full border-2 border-[#141414] object-cover bg-[#1a1a1a]"
+              className="w-8 h-8 rounded-full border-2 border-card object-cover bg-card"
             />
           ))}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-xs font-bold text-white">10,000+ users joined this week</div>
-          <div className="text-[11px] font-bold text-[#00FF6A]">20% Average ROI Increase</div>
+          <div className="text-xs font-bold text-foreground">10,000+ users joined this week</div>
+          <div className="text-[11px] font-bold text-primary">20% Average ROI Increase</div>
         </div>
       </motion.div>
 
@@ -674,13 +669,13 @@ const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { 
 
       <motion.div initial={lightweight ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : pageT}>
         <h1 className="text-[32px] leading-[1.05] font-extrabold tracking-tight">Make It Yours.</h1>
-        <p className="mt-2 text-sm text-white/60">We'll personalize your experience.</p>
+        <p className="mt-2 text-sm text-foreground/60">We'll personalize your experience.</p>
       </motion.div>
 
       {/* Odds format */}
       <div className="mt-6">
-        <p className="text-[10px] font-black tracking-wider text-white/60 mb-1">ODDS FORMAT</p>
-        <p className="text-xs text-white/50 mb-3">We'll show odds the way you like them.</p>
+        <p className="text-[10px] font-black tracking-wider text-foreground/60 mb-1">ODDS FORMAT</p>
+        <p className="text-xs text-foreground/50 mb-3">We'll show odds the way you like them.</p>
         <div className="grid grid-cols-2 gap-3">
           {[
             { id: "american" as const, label: "American", sample: "+150 -110" },
@@ -694,12 +689,12 @@ const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { 
                 whileTap={lightweight ? undefined : { scale: 0.97 }}
                 className={`rounded-xl border px-3 py-3 text-left transition-all ${
                   active
-                    ? "border-[#00FF6A] bg-[#00FF6A]/5 shadow-[0_0_18px_rgba(0,255,106,0.15)]"
-                    : "border-[#2A2A2A] bg-[#141414]"
+                    ? "border-primary bg-primary/5 shadow-[0_0_18px_hsl(var(--primary) / 0.15)]"
+                    : "border-border bg-card"
                 }`}
               >
-                <div className={`text-sm font-bold ${active ? "text-[#00FF6A]" : "text-white"}`}>{o.label}</div>
-                <div className={`text-xs font-mono mt-0.5 ${active ? "text-[#00FF6A]/80" : "text-white/50"}`}>{o.sample}</div>
+                <div className={`text-sm font-bold ${active ? "text-primary" : "text-foreground"}`}>{o.label}</div>
+                <div className={`text-xs font-mono mt-0.5 ${active ? "text-primary/80" : "text-foreground/50"}`}>{o.sample}</div>
               </motion.button>
             );
           })}
@@ -708,8 +703,8 @@ const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { 
 
       {/* Sports */}
       <div className="mt-6">
-        <p className="text-[10px] font-black tracking-wider text-white/60 mb-1">SPORTS YOU BET ON</p>
-        <p className="text-xs text-white/50 mb-3">Select all that apply.</p>
+        <p className="text-[10px] font-black tracking-wider text-foreground/60 mb-1">SPORTS YOU BET ON</p>
+        <p className="text-xs text-foreground/50 mb-3">Select all that apply.</p>
         <div className="grid grid-cols-2 gap-3">
           {SPORTS.map((s) => {
             const active = sports.includes(s.id);
@@ -720,12 +715,12 @@ const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { 
                 whileTap={lightweight ? undefined : { scale: 0.97 }}
                 className={`relative rounded-xl border p-3 transition-all ${
                   active
-                    ? "border-[#00FF6A] bg-[#00FF6A]/5 shadow-[0_0_18px_rgba(0,255,106,0.15)]"
-                    : "border-[#2A2A2A] bg-[#141414]"
+                    ? "border-primary bg-primary/5 shadow-[0_0_18px_hsl(var(--primary) / 0.15)]"
+                    : "border-border bg-card"
                 }`}
               >
                 {active && (
-                  <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[#00FF6A] flex items-center justify-center">
+                  <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
                     <Check className="w-3 h-3 text-black" strokeWidth={3} />
                   </div>
                 )}
@@ -736,7 +731,7 @@ const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { 
                     className={`w-12 h-12 object-contain transition-all ${active ? "" : "opacity-60 grayscale"}`}
                   />
                 </div>
-                <div className={`text-center text-sm font-bold ${active ? "text-[#00FF6A]" : "text-white"}`}>{s.label}</div>
+                <div className={`text-center text-sm font-bold ${active ? "text-primary" : "text-foreground"}`}>{s.label}</div>
               </motion.button>
             );
           })}
@@ -749,19 +744,19 @@ const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { 
           whileTap={lightweight ? undefined : { scale: 0.98 }}
           className={`mt-3 relative w-full rounded-xl border p-3 flex items-center gap-3 transition-all ${
             otherActive
-              ? "border-[#00FF6A] bg-[#00FF6A]/5 shadow-[0_0_18px_rgba(0,255,106,0.15)]"
-              : "border-[#2A2A2A] bg-[#141414]"
+              ? "border-primary bg-primary/5 shadow-[0_0_18px_hsl(var(--primary) / 0.15)]"
+              : "border-border bg-card"
           }`}
         >
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-black shrink-0 ${otherActive ? "bg-[#00FF6A]/15 text-[#00FF6A]" : "bg-white/5 text-white/60"}`}>
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-black shrink-0 ${otherActive ? "bg-primary/15 text-primary" : "bg-foreground/5 text-muted-foreground"}`}>
             +
           </div>
           <div className="flex-1 text-left">
-            <div className={`text-sm font-bold ${otherActive ? "text-[#00FF6A]" : "text-white"}`}>Other</div>
-            <div className="text-[11px] text-white/50">Esports, Soccer, Tennis, and more</div>
+            <div className={`text-sm font-bold ${otherActive ? "text-primary" : "text-foreground"}`}>Other</div>
+            <div className="text-[11px] text-foreground/50">Esports, Soccer, Tennis, and more</div>
           </div>
           {otherActive && (
-            <div className="w-5 h-5 rounded-full bg-[#00FF6A] flex items-center justify-center shrink-0">
+            <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shrink-0">
               <Check className="w-3 h-3 text-black" strokeWidth={3} />
             </div>
           )}
@@ -781,19 +776,19 @@ const ScreenPersonalize = memo(function ScreenPersonalize({ onBack, onNext }: { 
               placeholder="e.g. Esports, Soccer, Tennis…"
               maxLength={40}
               autoFocus
-              className="w-full rounded-xl border border-[#2A2A2A] bg-[#141414] px-3 py-3 text-sm text-white placeholder:text-white/30 focus:border-[#00FF6A] focus:outline-none focus:ring-1 focus:ring-[#00FF6A]/40"
+              className="w-full rounded-xl border border-border bg-card px-3 py-3 text-sm text-foreground placeholder:text-foreground/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40"
             />
           </motion.div>
         )}
       </div>
 
-      <div className="mt-5 flex items-start gap-2 text-[11px] text-white/50">
-        <Sparkles className="w-3.5 h-3.5 text-[#00FF6A] flex-shrink-0 mt-0.5" />
+      <div className="mt-5 flex items-start gap-2 text-[11px] text-foreground/50">
+        <Sparkles className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
         <span>We'll personalize picks &amp; insights based on your preferences.</span>
       </div>
 
       <div className="mt-6 flex items-center gap-3">
-        <button onClick={onBack} className="px-5 py-3 text-sm font-semibold text-white/70">
+        <button onClick={onBack} className="px-5 py-3 text-sm font-semibold text-foreground/70">
           <ArrowLeft className="w-4 h-4 inline mr-1" /> Back
         </button>
         <div className="flex-1">
@@ -816,27 +811,27 @@ const ScreenComparison = memo(function ScreenComparison({ onBack, onNext }: { on
       <motion.div initial={lightweight ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : pageT}>
         <h1 className="text-[30px] leading-[1.05] font-extrabold tracking-tight">
           Don't Bet Blind.<br />
-          <span className="text-[#00FF6A]">See The Difference.</span>
+          <span className="text-primary">See The Difference.</span>
         </h1>
-        <p className="mt-2 text-sm text-white/60">Data beats luck. Every time.</p>
+        <p className="mt-2 text-sm text-foreground/60">Data beats luck. Every time.</p>
       </motion.div>
 
       <div className="mt-5 grid grid-cols-2 gap-3">
         {/* WITHOUT */}
         <motion.div
           initial={lightweight ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : { ...pageT, delay: 0.1 }}
-          className="rounded-2xl border border-[#FF3B3B]/30 bg-[#141414] p-2.5"
+          className="rounded-2xl border border-danger/30 bg-card p-2.5"
           style={{ boxShadow: "inset 0 0 30px rgba(255,59,59,0.06)" }}
         >
-          <div className="text-[9px] font-black tracking-wider text-white/60 mb-2">WITHOUT SENTINEL</div>
-          <div className="text-2xl font-extrabold text-[#FF3B3B] tabular-nums leading-none">-12.34%</div>
-          <div className="text-[10px] text-white/50 mt-1">ROI After 30 Days</div>
-          <div className="mt-2 flex justify-center"><Sparkline color="#FF3B3B" down className="h-12 w-full max-w-[120px]" /></div>
+          <div className="text-[9px] font-black tracking-wider text-foreground/60 mb-2">WITHOUT SENTINEL</div>
+          <div className="text-2xl font-extrabold text-danger tabular-nums leading-none">-12.34%</div>
+          <div className="text-[10px] text-foreground/50 mt-1">ROI After 30 Days</div>
+          <div className="mt-2 flex justify-center"><Sparkline color="hsl(var(--danger))" down className="h-12 w-full max-w-[120px]" /></div>
           <div className="mt-3 space-y-1.5">
             {["Guessing & Hope", "Emotional Bets", "Chasing Losses", "No Real Strategy"].map((t) => (
               <div key={t} className="flex items-center gap-1.5">
-                <X className="w-3 h-3 text-[#FF3B3B] flex-shrink-0" strokeWidth={3} />
-                <span className="text-[10px] text-white/70">{t}</span>
+                <X className="w-3 h-3 text-danger flex-shrink-0" strokeWidth={3} />
+                <span className="text-[10px] text-foreground/70">{t}</span>
               </div>
             ))}
           </div>
@@ -845,18 +840,18 @@ const ScreenComparison = memo(function ScreenComparison({ onBack, onNext }: { on
         {/* WITH */}
         <motion.div
           initial={lightweight ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : { ...pageT, delay: 0.18 }}
-          className="rounded-2xl border border-[#00FF6A]/40 bg-[#141414] p-2.5"
-          style={{ boxShadow: "inset 0 0 30px rgba(0,255,106,0.08), 0 0 24px rgba(0,255,106,0.12)" }}
+          className="rounded-2xl border border-primary/40 bg-card p-2.5"
+          style={{ boxShadow: "inset 0 0 30px hsl(var(--primary) / 0.08), 0 0 24px hsl(var(--primary) / 0.12)" }}
         >
-          <div className="text-[9px] font-black tracking-wider text-[#00FF6A] mb-2">WITH SENTINEL</div>
-          <div className="text-2xl font-extrabold text-[#00FF6A] tabular-nums leading-none">+18.47%</div>
-          <div className="text-[10px] text-white/50 mt-1">ROI After 30 Days</div>
-          <div className="mt-2 flex justify-center"><Sparkline color="#00FF6A" className="h-12 w-full max-w-[120px]" /></div>
+          <div className="text-[9px] font-black tracking-wider text-primary mb-2">WITH SENTINEL</div>
+          <div className="text-2xl font-extrabold text-primary tabular-nums leading-none">+18.47%</div>
+          <div className="text-[10px] text-foreground/50 mt-1">ROI After 30 Days</div>
+          <div className="mt-2 flex justify-center"><Sparkline color="hsl(var(--primary))" className="h-12 w-full max-w-[120px]" /></div>
           <div className="mt-3 space-y-1.5">
             {["AI-Powered Picks", "High Confidence & +EV", "Track & Improve", "Smarter Parlays"].map((t) => (
               <div key={t} className="flex items-center gap-1.5">
-                <Check className="w-3 h-3 text-[#00FF6A] flex-shrink-0" strokeWidth={3} />
-                <span className="text-[10px] text-white/70">{t}</span>
+                <Check className="w-3 h-3 text-primary flex-shrink-0" strokeWidth={3} />
+                <span className="text-[10px] text-foreground/70">{t}</span>
               </div>
             ))}
           </div>
@@ -866,20 +861,20 @@ const ScreenComparison = memo(function ScreenComparison({ onBack, onNext }: { on
       {/* Testimonial */}
       <motion.div
         initial={lightweight ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={lightweight ? { duration: 0 } : { ...pageT, delay: 0.26 }}
-        className="mt-5 rounded-2xl border border-[#2A2A2A] bg-[#141414] p-4 flex items-start gap-3"
+        className="mt-5 rounded-2xl border border-border bg-card p-4 flex items-start gap-3"
       >
         <img
           src="https://i.pravatar.cc/100?img=11"
           alt="Mike R."
-          className="w-12 h-12 rounded-full flex-shrink-0 border border-[#2A2A2A] object-cover bg-[#1a1a1a]"
+          className="w-12 h-12 rounded-full flex-shrink-0 border border-border object-cover bg-card"
         />
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-white/80 italic leading-snug">
+          <p className="text-xs text-foreground/80 italic leading-snug">
             "I was skeptical at first. Now I'm up 23% this season. Sentinel changed the way I bet."
           </p>
           <div className="mt-2 flex items-center gap-2">
-            <span className="text-xs font-bold text-white">- Mike R.</span>
-            <span className="px-1.5 py-0.5 rounded bg-[#00FF6A] text-black text-[8px] font-black tracking-wider flex items-center gap-0.5">
+            <span className="text-xs font-bold text-foreground">- Mike R.</span>
+            <span className="px-1.5 py-0.5 rounded bg-primary text-primary-foreground text-[8px] font-black tracking-wider flex items-center gap-0.5">
               <ShieldCheck className="w-2.5 h-2.5" strokeWidth={3} /> VERIFIED
             </span>
           </div>
@@ -887,7 +882,7 @@ const ScreenComparison = memo(function ScreenComparison({ onBack, onNext }: { on
       </motion.div>
 
       <div className="mt-6 flex items-center gap-3">
-        <button onClick={onBack} className="px-5 py-3 text-sm font-semibold text-white/70">
+        <button onClick={onBack} className="px-5 py-3 text-sm font-semibold text-foreground/70">
           <ArrowLeft className="w-4 h-4 inline mr-1" /> Back
         </button>
         <div className="flex-1">
@@ -982,7 +977,7 @@ export default function OnboardingPage() {
 
   return (
     <LightweightMotionContext.Provider value={lightweight}>
-      <div className="relative min-h-screen-safe bg-[#0A0A0A]">
+      <div className="relative min-h-screen-safe bg-background">
         {lightweight ? (
           <div className="w-full">{current}</div>
         ) : (
@@ -1007,18 +1002,18 @@ export default function OnboardingPage() {
           <div
             className="fixed inset-x-0 bottom-0 z-50"
             style={{
-              background: lightweight ? "#0A0A0A" : "rgba(10,10,10,0.92)",
+              background: lightweight ? "hsl(var(--background))" : "hsl(var(--background) / 0.92)",
               backdropFilter: lightweight ? undefined : "blur(20px)",
               WebkitBackdropFilter: lightweight ? undefined : "blur(20px)",
-              borderTop: "1px solid rgba(255,255,255,0.06)",
+              borderTop: "1px solid hsl(var(--foreground) / 0.06)",
               paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)",
             }}
           >
             <div className="mx-auto max-w-md px-5 pt-3">
               <GreenCTA onClick={goNext}>Get Started</GreenCTA>
-              <p className="text-center text-[11px] text-white/50 mt-2.5">
+              <p className="text-center text-[11px] text-foreground/50 mt-2.5">
                 Already have an account?{" "}
-                <button onClick={() => navigate("/auth")} className="text-[#00FF6A] underline font-semibold">Sign in</button>
+                <button onClick={() => navigate("/auth")} className="text-primary underline font-semibold">Sign in</button>
               </p>
             </div>
           </div>
@@ -1078,8 +1073,8 @@ function FeatureCard({
   const reduce = useLightweightMotion();
   return (
     <div
-      className={`rounded-xl border bg-[#141414] transition-colors ${
-        isExpanded ? "border-[#00FF6A]/40" : "border-[#2A2A2A]"
+      className={`rounded-xl border bg-card transition-colors ${
+        isExpanded ? "border-primary/40" : "border-border"
       }`}
     >
       <button
@@ -1090,13 +1085,13 @@ function FeatureCard({
         className="w-full flex items-center gap-3 px-3.5 py-3 text-left focus:outline-none"
       >
         <Icon className="w-4 h-4 flex-shrink-0" style={{ color: "hsl(var(--nba-green))" }} />
-        <div className="text-sm font-semibold text-white flex-1">{title}</div>
+        <div className="text-sm font-semibold text-foreground flex-1">{title}</div>
         <motion.span
           animate={{ rotate: isExpanded ? 180 : 0 }}
           transition={{ duration: reduce ? 0 : 0.2, ease: microEase }}
           className="flex-shrink-0"
         >
-          <ChevronDown className="w-4 h-4 text-white/50" />
+          <ChevronDown className="w-4 h-4 text-foreground/50" />
         </motion.span>
       </button>
       <AnimatePresence initial={false}>
@@ -1110,7 +1105,7 @@ function FeatureCard({
             transition={{ duration: reduce ? 0 : 0.2, ease: microEase }}
             className="overflow-hidden"
           >
-            <div className="mx-1 mb-1 mt-0 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3">
+            <div className="mx-1 mb-1 mt-0 rounded-lg border border-border bg-secondary p-3">
               {children}
             </div>
           </motion.div>
@@ -1145,16 +1140,16 @@ function LiveGameMini({ active }: { active?: boolean }) {
         </div>
         <span className="text-[9px] text-muted-foreground/55">NBA · MLB · NHL</span>
       </div>
-      <div className="bg-white/[0.03] rounded-lg px-3 py-2.5 flex items-center justify-between gap-2">
+      <div className="bg-foreground/[0.03] rounded-lg px-3 py-2.5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <span className="w-2 h-2 rounded-full bg-[#FDB927] flex-shrink-0" />
-          <span className="text-xs font-bold text-white/90">LAL</span>
-          <span className="text-base font-extrabold tabular-nums text-white/90 ml-auto">108</span>
+          <span className="text-xs font-bold text-foreground/90">LAL</span>
+          <span className="text-base font-extrabold tabular-nums text-foreground/90 ml-auto">108</span>
         </div>
         <span className="text-[9px] text-muted-foreground/40 px-1">vs</span>
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <span className="text-base font-extrabold tabular-nums text-nba-green">112</span>
-          <span className="text-xs font-bold text-white ml-auto">BOS</span>
+          <span className="text-xs font-bold text-foreground ml-auto">BOS</span>
           <span className="w-2 h-2 rounded-full bg-[#007A33] flex-shrink-0" />
         </div>
       </div>
@@ -1192,7 +1187,7 @@ function PickRow({ pick, delay }: { pick: { name: string; matchup: string; line:
       initial={{ opacity: reduce ? 1 : 0, y: reduce ? 0 : 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, delay, ease: microEase }}
-      className="flex items-center gap-2.5 bg-white/[0.03] rounded-md px-2.5 py-1.5"
+      className="flex items-center gap-2.5 bg-foreground/[0.03] rounded-md px-2.5 py-1.5"
     >
       <div className="relative w-7 h-7 flex-shrink-0">
         <svg className="w-full h-full -rotate-90" viewBox="0 0 22 22">
@@ -1215,7 +1210,7 @@ function PickRow({ pick, delay }: { pick: { name: string; matchup: string; line:
       </div>
       <div className="flex flex-col leading-tight min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] font-bold text-white truncate">{pick.name}</span>
+          <span className="text-[11px] font-bold text-foreground truncate">{pick.name}</span>
           <span className="text-[9px] font-extrabold tabular-nums text-nba-green flex-shrink-0">{pick.ev}</span>
         </div>
         <span className="text-[9px] text-muted-foreground/60 truncate">{pick.matchup} · {pick.line}</span>
@@ -1290,11 +1285,11 @@ function ProfitTrackerMini() {
       <div className="grid grid-cols-3 gap-2 pt-1.5 border-t border-border/15">
         <div className="flex flex-col">
           <span className="text-[9px] uppercase tracking-wider text-muted-foreground/55">Record</span>
-          <span className="text-[11px] font-bold text-white tabular-nums">42-18</span>
+          <span className="text-[11px] font-bold text-foreground tabular-nums">42-18</span>
         </div>
         <div className="flex flex-col">
           <span className="text-[9px] uppercase tracking-wider text-muted-foreground/55">Win Rate</span>
-          <span className="text-[11px] font-bold text-white tabular-nums">70%</span>
+          <span className="text-[11px] font-bold text-foreground tabular-nums">70%</span>
         </div>
         <div className="flex flex-col">
           <span className="text-[9px] uppercase tracking-wider text-muted-foreground/55">Streak</span>

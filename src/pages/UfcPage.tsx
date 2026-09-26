@@ -105,23 +105,23 @@ const UfcPage = () => {
         placeholder={placeholder}
         className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
         style={{
-          background: 'hsla(228, 20%, 12%, 0.6)',
-          border: '1px solid hsla(228, 20%, 20%, 0.3)',
+          background: 'hsl(var(--card) / 0.6)',
+          border: '1px solid hsl(var(--border) / 0.3)',
         }}
       />
       {showSuggestions && (
         <div className="absolute top-full left-0 right-0 mt-1 rounded-xl max-h-[200px] overflow-y-auto z-50"
-          style={{ background: 'hsla(228, 25%, 10%, 0.95)', border: '1px solid hsla(228, 20%, 20%, 0.4)', backdropFilter: 'blur(20px)' }}>
+          style={{ background: 'hsl(var(--card) / 0.95)', border: '1px solid hsl(var(--border) / 0.4)', backdropFilter: 'blur(20px)' }}>
           {suggestions.map((s, i) => (
             <div key={i} onClick={() => selectFighter(s.name, side)}
               className="px-3 py-2.5 text-sm cursor-pointer hover:bg-primary/10 transition-colors flex items-center gap-2.5">
               {s.headshot ? (
                 <img src={s.headshot} alt="" className="w-7 h-7 rounded-full object-cover shrink-0"
-                  style={{ background: 'hsla(228, 20%, 15%, 1)' }}
+                  style={{ background: 'hsl(var(--secondary))' }}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
               ) : (
                 <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-muted-foreground/50 shrink-0"
-                  style={{ background: 'hsla(228, 20%, 15%, 0.8)' }}>
+                  style={{ background: 'hsl(var(--secondary) / 0.8)' }}>
                   {s.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2)}
                 </div>
               )}
@@ -162,8 +162,8 @@ const UfcPage = () => {
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 mt-2">
             {/* Search Card */}
             <div className="rounded-2xl p-4" style={{
-              background: 'hsla(228, 20%, 10%, 0.5)',
-              border: '1px solid hsla(228, 20%, 18%, 0.3)',
+              background: 'hsl(var(--card) / 0.5)',
+              border: '1px solid hsl(var(--border) / 0.3)',
               backdropFilter: 'blur(12px)',
             }}>
               <div className="space-y-3">
@@ -180,7 +180,7 @@ const UfcPage = () => {
                   className="w-full py-3 rounded-xl font-bold text-sm text-primary-foreground flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
                   style={{
                     background: 'linear-gradient(135deg, hsl(var(--accent)), hsl(var(--nba-blue)))',
-                    boxShadow: '0 4px 20px hsla(250, 76%, 50%, 0.25)',
+                    boxShadow: '0 4px 20px hsl(var(--primary) / 0.25)',
                   }}>
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Swords className="w-4 h-4" />}
                   ANALYZE MATCHUP
@@ -199,7 +199,7 @@ const UfcPage = () => {
 
         {error && (
           <div className="rounded-xl p-3 text-center text-destructive text-sm"
-            style={{ background: 'hsla(0, 60%, 50%, 0.08)', border: '1px solid hsla(0, 60%, 50%, 0.2)' }}>
+            style={{ background: 'hsl(var(--danger) / 0.08)', border: '1px solid hsl(var(--danger) / 0.2)' }}>
             {error}
           </div>
         )}
@@ -221,17 +221,17 @@ function StatBar({ label, val1, val2, format }: { label: string; val1: number; v
         <span className="font-semibold">{label}</span>
         <span className="font-bold text-foreground/80">{fmt(val2)}</span>
       </div>
-      <div className="flex gap-0.5 h-1.5 rounded-full overflow-hidden" style={{ background: 'hsla(228, 20%, 15%, 0.5)' }}>
+      <div className="flex gap-0.5 h-1.5 rounded-full overflow-hidden" style={{ background: 'hsl(var(--secondary) / 0.5)' }}>
         <div className="flex-1 flex justify-end">
           <div className="rounded-l-full transition-all" style={{
             width: `${(val1 / max) * 100}%`,
-            background: val1 >= val2 ? 'hsl(var(--accent))' : 'hsla(228, 20%, 25%, 0.4)',
+            background: val1 >= val2 ? 'hsl(var(--accent))' : 'hsl(var(--secondary) / 0.4)',
           }} />
         </div>
         <div className="flex-1">
           <div className="rounded-r-full transition-all" style={{
             width: `${(val2 / max) * 100}%`,
-            background: val2 >= val1 ? 'hsl(var(--nba-blue))' : 'hsla(228, 20%, 25%, 0.4)',
+            background: val2 >= val1 ? 'hsl(var(--nba-blue))' : 'hsl(var(--secondary) / 0.4)',
           }} />
         </div>
       </div>
@@ -243,8 +243,8 @@ function StatBar({ label, val1, val2, format }: { label: string; val1: number; v
 function BetSection({ icon, title, predictions }: { icon: React.ReactNode; title: string; predictions: any[] | undefined }) {
   return (
     <div className="rounded-2xl p-4" style={{
-      background: 'hsla(228, 20%, 10%, 0.5)',
-      border: '1px solid hsla(228, 20%, 18%, 0.3)',
+      background: 'hsl(var(--card) / 0.5)',
+      border: '1px solid hsl(var(--border) / 0.3)',
     }}>
       <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground/50 font-semibold mb-3 flex items-center gap-1.5">
         {icon} {title}
@@ -272,7 +272,7 @@ function BetSection({ icon, title, predictions }: { icon: React.ReactNode; title
               <span className={`text-sm font-extrabold block mb-1 ${
                 p.confidence === "strong" ? "text-nba-green" : p.confidence === "lean" ? "text-[hsl(var(--nba-blue))]" : "text-muted-foreground"
               }`}>{p.bet}</span>
-              <p className="text-[10px] text-white leading-snug">{p.reasoning}</p>
+              <p className="text-[10px] text-foreground leading-snug">{p.reasoning}</p>
             </div>
           ))}
         </div>
@@ -350,16 +350,16 @@ function MatchupResults({ data }: { data: any }) {
         {/* Top Pick Center */}
         <div className={`rounded-2xl p-3 flex flex-col items-center justify-center text-center border-2 ${confidenceBorder(best_bet?.confidence)}`}
           style={{
-            background: 'hsla(228, 20%, 10%, 0.5)',
+            background: 'hsl(var(--card) / 0.5)',
             boxShadow: best_bet?.confidence === "strong" ? '0 0 24px hsla(var(--nba-green), 0.15)' : 'none',
           }}>
           <Trophy className={`w-5 h-5 mb-1 ${confidenceColor(best_bet?.confidence)}`} />
-          <span className="text-[8px] uppercase tracking-wider text-white/70 mb-0.5">Top Pick</span>
+          <span className="text-[8px] uppercase tracking-wider text-foreground/70 mb-0.5">Top Pick</span>
           <div className={`text-xs font-extrabold leading-tight ${confidenceColor(best_bet?.confidence)}`}>{best_bet?.bet}</div>
           {best_bet?.probability && (
             <div className={`text-lg font-extrabold ${confidenceColor(best_bet?.confidence)}`}>{best_bet.probability}%</div>
           )}
-          <p className="text-[8px] text-white/90 mt-0.5 leading-snug line-clamp-3">{best_bet?.reasoning}</p>
+          <p className="text-[8px] text-foreground/90 mt-0.5 leading-snug line-clamp-3">{best_bet?.reasoning}</p>
         </div>
 
         {/* Fighter 2 */}
@@ -368,8 +368,8 @@ function MatchupResults({ data }: { data: any }) {
 
       {/* Head to Head */}
       <div className="rounded-2xl p-4" style={{
-        background: 'hsla(228, 20%, 10%, 0.5)',
-        border: '1px solid hsla(228, 20%, 18%, 0.3)',
+        background: 'hsl(var(--card) / 0.5)',
+        border: '1px solid hsl(var(--border) / 0.3)',
       }}>
         <div className="flex items-center justify-between mb-2">
           <span className="text-[10px] font-bold text-accent truncate">{fighter1?.name}</span>
@@ -391,8 +391,8 @@ function MatchupResults({ data }: { data: any }) {
 
         {/* ML Pick */}
         <div className="rounded-2xl p-4" style={{
-          background: 'hsla(228, 20%, 10%, 0.5)',
-          border: '1px solid hsla(228, 20%, 18%, 0.3)',
+          background: 'hsl(var(--card) / 0.5)',
+          border: '1px solid hsl(var(--border) / 0.3)',
         }}>
           <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground/50 font-semibold mb-3 flex items-center gap-1.5">
             <Zap className="w-3 h-3" /> Moneyline
@@ -412,7 +412,7 @@ function MatchupResults({ data }: { data: any }) {
                 ml_pick.confidence === "lean" ? "bg-[hsl(var(--nba-blue))] text-primary-foreground" :
                 "bg-[hsl(var(--nba-yellow))] text-accent-foreground"
               }`}>{ml_pick.confidence}</span>
-              <p className="text-[10px] text-white leading-snug">{ml_pick.reasoning}</p>
+              <p className="text-[10px] text-foreground leading-snug">{ml_pick.reasoning}</p>
             </div>
           )}
 
@@ -434,8 +434,8 @@ function MatchupResults({ data }: { data: any }) {
 
       {/* Sportsbook Odds */}
       <div className="rounded-2xl p-4" style={{
-        background: 'hsla(228, 20%, 10%, 0.5)',
-        border: '1px solid hsla(228, 20%, 18%, 0.3)',
+        background: 'hsl(var(--card) / 0.5)',
+        border: '1px solid hsl(var(--border) / 0.3)',
       }}>
         <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground/50 font-semibold mb-3 flex items-center gap-1.5">
           <BarChart3 className="w-3 h-3" /> Sportsbook Odds
@@ -489,8 +489,8 @@ function MatchupResults({ data }: { data: any }) {
         {[{ f: fighter1, fights: data.fighter1?.recent_fights || fighter1?.recent_fights, color: "text-accent" },
           { f: fighter2, fights: data.fighter2?.recent_fights || fighter2?.recent_fights, color: "text-[hsl(var(--nba-blue))]" }].map((side, idx) => (
           <div key={idx} className="rounded-2xl p-4" style={{
-            background: 'hsla(228, 20%, 10%, 0.5)',
-            border: '1px solid hsla(228, 20%, 18%, 0.3)',
+            background: 'hsl(var(--card) / 0.5)',
+            border: '1px solid hsl(var(--border) / 0.3)',
           }}>
             <h3 className={`text-[10px] uppercase tracking-wider font-semibold mb-2 ${side.color}`}>
               {side.f?.name} — Recent Fights
@@ -623,10 +623,10 @@ function FighterCard({ fighter, color }: { fighter: any; color: string }) {
 
   return (
     <div className="rounded-2xl p-3 text-center" style={{
-      background: 'hsla(228, 20%, 10%, 0.5)',
-      border: '1px solid hsla(228, 20%, 18%, 0.3)',
+      background: 'hsl(var(--card) / 0.5)',
+      border: '1px solid hsl(var(--border) / 0.3)',
     }}>
-      <div className="mx-auto w-14 h-14 rounded-xl overflow-hidden mb-2" style={{ background: 'hsla(228, 20%, 15%, 0.6)' }}>
+      <div className="mx-auto w-14 h-14 rounded-xl overflow-hidden mb-2" style={{ background: 'hsl(var(--secondary) / 0.6)' }}>
         {fighter?.image_url && !imgErr ? (
           <img src={fighter.image_url} alt={fighter.name} className="w-full h-full object-cover" onError={() => setImgErr(true)} />
         ) : (

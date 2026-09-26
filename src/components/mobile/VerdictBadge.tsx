@@ -27,26 +27,26 @@ function getVerdictTheme(v: string) {
     case "STRONG":
       return {
         bg: "bg-nba-green-dim",
-        border: "border-[hsla(158,64%,52%,0.2)]",
+        border: "border-success/20",
         text: "text-nba-green",
         glow: "glow-green",
-        gradient: "from-[hsla(158,64%,52%,0.15)] to-transparent",
+        gradient: "from-success/15 to-transparent",
       };
     case "LEAN":
       return {
         bg: "bg-nba-blue-dim",
-        border: "border-[hsla(211,100%,60%,0.2)]",
+        border: "border-primary/20",
         text: "text-nba-blue",
         glow: "glow-blue",
-        gradient: "from-[hsla(211,100%,60%,0.15)] to-transparent",
+        gradient: "from-primary/15 to-transparent",
       };
     case "RISKY":
       return {
         bg: "bg-nba-yellow-dim",
-        border: "border-[hsla(43,96%,56%,0.2)]",
+        border: "border-[hsl(var(--nba-yellow)_/_0.2)]",
         text: "text-nba-yellow",
         glow: "",
-        gradient: "from-[hsla(43,96%,56%,0.1)] to-transparent",
+        gradient: "from-[hsl(var(--nba-yellow)_/_0.1)] to-transparent",
       };
     case "PASS":
       return {
@@ -54,7 +54,7 @@ function getVerdictTheme(v: string) {
         border: "border-destructive/30",
         text: "text-nba-red",
         glow: "glow-red",
-        gradient: "from-[hsla(0,72%,51%,0.2)] to-transparent",
+        gradient: "from-danger/20 to-transparent",
       };
     default:
       return {
@@ -62,7 +62,7 @@ function getVerdictTheme(v: string) {
         border: "border-destructive/20",
         text: "text-nba-red",
         glow: "glow-red",
-        gradient: "from-[hsla(0,72%,51%,0.15)] to-transparent",
+        gradient: "from-danger/15 to-transparent",
       };
   }
 }
@@ -106,7 +106,7 @@ export function VerdictBadge({
       animate={{ opacity: 1, scale: 1 }}
       transition={{ type: "spring", stiffness: 300, damping: 25 }}
       className={`relative rounded-2xl overflow-hidden border ${theme.border} ${theme.glow} p-6 text-center`}
-      style={{ background: 'linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.94) 19.41%, hsla(228, 30%, 8%, 0.49) 76.65%)' }}
+      style={{ background: 'linear-gradient(127.09deg, hsl(var(--secondary) / 0.94) 19.41%, hsl(var(--card) / 0.49) 76.65%)' }}
     >
       {/* Gradient overlay */}
       <div className={`absolute inset-0 bg-gradient-to-b ${theme.gradient} pointer-events-none`} />

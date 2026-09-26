@@ -673,8 +673,8 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
         .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         @keyframes live-glow {
-          0%, 100% { box-shadow: 0 0 8px hsl(142 71% 45% / 0.3); }
-          50% { box-shadow: 0 0 18px hsl(142 71% 45% / 0.55); }
+          0%, 100% { box-shadow: 0 0 8px hsl(var(--success) / 0.3); }
+          50% { box-shadow: 0 0 18px hsl(var(--success) / 0.55); }
         }
         @keyframes live-dot {
           0%, 100% { opacity: 1; transform: scale(1); }
@@ -685,8 +685,8 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       
 
       <div className="w-full max-w-[430px] mx-auto px-5 pt-4 pb-6 space-y-5 relative">
-        <div className="vision-orb w-64 h-64 -top-24 -right-28 opacity-70" style={{ background: 'hsl(250 76% 62%)' }} />
-        <div className="vision-orb w-44 h-44 top-[760px] -left-24 opacity-45" style={{ background: 'hsl(250 76% 62%)', animationDelay: '-3s' }} />
+        <div className="vision-orb w-64 h-64 -top-24 -right-28 opacity-70" style={{ background: 'hsl(var(--primary))' }} />
+        <div className="vision-orb w-44 h-44 top-[760px] -left-24 opacity-45" style={{ background: 'hsl(var(--primary))', animationDelay: '-3s' }} />
 
         <motion.div {...stagger(0)} className="relative z-10">
           <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-accent/85">
@@ -736,9 +736,9 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.08 + index * 0.05 }}
                       className="relative w-[86vw] max-w-[360px] min-w-[86vw] shrink-0 snap-start overflow-hidden rounded-[26px] p-5"
-                      style={{ background: 'radial-gradient(circle at 100% 0%, hsla(250,76%,62%,0.36), transparent 40%), radial-gradient(circle at 0% 100%, hsla(210,100%,60%,0.15), transparent 45%), linear-gradient(145deg, hsl(250 28% 15%), hsl(228 30% 8%) 72%)', boxShadow: '0 18px 40px -24px hsla(250,76%,62%,0.8), inset 0 1px 0 hsla(250,90%,90%,0.1)' }}
+                      style={{ background: 'radial-gradient(circle at 100% 0%, hsl(var(--primary) / 0.36), transparent 40%), radial-gradient(circle at 0% 100%, hsl(var(--primary) / 0.15), transparent 45%), linear-gradient(145deg, hsl(var(--secondary)), hsl(var(--card)) 72%)', boxShadow: '0 18px 40px -24px hsl(var(--primary) / 0.8), inset 0 1px 0 hsl(var(--primary) / 0.1)' }}
                     >
-                      <div className="absolute -right-8 bottom-[-72px] h-44 w-44 rounded-full opacity-40 blur-3xl" style={{ background: 'hsl(250 76% 62%)' }} />
+                      <div className="absolute -right-8 bottom-[-72px] h-44 w-44 rounded-full opacity-40 blur-3xl" style={{ background: 'hsl(var(--primary))' }} />
                       <div className="relative">
                         <div className="flex items-center justify-between gap-3">
                           <span className="inline-flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-accent"><Flame className="h-3 w-3" /> Daily Edge</span>
@@ -755,15 +755,15 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                             <p className="mt-0.5 text-[8px] font-bold uppercase tracking-[0.12em] text-muted-foreground/55">Confidence</p>
                           </div>
                         </div>
-                        <div className="mt-5 flex items-center justify-between gap-3 border-t border-white/[0.08] pt-3">
+                        <div className="mt-5 flex items-center justify-between gap-3 border-t border-foreground/[0.08] pt-3">
                           <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-accent">{verdict}</span>
-                          <span className="text-[10px] font-semibold text-muted-foreground/65">{pick.odds ? formatOddsFn(pick.odds) : "â€”"}</span>
+                          <span className="text-[10px] font-semibold text-muted-foreground/65">{pick.odds ? formatOddsFn(pick.odds) : "—"}</span>
                         </div>
                         <div className="mt-4 flex gap-2">
-                          <button type="button" onClick={() => navigate("/dashboard/picks")} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-[11px] font-bold text-white active:scale-[0.98]" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(220 100% 62%))', boxShadow: '0 10px 20px -12px hsla(250,76%,62%,0.8)' }}>
+                          <button type="button" onClick={() => navigate("/dashboard/picks")} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-[11px] font-bold text-white active:scale-[0.98]" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))', boxShadow: '0 10px 20px -12px hsl(var(--primary) / 0.8)' }}>
                             View Daily Edge <ChevronRight className="h-3.5 w-3.5" />
                           </button>
-                          <button type="button" onClick={() => navigate("/dashboard/analyze")} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-accent" style={{ background: 'hsla(228,25%,7%,0.52)' }} aria-label="Open analysis"><BarChart3 className="h-4 w-4" /></button>
+                          <button type="button" onClick={() => navigate("/dashboard/analyze")} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-accent" style={{ background: 'hsl(var(--card) / 0.52)' }} aria-label="Open analysis"><BarChart3 className="h-4 w-4" /></button>
                         </div>
                       </div>
                     </motion.article>
@@ -772,7 +772,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               </div>
               {verifiedDailyEdges.length > 1 && (
                 <div className="flex justify-center gap-1.5">
-                  {verifiedDailyEdges.map((pick, index) => <span key={`${pick.id}-dot`} className="h-1.5 rounded-full transition-all" style={{ width: index === activeDailyEdge ? 18 : 6, background: index === activeDailyEdge ? 'hsl(250 76% 68%)' : 'hsla(250,30%,70%,0.26)' }} />)}
+                  {verifiedDailyEdges.map((pick, index) => <span key={`${pick.id}-dot`} className="h-1.5 rounded-full transition-all" style={{ width: index === activeDailyEdge ? 18 : 6, background: index === activeDailyEdge ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground) / 0.26)' }} />)}
                 </div>
               )}
             </>
@@ -780,7 +780,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
           </motion.section>
         )}
 
-        <motion.nav {...stagger(0.85)} aria-label="Explore Sentinel" className="relative z-10 border-y border-white/[0.06] py-2.5">
+        <motion.nav {...stagger(0.85)} aria-label="Explore Sentinel" className="relative z-10 border-y border-foreground/[0.06] py-2.5">
           <div className="flex items-center justify-between gap-2">
             {quickLinks.map((link, index) => (
               <motion.button
@@ -800,7 +800,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
         </motion.nav>
 
         <motion.div {...stagger(1)} className="relative z-10">
-          <div className="flex items-center justify-between border-b border-white/[0.07] pb-2.5 mb-0">
+          <div className="flex items-center justify-between border-b border-foreground/[0.07] pb-2.5 mb-0">
             <div className="flex items-center gap-2">
               <Flame className="w-4 h-4 text-accent" style={{ animation: 'pulse-fire 3s ease-in-out infinite' }} />
               <span className="text-xs font-bold tracking-[0.15em] uppercase text-foreground">Today's Edge Lineup</span>
@@ -817,8 +817,8 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               <div className="flex gap-3 pb-2">
                 {[0, 1].map(i => (
                   <div key={i} className="w-[85%] max-w-[320px] min-w-0 shrink-0 p-5 animate-pulse space-y-3" style={{
-                    background: 'linear-gradient(165deg, hsl(250 20% 12%), hsl(250 22% 9%))',
-                    border: '1px solid hsl(250 20% 18% / 0.6)',
+                    background: 'linear-gradient(165deg, hsl(var(--card)), hsl(var(--card)))',
+                    border: '1px solid hsl(var(--border) / 0.6)',
                     borderRadius: 20,
                   }}>
                     <div className="w-24 h-4 rounded bg-secondary/40" />
@@ -830,8 +830,8 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
             </div>
           ) : todayPicks.length === 0 ? (
             <div className="w-full min-w-0 p-6 text-center" style={{
-              background: 'linear-gradient(165deg, hsl(250 20% 12%), hsl(250 22% 9%))',
-              border: '1px solid hsl(250 20% 18% / 0.6)',
+              background: 'linear-gradient(165deg, hsl(var(--card)), hsl(var(--card)))',
+              border: '1px solid hsl(var(--border) / 0.6)',
               borderRadius: 20,
             }}>
               <Sparkles className="w-6 h-6 text-muted-foreground/30 mx-auto mb-2" />
@@ -852,7 +852,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                 onClick={() => { void requestTodayLineup(); }}
                 disabled={lineupScanPending}
                 className="mt-4 inline-flex h-10 items-center justify-center rounded-xl px-4 text-[11px] font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-55"
-                style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(220 100% 62%))' }}
+                style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))' }}
               >
                 {lineupScanPending ? "Analyzing slate…" : lineupError ? "Try again" : "Analyze today’s slate"}
               </button>
@@ -902,13 +902,13 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       // Settled cards swap the purple edge glow for the result
                       // colour and lay a faint wash over the base gradient, so
                       // a finished pick reads as finished without shouting.
-                      borderColor: settled ? settled.border : 'hsla(0, 0%, 100%, 0.08)',
+                      borderColor: settled ? settled.border : 'hsl(var(--foreground) / 0.08)',
                       background: settled
-                        ? `linear-gradient(145deg, ${settled.wash}, transparent 60%), radial-gradient(circle at 100% 0%, ${settled.chip}, transparent 43%), linear-gradient(145deg, hsl(250 30% 16%), hsl(228 28% 8%) 72%)`
-                        : 'radial-gradient(circle at 100% 0%, hsla(250, 76%, 62%, 0.28), transparent 43%), linear-gradient(145deg, hsl(250 30% 16%), hsl(228 28% 8%) 72%)',
+                        ? `linear-gradient(145deg, ${settled.wash}, transparent 60%), radial-gradient(circle at 100% 0%, ${settled.chip}, transparent 43%), linear-gradient(145deg, hsl(var(--secondary)), hsl(var(--card)) 72%)`
+                        : 'radial-gradient(circle at 100% 0%, hsl(var(--primary) / 0.28), transparent 43%), linear-gradient(145deg, hsl(var(--secondary)), hsl(var(--card)) 72%)',
                       boxShadow: settled
-                        ? `inset 0 1px 0 hsla(250, 90%, 94%, 0.06), 0 18px 34px -28px ${settled.border}`
-                        : 'inset 0 1px 0 hsla(250, 90%, 94%, 0.08), 0 18px 34px -28px hsla(250, 76%, 62%, 0.92)',
+                        ? `inset 0 1px 0 hsl(var(--primary) / 0.06), 0 18px 34px -28px ${settled.border}`
+                        : 'inset 0 1px 0 hsl(var(--primary) / 0.08), 0 18px 34px -28px hsl(var(--primary) / 0.92)',
                     }}
                   >
 
@@ -917,12 +917,12 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       {/* Left: Recommended team logo or player headshot */}
                       <div style={{
                         width: 48, height: 48, borderRadius: 15, overflow: 'hidden',
-                        border: `1px solid ${isGameBet ? 'rgba(124,111,247,0.26)' : '#302b58'}`,
+                        border: `1px solid ${isGameBet ? 'hsl(var(--primary) / 0.26)' : 'hsl(var(--border))'}`,
                         flexShrink: 0, position: 'relative',
                         background: isGameBet
-                          ? 'radial-gradient(circle at 50% 35%, rgba(124,111,247,0.18), transparent 68%), #201d38'
-                          : '#252340',
-                        boxShadow: isGameBet ? 'inset 0 1px 0 rgba(255,255,255,0.05)' : 'none',
+                          ? 'radial-gradient(circle at 50% 35%, hsl(var(--primary) / 0.14), transparent 68%), hsl(var(--secondary))'
+                          : 'hsl(var(--secondary))',
+                        boxShadow: isGameBet ? 'inset 0 1px 0 hsl(var(--foreground) / 0.05)' : 'none',
                       }}>
                         {isGameBet ? (() => {
                           const sportRaw = (pick.sport || 'nba').toLowerCase();
@@ -958,7 +958,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                               <span style={{ fontSize: 16 }}>
                                 {pick.bet_type === 'moneyline' ? '💰' : pick.bet_type === 'spread' ? '📊' : '📈'}
                               </span>
-                              <span style={{ fontSize: 8, fontWeight: 700, color: '#22d3ee', letterSpacing: 1 }}>
+                              <span style={{ fontSize: 8, fontWeight: 700, color: 'hsl(var(--nba-cyan))', letterSpacing: 1 }}>
                                 {(pick.bet_type || '').replace('_', '/').toUpperCase()}
                               </span>
                             </div>
@@ -982,7 +982,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                               display: headshots[pick.player_name] ? 'none' : 'flex',
                               width: '100%', height: '100%',
                               alignItems: 'center', justifyContent: 'center',
-                              fontSize: 11, fontWeight: 700, color: '#22d3ee',
+                              fontSize: 11, fontWeight: 700, color: 'hsl(var(--nba-cyan))',
                             }}>
                               {(pick.sport || 'NBA').toUpperCase()}
                             </div>
@@ -993,7 +993,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       {/* Middle: Name + Sport Pill + Matchup */}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{
-                          fontSize: isGameBet ? 15 : 17, fontWeight: 700, color: '#f0eeff',
+                          fontSize: isGameBet ? 15 : 17, fontWeight: 700, color: 'hsl(var(--foreground))',
                           lineHeight: 1.2, wordBreak: 'break-word',
                           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
                           overflow: 'hidden',
@@ -1005,7 +1005,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                         <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
                           <span style={{
                             display: 'inline-block',
-                            color: '#a9a3f9',
+                            color: 'hsl(var(--primary))',
                             fontSize: 9, fontWeight: 700, letterSpacing: 1,
                             borderRadius: 20, padding: '2px 8px',
                           }}>{(pick.sport || 'NBA').toUpperCase()}</span>
@@ -1029,10 +1029,10 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                           {isGameBet && (
                             <span style={{
                               display: 'none',
-                              background: 'hsla(190,90%,55%,0.15)', color: '#22d3ee',
+                              background: 'hsl(var(--nba-cyan) / 0.15)', color: 'hsl(var(--nba-cyan))',
                               fontSize: 10, fontWeight: 700, letterSpacing: 1,
                               borderRadius: 20, padding: '2px 8px',
-                              border: '1px solid hsla(190,90%,55%,0.25)',
+                              border: '1px solid hsl(var(--nba-cyan) / 0.25)',
                             }}>
                               {pick.bet_type === 'moneyline' ? 'ML' : pick.bet_type === 'spread' ? 'SPREAD' : 'O/U'}
                             </span>
@@ -1040,10 +1040,10 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                           {isFallbackEdge && (
                             <span style={{
                               display: 'none',
-                              background: 'hsla(45,93%,58%,0.12)', color: 'hsl(45 93% 58%)',
+                              background: 'hsl(var(--nba-yellow) / 0.12)', color: 'hsl(var(--nba-yellow))',
                               fontSize: 8, fontWeight: 800, letterSpacing: 0.8,
                               borderRadius: 20, padding: '2px 7px',
-                              border: '1px solid hsla(45,93%,58%,0.28)',
+                              border: '1px solid hsl(var(--nba-yellow) / 0.28)',
                             }}>
                               UNCALIBRATED MODEL LEAN
                             </span>
@@ -1051,10 +1051,10 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                           {isLineupsPending && (
                             <span style={{
                               display: 'none',
-                              background: 'hsla(30,100%,55%,0.12)', color: 'hsl(30 100% 62%)',
+                              background: 'hsl(var(--nba-yellow) / 0.12)', color: 'hsl(var(--nba-yellow))',
                               fontSize: 8, fontWeight: 800, letterSpacing: 0.8,
                               borderRadius: 20, padding: '2px 7px',
-                              border: '1px solid hsla(30,100%,55%,0.28)',
+                              border: '1px solid hsl(var(--nba-yellow) / 0.28)',
                             }}>
                               LINEUPS PENDING
                             </span>
@@ -1062,7 +1062,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                         </div>
                         {!isGameBet && (
                           <p style={{
-                            fontSize: 12, color: '#8b87b8',
+                            fontSize: 12, color: 'hsl(var(--muted-foreground))',
                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                             marginTop: 2,
                           }}>
@@ -1097,11 +1097,9 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                             ? `${pick.direction === 'home' ? (pick.home_team || pick.team) : (pick.away_team || pick.opponent)} ${pick.spread_line && pick.spread_line > 0 ? '+' : ''}${pick.spread_line}`
                             : (pick.direction === "over" ? "OVER" : "UNDER");
                       const colorMap: Record<string, string> = {
-                        'STRONG': '#22c55e', 'LEAN': '#22d3ee', 'RISKY': '#f59e0b', 'PASS': '#ef4444',
+                        'STRONG': 'hsl(var(--success))', 'LEAN': 'hsl(var(--nba-cyan))', 'RISKY': 'hsl(var(--nba-yellow))', 'PASS': 'hsl(var(--danger))',
                       };
-                      const dotColor = settled ? settled.accent : (colorMap[label] || '#ef4444');
-                      const bgColor = dotColor.replace('#', '').match(/.{2}/g)!;
-                      const r = parseInt(bgColor[0], 16), g = parseInt(bgColor[1], 16), b = parseInt(bgColor[2], 16);
+                      const dotColor = settled ? settled.accent : (colorMap[label] || 'hsl(var(--danger))');
                       const liveBadgeText = isLineupsPending ? 'LINEUPS PENDING' : isFallbackEdge ? 'MODEL LEAN' : label;
                       // Once the pick grades, the model's pre-game read is no
                       // longer the useful thing on this line — the settled
@@ -1130,7 +1128,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     {/* STAT + ODDS ROW */}
                     <div className="relative z-10" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 6 }}>
                       <span style={{
-                        color: '#c5c1e3', padding: 0,
+                        color: 'hsl(var(--foreground))', padding: 0,
                         fontSize: 12, fontWeight: 600,
                         flex: '1 1 auto', minWidth: 0,
                       }}>
@@ -1144,13 +1142,13 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                         }
                       </span>
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: '#f0eeff', whiteSpace: 'nowrap' }}>{pick.odds ? formatOddsFn(pick.odds) : "—"}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))', whiteSpace: 'nowrap' }}>{pick.odds ? formatOddsFn(pick.odds) : "—"}</div>
                       </div>
                     </div>
 
                     {isFallbackEdge && (
                       <p className="hidden relative z-10" style={{
-                        fontSize: 9.5, color: 'hsl(45 90% 62%)', lineHeight: 1.45,
+                        fontSize: 9.5, color: 'hsl(var(--nba-yellow))', lineHeight: 1.45,
                         marginBottom: -5,
                       }}>
                         Model lean only. The score and any simulation figures below are not validated win probabilities.
@@ -1160,7 +1158,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     {/* AI NARRATIVE */}
                     {pick.reasoning && (
                       <p className="hidden relative z-10" style={{
-                        fontStyle: 'italic', fontSize: 12, color: '#aaa6cf',
+                        fontStyle: 'italic', fontSize: 12, color: 'hsl(var(--muted-foreground))',
                         lineHeight: 1.6, overflow: 'hidden',
                         display: 'none', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
                         marginBottom: 0,
@@ -1172,7 +1170,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     {/* BUTTONS — a settled pick can no longer be bet, so
                         "Add to Slip" is dropped and Details takes the row. */}
                     <div
-                      className={`relative z-10 mt-auto grid gap-2 border-t border-white/[0.08] pt-3 ${settled ? 'grid-cols-1' : 'grid-cols-2'}`}
+                      className={`relative z-10 mt-auto grid gap-2 border-t border-foreground/[0.08] pt-3 ${settled ? 'grid-cols-1' : 'grid-cols-2'}`}
                     >
                       <button
                         onClick={() => {
@@ -1237,7 +1235,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                         style={{
                           height: 38, borderRadius: 11,
                           fontSize: 11, fontWeight: 600,
-                          background: 'hsla(250, 28%, 10%, 0.62)', border: '1px solid hsla(250, 55%, 68%, 0.2)', color: '#c4c0ff',
+                          background: 'hsl(var(--card) / 0.62)', border: '1px solid hsl(var(--primary) / 0.2)', color: 'hsl(var(--primary))',
                         }}
                       >
                         Details
@@ -1260,7 +1258,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                         style={{
                           height: 38, borderRadius: 11,
                           fontSize: 11, fontWeight: 600,
-                          background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(224 86% 66%))', color: '#f0eeff',
+                          background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))', color: 'hsl(var(--foreground))',
                         }}
                       >
                         Add to Slip
@@ -1280,7 +1278,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     className="h-1.5 rounded-full transition-all"
                     style={{
                       width: index === activeLineupIndex ? 16 : 6,
-                      background: index === activeLineupIndex ? 'hsl(250 76% 68%)' : 'hsla(250,30%,70%,0.26)',
+                      background: index === activeLineupIndex ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground) / 0.26)',
                     }}
                   />
                 ))}
@@ -1290,10 +1288,10 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
           )}
         </motion.div>
 
-        <motion.section {...stagger(2)} className="relative z-10 w-full min-w-0 border-t border-white/[0.07] pt-5">
+        <motion.section {...stagger(2)} className="relative z-10 w-full min-w-0 border-t border-foreground/[0.07] pt-5">
           <div className="absolute -bottom-6 -right-6 w-24 h-24 rounded-full opacity-[0.04] pointer-events-none"
-            style={{ background: 'radial-gradient(circle, hsl(142 71% 45%), transparent)' }} />
-          <p className="text-[11px] font-bold tracking-[0.15em] uppercase mb-3" style={{ color: 'hsl(142 100% 50%)' }}>
+            style={{ background: 'radial-gradient(circle, hsl(var(--success)), transparent)' }} />
+          <p className="text-[11px] font-bold tracking-[0.15em] uppercase mb-3" style={{ color: 'hsl(var(--primary))' }}>
             {yesterdayPending.length > 0 ? "Yesterday's Edge" : "Yesterday's Edge Results"}
           </p>
           {hasYesterdayData ? (
@@ -1305,16 +1303,16 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     const isHit = pick.result === "hit";
                     const pickLabel = formatPickLabel(pick);
                     return (
-                      <div key={pick.id} className="flex items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '1px solid hsl(250 20% 18% / 0.4)' }}>
+                      <div key={pick.id} className="flex items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '1px solid hsl(var(--border) / 0.4)' }}>
                         <div className="flex items-center gap-2.5 min-w-0">
                           {isHit ? (
-                            <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: 'hsl(142 71% 45%)' }} />
+                            <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: 'hsl(var(--success))' }} />
                           ) : (
-                            <XCircle className="w-4 h-4 shrink-0" style={{ color: 'hsl(0 84% 60%)' }} />
+                            <XCircle className="w-4 h-4 shrink-0" style={{ color: 'hsl(var(--danger))' }} />
                           )}
-                          <span className="truncate" style={{ fontSize: 13, fontWeight: 700, color: 'hsl(250 80% 97%)' }}>{pick.player_name}</span>
+                          <span className="truncate" style={{ fontSize: 13, fontWeight: 700, color: 'hsl(var(--primary))' }}>{pick.player_name}</span>
                         </div>
-                        <span className="tabular-nums shrink-0 ml-2" style={{ fontSize: 11, fontWeight: 700, color: isHit ? 'hsl(142 71% 45%)' : 'hsl(0 84% 60%)' }}>
+                        <span className="tabular-nums shrink-0 ml-2" style={{ fontSize: 11, fontWeight: 700, color: isHit ? 'hsl(var(--success))' : 'hsl(var(--danger))' }}>
                           {pickLabel} — {isHit ? "HIT" : "MISS"}
                         </span>
                       </div>
@@ -1323,12 +1321,12 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                 {yesterdayVoid.map(pick => {
                   const pickLabel = formatPickLabel(pick);
                   return (
-                    <div key={pick.id} className="flex items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '1px solid hsl(250 20% 18% / 0.4)' }}>
+                    <div key={pick.id} className="flex items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '1px solid hsl(var(--border) / 0.4)' }}>
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <MinusCircle className="w-4 h-4 shrink-0" style={{ color: 'hsl(250 15% 55%)' }} />
-                        <span className="truncate" style={{ fontSize: 13, fontWeight: 700, color: 'hsl(250 40% 74%)' }}>{pick.player_name}</span>
+                        <MinusCircle className="w-4 h-4 shrink-0" style={{ color: 'hsl(var(--muted-foreground))' }} />
+                        <span className="truncate" style={{ fontSize: 13, fontWeight: 700, color: 'hsl(var(--primary))' }}>{pick.player_name}</span>
                       </div>
-                      <span className="tabular-nums shrink-0 ml-2" style={{ fontSize: 11, fontWeight: 700, color: 'hsl(250 15% 58%)' }}>
+                      <span className="tabular-nums shrink-0 ml-2" style={{ fontSize: 11, fontWeight: 700, color: 'hsl(var(--muted-foreground))' }}>
                         {pickLabel} — VOID
                       </span>
                     </div>
@@ -1341,12 +1339,12 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                   // was written, so there is no box-score line to grade. Saying
                   // "pending" there promises a result that is not coming.
                   const dead = isUnresolved(pick);
-                  const tone = dead ? 'hsl(250 15% 55%)' : 'hsl(45 93% 58%)';
+                  const tone = dead ? 'hsl(var(--muted-foreground))' : 'hsl(var(--nba-yellow))';
                   return (
-                    <div key={pick.id} className="flex items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '1px solid hsl(250 20% 18% / 0.4)' }}>
+                    <div key={pick.id} className="flex items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '1px solid hsl(var(--border) / 0.4)' }}>
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="w-4 h-4 shrink-0 rounded-full" style={{ border: `2px solid ${tone}`, background: 'transparent' }} />
-                        <span className="truncate" style={{ fontSize: 13, fontWeight: 700, color: dead ? 'hsl(250 40% 72%)' : 'hsl(250 80% 97%)' }}>{pick.player_name}</span>
+                        <span className="truncate" style={{ fontSize: 13, fontWeight: 700, color: dead ? 'hsl(var(--primary))' : 'hsl(var(--primary))' }}>{pick.player_name}</span>
                       </div>
                       <span className="tabular-nums shrink-0 ml-2" style={{ fontSize: 11, fontWeight: 700, color: tone }}>
                         {pickLabel} — {dead ? "NO RESULT" : "PENDING"}
@@ -1356,12 +1354,12 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                 })}
               </div>
               {yesterdayTotal > 0 && yesterdayPending.length === 0 ? (
-                <p className="text-center mt-3" style={{ fontSize: 12, fontWeight: 700, color: 'hsl(142 71% 45%)' }}>
+                <p className="text-center mt-3" style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--success))' }}>
                   Sentinel went {yesterdayHits}/{yesterdayTotal} yesterday • {yesterdayAcc}% accuracy
                   {yesterdayVoid.length > 0 ? ` · ${yesterdayVoid.length} void` : ""}
                 </p>
               ) : yesterdayPending.length > 0 ? (
-                <p className="text-center mt-3" style={{ fontSize: 12, fontWeight: 600, color: yesterdayLive > 0 ? 'hsl(45 93% 58%)' : 'hsl(250 15% 55%)' }}>
+                <p className="text-center mt-3" style={{ fontSize: 12, fontWeight: 600, color: yesterdayLive > 0 ? 'hsl(var(--nba-yellow))' : 'hsl(var(--muted-foreground))' }}>
                   {yesterdayLive > 0
                     ? `${yesterdayLive} edge pick${yesterdayLive > 1 ? "s" : ""} still pending - games in progress`
                     : `Sentinel went ${yesterdayHits}/${yesterdayTotal} yesterday • ${yesterdayAcc}% accuracy · ${yesterdayPending.length} without a result`}
@@ -1370,24 +1368,24 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
             </>
           ) : (
             <div className="flex items-center gap-3 py-3 px-2" style={{
-              background: 'hsl(250 18% 10%)',
+              background: 'hsl(var(--card))',
               borderRadius: 14,
             }}>
               <div className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center" style={{
-                background: yesterdayError ? 'hsl(45 60% 14%)' : 'hsl(250 20% 14%)',
-                border: `1px solid ${yesterdayError ? 'hsl(45 93% 58% / 0.35)' : 'hsl(250 20% 18% / 0.5)'}`,
+                background: yesterdayError ? 'hsl(var(--nba-yellow))' : 'hsl(var(--secondary))',
+                border: `1px solid ${yesterdayError ? 'hsl(var(--nba-yellow) / 0.35)' : 'hsl(var(--secondary) / 0.5)'}`,
               }}>
-                <Target className={`w-4 h-4 ${yesterdayError ? 'text-[hsl(45_93%_58%)]' : 'text-muted-foreground/40'}`} />
+                <Target className={`w-4 h-4 ${yesterdayError ? 'text-[hsl(var(--nba-yellow))]' : 'text-muted-foreground/40'}`} />
               </div>
               {/* A failed query and a genuinely empty slate are different facts.
                   Showing "No edge yesterday" for a failure asserts something we
                   do not know, and sends the user looking for a pick bug that
                   isn't there. */}
               <div className="min-w-0">
-                <p style={{ fontSize: 13, fontWeight: 700, color: 'hsl(250 80% 97%)' }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: 'hsl(var(--primary))' }}>
                   {yesterdayError ? "Results unavailable" : "No edge yesterday"}
                 </p>
-                <p style={{ fontSize: 11, color: 'hsl(250 15% 50%)', lineHeight: 1.4 }}>
+                <p style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', lineHeight: 1.4 }}>
                   {yesterdayError ?? "No Today's Edge picks were generated yesterday."}
                 </p>
               </div>

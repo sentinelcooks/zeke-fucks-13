@@ -44,20 +44,20 @@ const CountdownBanner = () => {
   const secs = Math.floor((remaining % 60_000) / 1000);
 
   return (
-    <div className="w-full rounded-2xl border border-[#2A2A2A] bg-[#141414] px-4 py-3 flex items-center justify-between gap-3">
+    <div className="w-full rounded-2xl border border-border bg-card px-4 py-3 flex items-center justify-between gap-3">
       <div className="flex items-center gap-2 min-w-0">
-        <div className="w-9 h-9 rounded-lg bg-[#FFC93C]/15 flex items-center justify-center flex-shrink-0">
-          <Tag className="w-4 h-4 text-[#FFC93C]" />
+        <div className="w-9 h-9 rounded-lg bg-[hsl(var(--nba-yellow))]/15 flex items-center justify-center flex-shrink-0">
+          <Tag className="w-4 h-4 text-[hsl(var(--nba-yellow))]" />
         </div>
         <div className="min-w-0">
-          <div className="text-[11px] font-black uppercase tracking-wider text-[#FFC93C] leading-tight flex items-center whitespace-nowrap">
+          <div className="text-[11px] font-black uppercase tracking-wider text-[hsl(var(--nba-yellow))] leading-tight flex items-center whitespace-nowrap">
             <span className="relative flex h-2 w-2 mr-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-danger"></span>
             </span>
             Limited Time
           </div>
-          <div className="text-[11px] font-black uppercase tracking-wider text-[#FFC93C] leading-tight mt-0.5 whitespace-nowrap">
+          <div className="text-[11px] font-black uppercase tracking-wider text-[hsl(var(--nba-yellow))] leading-tight mt-0.5 whitespace-nowrap">
             3-Day Free Trial
           </div>
         </div>
@@ -70,10 +70,10 @@ const CountdownBanner = () => {
         ].map((u, i) => (
           <div key={u.l} className="flex items-center gap-1.5">
             <div className="flex flex-col items-center">
-              <span className="text-base font-extrabold text-white tabular-nums leading-none">{pad(u.v)}</span>
-              <span className="text-[8px] text-white/50 mt-0.5 tracking-wider">{u.l}</span>
+              <span className="text-base font-extrabold text-foreground tabular-nums leading-none">{pad(u.v)}</span>
+              <span className="text-[8px] text-foreground/50 mt-0.5 tracking-wider">{u.l}</span>
             </div>
-            {i < 2 && <span className="text-white/40 text-base font-bold leading-none -mt-2">:</span>}
+            {i < 2 && <span className="text-foreground/40 text-base font-bold leading-none -mt-2">:</span>}
           </div>
         ))}
       </div>

@@ -26,13 +26,13 @@ function BookLogo({ bookKey, size = 28 }: { bookKey: string; size?: number }) {
   const info = getSportsbookInfo(bookKey);
   if (info.logo) {
     return (
-      <div className="rounded-lg overflow-hidden flex items-center justify-center" style={{ width: size, height: size, background: 'hsla(228, 20%, 14%, 0.6)', border: '1px solid hsla(228, 20%, 22%, 0.3)' }}>
+      <div className="rounded-lg overflow-hidden flex items-center justify-center" style={{ width: size, height: size, background: 'hsl(var(--secondary) / 0.6)', border: '1px solid hsl(var(--border) / 0.3)' }}>
         <img src={info.logo} alt={info.label} className="w-5 h-5 object-contain" loading="lazy" />
       </div>
     );
   }
   return (
-    <div className="rounded-lg flex items-center justify-center text-[9px] font-black text-white" style={{ width: size, height: size, background: info.color }}>
+    <div className="rounded-lg flex items-center justify-center text-[9px] font-black text-foreground" style={{ width: size, height: size, background: info.color }}>
       {info.abbrev}
     </div>
   );
@@ -128,7 +128,7 @@ const OddsComparison = ({ playerName, propType, line, overUnder, sport = "nba", 
       animate={{ opacity: 1, y: 0 }}
       className="vision-card overflow-hidden relative"
     >
-      <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(270,60%,55%,0.15), transparent)' }} />
+      <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--primary) / 0.15), transparent)' }} />
 
       <div className="px-5 py-4">
         {/* Header */}
@@ -139,7 +139,7 @@ const OddsComparison = ({ playerName, propType, line, overUnder, sport = "nba", 
           </div>
           {books.length > 0 && (
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'hsla(158, 64%, 52%, 0.08)', border: '1px solid hsla(158, 64%, 52%, 0.15)' }}>
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'hsl(var(--success) / 0.08)', border: '1px solid hsl(var(--success) / 0.15)' }}>
                 <div className="w-1.5 h-1.5 rounded-full bg-nba-green animate-pulse" />
                 <span className="text-[7px] font-bold text-nba-green uppercase tracking-wider">Live</span>
               </div>
@@ -166,19 +166,19 @@ const OddsComparison = ({ playerName, propType, line, overUnder, sport = "nba", 
             {/* EV + Edge Summary (only when model hit rate is available) */}
             {modelHitRate && bestOdds && bestEV !== null && bestEdge !== null && (
               <div className="grid grid-cols-3 gap-2 mb-3">
-                <div className="rounded-xl px-2.5 py-2 text-center" style={{ background: bestEV > 0 ? 'hsla(145, 60%, 45%, 0.08)' : 'hsla(0, 72%, 51%, 0.08)', border: `1px solid ${bestEV > 0 ? 'hsla(145, 60%, 45%, 0.15)' : 'hsla(0, 72%, 51%, 0.15)'}` }}>
+                <div className="rounded-xl px-2.5 py-2 text-center" style={{ background: bestEV > 0 ? 'hsl(var(--success) / 0.08)' : 'hsl(var(--danger) / 0.08)', border: `1px solid ${bestEV > 0 ? 'hsl(var(--success) / 0.15)' : 'hsl(var(--danger) / 0.15)'}` }}>
                   <p className="text-[7px] text-muted-foreground/45 font-bold uppercase tracking-wider mb-0.5">Best EV</p>
-                  <p className={`text-[13px] font-black tabular-nums ${bestEV > 0 ? 'text-nba-green' : 'text-red-400'}`}>
+                  <p className={`text-[13px] font-black tabular-nums ${bestEV > 0 ? 'text-nba-green' : 'text-danger'}`}>
                     {bestEV > 0 ? "+" : ""}{bestEV.toFixed(1)}%
                   </p>
                 </div>
-                <div className="rounded-xl px-2.5 py-2 text-center" style={{ background: bestEdge > 0 ? 'hsla(145, 60%, 45%, 0.08)' : 'hsla(0, 72%, 51%, 0.08)', border: `1px solid ${bestEdge > 0 ? 'hsla(145, 60%, 45%, 0.15)' : 'hsla(0, 72%, 51%, 0.15)'}` }}>
+                <div className="rounded-xl px-2.5 py-2 text-center" style={{ background: bestEdge > 0 ? 'hsl(var(--success) / 0.08)' : 'hsl(var(--danger) / 0.08)', border: `1px solid ${bestEdge > 0 ? 'hsl(var(--success) / 0.15)' : 'hsl(var(--danger) / 0.15)'}` }}>
                   <p className="text-[7px] text-muted-foreground/45 font-bold uppercase tracking-wider mb-0.5">Edge</p>
-                  <p className={`text-[13px] font-black tabular-nums ${bestEdge > 0 ? 'text-nba-green' : 'text-red-400'}`}>
+                  <p className={`text-[13px] font-black tabular-nums ${bestEdge > 0 ? 'text-nba-green' : 'text-danger'}`}>
                     {bestEdge > 0 ? "+" : ""}{bestEdge.toFixed(1)}%
                   </p>
                 </div>
-                <div className="rounded-xl px-2.5 py-2 text-center" style={{ background: 'hsla(228, 20%, 12%, 0.5)', border: '1px solid hsla(228, 30%, 18%, 0.3)' }}>
+                <div className="rounded-xl px-2.5 py-2 text-center" style={{ background: 'hsl(var(--card) / 0.5)', border: '1px solid hsl(var(--border) / 0.3)' }}>
                   <p className="text-[7px] text-muted-foreground/45 font-bold uppercase tracking-wider mb-0.5">
                     {juiceSaved && juiceSaved > 0 ? "Juice Saved" : "Mkt Impl."}
                   </p>
@@ -219,15 +219,15 @@ const OddsComparison = ({ playerName, propType, line, overUnder, sport = "nba", 
                     transition={{ delay: i * 0.05 }}
                     className={`grid ${modelHitRate ? 'grid-cols-[1fr_auto_auto_auto]' : 'grid-cols-[1fr_auto_auto]'} gap-3 items-center py-2.5 px-2.5 rounded-xl transition-all duration-200 group cursor-default`}
                     style={{
-                      background: isBest ? 'hsla(270, 50%, 50%, 0.08)' : 'hsla(228, 20%, 10%, 0.3)',
-                      border: isBest ? '1px solid hsla(270, 50%, 50%, 0.15)' : '1px solid transparent',
+                      background: isBest ? 'hsl(var(--primary) / 0.08)' : 'hsl(var(--card) / 0.3)',
+                      border: isBest ? '1px solid hsl(var(--primary) / 0.15)' : '1px solid transparent',
                     }}
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <BookLogo bookKey={b.book} />
                       <span className="text-[11px] font-bold text-foreground/80 group-hover:text-foreground transition-colors truncate">{getSportsbookInfo(b.book).label}</span>
                       {isBest && (
-                        <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'linear-gradient(135deg, hsla(250,76%,62%,0.2), hsla(210,100%,60%,0.2))', border: '1px solid hsla(250,76%,62%,0.25)' }}>
+                        <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.2), hsl(var(--primary) / 0.2))', border: '1px solid hsl(var(--primary) / 0.25)' }}>
                           <Crown className="w-2 h-2 text-accent" />
                           <span className="text-[6px] font-black text-accent uppercase tracking-wider">Best</span>
                         </div>
@@ -244,7 +244,7 @@ const OddsComparison = ({ playerName, propType, line, overUnder, sport = "nba", 
                     </div>
                     {modelHitRate && bookEV !== null && (
                       <div className="text-center w-12">
-                        <span className={`text-[11px] font-bold tabular-nums ${bookEV > 0 ? 'text-nba-green' : 'text-red-400/70'}`}>
+                        <span className={`text-[11px] font-bold tabular-nums ${bookEV > 0 ? 'text-nba-green' : 'text-danger/70'}`}>
                           {bookEV > 0 ? "+" : ""}{bookEV.toFixed(1)}%
                         </span>
                       </div>
@@ -261,7 +261,7 @@ const OddsComparison = ({ playerName, propType, line, overUnder, sport = "nba", 
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3 }}
                 className="mt-3 rounded-xl px-3 py-2.5 flex items-center gap-2"
-                style={{ background: 'linear-gradient(135deg, hsla(250, 76%, 62%, 0.06), hsla(210, 100%, 60%, 0.06))', border: '1px solid hsla(250, 76%, 62%, 0.1)' }}
+                style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.06), hsl(var(--primary) / 0.06))', border: '1px solid hsl(var(--primary) / 0.1)' }}
               >
                 <Zap className="w-3.5 h-3.5 text-accent shrink-0" />
                 <p className="text-[10px] text-foreground/70 leading-relaxed">
@@ -274,7 +274,7 @@ const OddsComparison = ({ playerName, propType, line, overUnder, sport = "nba", 
               </motion.div>
             )}
 
-            <div className="mt-3 pt-3" style={{ borderTop: '1px solid hsla(228, 18%, 18%, 0.3)' }}>
+            <div className="mt-3 pt-3" style={{ borderTop: '1px solid hsl(var(--border) / 0.3)' }}>
               <p className="text-[8px] text-muted-foreground/55 text-center leading-relaxed">
                 Live odds from The Odds API · Always verify before placing bets
               </p>

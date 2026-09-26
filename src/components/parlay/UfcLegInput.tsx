@@ -56,10 +56,10 @@ export default function UfcLegInput({ data, onChange }: Props) {
         <input type="text" value={value}
           onChange={(e) => search(e.target.value, side)}
           placeholder={placeholder}
-          className="w-full bg-[hsla(228,20%,11%,0.6)] border border-[hsla(228,18%,22%,0.5)] rounded-xl pl-8 pr-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/30 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/30 transition-all backdrop-blur-sm" />
+          className="w-full bg-card/60 border border-border/50 rounded-xl pl-8 pr-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/30 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/30 transition-all backdrop-blur-sm" />
       </div>
       {show && (
-        <div className="absolute top-full left-0 right-0 mt-1 border border-[hsla(228,18%,22%,0.5)] rounded-xl max-h-[160px] overflow-y-auto z-50 shadow-2xl shadow-black/50 backdrop-blur-xl" style={{ background: 'var(--gradient-card)' }}>
+        <div className="absolute top-full left-0 right-0 mt-1 border border-border/50 rounded-xl max-h-[160px] overflow-y-auto z-50 shadow-2xl shadow-black/50 backdrop-blur-xl" style={{ background: 'var(--gradient-card)' }}>
           {sugs.map((s, i) => (
             <div key={i} onClick={() => {
               if (side === 1) { onChange({ ...data, fighter1: s.name }); setShow1(false); }
@@ -67,8 +67,8 @@ export default function UfcLegInput({ data, onChange }: Props) {
             }}
               className="flex items-center gap-3.5 px-3 py-2.5 cursor-pointer hover:bg-accent/6 active:bg-accent/10 transition-all first:rounded-t-xl last:rounded-b-xl group">
               <div className="relative w-9 h-9 rounded-full overflow-hidden flex-shrink-0" style={{
-                background: 'linear-gradient(135deg, hsla(228,30%,18%,1), hsla(228,30%,10%,1))',
-                border: '1px solid hsla(228,30%,22%,0.3)',
+                background: 'linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--card)))',
+                border: '1px solid hsl(var(--border) / 0.3)',
               }}>
                 {s.headshot ? (
                   <img src={s.headshot} alt={s.name} className="w-full h-full object-cover object-center"
@@ -94,7 +94,7 @@ export default function UfcLegInput({ data, onChange }: Props) {
     <div className="space-y-2">
       <div className="flex gap-2 items-center">
         {renderInput(data.fighter1, 1, sug1, show1, ref1 as any, "Fighter 1...")}
-        <span className="text-[10px] font-black text-accent bg-accent/10 border border-accent/20 px-2 py-1 rounded-lg shrink-0 shadow-[0_0_8px_hsl(250_76%_62%/0.15)]">VS</span>
+        <span className="text-[10px] font-black text-accent bg-accent/10 border border-accent/20 px-2 py-1 rounded-lg shrink-0 shadow-[0_0_8px_hsl(var(--primary) / 0.15)]">VS</span>
         {renderInput(data.fighter2, 2, sug2, show2, ref2 as any, "Fighter 2...")}
       </div>
       {/* Pick which fighter */}
@@ -103,14 +103,14 @@ export default function UfcLegInput({ data, onChange }: Props) {
           <button onClick={() => onChange({ ...data, pickFighter: "fighter1" })}
             className={`flex-1 py-2 rounded-xl text-[10px] font-bold transition-all border ${
               data.pickFighter === "fighter1"
-                ? "bg-accent/15 border-accent/40 text-accent shadow-[0_0_10px_hsl(250_76%_62%/0.15)]"
-                : "bg-[hsla(228,20%,14%,0.5)] border-[hsla(228,18%,20%,0.4)] text-muted-foreground/50"
+                ? "bg-accent/15 border-accent/40 text-accent shadow-[0_0_10px_hsl(var(--primary) / 0.15)]"
+                : "bg-secondary/50 border-border/40 text-muted-foreground/50"
             }`}>{data.fighter1.split(" ").pop()}</button>
           <button onClick={() => onChange({ ...data, pickFighter: "fighter2" })}
             className={`flex-1 py-2 rounded-xl text-[10px] font-bold transition-all border ${
               data.pickFighter === "fighter2"
-                ? "bg-accent/15 border-accent/40 text-accent shadow-[0_0_10px_hsl(250_76%_62%/0.15)]"
-                : "bg-[hsla(228,20%,14%,0.5)] border-[hsla(228,18%,20%,0.4)] text-muted-foreground/50"
+                ? "bg-accent/15 border-accent/40 text-accent shadow-[0_0_10px_hsl(var(--primary) / 0.15)]"
+                : "bg-secondary/50 border-border/40 text-muted-foreground/50"
             }`}>{data.fighter2.split(" ").pop()}</button>
         </div>
       )}

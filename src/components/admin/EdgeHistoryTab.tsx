@@ -320,8 +320,8 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
     }
   };
 
-  const hitRateColor = stats.hit_rate >= 55 ? "text-green-500"
-    : stats.hit_rate >= 50 ? "text-yellow-500"
+  const hitRateColor = stats.hit_rate >= 55 ? "text-success"
+    : stats.hit_rate >= 50 ? "text-warning"
     : "text-destructive";
 
   const presetBtn = (p: Preset, label: string) => (
@@ -337,10 +337,10 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
 
   const resultBadge = (result: string | null) => {
     const r = (result || "pending").toLowerCase();
-    if (r === "hit" || r === "win") return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-green-500/15 text-green-400 border border-green-500/20">✓ Win</span>;
+    if (r === "hit" || r === "win") return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-success/15 text-success border border-success/20">✓ Win</span>;
     if (r === "miss" || r === "loss") return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/20">✗ Loss</span>;
     if (r === "push") return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border">Push</span>;
-    return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-yellow-500/15 text-yellow-400 border border-yellow-500/20">Pending</span>;
+    return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-warning/15 text-warning border border-warning/20">Pending</span>;
   };
 
   const renderMatchup = (p: EdgePick) => {
@@ -366,12 +366,12 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
   return (
     <>
       {error && (
-        <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+        <div className="rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
           <div className="font-semibold mb-1">Failed to load Edge History</div>
           <div className="font-mono text-xs whitespace-pre-wrap break-all">{error}</div>
           <button
             onClick={load}
-            className="mt-2 inline-flex items-center gap-1.5 text-xs underline text-red-100 hover:text-white"
+            className="mt-2 inline-flex items-center gap-1.5 text-xs underline text-danger hover:text-foreground"
           >
             <RefreshCw className="w-3 h-3" /> Retry
           </button>
@@ -391,7 +391,7 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
         <div className="glass-card rounded-xl p-4">
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">W / L / P</p>
           <p className="text-2xl font-extrabold text-foreground tabular-nums">
-            <span className="text-green-500">{stats.wins}</span>
+            <span className="text-success">{stats.wins}</span>
             <span className="text-muted-foreground/40">/</span>
             <span className="text-destructive">{stats.losses}</span>
             <span className="text-muted-foreground/40">/</span>
@@ -400,7 +400,7 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
         </div>
         <div className="glass-card rounded-xl p-4">
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Pending</p>
-          <p className="text-2xl font-extrabold text-yellow-500 tabular-nums">{stats.pending}</p>
+          <p className="text-2xl font-extrabold text-warning tabular-nums">{stats.pending}</p>
         </div>
         <div className="glass-card rounded-xl p-4">
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Streak</p>
@@ -408,7 +408,7 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
             <p className={cn(
               "text-2xl font-extrabold tabular-nums inline-flex items-center gap-1.5",
               stats.current_streak.type === "W"
-                ? (stats.current_streak.count >= 3 ? "text-green-500" : "text-foreground")
+                ? (stats.current_streak.count >= 3 ? "text-success" : "text-foreground")
                 : "text-destructive"
             )}>
               {stats.current_streak.type === "W"
@@ -428,7 +428,7 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Avg Edge</p>
           <p className={cn(
             "text-2xl font-extrabold tabular-nums",
-            stats.avg_edge >= 0 ? "text-green-500" : "text-destructive"
+            stats.avg_edge >= 0 ? "text-success" : "text-destructive"
           )}>
             {stats.avg_edge >= 0 ? "+" : ""}{stats.avg_edge.toFixed(2)}%
           </p>
@@ -437,7 +437,7 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Profit (units)</p>
           <p className={cn(
             "text-2xl font-extrabold tabular-nums",
-            stats.total_profit_units >= 0 ? "text-green-500" : "text-destructive"
+            stats.total_profit_units >= 0 ? "text-success" : "text-destructive"
           )}>
             {stats.total_profit_units >= 0 ? "+" : ""}{stats.total_profit_units.toFixed(2)}u
           </p>
@@ -446,7 +446,7 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">ROI</p>
           <p className={cn(
             "text-2xl font-extrabold tabular-nums",
-            stats.roi_pct >= 0 ? "text-green-500" : "text-destructive"
+            stats.roi_pct >= 0 ? "text-success" : "text-destructive"
           )}>
             {stats.roi_pct >= 0 ? "+" : ""}{stats.roi_pct.toFixed(1)}%
           </p>
@@ -560,8 +560,8 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
         <div className={cn(
           "rounded-md border p-3 text-sm",
           gradeErr
-            ? "border-red-500/40 bg-red-500/10 text-red-200"
-            : "border-green-500/40 bg-green-500/10 text-green-200"
+            ? "border-danger/40 bg-danger/10 text-danger"
+            : "border-success/40 bg-success/10 text-success"
         )}>
           <div className="flex items-start justify-between gap-3">
             <div className="font-mono text-xs whitespace-pre-wrap break-all">{gradeErr ?? gradeMsg}</div>
@@ -629,7 +629,7 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
                       <td className={cn(
                         "py-2.5 px-4 text-xs tabular-nums",
                         typeof p.edge_value === "number"
-                          ? (p.edge_value >= 0 ? "text-green-500" : "text-destructive")
+                          ? (p.edge_value >= 0 ? "text-success" : "text-destructive")
                           : "text-muted-foreground"
                       )}>
                         {typeof p.edge_value === "number"
@@ -640,7 +640,7 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
                       <td className={cn(
                         "py-2.5 px-4 text-xs tabular-nums",
                         typeof p.clv === "number"
-                          ? (p.clv >= 0 ? "text-green-500" : "text-destructive")
+                          ? (p.clv >= 0 ? "text-success" : "text-destructive")
                           : "text-muted-foreground"
                       )}>
                         {typeof p.clv === "number"
@@ -650,7 +650,7 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
                       <td className={cn(
                         "py-2.5 px-4 text-xs tabular-nums",
                         typeof p.profit_units === "number"
-                          ? (p.profit_units >= 0 ? "text-green-500" : "text-destructive")
+                          ? (p.profit_units >= 0 ? "text-success" : "text-destructive")
                           : "text-muted-foreground"
                       )}>
                         {typeof p.profit_units === "number"
@@ -661,7 +661,7 @@ export const EdgeHistoryTab: React.FC<{ password: string }> = ({ password }) => 
                       <td className="py-2.5 px-4">
                         <div className="flex items-center justify-end gap-1">
                           <button onClick={() => updateResult(p.id, "hit")} title="Mark Win"
-                            className="w-6 h-6 rounded flex items-center justify-center text-green-500 hover:bg-green-500/10 transition-colors">
+                            className="w-6 h-6 rounded flex items-center justify-center text-success hover:bg-success/10 transition-colors">
                             <Check className="w-3.5 h-3.5" />
                           </button>
                           <button onClick={() => updateResult(p.id, "miss")} title="Mark Loss"

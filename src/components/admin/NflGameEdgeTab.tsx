@@ -68,7 +68,7 @@ function Backtest({ bt }: { bt: GameSummary["backtest"] }) {
                 <td className="px-3 py-1.5 whitespace-nowrap">{c}</td>
                 <td className="px-3 py-1.5 whitespace-nowrap">{d}</td>
                 <td className="px-3 py-1.5">{num(ece, 3)}</td>
-                <td className={`px-3 py-1.5 whitespace-nowrap ${gate ? "text-emerald-400" : "text-red-400"}`}>
+                <td className={`px-3 py-1.5 whitespace-nowrap ${gate ? "text-success" : "text-danger"}`}>
                   {gate ? `≥ ${(gate.min_edge * 100).toFixed(0)}% edge (${gate.bets} bets, ROI ${pct(gate.roi)})` : "none profitable → NO PLAY"}
                 </td>
               </tr>

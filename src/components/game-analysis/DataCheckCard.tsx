@@ -39,11 +39,11 @@ export function DataCheckCard({
             className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-[11.5px] font-medium ${
               node.verified ? "text-foreground/85" : "text-muted-foreground"
             }`}
-            style={{ background: "hsla(228,24%,10%,0.8)", border: "1px solid hsla(228,30%,22%,0.35)" }}
+            style={{ background: "hsl(var(--card) / 0.8)", border: "1px solid hsl(var(--border) / 0.35)" }}
           >
             {node.verified
               ? <Check className="h-3.5 w-3.5 shrink-0 text-nba-green" strokeWidth={3} />
-              : <CircleAlert className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
+              : <CircleAlert className="h-3.5 w-3.5 shrink-0 text-warning" />}
             <span className="truncate">{node.label}</span>
           </div>
         ))}
@@ -52,7 +52,7 @@ export function DataCheckCard({
       {coveragePct !== null && (
         <div className="mt-3.5 flex items-center gap-2.5 text-[11px] font-semibold text-muted-foreground">
           Coverage
-          <span className="h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: "hsla(228,24%,20%,0.9)" }}>
+          <span className="h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: "hsl(var(--secondary) / 0.9)" }}>
             <span className="block h-full rounded-full bg-nba-green transition-[width] duration-700" style={{ width: `${coveragePct}%` }} />
           </span>
           <span className="text-[14px] font-bold text-nba-green tabular-nums">{coveragePct}%</span>

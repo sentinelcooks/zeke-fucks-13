@@ -19,7 +19,7 @@ import { ShotChart } from "@/components/mobile/ShotChart";
 import { OddsProjection } from "@/components/mobile/OddsProjection";
 import { StrengthWeakness } from "@/components/mobile/StrengthWeakness";
 
-import { Bar } from "react-chartjs-2";
+import { ThemedBar as Bar } from "@/components/charts/ThemedBar";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -60,10 +60,10 @@ interface CorrelatedProp {
 }
 
 function getHitRateColor(rate: number) {
-  if (rate >= 75) return { text: "text-nba-green", bg: "hsla(160, 84%, 39%, 0.12)" };
-  if (rate >= 60) return { text: "text-nba-blue", bg: "hsla(217, 91%, 60%, 0.12)" };
-  if (rate >= 45) return { text: "text-nba-yellow", bg: "hsla(38, 92%, 50%, 0.12)" };
-  return { text: "text-muted-foreground", bg: "hsla(0, 0%, 50%, 0.1)" };
+  if (rate >= 75) return { text: "text-nba-green", bg: "hsl(var(--success) / 0.12)" };
+  if (rate >= 60) return { text: "text-nba-blue", bg: "hsl(var(--primary) / 0.12)" };
+  if (rate >= 45) return { text: "text-nba-yellow", bg: "hsl(var(--nba-yellow) / 0.12)" };
+  return { text: "text-muted-foreground", bg: "hsl(var(--muted-foreground) / 0.1)" };
 }
 
 function getEdgeColor(edge: number) {
@@ -80,7 +80,7 @@ function Section({ title, children, defaultOpen = true, icon }: { title: string;
   const [open, setOpen] = useState(defaultOpen);
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="vision-card overflow-hidden relative">
-      <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(250,76%,62%,0.15), transparent)' }} />
+      <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--primary) / 0.15), transparent)' }} />
       <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-5 py-4 text-left group">
         <div className="flex items-center gap-2.5">
           {icon && <span className="text-accent/50">{icon}</span>}
@@ -113,11 +113,11 @@ function GameChart({ data }: { data: any }) {
   const labels = games.map((g: any) => fmtDate(g.date));
   const values = games.map((g: any) => g.stat_value);
   const lineval = data.line;
-  const colors = values.map((v: number) => data.over_under === "over" ? v > lineval ? "hsla(158, 64%, 52%, 0.8)" : "hsla(0, 72%, 51%, 0.35)" : v < lineval ? "hsla(158, 64%, 52%, 0.8)" : "hsla(0, 72%, 51%, 0.35)");
+  const colors = values.map((v: number) => data.over_under === "over" ? v > lineval ? "hsl(var(--success) / 0.8)" : "hsl(var(--danger) / 0.35)" : v < lineval ? "hsl(var(--success) / 0.8)" : "hsl(var(--danger) / 0.35)");
   return (
     <div className="h-[220px]">
-      <Bar data={{ labels, datasets: [{ label: data.prop_display, data: values, backgroundColor: colors, borderRadius: 6, barPercentage: 0.55 } as any, { label: `Line (${lineval})`, data: Array(labels.length).fill(lineval), type: "line" as any, borderColor: "hsla(250, 76%, 62%, 0.5)", borderDash: [6, 4], borderWidth: 2, pointRadius: 0, fill: false }] }}
-        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: "hsla(228, 10%, 45%, 0.6)", font: { size: 9 } }, grid: { display: false } }, y: { ticks: { color: "hsla(228, 10%, 45%, 0.6)", font: { size: 9 } }, grid: { color: "hsla(228, 18%, 15%, 0.4)" }, beginAtZero: true } } }}
+      <Bar data={{ labels, datasets: [{ label: data.prop_display, data: values, backgroundColor: colors, borderRadius: 6, barPercentage: 0.55 } as any, { label: `Line (${lineval})`, data: Array(labels.length).fill(lineval), type: "line" as any, borderColor: "hsl(var(--primary) / 0.5)", borderDash: [6, 4], borderWidth: 2, pointRadius: 0, fill: false }] }}
+        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: "hsl(var(--muted-foreground) / 0.6)", font: { size: 9 } }, grid: { display: false } }, y: { ticks: { color: "hsl(var(--muted-foreground) / 0.6)", font: { size: 9 } }, grid: { color: "hsl(var(--secondary) / 0.4)" }, beginAtZero: true } } }}
       />
     </div>
   );
@@ -139,7 +139,7 @@ function GamesTable({ games, line, overUnder, propType }: { games: any[]; line: 
             const sv = getStatVal(g);
             const isHit = overUnder === "over" ? sv > line : sv < line;
             return (
-              <tr key={i} className="border-b border-border/15 hover:bg-[hsla(228,20%,14%,0.4)] transition-colors">
+              <tr key={i} className="border-b border-border/15 hover:bg-secondary/40 transition-colors">
                 <td className="text-center py-2.5 px-1 whitespace-nowrap text-muted-foreground/50">{fmtDate(g.date)}</td>
                 <td className="text-center py-2.5 px-1 whitespace-nowrap font-medium text-foreground/80">{g.matchup?.replace(/.*(?:vs\.|@)\s*/, "")}</td>
                 <td className={`text-center py-2.5 px-1 font-bold ${g.result === "W" ? "text-nba-green" : "text-nba-red"}`}>{g.result}</td>
@@ -286,7 +286,7 @@ const FreePropsPage = () => {
 
     return (
       <div className="flex flex-col min-h-full relative">
-        <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(250 76% 62%)' }} />
+        <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(var(--primary))' }} />
         
 
         <div className="px-4 pt-3 pb-28 space-y-3 relative z-10">
@@ -302,7 +302,7 @@ const FreePropsPage = () => {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-20">
               <div className="relative w-16 h-16 mb-5">
                 <motion.div className="absolute inset-0 rounded-full border-2 border-transparent border-t-accent" animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} />
-                <motion.div className="absolute inset-2 rounded-full border border-transparent border-b-[hsl(210,100%,60%)]" animate={{ rotate: -360 }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }} />
+                <motion.div className="absolute inset-2 rounded-full border border-transparent border-b-primary" animate={{ rotate: -360 }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }} />
               </div>
               <motion.p className="text-foreground/60 text-sm font-medium" animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 2, repeat: Infinity }}>Crunching numbers...</motion.p>
             </motion.div>
@@ -314,9 +314,9 @@ const FreePropsPage = () => {
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
                 {/* Analysis Complete Banner */}
                 <motion.div initial={{ opacity: 0, y: -8, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="flex items-center justify-between p-3 rounded-xl"
-                  style={{ background: 'linear-gradient(135deg, hsla(158, 64%, 52%, 0.08), hsla(210, 100%, 60%, 0.04))', border: '1px solid hsla(158, 64%, 52%, 0.12)' }}>
+                  style={{ background: 'linear-gradient(135deg, hsl(var(--success) / 0.08), hsl(var(--primary) / 0.04))', border: '1px solid hsl(var(--success) / 0.12)' }}>
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
                     <span className="text-[10px] font-bold text-nba-green uppercase tracking-wider">Analysis Complete</span>
                   </div>
                   {prop.edge != null && prop.edge > 0 && (
@@ -352,7 +352,7 @@ const FreePropsPage = () => {
                         { label: "3PM", value: results.season_averages?.fg3m },
                         { label: "MPG", value: results.season_averages?.min },
                       ].map((s, i) => (
-                        <motion.div key={s.label} className="text-center py-2 rounded-lg" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}
+                        <motion.div key={s.label} className="text-center py-2 rounded-lg" style={{ background: 'hsl(var(--card) / 0.6)' }}
                           initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 + i * 0.04 }}>
                           <span className="block text-sm font-extrabold tabular-nums text-foreground/80">{s.value ?? "--"}</span>
                           <span className="block text-[8px] text-muted-foreground/35 font-bold uppercase">{s.label}</span>
@@ -416,7 +416,7 @@ const FreePropsPage = () => {
                       { label: "Last Season", rate: prev.rate, total: prev.total },
                       { label: "Combined", rate: results.h2h_combined?.rate, total: results.h2h_combined?.total },
                     ].map((s) => (
-                      <div key={s.label} className="rounded-xl p-3 text-center" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+                      <div key={s.label} className="rounded-xl p-3 text-center" style={{ background: 'hsl(var(--card) / 0.6)' }}>
                         <span className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground/65">{s.label}</span>
                         <span className={`block text-xl font-extrabold tabular-nums ${(s.rate || 0) >= 65 ? "text-nba-green" : (s.rate || 0) >= 50 ? "text-nba-blue" : (s.rate || 0) >= 35 ? "text-nba-yellow" : "text-nba-red"}`}>{s.rate ?? "--"}%</span>
                         <span className="block text-[9px] text-muted-foreground/55">{s.total || 0} games</span>
@@ -445,7 +445,7 @@ const FreePropsPage = () => {
                         <div className="mt-2 space-y-1">
                           {results.teammate_injuries.map((inj: any, idx: number) => {
                             const statusColor = ["out", "doubtful"].includes(inj.status?.toLowerCase()) ? "text-nba-red" : "text-nba-yellow";
-                            const statusBg = ["out", "doubtful"].includes(inj.status?.toLowerCase()) ? "bg-destructive/15" : "bg-yellow-500/10";
+                            const statusBg = ["out", "doubtful"].includes(inj.status?.toLowerCase()) ? "bg-destructive/15" : "bg-warning/10";
                             return (
                               <div key={idx} className="flex items-center gap-2 py-2 border-b border-border/10 last:border-0">
                                 <span className="text-xs font-semibold text-foreground/80">{inj.player_name}</span>
@@ -463,7 +463,7 @@ const FreePropsPage = () => {
                         <div className="mt-2 space-y-1">
                           {results.opponent_injuries.map((inj: any, idx: number) => {
                             const statusColor = ["out", "doubtful"].includes(inj.status?.toLowerCase()) ? "text-nba-red" : "text-nba-yellow";
-                            const statusBg = ["out", "doubtful"].includes(inj.status?.toLowerCase()) ? "bg-destructive/15" : "bg-yellow-500/10";
+                            const statusBg = ["out", "doubtful"].includes(inj.status?.toLowerCase()) ? "bg-destructive/15" : "bg-warning/10";
                             return (
                               <div key={idx} className="flex items-center gap-2 py-2 border-b border-border/10 last:border-0">
                                 <span className="text-xs font-semibold text-foreground/80">{inj.player_name}</span>
@@ -491,7 +491,7 @@ const FreePropsPage = () => {
                 {results.minutes_trend && results.minutes_trend.trend !== "insufficient_data" && (
                   <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="vision-card p-5 relative overflow-hidden">
                     <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full opacity-[0.06] pointer-events-none"
-                      style={{ background: `radial-gradient(circle, ${results.minutes_trend.trend === "up" ? "hsl(158 64% 52%)" : results.minutes_trend.trend === "down" ? "hsl(0 72% 51%)" : "hsl(210 100% 60%)"}, transparent)` }} />
+                      style={{ background: `radial-gradient(circle, ${results.minutes_trend.trend === "up" ? "hsl(var(--success))" : results.minutes_trend.trend === "down" ? "hsl(var(--danger))" : "hsl(var(--primary))"}, transparent)` }} />
                     <div className="flex items-center gap-2.5 mb-3">
                       <Activity className="w-3.5 h-3.5 text-accent/40" />
                       <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65">{prop.sport === "mlb" ? "At-Bats Trend" : prop.sport === "nhl" ? "TOI Trend" : "Minutes Trend"}</span>
@@ -500,8 +500,8 @@ const FreePropsPage = () => {
                       <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl font-extrabold relative overflow-hidden ${
                         results.minutes_trend.trend === "up" ? "text-nba-green" : results.minutes_trend.trend === "down" ? "text-nba-red" : "text-muted-foreground"
                       }`} style={{
-                        background: results.minutes_trend.trend === "up" ? "hsla(158,64%,52%,0.08)" : results.minutes_trend.trend === "down" ? "hsla(0,72%,51%,0.08)" : "hsla(228,20%,12%,0.5)",
-                        border: `1px solid ${results.minutes_trend.trend === "up" ? "hsla(158,64%,52%,0.15)" : results.minutes_trend.trend === "down" ? "hsla(0,72%,51%,0.15)" : "hsla(228,20%,20%,0.2)"}`,
+                        background: results.minutes_trend.trend === "up" ? "hsl(var(--success) / 0.08)" : results.minutes_trend.trend === "down" ? "hsl(var(--danger) / 0.08)" : "hsl(var(--card) / 0.5)",
+                        border: `1px solid ${results.minutes_trend.trend === "up" ? "hsl(var(--success) / 0.15)" : results.minutes_trend.trend === "down" ? "hsl(var(--danger) / 0.15)" : "hsl(var(--secondary) / 0.2)"}`,
                       }}>
                         {results.minutes_trend.trend === "up" ? "↑" : results.minutes_trend.trend === "down" ? "↓" : "→"}
                       </div>
@@ -560,7 +560,7 @@ const FreePropsPage = () => {
                         </p>
                         {correlations.map((c, ci) => (
                           <motion.div key={ci} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ci * 0.04 }}
-                            className="flex items-center justify-between py-2.5 px-3 rounded-xl" style={{ background: 'hsla(228, 20%, 8%, 0.5)' }}>
+                            className="flex items-center justify-between py-2.5 px-3 rounded-xl" style={{ background: 'hsl(var(--card) / 0.5)' }}>
                             <div>
                               <span className="text-[13px] font-bold text-foreground">{c.correlated_player}</span>
                               {c.correlated_team && <span className="text-[10px] text-muted-foreground/50 ml-1.5">{c.correlated_team}</span>}
@@ -599,7 +599,7 @@ const FreePropsPage = () => {
 
       <div className="px-4 pt-3 pb-2 space-y-3">
         {/* Sport Filter */}
-        <div className="flex p-0.5 rounded-xl" style={{ background: 'hsla(228, 20%, 12%, 0.6)', border: '1px solid hsla(228, 25%, 18%, 0.3)' }}>
+        <div className="flex p-0.5 rounded-xl" style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.3)' }}>
           {(["all", "nba", "mlb", "ufc"] as const).map((f) => (
             <button
               key={f}
@@ -612,7 +612,7 @@ const FreePropsPage = () => {
                 <motion.div
                   layoutId="free-props-filter"
                   className="absolute inset-0 rounded-lg"
-                  style={{ background: 'hsla(250, 76%, 62%, 0.15)', border: '1px solid hsla(250, 76%, 62%, 0.2)' }}
+                  style={{ background: 'hsl(var(--primary) / 0.15)', border: '1px solid hsl(var(--primary) / 0.2)' }}
                   transition={{ type: "spring", stiffness: 500, damping: 32 }}
                 />
               )}
@@ -629,7 +629,7 @@ const FreePropsPage = () => {
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search player..."
             className="w-full pl-9 pr-8 py-2 rounded-xl text-[13px] text-foreground placeholder:text-muted-foreground/55 outline-none transition-all"
-            style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 25%, 18%, 0.25)' }}
+            style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}
           />
           {searchQuery && (
             <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -648,8 +648,8 @@ const FreePropsPage = () => {
                   propTypeFilter === "all" ? "text-foreground" : "text-muted-foreground/50"
                 }`}
                 style={{
-                  background: propTypeFilter === "all" ? 'hsla(250, 76%, 62%, 0.15)' : 'hsla(228, 20%, 12%, 0.4)',
-                  border: `1px solid ${propTypeFilter === "all" ? 'hsla(250, 76%, 62%, 0.25)' : 'hsla(228, 25%, 18%, 0.2)'}`,
+                  background: propTypeFilter === "all" ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--card) / 0.4)',
+                  border: `1px solid ${propTypeFilter === "all" ? 'hsl(var(--primary) / 0.25)' : 'hsl(var(--secondary) / 0.2)'}`,
                 }}
               >
                 All
@@ -662,8 +662,8 @@ const FreePropsPage = () => {
                     propTypeFilter === pt ? "text-foreground" : "text-muted-foreground/50"
                   }`}
                   style={{
-                    background: propTypeFilter === pt ? 'hsla(250, 76%, 62%, 0.15)' : 'hsla(228, 20%, 12%, 0.4)',
-                    border: `1px solid ${propTypeFilter === pt ? 'hsla(250, 76%, 62%, 0.25)' : 'hsla(228, 25%, 18%, 0.2)'}`,
+                    background: propTypeFilter === pt ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--card) / 0.4)',
+                    border: `1px solid ${propTypeFilter === pt ? 'hsl(var(--primary) / 0.25)' : 'hsl(var(--secondary) / 0.2)'}`,
                   }}
                 >
                   {formatPropType(pt)}
@@ -674,7 +674,7 @@ const FreePropsPage = () => {
           <button
             onClick={() => setSortOrder(prev => prev === "desc" ? "asc" : "desc")}
             className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 transition-all active:scale-95"
-            style={{ background: 'hsla(228, 20%, 12%, 0.4)', border: '1px solid hsla(228, 25%, 18%, 0.2)' }}
+            style={{ background: 'hsl(var(--card) / 0.4)', border: '1px solid hsl(var(--border) / 0.2)' }}
           >
             <BarChart3 className="w-3 h-3" />
             {sortOrder === "desc" ? "High→Low" : "Low→High"}
@@ -687,7 +687,7 @@ const FreePropsPage = () => {
             <Clock className="w-3 h-3" />
             <span>Updated daily</span>
           </div>
-          <div className="flex items-center gap-1 text-[11px] font-semibold" style={{ color: 'hsla(160, 84%, 55%, 0.8)' }}>
+          <div className="flex items-center gap-1 text-[11px] font-semibold" style={{ color: 'hsl(var(--success) / 0.8)' }}>
             <Zap className="w-3 h-3" />
             <span>{filtered.length} props</span>
           </div>
@@ -718,10 +718,10 @@ const FreePropsPage = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.015 }}
                   onClick={() => handlePropClick(prop)}
-                  className={`w-full text-left rounded-2xl overflow-hidden active:scale-[0.98] transition-transform ${highConfidence ? "ring-1 ring-emerald-500/20" : ""}`}
+                  className={`w-full text-left rounded-2xl overflow-hidden active:scale-[0.98] transition-transform ${highConfidence ? "ring-1 ring-success/20" : ""}`}
                   style={{
-                    background: highConfidence ? 'hsla(158, 64%, 39%, 0.06)' : 'hsla(228, 20%, 10%, 0.5)',
-                    border: `1px solid ${highConfidence ? 'hsla(158, 64%, 39%, 0.15)' : 'hsla(228, 25%, 18%, 0.2)'}`,
+                    background: highConfidence ? 'hsl(var(--success) / 0.06)' : 'hsl(var(--card) / 0.5)',
+                    border: `1px solid ${highConfidence ? 'hsl(var(--success) / 0.15)' : 'hsl(var(--secondary) / 0.2)'}`,
                   }}
                 >
                   <div className="flex items-center p-3 gap-3">
@@ -729,7 +729,7 @@ const FreePropsPage = () => {
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className="text-[14px] font-bold text-foreground truncate">{prop.player_name}</span>
                         <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md text-muted-foreground/60"
-                          style={{ background: 'hsla(228, 20%, 20%, 0.4)' }}>
+                          style={{ background: 'hsl(var(--secondary) / 0.4)' }}>
                           {prop.sport}
                         </span>
                       </div>
@@ -786,7 +786,7 @@ const FreePropsPage = () => {
                             className="flex-1 rounded-sm"
                             style={{
                               height: `${height}%`,
-                              background: isHit ? 'hsla(160, 84%, 39%, 0.7)' : 'hsla(0, 72%, 51%, 0.5)',
+                              background: isHit ? 'hsl(var(--success) / 0.7)' : 'hsl(var(--danger) / 0.5)',
                             }}
                           />
                         );

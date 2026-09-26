@@ -268,9 +268,9 @@ const LegalPage = () => {
                 >
                   <div
                     className={`w-12 h-12 rounded-xl bg-gradient-to-br ${section.gradient} flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all group-hover:scale-110`}
-                    style={{ boxShadow: "0 4px 14px -3px hsla(228, 20%, 0%, 0.35)" }}
+                    style={{ boxShadow: "0 4px 14px -3px hsl(var(--background) / 0.35)" }}
                   >
-                    <Icon className="w-5.5 h-5.5 text-white" />
+                    <Icon className="w-5.5 h-5.5 text-foreground" />
                   </div>
                   <div>
                     <p className="text-xs font-bold text-foreground leading-tight">{section.title}</p>
@@ -295,7 +295,7 @@ const LegalPage = () => {
                   <div
                     className={`w-10 h-10 rounded-xl bg-gradient-to-br ${active.gradient} flex items-center justify-center shadow-md flex-shrink-0`}
                   >
-                    <active.icon className="w-5 h-5 text-white" />
+                    <active.icon className="w-5 h-5 text-foreground" />
                   </div>
                 )}
                 <div className="flex-1 min-w-0">

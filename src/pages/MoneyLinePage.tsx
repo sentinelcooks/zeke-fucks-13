@@ -9,8 +9,8 @@ const MoneyLinePage = () => {
   return (
     <div className="flex flex-col min-h-full relative">
       {/* Ambient orbs */}
-      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(250 76% 62%)' }} />
-      <div className="vision-orb w-36 h-36 top-[600px] -left-12" style={{ background: 'hsl(210 100% 60%)', animationDelay: '-4s' }} />
+      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(var(--primary))' }} />
+      <div className="vision-orb w-36 h-36 top-[600px] -left-12" style={{ background: 'hsl(var(--primary))', animationDelay: '-4s' }} />
 
       
       <div className="px-4 pt-4 pb-6 space-y-3 relative z-10">

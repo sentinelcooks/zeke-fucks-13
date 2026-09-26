@@ -64,7 +64,7 @@ export function SavedPickStatPanel({
         <div className="flex items-center gap-1.5">
           <span className="text-[9px] font-bold uppercase text-muted-foreground/55">{sportLabel}</span>
           {tierLabel && (
-            <span className="text-[9px] font-bold uppercase text-foreground/80 px-1.5 py-0.5 rounded" style={{ background: 'hsla(250, 76%, 62%, 0.18)' }}>
+            <span className="text-[9px] font-bold uppercase text-foreground/80 px-1.5 py-0.5 rounded" style={{ background: 'hsl(var(--primary) / 0.18)' }}>
               {tierLabel}
             </span>
           )}
@@ -77,7 +77,7 @@ export function SavedPickStatPanel({
 
       <div className="grid grid-cols-2 gap-2">
         {market.bestBook && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'hsl(var(--card) / 0.6)' }}>
             <Building2 className="w-3.5 h-3.5 text-muted-foreground/70" />
             <div className="min-w-0">
               <p className="text-[8px] uppercase font-bold text-muted-foreground/55 leading-none">Best book</p>
@@ -86,7 +86,7 @@ export function SavedPickStatPanel({
           </div>
         )}
         {market.bookCount != null && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'hsl(var(--card) / 0.6)' }}>
             <Layers3 className="w-3.5 h-3.5 text-muted-foreground/70" />
             <div className="min-w-0">
               <p className="text-[8px] uppercase font-bold text-muted-foreground/55 leading-none">Market depth</p>
@@ -97,7 +97,7 @@ export function SavedPickStatPanel({
           </div>
         )}
         {impliedDisplay && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'hsl(var(--card) / 0.6)' }}>
             <Gauge className="w-3.5 h-3.5 text-muted-foreground/70" />
             <div className="min-w-0">
               <p className="text-[8px] uppercase font-bold text-muted-foreground/55 leading-none">Implied prob.</p>
@@ -106,7 +106,7 @@ export function SavedPickStatPanel({
           </div>
         )}
         {market.marketDataQuality && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'hsl(var(--card) / 0.6)' }}>
             <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground/70" />
             <div className="min-w-0">
               <p className="text-[8px] uppercase font-bold text-muted-foreground/55 leading-none">Quality</p>

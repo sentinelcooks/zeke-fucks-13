@@ -3,7 +3,7 @@ import { Lightbulb, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { motion, AnimatePresence } from "framer-motion";
-import logo from "@/assets/sentinel-lock.jpg";
+import { BrandMark } from "@/components/brand/BrandMark";
 import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 
 // Client-side cache to avoid re-fetching the same prop
@@ -85,12 +85,12 @@ export function PropExplainerDialog({ propValue, propLabel, sport, bettingLevel,
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-sm rounded-2xl overflow-hidden"
             style={{
-              background: "linear-gradient(145deg, hsla(228, 25%, 12%, 0.95), hsla(228, 25%, 8%, 0.98))",
-              border: "1px solid hsla(250, 76%, 62%, 0.15)",
-              boxShadow: "0 25px 50px -12px hsla(0, 0%, 0%, 0.5), 0 0 40px -10px hsla(250, 76%, 62%, 0.15)",
+              background: "linear-gradient(145deg, hsl(var(--card) / 0.95), hsl(var(--card) / 0.98))",
+              border: "1px solid hsl(var(--primary) / 0.15)",
+              boxShadow: "0 25px 50px -12px hsla(0, 0%, 0%, 0.5), 0 0 40px -10px hsl(var(--primary) / 0.15)",
             }}
           >
-            <div className="absolute top-0 left-0 right-0 h-px" style={{ background: "linear-gradient(90deg, transparent, hsla(250,76%,62%,0.3), transparent)" }} />
+            <div className="absolute top-0 left-0 right-0 h-px" style={{ background: "linear-gradient(90deg, transparent, hsl(var(--primary) / 0.3), transparent)" }} />
 
             <button
               onClick={onClose}
@@ -104,9 +104,9 @@ export function PropExplainerDialog({ propValue, propLabel, sport, bettingLevel,
               <div className="flex items-center gap-3">
                   <div
                     className="w-10 h-10 rounded-xl overflow-hidden shrink-0"
-                    style={{ border: "1px solid hsla(250, 76%, 62%, 0.2)" }}
+                    style={{ border: "1px solid hsl(var(--primary) / 0.2)" }}
                 >
-                    <img src={logo} alt="Sentinel" className="w-full h-full object-cover" draggable={false} />
+                    <BrandMark />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-foreground">What is {propLabel}?</h3>
@@ -130,13 +130,13 @@ export function PropExplainerDialog({ propValue, propLabel, sport, bettingLevel,
                   <div
                     className="rounded-xl p-3.5 space-y-1.5"
                     style={{
-                      background: "linear-gradient(135deg, hsla(158, 64%, 52%, 0.08), hsla(158, 64%, 52%, 0.03))",
-                      border: "1px solid hsla(158, 64%, 52%, 0.12)",
+                      background: "linear-gradient(135deg, hsl(var(--success) / 0.08), hsl(var(--success) / 0.03))",
+                      border: "1px solid hsl(var(--success) / 0.12)",
                     }}
                   >
                     <div className="flex items-center gap-1.5">
-                      <Lightbulb className="w-3 h-3 text-emerald-400/80" />
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400/70">Example</span>
+                      <Lightbulb className="w-3 h-3 text-success/80" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-success/70">Example</span>
                     </div>
                     <p className="text-[11px] text-foreground/70 leading-relaxed">{example}</p>
                   </div>

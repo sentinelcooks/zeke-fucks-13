@@ -616,7 +616,7 @@ function TeamBadge({ team, fallbackName, size = "regular" }: { team?: TeamDirect
   }
 
   return (
-    <div className={`${dimensions} shrink-0 rounded-xl flex items-center justify-center text-[10px] font-black text-accent`} style={{ background: "hsla(250, 76%, 62%, 0.12)", border: "1px solid hsla(250, 76%, 62%, 0.24)" }}>
+    <div className={`${dimensions} shrink-0 rounded-xl flex items-center justify-center text-[10px] font-black text-accent`} style={{ background: "hsl(var(--primary) / 0.12)", border: "1px solid hsl(var(--primary) / 0.24)" }}>
       {initials || <Shield className="h-4 w-4" />}
     </div>
   );
@@ -627,7 +627,7 @@ function AnalysisCallout({ analysis, full = false }: { analysis?: MarketAnalysis
 
   if (analysis.state === "loading") {
     return (
-      <div className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2.5 text-[11px] text-muted-foreground" style={{ background: "hsla(228,20%,8%,0.58)", border: "1px solid hsla(228,30%,18%,0.35)" }}>
+      <div className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2.5 text-[11px] text-muted-foreground" style={{ background: "hsl(var(--card) / 0.58)", border: "1px solid hsl(var(--border) / 0.35)" }}>
         <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
         Checking verified matchup data and published odds…
       </div>
@@ -637,7 +637,7 @@ function AnalysisCallout({ analysis, full = false }: { analysis?: MarketAnalysis
   if (analysis.recommendation) {
     const recommendation = analysis.recommendation;
     return (
-      <div className="mt-3 space-y-2 rounded-xl p-3" style={{ background: "hsla(158,64%,52%,0.08)", border: "1px solid hsla(158,64%,52%,0.25)" }}>
+      <div className="mt-3 space-y-2 rounded-xl p-3" style={{ background: "hsl(var(--success) / 0.08)", border: "1px solid hsl(var(--success) / 0.25)" }}>
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-[8px] font-bold uppercase tracking-[0.15em] text-nba-green">Best Bet</p>
@@ -658,7 +658,7 @@ function AnalysisCallout({ analysis, full = false }: { analysis?: MarketAnalysis
   if (analysis.modelLean) {
     const lean = analysis.modelLean;
     return (
-      <div className="mt-3 space-y-2 rounded-xl p-3" style={{ background: "hsla(250,76%,62%,0.08)", border: "1px solid hsla(250,76%,62%,0.22)" }}>
+      <div className="mt-3 space-y-2 rounded-xl p-3" style={{ background: "hsl(var(--primary) / 0.08)", border: "1px solid hsl(var(--primary) / 0.22)" }}>
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-[8px] font-bold uppercase tracking-[0.15em] text-accent">Model Lean · Not a Bet</p>
@@ -681,7 +681,7 @@ function AnalysisCallout({ analysis, full = false }: { analysis?: MarketAnalysis
 
   const title = analysis.state === "error" ? "Analysis Unavailable" : "No Significant Edge · No Bet";
   return (
-    <div className="mt-3 rounded-xl p-3" style={{ background: "hsla(228,20%,10%,0.66)", border: "1px solid hsla(228,30%,20%,0.34)" }}>
+    <div className="mt-3 rounded-xl p-3" style={{ background: "hsl(var(--card) / 0.66)", border: "1px solid hsl(var(--border) / 0.34)" }}>
       <div className="flex items-start gap-2">
         <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60" />
         <div>
@@ -759,7 +759,7 @@ function MarketCard({
       return (
         <span
           className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-[11px] font-black text-foreground/80"
-          style={{ background: "hsla(228,24%,18%,0.9)", border: "1px solid hsla(228,30%,28%,0.6)" }}
+          style={{ background: "hsl(var(--secondary) / 0.9)", border: "1px solid hsl(var(--border) / 0.6)" }}
         >
           {quote.side === "over" ? "O" : "U"}
         </span>
@@ -770,7 +770,7 @@ function MarketCard({
   };
 
   return (
-    <div className="vision-card p-4" style={{ borderColor: "hsla(228,30%,22%,0.4)" }}>
+    <div className="vision-card p-4" style={{ borderColor: "hsl(var(--border) / 0.4)" }}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-[15px] font-extrabold text-foreground">{title}</h3>
@@ -780,8 +780,8 @@ function MarketCard({
           type="button"
           onClick={onAnalyze}
           disabled={!snapshot || loading}
-          className="flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-bold text-nba-green transition-colors hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
-          style={{ background: "hsla(228,24%,14%,0.9)", border: "1px solid hsla(228,30%,24%,0.6)" }}
+          className="flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-bold text-nba-green transition-colors hover:bg-foreground/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
+          style={{ background: "hsl(var(--secondary) / 0.9)", border: "1px solid hsl(var(--border) / 0.6)" }}
           aria-label={`Analyze ${title}`}
         >
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
@@ -800,7 +800,7 @@ function MarketCard({
               <div
                 key={quote.side}
                 className="rounded-xl p-3"
-                style={{ background: "hsla(228,24%,10%,0.85)", border: "1px solid hsla(228,30%,22%,0.45)" }}
+                style={{ background: "hsl(var(--card) / 0.85)", border: "1px solid hsl(var(--border) / 0.45)" }}
               >
                 <div className="flex min-w-0 items-center gap-2">
                   {badgeFor(quote)}
@@ -814,12 +814,12 @@ function MarketCard({
                     {/* Implied probability from the price itself — the book's
                         number, shown so the model's score has something to be
                         compared against. */}
-                    <div className="h-1.5 overflow-hidden rounded-full" style={{ background: "hsla(228,24%,22%,0.8)" }}>
+                    <div className="h-1.5 overflow-hidden rounded-full" style={{ background: "hsl(var(--secondary) / 0.8)" }}>
                       <div
                         className="h-full rounded-full"
                         style={{
                           width: `${Math.min(100, implied)}%`,
-                          background: isFavourite ? "hsl(250 76% 68%)" : "hsla(228,20%,55%,0.55)",
+                          background: isFavourite ? "hsl(var(--primary))" : "hsl(var(--muted-foreground) / 0.55)",
                         }}
                       />
                     </div>
@@ -1186,8 +1186,8 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
             type="button"
             onClick={() => setSelectedEvent(null)}
             aria-label="Back to all game lines"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-foreground transition-colors hover:bg-white/[0.08]"
-            style={{ background: "hsla(228,24%,14%,0.9)", border: "1px solid hsla(228,30%,24%,0.6)" }}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-foreground transition-colors hover:bg-foreground/[0.08]"
+            style={{ background: "hsl(var(--secondary) / 0.9)", border: "1px solid hsl(var(--border) / 0.6)" }}
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
@@ -1200,8 +1200,8 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
             onClick={() => void loadEvents()}
             disabled={loading}
             aria-label="Refresh live game lines"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-white/[0.08] hover:text-foreground disabled:opacity-40"
-            style={{ background: "hsla(228,24%,14%,0.9)", border: "1px solid hsla(228,30%,24%,0.6)" }}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-foreground/[0.08] hover:text-foreground disabled:opacity-40"
+            style={{ background: "hsl(var(--secondary) / 0.9)", border: "1px solid hsl(var(--border) / 0.6)" }}
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </button>
@@ -1225,7 +1225,7 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
               <TeamBadge team={teams?.home} fallbackName={selectedEvent.home_team} />
             </div>
           </div>
-          <div className="mt-3.5 flex items-center justify-between gap-3 border-t border-white/[0.07] pt-3">
+          <div className="mt-3.5 flex items-center justify-between gap-3 border-t border-foreground/[0.07] pt-3">
             <p className="truncate text-[11px] text-muted-foreground/65">
               {sportsbook ? <>Odds via <span className="font-bold text-foreground/90">{sportsbook}</span></> : "Odds not posted yet"}
             </p>
@@ -1237,14 +1237,14 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
         <div
           className="rounded-[1.25rem] p-4"
           style={{
-            background: "linear-gradient(150deg, hsla(158,64%,52%,0.09), hsla(228,30%,8%,0.6) 60%)",
-            border: "1px solid hsla(158,64%,52%,0.28)",
+            background: "linear-gradient(150deg, hsl(var(--success) / 0.09), hsl(var(--card) / 0.6) 60%)",
+            border: "1px solid hsl(var(--success) / 0.28)",
           }}
         >
           <div className="flex items-start gap-3">
             <span
               className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-nba-green"
-              style={{ background: "hsla(158,64%,52%,0.1)", border: "1px solid hsla(158,64%,52%,0.3)" }}
+              style={{ background: "hsl(var(--success) / 0.1)", border: "1px solid hsl(var(--success) / 0.3)" }}
             >
               <Target className="h-5 w-5" />
             </span>
@@ -1259,7 +1259,7 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
             type="button"
             onClick={() => void analyzeFullGame(selectedEvent)}
             disabled={fullAnalysis?.state === "loading" || availableMarkets === 0 || !teams}
-            className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-xl bg-nba-green py-3.5 text-[13px] font-bold text-[#06140d] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-xl bg-success py-3.5 text-[13px] font-bold text-success-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {fullAnalysis?.state === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radar className="h-4 w-4" />}
             Analyze full game
@@ -1283,16 +1283,16 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
   return (
     <section className="space-y-4">
       <div className="vision-card relative overflow-hidden p-4">
-        <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-15 blur-2xl" style={{ background: "hsl(250 76% 62%)" }} />
+        <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-15 blur-2xl" style={{ background: "hsl(var(--primary))" }} />
         <div className="relative flex items-start justify-between gap-3"><div><p className="text-[8px] font-bold uppercase tracking-[0.15em] text-accent/75">Live Game Lines</p><h2 className="mt-1 text-base font-extrabold text-foreground">Upcoming {sport.toUpperCase()} matchups</h2><p className="mt-1 text-[10px] leading-relaxed text-muted-foreground/65">Published sportsbook odds only. Open a game to compare markets or run a verified analysis.{sport === "nfl" ? ` ${NFL_FORWARD_NOTE}` : ""}</p></div><button type="button" onClick={() => void loadEvents()} disabled={loading} className="rounded-lg p-2 text-muted-foreground/65 transition-colors hover:bg-accent/10 hover:text-accent disabled:opacity-40" aria-label="Refresh live game lines"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></button></div>
       </div>
 
       {loading && <div className="flex flex-col items-center justify-center py-12 text-center"><Loader2 className="h-6 w-6 animate-spin text-accent" /><p className="mt-3 text-xs font-semibold text-muted-foreground">Loading live sportsbook events…</p></div>}
-      {!loading && error && <div className="rounded-xl p-4 text-center" style={{ background: "hsla(0,72%,51%,0.08)", border: "1px solid hsla(0,72%,51%,0.22)" }}><CircleAlert className="mx-auto h-5 w-5 text-nba-red" /><p className="mt-2 text-xs font-semibold text-foreground">Live lines temporarily unavailable</p><p className="mt-1 text-[10px] text-muted-foreground/70">Please try again shortly.</p></div>}
+      {!loading && error && <div className="rounded-xl p-4 text-center" style={{ background: "hsl(var(--danger) / 0.08)", border: "1px solid hsl(var(--danger) / 0.22)" }}><CircleAlert className="mx-auto h-5 w-5 text-nba-red" /><p className="mt-2 text-xs font-semibold text-foreground">Live lines temporarily unavailable</p><p className="mt-1 text-[10px] text-muted-foreground/70">Please try again shortly.</p></div>}
       {!loading && !error && groupedEvents.length === 0 && <div className="vision-card p-6 text-center"><CalendarDays className="mx-auto h-6 w-6 text-muted-foreground/45" /><p className="mt-3 text-xs font-semibold text-foreground/80">No upcoming live lines</p><p className="mt-1 text-[10px] leading-relaxed text-muted-foreground/60">Sportsbooks have not posted upcoming {sport.toUpperCase()} game markets yet.</p></div>}
 
       {!loading && !error && marketFeedUnavailable && groupedEvents.length > 0 && (
-        <div className="flex items-start gap-2 rounded-xl px-3 py-2.5 text-[10px] leading-relaxed text-muted-foreground/70" style={{ background: "hsla(42,92%,55%,0.07)", border: "1px solid hsla(42,92%,55%,0.18)" }}>
+        <div className="flex items-start gap-2 rounded-xl px-3 py-2.5 text-[10px] leading-relaxed text-muted-foreground/70" style={{ background: "hsl(var(--nba-yellow) / 0.07)", border: "1px solid hsl(var(--nba-yellow) / 0.18)" }}>
           <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-nba-yellow" />
           Upcoming games are shown, but live sportsbook markets could not be verified. Refresh to try again; analysis stays disabled until a market is returned.
         </div>
@@ -1302,7 +1302,7 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
         <div key={group.date} className="space-y-2.5">
           <div className="px-1 pt-1">
             <p className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-nba-green">
-              <span className="h-1.5 w-1.5 rounded-full bg-nba-green" style={{ boxShadow: "0 0 6px hsl(158 64% 52%)" }} />
+              <span className="h-1.5 w-1.5 rounded-full bg-nba-green" style={{ boxShadow: "0 0 6px hsl(var(--success))" }} />
               {dateLabel(group.date)}
             </p>
             <div className="mt-1 flex items-baseline justify-between gap-3">
@@ -1341,7 +1341,7 @@ export function GameLinesBrowser({ sport, initialHomeTeam, initialAwayTeam, auto
         </div>
       ))}
 
-      {!loading && visibleDateCount < groupedEvents.length && <button type="button" onClick={() => setVisibleDateCount((current) => current + INITIAL_DATE_COUNT)} className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-[11px] font-bold text-accent transition-colors hover:bg-accent/10" style={{ border: "1px solid hsla(250,76%,62%,0.2)", background: "hsla(250,76%,62%,0.06)" }}>Show next dates <ChevronRight className="h-3.5 w-3.5" /></button>}
+      {!loading && visibleDateCount < groupedEvents.length && <button type="button" onClick={() => setVisibleDateCount((current) => current + INITIAL_DATE_COUNT)} className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-[11px] font-bold text-accent transition-colors hover:bg-accent/10" style={{ border: "1px solid hsl(var(--primary) / 0.2)", background: "hsl(var(--primary) / 0.06)" }}>Show next dates <ChevronRight className="h-3.5 w-3.5" /></button>}
     </section>
   );
 }

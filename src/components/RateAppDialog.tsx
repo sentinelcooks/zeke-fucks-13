@@ -58,13 +58,13 @@ export function RateAppDialog({ open, onClose }: RateAppDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleDismiss()}>
-      <DialogContent className="max-w-[360px] rounded-2xl border-yellow-500/20 bg-card p-6 text-center">
+      <DialogContent className="max-w-[360px] rounded-2xl border-warning/20 bg-card p-6 text-center">
         <DialogHeader className="items-center">
           <div className="flex justify-center gap-1 mb-2">
             {[1, 2, 3, 4, 5].map((s) => (
               <Star
                 key={s}
-                className="w-7 h-7 fill-yellow-400 text-yellow-400 drop-shadow-[0_0_6px_hsla(45,100%,60%,0.4)]"
+                className="w-7 h-7 fill-warning text-warning drop-shadow-[0_0_6px_hsl(var(--nba-yellow) / 0.4)]"
               />
             ))}
           </div>
@@ -79,9 +79,9 @@ export function RateAppDialog({ open, onClose }: RateAppDialogProps) {
         <div className="flex flex-col gap-2 mt-2">
           <button
             onClick={handleRate}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-yellow-500/15 border border-yellow-500/25 text-yellow-400 text-sm font-bold hover:bg-yellow-500/25 transition-colors"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-warning/15 border border-warning/25 text-warning text-sm font-bold hover:bg-warning/25 transition-colors"
           >
-            <Star className="w-4 h-4 fill-yellow-400" /> Rate on App Store
+            <Star className="w-4 h-4 fill-warning" /> Rate on App Store
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
           <button

@@ -100,14 +100,14 @@ export function PnLCalendar({ plays }: PnLCalendarProps) {
       >
         {/* Background glow */}
         <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full opacity-[0.04] pointer-events-none"
-          style={{ background: 'radial-gradient(circle, hsl(250 76% 62%), transparent 70%)' }} />
+          style={{ background: 'radial-gradient(circle, hsl(var(--primary)), transparent 70%)' }} />
 
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[hsl(250,76%,62%)] to-[hsl(280,70%,55%)] flex items-center justify-center shadow-lg"
-              style={{ boxShadow: '0 4px 14px -2px hsla(250,76%,62%,0.3)' }}>
-              <Calendar className="w-4 h-4 text-white" />
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary flex items-center justify-center shadow-lg"
+              style={{ boxShadow: '0 4px 14px -2px hsl(var(--primary) / 0.3)' }}>
+              <Calendar className="w-4 h-4 text-foreground" />
             </div>
             <div>
               <p className="text-[13px] font-bold text-foreground">P&L Calendar</p>
@@ -120,11 +120,11 @@ export function PnLCalendar({ plays }: PnLCalendarProps) {
               whileTap={{ scale: 0.9 }}
               onClick={() => setShowShareCard(true)}
               className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground/65 hover:text-accent transition-all"
-              style={{ background: 'hsla(228, 20%, 12%, 0.5)', border: '1px solid hsla(228, 20%, 20%, 0.2)' }}
+              style={{ background: 'hsl(var(--card) / 0.5)', border: '1px solid hsl(var(--border) / 0.2)' }}
             >
               <Share2 className="w-3.5 h-3.5" />
             </motion.button>
-            <div className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ background: 'hsla(228, 20%, 12%, 0.5)', border: '1px solid hsla(228, 20%, 20%, 0.2)' }}>
+            <div className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ background: 'hsl(var(--card) / 0.5)', border: '1px solid hsl(var(--border) / 0.2)' }}>
               {monthTotal >= 0 ? (
                 <TrendingUp className="w-3 h-3 text-nba-green" />
               ) : (
@@ -140,7 +140,7 @@ export function PnLCalendar({ plays }: PnLCalendarProps) {
         {/* Month nav */}
         <div className="flex items-center justify-between mb-3">
           <button onClick={prevMonth} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/65 hover:text-foreground transition-colors active:scale-90"
-            style={{ background: 'hsla(228, 20%, 12%, 0.4)', border: '1px solid hsla(228, 20%, 20%, 0.15)' }}>
+            style={{ background: 'hsl(var(--card) / 0.4)', border: '1px solid hsl(var(--border) / 0.15)' }}>
             <ChevronLeft className="w-3.5 h-3.5" />
           </button>
           <AnimatePresence mode="wait">
@@ -155,7 +155,7 @@ export function PnLCalendar({ plays }: PnLCalendarProps) {
             </motion.span>
           </AnimatePresence>
           <button onClick={nextMonth} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/65 hover:text-foreground transition-colors active:scale-90"
-            style={{ background: 'hsla(228, 20%, 12%, 0.4)', border: '1px solid hsla(228, 20%, 20%, 0.15)' }}>
+            style={{ background: 'hsl(var(--card) / 0.4)', border: '1px solid hsl(var(--border) / 0.15)' }}>
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -225,15 +225,15 @@ export function PnLCalendar({ plays }: PnLCalendarProps) {
         </div>
 
         {/* Footer stats */}
-        <div className="h-[1px] my-3.5" style={{ background: 'linear-gradient(90deg, transparent, hsla(228, 18%, 20%, 0.4), transparent)' }} />
+        <div className="h-[1px] my-3.5" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--secondary) / 0.4), transparent)' }} />
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-sm" style={{ background: 'hsla(158, 64%, 52%, 0.35)' }} />
+              <div className="w-2 h-2 rounded-sm" style={{ background: 'hsl(var(--success) / 0.35)' }} />
               <span className="text-[8px] text-muted-foreground/55 font-semibold">{winDays} green</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-sm" style={{ background: 'hsla(0, 72%, 51%, 0.35)' }} />
+              <div className="w-2 h-2 rounded-sm" style={{ background: 'hsl(var(--danger) / 0.35)' }} />
               <span className="text-[8px] text-muted-foreground/55 font-semibold">{lossDays} red</span>
             </div>
           </div>

@@ -4,8 +4,8 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
-const ACCENT = "#A855F7";
-const ACCENT_DEEP = "#7B2FFF";
+const ACCENT = "hsl(var(--primary))";
+const ACCENT_DEEP = "hsl(var(--primary))";
 
 const USERNAME_RE = /^[A-Za-z0-9_.\- ]+$/;
 const MIN_LEN = 3;
@@ -71,17 +71,17 @@ export function UsernamePromptDialog({ open, onSaved }: Props) {
           transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
           className="rounded-[24px] p-6 border"
           style={{
-            background: "hsla(265, 25%, 9%, 0.96)",
-            borderColor: "hsla(0, 0%, 100%, 0.06)",
+            background: "hsl(var(--card) / 0.96)",
+            borderColor: "hsl(var(--foreground) / 0.06)",
             backdropFilter: "blur(28px)",
             WebkitBackdropFilter: "blur(28px)",
-            boxShadow: "0 20px 60px hsla(265, 50%, 4%, 0.65), inset 0 1px 0 hsla(0, 0%, 100%, 0.04)",
+            boxShadow: "0 20px 60px hsl(var(--primary) / 0.65), inset 0 1px 0 hsl(var(--foreground) / 0.04)",
           }}
         >
-          <DialogTitle className="text-[20px] font-bold text-white mb-1.5 leading-tight">
+          <DialogTitle className="text-[20px] font-bold text-foreground mb-1.5 leading-tight">
             Please select your username
           </DialogTitle>
-          <p className="text-[12.5px] text-white/55 leading-relaxed mb-5">
+          <p className="text-[12.5px] text-foreground/55 leading-relaxed mb-5">
             This is the name we'll show across Sentinel.
           </p>
 
@@ -102,15 +102,15 @@ export function UsernamePromptDialog({ open, onSaved }: Props) {
             autoFocus
             maxLength={MAX_LEN}
             disabled={saving}
-            className="w-full px-4 py-3 rounded-xl text-[14px] text-white placeholder:text-white/30 outline-none transition-all disabled:opacity-50"
+            className="w-full px-4 py-3 rounded-xl text-[14px] text-foreground placeholder:text-foreground/30 outline-none transition-all disabled:opacity-50"
             style={{
-              background: "hsla(0,0%,100%,0.04)",
-              border: "1px solid hsla(0,0%,100%,0.08)",
+              background: "hsl(var(--foreground) / 0.04)",
+              border: "1px solid hsl(var(--foreground) / 0.08)",
             }}
           />
 
           {error && (
-            <p className="text-[12px] text-red-400 mt-2.5 leading-snug">{error}</p>
+            <p className="text-[12px] text-danger mt-2.5 leading-snug">{error}</p>
           )}
 
           <motion.button
@@ -121,12 +121,12 @@ export function UsernamePromptDialog({ open, onSaved }: Props) {
             className="w-full py-3 rounded-full text-[13px] font-semibold mt-5 transition-all disabled:opacity-50 flex items-center justify-center"
             style={{
               background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_DEEP})`,
-              boxShadow: `0 8px 24px ${ACCENT}44`,
+              boxShadow: `0 8px 24px hsl(var(--primary) / 0.27)`,
               color: "white",
             }}
           >
             {saving ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-foreground/30 border-t-white rounded-full animate-spin" />
             ) : (
               "Save username"
             )}

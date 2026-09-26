@@ -31,7 +31,7 @@ const WaveImage = ({
   alt,
   model = "wavespeed-ai/flux-dev",
   className = "",
-  fallbackClassName = "bg-gradient-to-br from-[#1a1a1a] via-[#0d0d0d] to-[#1a1a1a]",
+  fallbackClassName = "bg-gradient-to-br from-card via-secondary to-card",
   rounded = "2xl",
 }: Props) => {
   const { url, loading, error } = useGeneratedImage(prompt, cacheKey, true, model);
@@ -42,7 +42,7 @@ const WaveImage = ({
       {/* Fallback always behind */}
       <div className={`absolute inset-0 ${r} ${fallbackClassName}`} />
       {loading && !url && (
-        <Skeleton className={`absolute inset-0 ${r} bg-white/5`} />
+        <Skeleton className={`absolute inset-0 ${r} bg-foreground/5`} />
       )}
       {url && !error && (
         <motion.img

@@ -71,7 +71,7 @@ const kickoff = (iso: string) =>
 
 function ForwardTestBanner() {
   return (
-    <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+    <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
       <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
       <span>
         <strong>Proven picks only.</strong> NFL picks appear here only for markets whose model has proven profitable on
@@ -85,7 +85,7 @@ function StatusChip({ status }: { status: "PLAY" | "NO PLAY" }) {
   return (
     <span
       className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-wide ${
-        status === "PLAY" ? "bg-emerald-500/15 text-emerald-400" : "bg-muted text-muted-foreground"
+        status === "PLAY" ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"
       }`}
     >
       {status}

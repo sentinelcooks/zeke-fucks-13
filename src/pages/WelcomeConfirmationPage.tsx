@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Trophy } from "lucide-react";
 import { motion } from "framer-motion";
-import logo from "@/assets/sentinel-lock.jpg";
+import { BrandMark } from "@/components/brand/BrandMark";
 import WaveImage from "@/components/onboarding/WaveImage";
 
 const STADIUM = {
@@ -21,7 +21,7 @@ export default function WelcomeConfirmationPage() {
   }, [navigate]);
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-[#050508] text-white pt-safe pb-safe">
+    <div className="relative min-h-screen w-full overflow-hidden bg-background text-foreground pt-safe pb-safe">
       <style>{`
         @keyframes ken-burns { from { transform: scale(1) } to { transform: scale(1.06) } }
         @keyframes float-particle {
@@ -33,7 +33,7 @@ export default function WelcomeConfirmationPage() {
       {/* Layered background scene */}
       <div className="fixed inset-0 z-0 overflow-hidden">
         {/* Deep base */}
-        <div className="absolute inset-0 bg-[#050508]" />
+        <div className="absolute inset-0 bg-background" />
 
         {/* Stadium photo at 30% as additional layer */}
         <div className="absolute inset-0 opacity-30" style={{ animation: "ken-burns 12s ease-out forwards" }}>
@@ -53,17 +53,17 @@ export default function WelcomeConfirmationPage() {
           className="absolute inset-0 opacity-[0.04]"
           style={{
             backgroundImage:
-              "linear-gradient(#00FF6A 1px, transparent 1px), linear-gradient(90deg, #00FF6A 1px, transparent 1px)",
+              "linear-gradient(hsl(var(--primary)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--primary)) 1px, transparent 1px)",
             backgroundSize: "44px 44px",
           }}
         />
 
         {/* Central purple radial glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[720px] h-[720px] rounded-full bg-[#7B2FFF]/25 blur-[140px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[720px] h-[720px] rounded-full bg-primary/25 blur-[140px]" />
         {/* Green ambient glow behind logo */}
-        <div className="absolute top-[42%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] rounded-full bg-[#00FF6A]/15 blur-[120px]" />
+        <div className="absolute top-[42%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] rounded-full bg-primary/15 blur-[120px]" />
         {/* Bottom dark fade */}
-        <div className="absolute inset-x-0 bottom-0 h-[55%] bg-gradient-to-t from-[#050508] via-[#050508]/85 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-[55%] bg-gradient-to-t from-background via-background/85 to-transparent" />
 
         {/* Floating green particles */}
         {[
@@ -76,11 +76,11 @@ export default function WelcomeConfirmationPage() {
         ].map((p, i) => (
           <div
             key={i}
-            className="absolute w-1.5 h-1.5 rounded-full bg-[#00FF6A]"
+            className="absolute w-1.5 h-1.5 rounded-full bg-primary"
             style={{
               left: p.x,
               top: p.y,
-              boxShadow: "0 0 10px rgba(0,255,106,0.9), 0 0 20px rgba(0,255,106,0.5)",
+              boxShadow: "0 0 10px hsl(var(--primary) / 0.9), 0 0 20px hsl(var(--primary) / 0.5)",
               animation: `float-particle ${p.dur}s ease-in-out ${p.d}s infinite`,
             }}
           />
@@ -91,7 +91,7 @@ export default function WelcomeConfirmationPage() {
       <div className="absolute inset-0 z-[1] flex items-center justify-center pointer-events-none">
         <span
           className="text-[20vw] font-black tracking-[0.15em] select-none"
-          style={{ color: "rgba(255,255,255,0.04)" }}
+          style={{ color: "hsl(var(--foreground) / 0.04)" }}
         >
           SENTINEL
         </span>
@@ -100,7 +100,7 @@ export default function WelcomeConfirmationPage() {
       {/* Progress (all dots green, glowing active style on the last one) */}
       <div className="relative z-10 px-5 py-6">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-white/70">6 / 6</span>
+          <span className="text-xs font-bold text-foreground/70">6 / 6</span>
           <div className="flex gap-1.5 ml-1 items-center">
             {Array.from({ length: 6 }).map((_, i) => (
               <div
@@ -108,11 +108,11 @@ export default function WelcomeConfirmationPage() {
                 className="h-1.5 rounded-full"
                 style={{
                   width: i === 5 ? 28 : 14,
-                  backgroundColor: i === 5 ? "#00FF6A" : "rgba(0,255,106,0.7)",
+                  backgroundColor: i === 5 ? "hsl(var(--primary))" : "hsl(var(--primary) / 0.7)",
                   boxShadow:
                     i === 5
-                      ? "0 0 12px rgba(0,255,106,0.8), 0 0 24px rgba(0,255,106,0.45)"
-                      : "0 0 6px rgba(0,255,106,0.35)",
+                      ? "0 0 12px hsl(var(--primary) / 0.8), 0 0 24px hsl(var(--primary) / 0.45)"
+                      : "0 0 6px hsl(var(--primary) / 0.35)",
                 }}
               />
             ))}
@@ -124,22 +124,17 @@ export default function WelcomeConfirmationPage() {
       <div className="relative z-10 flex flex-col items-center justify-center px-6 text-center" style={{ minHeight: "calc(100vh - 200px)" }}>
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="flex flex-col items-center">
           <div className="relative">
-            <div className="absolute -inset-4 rounded-3xl bg-[#00FF6A]/40 blur-3xl" />
-            <div className="absolute -inset-1 rounded-2xl bg-[#00FF6A]/30 blur-xl" />
-            <img
-              src={logo}
-              alt="Sentinel"
-              className="relative w-16 h-16 rounded-2xl"
-              style={{ boxShadow: "0 0 36px 6px rgba(0,255,106,0.5), 0 0 72px 12px rgba(0,255,106,0.22)" }}
-            />
+            <div className="absolute -inset-4 rounded-3xl bg-primary/40 blur-3xl" />
+            <div className="absolute -inset-1 rounded-2xl bg-primary/30 blur-xl" />
+            <BrandMark size={64} className="relative" />
           </div>
-          <p className="mt-3 text-[11px] font-extrabold tracking-[0.4em] text-white/80">SENTINEL</p>
+          <p className="mt-3 text-[11px] font-extrabold tracking-[0.4em] text-foreground/80">SENTINEL</p>
 
           <h1 className="mt-6 text-[40px] leading-[1.05] font-extrabold">
             You're Ready.<br />
-            <span className="text-[#00FF6A]">Let's Win.</span>
+            <span className="text-primary">Let's Win.</span>
           </h1>
-          <p className="mt-3 text-base text-white/70">Smarter bets. Bigger results.</p>
+          <p className="mt-3 text-base text-foreground/70">Smarter bets. Bigger results.</p>
         </motion.div>
       </div>
 
@@ -152,18 +147,18 @@ export default function WelcomeConfirmationPage() {
         className="fixed left-5 right-5 max-w-md mx-auto z-50 rounded-2xl px-4 py-3 flex items-center gap-3 text-left backdrop-blur-xl"
         style={{
           bottom: "calc(env(safe-area-inset-bottom) + 2rem)",
-          background: "rgba(20,20,20,0.95)",
-          border: "1px solid rgba(0,255,106,0.35)",
+          background: "hsl(var(--card) / 0.95)",
+          border: "1px solid hsl(var(--primary) / 0.35)",
           boxShadow:
-            "0 0 24px rgba(0,255,106,0.25), 0 12px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05)",
+            "0 0 24px hsl(var(--primary) / 0.25), 0 12px 40px rgba(0,0,0,0.6), inset 0 1px 0 hsl(var(--foreground) / 0.05)",
         }}
       >
-        <div className="w-12 h-12 rounded-xl bg-[#00FF6A]/15 flex items-center justify-center flex-shrink-0 border border-[#00FF6A]/25">
-          <Trophy className="w-6 h-6 text-[#00FF6A]" />
+        <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0 border border-primary/25">
+          <Trophy className="w-6 h-6 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-bold text-white">🏆 Welcome to Sentinel</div>
-          <div className="text-xs text-white/60">Your edge starts now.</div>
+          <div className="text-sm font-bold text-foreground">🏆 Welcome to Sentinel</div>
+          <div className="text-xs text-foreground/60">Your edge starts now.</div>
         </div>
       </motion.button>
     </div>

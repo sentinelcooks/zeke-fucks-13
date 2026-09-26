@@ -42,9 +42,9 @@ function getGradeBg(grade: string) {
 }
 
 function getGradeGlow(grade: string) {
-  if (grade === "strong") return "shadow-[0_0_15px_hsl(158_64%_52%/0.2)]";
-  if (grade === "lean") return "shadow-[0_0_15px_hsl(43_96%_56%/0.2)]";
-  return "shadow-[0_0_15px_hsl(0_72%_51%/0.2)]";
+  if (grade === "strong") return "shadow-[0_0_15px_hsl(var(--success) / 0.2)]";
+  if (grade === "lean") return "shadow-[0_0_15px_hsl(var(--nba-yellow) / 0.2)]";
+  return "shadow-[0_0_15px_hsl(var(--danger) / 0.2)]";
 }
 
 function getGradeBorderColor(grade: string) {
@@ -112,11 +112,11 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.08, duration: 0.3 }}
-            className={`rounded-2xl p-4 text-center border border-[hsla(228,18%,22%,0.5)] backdrop-blur-md relative overflow-hidden ${card.glow}`}
+            className={`rounded-2xl p-4 text-center border border-border/50 backdrop-blur-md relative overflow-hidden ${card.glow}`}
             style={{ background: 'var(--gradient-card)' }}
           >
             {card.highlight && (
-              <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ background: `radial-gradient(circle at center, ${overallGrade === 'strong' ? 'hsl(158 64% 52%)' : overallGrade === 'lean' ? 'hsl(43 96% 56%)' : 'hsl(0 72% 51%)'}, transparent 70%)` }} />
+              <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ background: `radial-gradient(circle at center, ${overallGrade === 'strong' ? 'hsl(var(--success))' : overallGrade === 'lean' ? 'hsl(var(--nba-yellow))' : 'hsl(var(--danger))'}, transparent 70%)` }} />
             )}
             <card.icon className={`w-4 h-4 mx-auto mb-1 ${card.color}`} />
             <span className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">{card.label}</span>
@@ -130,7 +130,7 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.35, duration: 0.3 }}
-        className={`rounded-2xl p-5 border border-[hsla(228,18%,22%,0.5)] backdrop-blur-md ${getGradeGlow(overallGrade)}`}
+        className={`rounded-2xl p-5 border border-border/50 backdrop-blur-md ${getGradeGlow(overallGrade)}`}
         style={{ background: 'var(--gradient-card)' }}
       >
         <div className="flex items-center gap-2 mb-2">
@@ -148,7 +148,7 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.45, duration: 0.3 }}
-        className="rounded-2xl p-5 border border-[hsla(228,18%,22%,0.5)] backdrop-blur-md"
+        className="rounded-2xl p-5 border border-border/50 backdrop-blur-md"
         style={{ background: 'var(--gradient-card)' }}
       >
         <div className="flex items-center gap-2 mb-3">
@@ -156,7 +156,7 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
           <h3 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Recommended Sizing</h3>
         </div>
         <div className="flex items-center gap-4 mb-3">
-          <div className="bg-[hsla(228,20%,14%,0.6)] border border-[hsla(228,18%,22%,0.5)] rounded-xl px-5 py-3 text-center">
+          <div className="bg-secondary/60 border border-border/50 rounded-xl px-5 py-3 text-center">
             <span className={`block text-2xl font-black ${unitSizing.color}`}>{unitSizing.units}</span>
             <span className="block text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">Units</span>
           </div>
@@ -166,7 +166,7 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
           </div>
         </div>
         {stake > 0 && (
-          <div className="flex items-center gap-2 pt-3 border-t border-[hsla(228,18%,20%,0.3)]">
+          <div className="flex items-center gap-2 pt-3 border-t border-border/30">
             <Target className="w-3.5 h-3.5 text-muted-foreground/50" />
             <span className="text-[11px] text-muted-foreground">
               At <span className="text-foreground font-semibold">${stake}</span>/unit → recommended wager: <span className={`font-bold ${unitSizing.color}`}>${(stake * parseFloat(unitSizing.units.split("–")[0])).toFixed(2)} – ${(stake * parseFloat(unitSizing.units.split("–")[1])).toFixed(2)}</span>
@@ -180,7 +180,7 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.55, duration: 0.3 }}
-        className="rounded-2xl p-5 border border-[hsla(228,18%,22%,0.5)] backdrop-blur-md"
+        className="rounded-2xl p-5 border border-border/50 backdrop-blur-md"
         style={{ background: 'var(--gradient-card)' }}
       >
         <h3 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-3">Leg-by-Leg Breakdown</h3>
@@ -191,7 +191,7 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.6 + i * 0.08, duration: 0.25 }}
-              className={`rounded-xl p-3.5 border-l-[3px] ${getGradeBorderColor(leg.grade)} border border-[hsla(228,18%,22%,0.4)] bg-[hsla(228,20%,12%,0.4)]`}
+              className={`rounded-xl p-3.5 border-l-[3px] ${getGradeBorderColor(leg.grade)} border border-border/40 bg-card/40`}
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
@@ -213,7 +213,7 @@ export default function ParlayAnalysisResults({ legs, parlayOdds, potentialPayou
               {leg.keyStats.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {leg.keyStats.map((stat, si) => (
-                    <span key={si} className="text-[10px] bg-[hsla(228,20%,14%,0.6)] border border-[hsla(228,18%,20%,0.4)] rounded px-2 py-0.5 text-muted-foreground">{stat}</span>
+                    <span key={si} className="text-[10px] bg-secondary/60 border border-border/40 rounded px-2 py-0.5 text-muted-foreground">{stat}</span>
                   ))}
                 </div>
               )}

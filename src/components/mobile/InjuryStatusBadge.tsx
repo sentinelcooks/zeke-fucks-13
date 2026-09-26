@@ -81,8 +81,8 @@ export function InjuryStatusBadge({ status, colorClass, bgClass }: Props) {
             transition={{ duration: 0.18 }}
             className="absolute right-0 bottom-full mb-2 w-64 z-50 rounded-xl overflow-hidden"
             style={{
-              background: "hsla(228, 25%, 10%, 0.97)",
-              border: "1px solid hsla(228, 20%, 22%, 0.5)",
+              background: "hsl(var(--card) / 0.97)",
+              border: "1px solid hsl(var(--border) / 0.5)",
               backdropFilter: "blur(20px)",
               boxShadow: "0 12px 40px -8px hsla(228, 50%, 4%, 0.8)",
             }}

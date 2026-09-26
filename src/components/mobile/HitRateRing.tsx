@@ -9,10 +9,10 @@ interface HitRateRingProps {
 }
 
 function getRingColor(rate: number): string {
-  if (rate >= 65) return "hsl(160, 100%, 45%)";
-  if (rate >= 50) return "hsl(215, 90%, 60%)";
-  if (rate >= 35) return "hsl(40, 100%, 55%)";
-  return "hsl(0, 85%, 62%)";
+  if (rate >= 65) return "hsl(var(--success))";
+  if (rate >= 50) return "hsl(var(--primary))";
+  if (rate >= 35) return "hsl(var(--nba-yellow))";
+  return "hsl(var(--danger))";
 }
 
 function getTextColor(rate: number): string {
@@ -37,7 +37,7 @@ export function HitRateRing({ rate, hits, total, label, delay = 0 }: HitRateRing
     >
       <div className="relative w-16 h-16">
         <svg className="w-full h-full -rotate-90" viewBox="0 0 66 66">
-          <circle cx="33" cy="33" r={radius} fill="none" stroke="hsl(220, 15%, 12%)" strokeWidth="5" />
+          <circle cx="33" cy="33" r={radius} fill="none" stroke="hsl(var(--card))" strokeWidth="5" />
           <motion.circle
             cx="33" cy="33" r={radius}
             fill="none"

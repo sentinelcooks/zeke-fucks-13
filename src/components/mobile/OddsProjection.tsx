@@ -85,10 +85,10 @@ function getEVColor(ev: number): string {
 }
 
 function getEVBg(ev: number): string {
-  if (ev >= 5) return "from-[hsla(158,64%,52%,0.15)] to-transparent";
-  if (ev >= 0) return "from-[hsla(211,100%,60%,0.12)] to-transparent";
-  if (ev >= -5) return "from-[hsla(43,96%,56%,0.1)] to-transparent";
-  return "from-[hsla(0,72%,51%,0.12)] to-transparent";
+  if (ev >= 5) return "from-success/15 to-transparent";
+  if (ev >= 0) return "from-primary/12 to-transparent";
+  if (ev >= -5) return "from-[hsl(var(--nba-yellow)_/_0.1)] to-transparent";
+  return "from-danger/12 to-transparent";
 }
 
 function getEdgeLabel(edge: number): { label: string; color: string; bg: string } {
@@ -101,22 +101,22 @@ function getEdgeLabel(edge: number): { label: string; color: string; bg: string 
 }
 
 const BOOK_GRADIENTS: Record<string, string> = {
-  FanDuel: "from-[hsl(210,100%,55%)] to-[hsl(210,100%,40%)]",
-  DraftKings: "from-[hsl(145,70%,45%)] to-[hsl(160,60%,35%)]",
-  BetMGM: "from-[hsl(40,90%,50%)] to-[hsl(35,85%,40%)]",
-  "Caesars Sportsbook": "from-[hsl(250,60%,55%)] to-[hsl(250,50%,40%)]",
-  "PointsBet (US)": "from-[hsl(350,70%,55%)] to-[hsl(340,60%,40%)]",
-  PointsBet: "from-[hsl(350,70%,55%)] to-[hsl(340,60%,40%)]",
-  Bovada: "from-[hsl(0,70%,50%)] to-[hsl(0,60%,38%)]",
-  "BetOnline.ag": "from-[hsl(30,80%,50%)] to-[hsl(25,70%,38%)]",
-  "William Hill (US)": "from-[hsl(210,60%,45%)] to-[hsl(215,50%,35%)]",
-  "ESPN BET": "from-[hsl(0,80%,48%)] to-[hsl(0,70%,35%)]",
-  Fliff: "from-[hsl(280,70%,55%)] to-[hsl(280,60%,40%)]",
-  "Hard Rock Bet": "from-[hsl(45,85%,50%)] to-[hsl(40,75%,38%)]",
-  BetRivers: "from-[hsl(200,80%,45%)] to-[hsl(205,70%,35%)]",
-  SuperBook: "from-[hsl(220,70%,50%)] to-[hsl(225,60%,38%)]",
-  WynnBET: "from-[hsl(340,70%,50%)] to-[hsl(345,60%,38%)]",
-  BetAnySports: "from-[hsl(170,60%,45%)] to-[hsl(175,50%,35%)]",
+  FanDuel: "from-primary to-primary",
+  DraftKings: "from-success to-success",
+  BetMGM: "from-[hsl(var(--nba-yellow))] to-[hsl(var(--nba-yellow))]",
+  "Caesars Sportsbook": "from-primary to-primary",
+  "PointsBet (US)": "from-danger to-danger",
+  PointsBet: "from-danger to-danger",
+  Bovada: "from-danger to-danger",
+  "BetOnline.ag": "from-[hsl(var(--nba-yellow))] to-[hsl(var(--nba-yellow))]",
+  "William Hill (US)": "from-primary to-[hsl(215,50%,35%)]",
+  "ESPN BET": "from-danger to-danger",
+  Fliff: "from-primary to-primary",
+  "Hard Rock Bet": "from-[hsl(var(--nba-yellow))] to-[hsl(var(--nba-yellow))]",
+  BetRivers: "from-primary to-[hsl(205,70%,35%)]",
+  SuperBook: "from-primary to-[hsl(225,60%,38%)]",
+  WynnBET: "from-danger to-danger",
+  BetAnySports: "from-success to-success",
 };
 
 function SportsbookLogoBadge({
@@ -166,8 +166,8 @@ function EdgeExplainer({ modelRate, impliedRate, edge, ev }: { modelRate: number
       animate={{ opacity: 1, y: 0 }}
       className="rounded-2xl overflow-hidden"
       style={{
-        background: 'linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.94) 19.41%, hsla(228, 30%, 8%, 0.49) 76.65%)',
-        border: '1px solid hsla(250,76%,62%,0.15)',
+        background: 'linear-gradient(127.09deg, hsl(var(--secondary) / 0.94) 19.41%, hsl(var(--card) / 0.49) 76.65%)',
+        border: '1px solid hsl(var(--primary) / 0.15)',
       }}
     >
       <button
@@ -197,7 +197,7 @@ function EdgeExplainer({ modelRate, impliedRate, edge, ev }: { modelRate: number
           >
             <div className="px-4 pb-4 space-y-3">
               {/* Edge explanation */}
-              <div className="rounded-xl p-3.5 space-y-2" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+              <div className="rounded-xl p-3.5 space-y-2" style={{ background: 'hsl(var(--card) / 0.6)' }}>
                 <div className="flex items-center gap-1.5">
                   <Shield className="w-3 h-3 text-nba-cyan" />
                   <span className="text-[10px] font-extrabold uppercase tracking-wider text-[hsl(var(--nba-cyan))]">Edge</span>
@@ -205,7 +205,7 @@ function EdgeExplainer({ modelRate, impliedRate, edge, ev }: { modelRate: number
                 <p className="text-[11px] text-foreground/60 leading-relaxed">
                   Edge is the difference between what <strong className="text-foreground/80">our model thinks will happen</strong> and what the <strong className="text-foreground/80">sportsbooks think</strong>.
                 </p>
-                <div className="rounded-lg p-3 space-y-1.5" style={{ background: 'hsla(228, 20%, 8%, 0.7)' }}>
+                <div className="rounded-lg p-3 space-y-1.5" style={{ background: 'hsl(var(--card) / 0.7)' }}>
                   <p className="text-[10px] text-muted-foreground/50 italic">Example with this prop:</p>
                   <div className="flex items-center gap-2 text-[11px]">
                     <span className="text-accent font-bold">Our model: {modelRate.toFixed(0)}%</span>
@@ -224,7 +224,7 @@ function EdgeExplainer({ modelRate, impliedRate, edge, ev }: { modelRate: number
               </div>
 
               {/* EV explanation */}
-              <div className="rounded-xl p-3.5 space-y-2" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+              <div className="rounded-xl p-3.5 space-y-2" style={{ background: 'hsl(var(--card) / 0.6)' }}>
                 <div className="flex items-center gap-1.5">
                   <TrendingUp className="w-3 h-3 text-nba-green" />
                   <span className="text-[10px] font-extrabold uppercase tracking-wider text-nba-green">Expected Value (EV)</span>
@@ -232,7 +232,7 @@ function EdgeExplainer({ modelRate, impliedRate, edge, ev }: { modelRate: number
                 <p className="text-[11px] text-foreground/60 leading-relaxed">
                   EV tells you <strong className="text-foreground/80">how much you'd profit per $100 bet</strong> over time if our model is right. Positive EV (+EV) means the bet is profitable long-term.
                 </p>
-                <div className="rounded-lg p-3" style={{ background: 'hsla(228, 20%, 8%, 0.7)' }}>
+                <div className="rounded-lg p-3" style={{ background: 'hsl(var(--card) / 0.7)' }}>
                   <div className="flex items-center gap-2 text-[11px]">
                     <span className="text-muted-foreground/50">This bet's EV:</span>
                     <span className={`font-extrabold ${ev > 0 ? 'text-nba-green' : 'text-nba-red'}`}>{ev > 0 ? '+' : ''}{ev.toFixed(1)}%</span>
@@ -247,7 +247,7 @@ function EdgeExplainer({ modelRate, impliedRate, edge, ev }: { modelRate: number
               </div>
 
               {/* Quick tips */}
-              <div className="rounded-xl p-3" style={{ background: 'hsla(158, 64%, 52%, 0.04)', border: '1px solid hsla(158, 64%, 52%, 0.08)' }}>
+              <div className="rounded-xl p-3" style={{ background: 'hsl(var(--success) / 0.04)', border: '1px solid hsl(var(--success) / 0.08)' }}>
                 <span className="text-[9px] font-bold uppercase tracking-wider text-nba-green/60 block mb-1.5">💡 Quick Tips</span>
                 <ul className="space-y-1">
                   {[
@@ -352,19 +352,19 @@ export function OddsProjection({
         </div>
         {savedOdds ? (
           <div className="grid grid-cols-3 gap-2">
-            <div className="text-center py-2 rounded-lg" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+            <div className="text-center py-2 rounded-lg" style={{ background: 'hsl(var(--card) / 0.6)' }}>
               <span className="block text-base font-extrabold tabular-nums text-foreground/90">
                 {americanOdds != null ? formatOdds(americanOdds) : savedOdds}
               </span>
               <span className="block text-[8px] text-muted-foreground/55 font-bold uppercase">Best price</span>
             </div>
-            <div className="text-center py-2 rounded-lg" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+            <div className="text-center py-2 rounded-lg" style={{ background: 'hsl(var(--card) / 0.6)' }}>
               <span className="block text-base font-extrabold tabular-nums text-foreground/90">
                 {impliedPct != null ? `${impliedPct}%` : "—"}
               </span>
               <span className="block text-[8px] text-muted-foreground/55 font-bold uppercase">Implied</span>
             </div>
-            <div className="text-center py-2 rounded-lg" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+            <div className="text-center py-2 rounded-lg" style={{ background: 'hsl(var(--card) / 0.6)' }}>
               <span className={`block text-base font-extrabold tabular-nums ${evDisplay ? getEVColor(backendEvPct ?? 0) : "text-foreground/60"}`}>
                 {evDisplay ?? "—"}
               </span>
@@ -380,7 +380,7 @@ export function OddsProjection({
               bookName={savedBook}
               sizeClass="w-6 h-6"
               logoClass="w-4 h-4 object-contain"
-              fallbackClass="text-[8px] font-black text-white"
+              fallbackClass="text-[8px] font-black text-foreground"
             />
             <p>Best book at scan time: <span className="text-foreground/75 font-bold uppercase">{savedBookInfo.label}</span></p>
           </div>
@@ -476,12 +476,12 @@ export function OddsProjection({
           animate={{ opacity: 1, y: 0 }}
           className={`relative rounded-2xl overflow-hidden p-5`}
           style={{
-            background: 'linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.94) 19.41%, hsla(228, 30%, 8%, 0.49) 76.65%)',
-            border: `1px solid ${hasPositiveEV ? 'hsla(158,64%,52%,0.25)' : 'hsla(228,30%,22%,0.3)'}`,
+            background: 'linear-gradient(127.09deg, hsl(var(--secondary) / 0.94) 19.41%, hsl(var(--card) / 0.49) 76.65%)',
+            border: `1px solid ${hasPositiveEV ? 'hsl(var(--success) / 0.25)' : 'hsl(var(--secondary) / 0.3)'}`,
           }}
         >
           {/* Glow for +EV */}
-          {hasPositiveEV && <div className="absolute inset-0 bg-gradient-to-b from-[hsla(158,64%,52%,0.06)] to-transparent pointer-events-none" />}
+          {hasPositiveEV && <div className="absolute inset-0 bg-gradient-to-b from-success/6 to-transparent pointer-events-none" />}
 
           <div className="relative z-10">
             {/* EV Verdict Banner */}
@@ -514,7 +514,7 @@ export function OddsProjection({
 
             {/* Model vs Implied visual comparison */}
             <div className="grid grid-cols-3 gap-2 mb-4">
-              <div className="rounded-xl p-2.5 text-center min-w-0 overflow-hidden" style={{ background: 'hsla(228, 20%, 10%, 0.7)' }}>
+              <div className="rounded-xl p-2.5 text-center min-w-0 overflow-hidden" style={{ background: 'hsl(var(--card) / 0.7)' }}>
                 <div className="flex items-center justify-center gap-1 mb-1.5">
                   <Zap className="w-3 h-3 text-accent" />
                   <span className="text-[8px] font-bold uppercase tracking-wider text-accent/60">Our Model</span>
@@ -522,12 +522,12 @@ export function OddsProjection({
                 <span className="block text-[16px] font-extrabold tabular-nums text-accent">{compositeModelRate.toFixed(1)}%</span>
                 <span className="block text-[8px] text-muted-foreground/55 mt-0.5">Hit Probability</span>
               </div>
-              <div className="rounded-xl p-2.5 text-center flex flex-col items-center justify-center min-w-0 overflow-hidden" style={{ background: 'hsla(228, 20%, 10%, 0.7)' }}>
+              <div className="rounded-xl p-2.5 text-center flex flex-col items-center justify-center min-w-0 overflow-hidden" style={{ background: 'hsl(var(--card) / 0.7)' }}>
                 <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/65 mb-1">Implied</span>
                 <span className="block text-[16px] font-extrabold tabular-nums text-foreground/60">{bestImplied.toFixed(1)}%</span>
                 <span className="block text-[8px] text-muted-foreground/55 mt-0.5">Best Book</span>
               </div>
-              <div className="rounded-xl p-2.5 text-center min-w-0 overflow-hidden" style={{ background: 'hsla(228, 20%, 10%, 0.7)' }}>
+              <div className="rounded-xl p-2.5 text-center min-w-0 overflow-hidden" style={{ background: 'hsl(var(--card) / 0.7)' }}>
                 <div className="flex items-center justify-center gap-1 mb-1.5">
                   <Shield className="w-3 h-3 text-nba-cyan" />
                   <span className="text-[8px] font-bold uppercase tracking-wider text-[hsl(var(--nba-cyan))]/60">Edge</span>
@@ -547,11 +547,11 @@ export function OddsProjection({
                   EV: {bestEV.ev > 0 ? "+" : ""}{bestEV.ev.toFixed(1)}%
                 </span>
               </div>
-              <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: 'hsla(228, 20%, 12%, 0.8)' }}>
+              <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: 'hsl(var(--card) / 0.8)' }}>
                 {/* Implied prob bar */}
                 <div
                   className="absolute top-0 left-0 h-full rounded-full opacity-30"
-                  style={{ width: `${Math.min(bestImplied, 100)}%`, background: 'hsl(228 10% 45%)' }}
+                  style={{ width: `${Math.min(bestImplied, 100)}%`, background: 'hsl(var(--muted-foreground))' }}
                 />
                 {/* Model prob bar */}
                 <motion.div
@@ -560,8 +560,8 @@ export function OddsProjection({
                   transition={{ duration: 0.8, delay: 0.2 }}
                   className="absolute top-0 left-0 h-full rounded-full"
                   style={{ background: hasPositiveEV
-                    ? 'linear-gradient(90deg, hsl(158 64% 52% / 0.8), hsl(158 64% 52% / 0.4))'
-                    : 'linear-gradient(90deg, hsl(0 72% 51% / 0.7), hsl(0 72% 51% / 0.3))'
+                    ? 'linear-gradient(90deg, hsl(var(--success) / 0.8), hsl(var(--success) / 0.4))'
+                    : 'linear-gradient(90deg, hsl(var(--danger) / 0.7), hsl(var(--danger) / 0.3))'
                   }}
                 />
                 {/* Line marker for implied */}
@@ -574,7 +574,7 @@ export function OddsProjection({
                 <span className="text-[8px] text-muted-foreground/50">0%</span>
                 <div className="flex items-center gap-3">
                   <span className="flex items-center gap-1 text-[8px] text-muted-foreground/55">
-                    <span className="w-2 h-1 rounded-full" style={{ background: hasPositiveEV ? 'hsl(158 64% 52%)' : 'hsl(0 72% 51%)' }} /> Model
+                    <span className="w-2 h-1 rounded-full" style={{ background: hasPositiveEV ? 'hsl(var(--success))' : 'hsl(var(--danger))' }} /> Model
                   </span>
                   <span className="flex items-center gap-1 text-[8px] text-muted-foreground/55">
                     <span className="w-2 h-1 rounded-full bg-muted-foreground/55" /> Implied
@@ -605,11 +605,11 @@ export function OddsProjection({
         transition={{ delay: 0.1 }}
         className="relative rounded-2xl overflow-hidden p-4"
         style={{
-          background: 'linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.94) 19.41%, hsla(228, 30%, 8%, 0.49) 76.65%)',
-          border: '1px solid hsla(158,64%,52%,0.2)',
+          background: 'linear-gradient(127.09deg, hsl(var(--secondary) / 0.94) 19.41%, hsl(var(--card) / 0.49) 76.65%)',
+          border: '1px solid hsl(var(--success) / 0.2)',
         }}
       >
-        <div className="absolute inset-0 bg-gradient-to-b from-[hsla(158,64%,52%,0.04)] to-transparent pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-success/4 to-transparent pointer-events-none" />
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -661,8 +661,8 @@ export function OddsProjection({
                 isBest ? "ring-1 ring-nba-green/20" : ""
               }`}
               style={{
-                background: 'linear-gradient(127.09deg, hsla(228, 30%, 14%, 0.7) 19.41%, hsla(228, 30%, 8%, 0.4) 76.65%)',
-                border: '1px solid hsla(228, 30%, 22%, 0.2)',
+                background: 'linear-gradient(127.09deg, hsl(var(--secondary) / 0.7) 19.41%, hsl(var(--card) / 0.4) 76.65%)',
+                border: '1px solid hsl(var(--border) / 0.2)',
               }}
             >
               <div className="flex items-center justify-between px-4 py-3.5">
@@ -672,7 +672,7 @@ export function OddsProjection({
                     bookName={book.book}
                     sizeClass="w-9 h-9"
                     logoClass="w-6 h-6 object-contain"
-                    fallbackClass="text-[10px] font-black text-white"
+                    fallbackClass="text-[10px] font-black text-foreground"
                   />
                   <div>
                     <div className="flex items-center gap-2">
@@ -715,15 +715,15 @@ export function OddsProjection({
               {/* Edge bar per book */}
               {compositeModelRate > 0 && (
                 <div className="px-4 pb-2.5">
-                  <div className="h-1 rounded-full overflow-hidden" style={{ background: 'hsla(228, 20%, 12%, 0.8)' }}>
+                  <div className="h-1 rounded-full overflow-hidden" style={{ background: 'hsl(var(--card) / 0.8)' }}>
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: `${Math.min(Math.max(book.edge + 50, 0), 100)}%` }}
                       transition={{ duration: 0.6, delay: 0.2 + i * 0.05 }}
                       className="h-full rounded-full"
                       style={{ background: book.edge > 0
-                        ? 'linear-gradient(90deg, hsl(158 64% 52% / 0.6), hsl(158 64% 52% / 0.3))'
-                        : 'linear-gradient(90deg, hsl(0 72% 51% / 0.5), hsl(0 72% 51% / 0.2))'
+                        ? 'linear-gradient(90deg, hsl(var(--success) / 0.6), hsl(var(--success) / 0.3))'
+                        : 'linear-gradient(90deg, hsl(var(--danger) / 0.5), hsl(var(--danger) / 0.2))'
                       }}
                     />
                   </div>
@@ -735,7 +735,7 @@ export function OddsProjection({
       </div>
 
       {/* ── SUMMARY FOOTER ── */}
-      <div className="rounded-xl p-3 text-center space-y-1" style={{ background: 'hsla(228, 20%, 10%, 0.4)' }}>
+      <div className="rounded-xl p-3 text-center space-y-1" style={{ background: 'hsl(var(--card) / 0.4)' }}>
         <div className="flex items-center justify-center gap-4 text-[10px]">
           <span className="text-muted-foreground/55">
             Avg implied: <span className="font-bold text-foreground/50 tabular-nums">{avgImplied.toFixed(1)}%</span>

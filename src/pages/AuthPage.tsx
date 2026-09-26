@@ -6,7 +6,7 @@ import { getAuthRedirectUrl, getPasswordResetRedirectUrl } from "@/lib/authRedir
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import sentinelLogo from "@/assets/sentinel-lock.jpg";
+import { BrandMark } from "@/components/brand/BrandMark";
 import { SplashScreen } from "@/components/SplashScreen";
 import { Capacitor } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
@@ -17,8 +17,8 @@ import {
 } from "@/lib/appleNativeSignIn";
 
 // Sentinel purple brand
-const ACCENT = "#A855F7";       // primary purple
-const ACCENT_DEEP = "#7B2FFF";  // deeper purple for gradients
+const ACCENT = "hsl(var(--primary))";       // primary purple
+const ACCENT_DEEP = "hsl(var(--primary))";  // deeper purple for gradients
 
 // iOS bundle id — must be allow-listed under the Supabase Apple provider's Client IDs.
 const APPLE_NATIVE_CLIENT_ID = "com.sentinelprops.app";
@@ -386,7 +386,7 @@ const AuthPage = () => {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background relative overflow-hidden px-4 py-8 pt-safe-plus-4 pb-safe">
         {/* Ambient purple orbs */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[120px] pointer-events-none" style={{ background: 'hsl(270 70% 45% / 0.22)' }} />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[120px] pointer-events-none" style={{ background: 'hsl(var(--primary) / 0.22)' }} />
 
         <motion.div
           initial={{ opacity: 0, y: 20, scale: 0.97 }}
@@ -394,25 +394,25 @@ const AuthPage = () => {
           transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
           className="w-full max-w-[440px] relative z-10 rounded-[28px] p-7 sm:p-8 border text-center"
           style={{
-            background: 'hsla(265, 25%, 9%, 0.72)',
-            borderColor: 'hsla(0, 0%, 100%, 0.06)',
+            background: 'hsl(var(--card) / 0.72)',
+            borderColor: 'hsl(var(--foreground) / 0.06)',
             backdropFilter: 'blur(28px)',
             WebkitBackdropFilter: 'blur(28px)',
-            boxShadow: '0 20px 60px hsla(265, 50%, 4%, 0.65), inset 0 1px 0 hsla(0, 0%, 100%, 0.04)',
+            boxShadow: '0 20px 60px hsl(var(--primary) / 0.65), inset 0 1px 0 hsl(var(--foreground) / 0.04)',
           }}
         >
           <div className="flex justify-center mb-5">
-            <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: `${ACCENT}22`, border: `1px solid ${ACCENT}44` }}>
+            <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: `hsl(var(--primary) / 0.13)`, border: `1px solid hsl(var(--primary) / 0.27)` }}>
               <Mail className="w-8 h-8" style={{ color: ACCENT }} />
             </div>
           </div>
 
-          <h2 className="text-[24px] font-bold text-white mb-2">Check your email</h2>
-          <p className="text-[13px] text-white/55 leading-relaxed mb-1">
+          <h2 className="text-[24px] font-bold text-foreground mb-2">Check your email</h2>
+          <p className="text-[13px] text-foreground/55 leading-relaxed mb-1">
             We sent a confirmation link to
           </p>
           <p className="text-[14px] font-semibold mb-5" style={{ color: ACCENT }}>{email}</p>
-          <p className="text-[12px] text-white/45 leading-relaxed mb-6">
+          <p className="text-[12px] text-foreground/45 leading-relaxed mb-6">
             Open the link to activate your account. Once confirmed, come back to unlock the rest of Sentinel.
           </p>
 
@@ -423,12 +423,12 @@ const AuthPage = () => {
             className="w-full py-3 rounded-full text-[13px] font-semibold mb-3 transition-all disabled:opacity-50"
             style={{
               background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_DEEP})`,
-              boxShadow: `0 8px 24px ${ACCENT}44`,
+              boxShadow: `0 8px 24px hsl(var(--primary) / 0.27)`,
               color: 'white',
             }}
           >
             {resendLoading ? (
-              <div className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <div className="inline-block w-4 h-4 border-2 border-foreground/30 border-t-white rounded-full animate-spin" />
             ) : (
               "Resend confirmation email"
             )}
@@ -437,7 +437,7 @@ const AuthPage = () => {
           <button
             type="button"
             onClick={() => { setConfirmationPending(false); setError(""); }}
-            className="text-[12px] text-white/45 hover:text-white/70 transition-colors"
+            className="text-[12px] text-foreground/45 hover:text-foreground/70 transition-colors"
           >
             ← Back to sign in
           </button>
@@ -449,7 +449,7 @@ const AuthPage = () => {
   if (forgotMode) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background relative overflow-hidden px-4 py-8 pt-safe-plus-4 pb-safe">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[120px] pointer-events-none" style={{ background: 'hsl(270 70% 45% / 0.22)' }} />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[120px] pointer-events-none" style={{ background: 'hsl(var(--primary) / 0.22)' }} />
 
         <motion.div
           initial={{ opacity: 0, y: 20, scale: 0.97 }}
@@ -457,21 +457,21 @@ const AuthPage = () => {
           transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
           className="w-full max-w-[440px] relative z-10 rounded-[28px] p-7 sm:p-8 border"
           style={{
-            background: 'hsla(265, 25%, 9%, 0.72)',
-            borderColor: 'hsla(0, 0%, 100%, 0.06)',
+            background: 'hsl(var(--card) / 0.72)',
+            borderColor: 'hsl(var(--foreground) / 0.06)',
             backdropFilter: 'blur(28px)',
             WebkitBackdropFilter: 'blur(28px)',
-            boxShadow: '0 20px 60px hsla(265, 50%, 4%, 0.65), inset 0 1px 0 hsla(0, 0%, 100%, 0.04)',
+            boxShadow: '0 20px 60px hsl(var(--primary) / 0.65), inset 0 1px 0 hsl(var(--foreground) / 0.04)',
           }}
         >
           <div className="flex items-center gap-2.5 mb-6">
             <div
               className="relative w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center"
-              style={{ boxShadow: `0 0 20px ${ACCENT}66, inset 0 0 0 1px ${ACCENT}55` }}
+              style={{ boxShadow: `0 0 20px hsl(var(--primary) / 0.4), inset 0 0 0 1px hsl(var(--primary) / 0.33)` }}
             >
-              <img src={sentinelLogo} alt="Sentinel" className="w-full h-full object-cover" />
+              <BrandMark />
             </div>
-            <span className="text-[13px] font-bold tracking-[0.22em]" style={{ color: ACCENT, textShadow: `0 0 12px ${ACCENT}66` }}>
+            <span className="text-[13px] font-bold tracking-[0.22em]" style={{ color: ACCENT, textShadow: `0 0 12px hsl(var(--primary) / 0.4)` }}>
               SENTINEL
             </span>
           </div>
@@ -479,51 +479,51 @@ const AuthPage = () => {
           {forgotSent ? (
             <div className="text-center py-2">
               <div className="flex justify-center mb-5">
-                <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: `${ACCENT}22`, border: `1px solid ${ACCENT}44` }}>
+                <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: `hsl(var(--primary) / 0.13)`, border: `1px solid hsl(var(--primary) / 0.27)` }}>
                   <Mail className="w-8 h-8" style={{ color: ACCENT }} />
                 </div>
               </div>
-              <h2 className="text-[24px] font-bold text-white mb-2">Check your email</h2>
-              <p className="text-[13px] text-white/55 leading-relaxed mb-1">We sent a reset link to</p>
+              <h2 className="text-[24px] font-bold text-foreground mb-2">Check your email</h2>
+              <p className="text-[13px] text-foreground/55 leading-relaxed mb-1">We sent a reset link to</p>
               <p className="text-[14px] font-semibold mb-5" style={{ color: ACCENT }}>{email}</p>
-              <p className="text-[12px] text-white/45 leading-relaxed mb-6">
+              <p className="text-[12px] text-foreground/45 leading-relaxed mb-6">
                 Open the link to choose a new password. The link is valid for one hour.
               </p>
               <button
                 type="button"
                 onClick={() => { setForgotMode(false); setForgotSent(false); setError(""); }}
-                className="text-[12px] text-white/45 hover:text-white/70 transition-colors"
+                className="text-[12px] text-foreground/45 hover:text-foreground/70 transition-colors"
               >
                 ← Back to sign in
               </button>
             </div>
           ) : (
             <>
-              <h1 className="text-[28px] leading-[1.15] font-bold tracking-tight text-white mb-2">
+              <h1 className="text-[28px] leading-[1.15] font-bold tracking-tight text-foreground mb-2">
                 Reset your<br />
-                <span style={{ color: ACCENT, textShadow: `0 0 24px ${ACCENT}55` }}>password</span>
+                <span style={{ color: ACCENT, textShadow: `0 0 24px hsl(var(--primary) / 0.33)` }}>password</span>
               </h1>
-              <p className="text-[13px] text-white/55 mb-6 leading-relaxed">
+              <p className="text-[13px] text-foreground/55 mb-6 leading-relaxed">
                 Enter your email and we'll send you a link to set a new password.
               </p>
 
               <form onSubmit={handleForgotPassword} className="space-y-4" autoComplete="on">
                 <div>
-                  <label className="block text-[10px] font-semibold tracking-[0.15em] text-white/50 mb-1.5 uppercase">Email Address</label>
+                  <label className="block text-[10px] font-semibold tracking-[0.15em] text-foreground/50 mb-1.5 uppercase">Email Address</label>
                   <input
                     type="email"
                     placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     autoComplete="email"
-                    className="w-full rounded-xl py-3 px-4 text-[14px] text-white placeholder:text-white/30 focus:outline-none transition-all"
+                    className="w-full rounded-xl py-3 px-4 text-[14px] text-foreground placeholder:text-foreground/30 focus:outline-none transition-all"
                     style={{
-                      background: 'hsla(0,0%,100%,0.03)',
-                      border: '1px solid hsla(0,0%,100%,0.06)',
+                      background: 'hsl(var(--foreground) / 0.03)',
+                      border: '1px solid hsl(var(--foreground) / 0.06)',
                       boxShadow: 'inset 0 1px 2px hsla(0,0%,0%,0.25)',
                     }}
-                    onFocus={(e) => { e.currentTarget.style.borderColor = `${ACCENT}66`; e.currentTarget.style.boxShadow = `inset 0 1px 2px hsla(0,0%,0%,0.25), 0 0 0 3px ${ACCENT}26`; }}
-                    onBlur={(e) => { e.currentTarget.style.borderColor = 'hsla(0,0%,100%,0.06)'; e.currentTarget.style.boxShadow = 'inset 0 1px 2px hsla(0,0%,0%,0.25)'; }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = `hsl(var(--primary) / 0.4)`; e.currentTarget.style.boxShadow = `inset 0 1px 2px hsla(0,0%,0%,0.25), 0 0 0 3px hsl(var(--primary) / 0.15)`; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--foreground) / 0.06)'; e.currentTarget.style.boxShadow = 'inset 0 1px 2px hsla(0,0%,0%,0.25)'; }}
                   />
                 </div>
 
@@ -538,11 +538,11 @@ const AuthPage = () => {
                   className="w-full py-3.5 rounded-full text-[14px] font-bold text-white flex items-center justify-center gap-2 transition-all disabled:opacity-50"
                   style={{
                     background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_DEEP})`,
-                    boxShadow: `0 8px 32px ${ACCENT}66, inset 0 1px 0 hsla(0,0%,100%,0.25)`,
+                    boxShadow: `0 8px 32px hsl(var(--primary) / 0.4), inset 0 1px 0 hsl(var(--foreground) / 0.25)`,
                   }}
                 >
                   {forgotLoading ? (
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <div className="w-5 h-5 border-2 border-foreground/30 border-t-white rounded-full animate-spin" />
                   ) : (
                     <>Send reset link<ArrowRight className="w-4 h-4" strokeWidth={2.5} /></>
                   )}
@@ -551,7 +551,7 @@ const AuthPage = () => {
                 <button
                   type="button"
                   onClick={() => { setForgotMode(false); setError(""); }}
-                  className="w-full text-[12px] text-white/45 hover:text-white/70 transition-colors"
+                  className="w-full text-[12px] text-foreground/45 hover:text-foreground/70 transition-colors"
                 >
                   ← Back to sign in
                 </button>
@@ -588,9 +588,9 @@ const AuthPage = () => {
       ))}
 
       {/* Ambient purple orbs */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[120px] pointer-events-none" style={{ background: 'hsl(270 70% 45% / 0.22)' }} />
-      <div className="absolute bottom-0 right-0 w-[420px] h-[420px] rounded-full blur-[110px] pointer-events-none" style={{ background: `${ACCENT}1f` }} />
-      <div className="absolute top-0 left-0 w-[320px] h-[320px] rounded-full blur-[90px] pointer-events-none" style={{ background: 'hsl(265 80% 55% / 0.14)' }} />
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[120px] pointer-events-none" style={{ background: 'hsl(var(--primary) / 0.22)' }} />
+      <div className="absolute bottom-0 right-0 w-[420px] h-[420px] rounded-full blur-[110px] pointer-events-none" style={{ background: `hsl(var(--primary) / 0.12)` }} />
+      <div className="absolute top-0 left-0 w-[320px] h-[320px] rounded-full blur-[90px] pointer-events-none" style={{ background: 'hsl(var(--primary) / 0.14)' }} />
 
       <motion.div
         initial={{ opacity: 0, y: 20, scale: 0.97 }}
@@ -598,72 +598,72 @@ const AuthPage = () => {
         transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
         className="w-full max-w-[440px] relative z-10 rounded-[28px] p-7 sm:p-8 border overflow-hidden"
         style={{
-          background: 'hsla(265, 25%, 9%, 0.72)',
-          borderColor: 'hsla(0, 0%, 100%, 0.06)',
+          background: 'hsl(var(--card) / 0.72)',
+          borderColor: 'hsl(var(--foreground) / 0.06)',
           backdropFilter: 'blur(28px)',
           WebkitBackdropFilter: 'blur(28px)',
-          boxShadow: '0 20px 60px hsla(265, 50%, 4%, 0.65), inset 0 1px 0 hsla(0, 0%, 100%, 0.04)',
+          boxShadow: '0 20px 60px hsl(var(--primary) / 0.65), inset 0 1px 0 hsl(var(--foreground) / 0.04)',
         }}
       >
         {/* Top inner light gradient */}
-        <div className="absolute inset-x-0 top-0 h-px pointer-events-none" style={{ background: 'linear-gradient(90deg, transparent, hsla(0,0%,100%,0.12), transparent)' }} />
+        <div className="absolute inset-x-0 top-0 h-px pointer-events-none" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--foreground) / 0.12), transparent)' }} />
         {/* Purple corner glow */}
-        <div className="absolute -top-20 -right-20 w-[260px] h-[260px] rounded-full blur-[80px] pointer-events-none" style={{ background: `${ACCENT}33` }} />
+        <div className="absolute -top-20 -right-20 w-[260px] h-[260px] rounded-full blur-[80px] pointer-events-none" style={{ background: `hsl(var(--primary) / 0.2)` }} />
 
         {/* Wordmark + progress */}
         <div className="relative flex items-center justify-between mb-6">
           <div className="flex items-center gap-2.5">
             <div
               className="relative w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center"
-              style={{ boxShadow: `0 0 20px ${ACCENT}66, inset 0 0 0 1px ${ACCENT}55` }}
+              style={{ boxShadow: `0 0 20px hsl(var(--primary) / 0.4), inset 0 0 0 1px hsl(var(--primary) / 0.33)` }}
             >
-              <img src={sentinelLogo} alt="Sentinel" className="w-full h-full object-cover" />
+              <BrandMark />
             </div>
             <span
               className="text-[13px] font-bold tracking-[0.22em]"
-              style={{ color: ACCENT, textShadow: `0 0 12px ${ACCENT}66` }}
+              style={{ color: ACCENT, textShadow: `0 0 12px hsl(var(--primary) / 0.4)` }}
             >
               SENTINEL
             </span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-6 h-1 rounded-full" style={{ background: 'hsla(0,0%,100%,0.08)' }} />
-            <div className="w-6 h-1 rounded-full" style={{ background: 'hsla(0,0%,100%,0.08)' }} />
-            <div className="w-8 h-1 rounded-full" style={{ background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_DEEP})`, boxShadow: `0 0 10px ${ACCENT}88` }} />
+            <div className="w-6 h-1 rounded-full" style={{ background: 'hsl(var(--foreground) / 0.08)' }} />
+            <div className="w-6 h-1 rounded-full" style={{ background: 'hsl(var(--foreground) / 0.08)' }} />
+            <div className="w-8 h-1 rounded-full" style={{ background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_DEEP})`, boxShadow: `0 0 10px hsl(var(--primary) / 0.53)` }} />
           </div>
         </div>
 
         {/* Headline */}
         <div className="relative mb-6">
-          <h1 className="text-[28px] leading-[1.15] font-bold tracking-tight text-white">
+          <h1 className="text-[28px] leading-[1.15] font-bold tracking-tight text-foreground">
             {isSignup ? (
               <>
                 Create your<br />
-                <span style={{ color: ACCENT, textShadow: `0 0 24px ${ACCENT}55` }}>free account</span>
+                <span style={{ color: ACCENT, textShadow: `0 0 24px hsl(var(--primary) / 0.33)` }}>free account</span>
               </>
             ) : (
               <>
                 Welcome<br />
-                <span style={{ color: ACCENT, textShadow: `0 0 24px ${ACCENT}55` }}>back to Sentinel</span>
+                <span style={{ color: ACCENT, textShadow: `0 0 24px hsl(var(--primary) / 0.33)` }}>back to Sentinel</span>
               </>
             )}
           </h1>
-          <p className="text-[13px] text-white/55 mt-2.5 leading-relaxed">
+          <p className="text-[13px] text-foreground/55 mt-2.5 leading-relaxed">
             {isSignup ? "Unlock your personalized AI picks in seconds." : "Sign in to access today's edge."}
           </p>
         </div>
 
         {/* Mode toggle */}
-        <div className="relative flex p-1 rounded-full mb-5" style={{ background: 'hsla(0,0%,100%,0.04)', border: '1px solid hsla(0,0%,100%,0.05)' }}>
+        <div className="relative flex p-1 rounded-full mb-5" style={{ background: 'hsl(var(--foreground) / 0.04)', border: '1px solid hsl(var(--foreground) / 0.05)' }}>
           {(["login", "signup"] as const).map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => { setMode(m); setError(""); }}
-              className={`relative flex-1 py-2 text-[12px] font-semibold rounded-full transition-colors duration-200 ${mode === m ? "text-white" : "text-white/55 hover:text-white/75"}`}
+              className={`relative flex-1 py-2 text-[12px] font-semibold rounded-full transition-colors duration-200 ${mode === m ? "text-white" : "text-muted-foreground hover:text-foreground"}`}
               style={mode === m ? {
                 background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT_DEEP})`,
-                boxShadow: `0 4px 14px ${ACCENT}55`,
+                boxShadow: `0 4px 14px hsl(var(--primary) / 0.33)`,
               } : {}}
             >
               {m === "login" ? "Sign In" : "Sign Up"}
@@ -682,46 +682,46 @@ const AuthPage = () => {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <label className="block text-[10px] font-semibold tracking-[0.15em] text-white/50 mb-1.5 uppercase">Display Name</label>
+                <label className="block text-[10px] font-semibold tracking-[0.15em] text-foreground/50 mb-1.5 uppercase">Display Name</label>
                 <input
                   type="text"
                   placeholder="Your name (optional)"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  className="w-full rounded-xl py-3 px-4 text-[14px] text-white placeholder:text-white/30 focus:outline-none transition-all"
+                  className="w-full rounded-xl py-3 px-4 text-[14px] text-foreground placeholder:text-foreground/30 focus:outline-none transition-all"
                   style={{
-                    background: 'hsla(0,0%,100%,0.03)',
-                    border: '1px solid hsla(0,0%,100%,0.06)',
+                    background: 'hsl(var(--foreground) / 0.03)',
+                    border: '1px solid hsl(var(--foreground) / 0.06)',
                     boxShadow: 'inset 0 1px 2px hsla(0,0%,0%,0.25)',
                   }}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = `${ACCENT}66`; e.currentTarget.style.boxShadow = `inset 0 1px 2px hsla(0,0%,0%,0.25), 0 0 0 3px ${ACCENT}26`; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = 'hsla(0,0%,100%,0.06)'; e.currentTarget.style.boxShadow = 'inset 0 1px 2px hsla(0,0%,0%,0.25)'; }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = `hsl(var(--primary) / 0.4)`; e.currentTarget.style.boxShadow = `inset 0 1px 2px hsla(0,0%,0%,0.25), 0 0 0 3px hsl(var(--primary) / 0.15)`; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--foreground) / 0.06)'; e.currentTarget.style.boxShadow = 'inset 0 1px 2px hsla(0,0%,0%,0.25)'; }}
                 />
               </motion.div>
             )}
           </AnimatePresence>
 
           <div>
-            <label className="block text-[10px] font-semibold tracking-[0.15em] text-white/50 mb-1.5 uppercase">Email Address</label>
+            <label className="block text-[10px] font-semibold tracking-[0.15em] text-foreground/50 mb-1.5 uppercase">Email Address</label>
             <input
               type="email"
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
-              className="w-full rounded-xl py-3 px-4 text-[14px] text-white placeholder:text-white/30 focus:outline-none transition-all"
+              className="w-full rounded-xl py-3 px-4 text-[14px] text-foreground placeholder:text-foreground/30 focus:outline-none transition-all"
               style={{
-                background: 'hsla(0,0%,100%,0.03)',
-                border: '1px solid hsla(0,0%,100%,0.06)',
+                background: 'hsl(var(--foreground) / 0.03)',
+                border: '1px solid hsl(var(--foreground) / 0.06)',
                 boxShadow: 'inset 0 1px 2px hsla(0,0%,0%,0.25)',
               }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = `${ACCENT}66`; e.currentTarget.style.boxShadow = `inset 0 1px 2px hsla(0,0%,0%,0.25), 0 0 0 3px ${ACCENT}26`; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = 'hsla(0,0%,100%,0.06)'; e.currentTarget.style.boxShadow = 'inset 0 1px 2px hsla(0,0%,0%,0.25)'; }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = `hsl(var(--primary) / 0.4)`; e.currentTarget.style.boxShadow = `inset 0 1px 2px hsla(0,0%,0%,0.25), 0 0 0 3px hsl(var(--primary) / 0.15)`; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--foreground) / 0.06)'; e.currentTarget.style.boxShadow = 'inset 0 1px 2px hsla(0,0%,0%,0.25)'; }}
             />
           </div>
 
           <div>
-            <label className="block text-[10px] font-semibold tracking-[0.15em] text-white/50 mb-1.5 uppercase">Password</label>
+            <label className="block text-[10px] font-semibold tracking-[0.15em] text-foreground/50 mb-1.5 uppercase">Password</label>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
@@ -729,19 +729,19 @@ const AuthPage = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete={isSignup ? "new-password" : "current-password"}
-                className="w-full rounded-xl py-3 pl-4 pr-11 text-[14px] text-white placeholder:text-white/30 focus:outline-none transition-all"
+                className="w-full rounded-xl py-3 pl-4 pr-11 text-[14px] text-foreground placeholder:text-foreground/30 focus:outline-none transition-all"
                 style={{
-                  background: 'hsla(0,0%,100%,0.03)',
-                  border: '1px solid hsla(0,0%,100%,0.06)',
+                  background: 'hsl(var(--foreground) / 0.03)',
+                  border: '1px solid hsl(var(--foreground) / 0.06)',
                   boxShadow: 'inset 0 1px 2px hsla(0,0%,0%,0.25)',
                 }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = `${ACCENT}66`; e.currentTarget.style.boxShadow = `inset 0 1px 2px hsla(0,0%,0%,0.25), 0 0 0 3px ${ACCENT}26`; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = 'hsla(0,0%,100%,0.06)'; e.currentTarget.style.boxShadow = 'inset 0 1px 2px hsla(0,0%,0%,0.25)'; }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = `hsl(var(--primary) / 0.4)`; e.currentTarget.style.boxShadow = `inset 0 1px 2px hsla(0,0%,0%,0.25), 0 0 0 3px hsl(var(--primary) / 0.15)`; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--foreground) / 0.06)'; e.currentTarget.style.boxShadow = 'inset 0 1px 2px hsla(0,0%,0%,0.25)'; }}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/80 transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/40 hover:text-foreground/80 transition-colors"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -768,7 +768,7 @@ const AuthPage = () => {
                 className="w-3.5 h-3.5 rounded"
                 style={{ accentColor: ACCENT }}
               />
-              <span className="text-[12px] text-white/55">Remember me on this device</span>
+              <span className="text-[12px] text-foreground/55">Remember me on this device</span>
             </label>
             {!isSignup && (
               <button
@@ -791,11 +791,11 @@ const AuthPage = () => {
             className="w-full py-3.5 rounded-full text-[14px] font-bold text-white flex items-center justify-center gap-2 transition-all disabled:opacity-50 group"
             style={{
               background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_DEEP})`,
-              boxShadow: `0 8px 32px ${ACCENT}66, inset 0 1px 0 hsla(0,0%,100%,0.25)`,
+              boxShadow: `0 8px 32px hsl(var(--primary) / 0.4), inset 0 1px 0 hsl(var(--foreground) / 0.25)`,
             }}
           >
             {loading ? (
-              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-foreground/30 border-t-white rounded-full animate-spin" />
             ) : (
               <>
                 {isSignup ? "Launch Sentinel" : "Sign In"}
@@ -807,11 +807,11 @@ const AuthPage = () => {
 
         {/* Divider */}
         <div className="relative flex items-center gap-3 my-5">
-          <div className="flex-1 h-px" style={{ background: 'hsla(0,0%,100%,0.06)' }} />
-          <span className="text-[10px] tracking-[0.18em] uppercase text-white/35 font-medium">
+          <div className="flex-1 h-px" style={{ background: 'hsl(var(--foreground) / 0.06)' }} />
+          <span className="text-[10px] tracking-[0.18em] uppercase text-foreground/35 font-medium">
             or {isSignup ? "sign up" : "continue"} with
           </span>
-          <div className="flex-1 h-px" style={{ background: 'hsla(0,0%,100%,0.06)' }} />
+          <div className="flex-1 h-px" style={{ background: 'hsl(var(--foreground) / 0.06)' }} />
         </div>
 
         {/* Social buttons */}
@@ -825,11 +825,11 @@ const AuthPage = () => {
               style={{
                 background: "#000",
                 color: "#fff",
-                border: "1px solid hsla(0,0%,100%,0.12)",
+                border: "1px solid hsl(var(--foreground) / 0.12)",
               }}
             >
               {oauthLoading === "apple" ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-foreground/30 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
                   <AppleGlyph />
@@ -842,14 +842,14 @@ const AuthPage = () => {
             type="button"
             onClick={() => handleOAuth("google")}
             disabled={!!oauthLoading}
-            className="w-full py-3 rounded-full text-[13px] font-semibold text-white flex items-center justify-center gap-2.5 transition-all hover:bg-white/[0.06] disabled:opacity-50"
+            className="w-full py-3 rounded-full text-[13px] font-semibold text-foreground flex items-center justify-center gap-2.5 transition-all hover:bg-foreground/[0.06] disabled:opacity-50"
             style={{
-              background: 'hsla(0,0%,100%,0.03)',
-              border: '1px solid hsla(0,0%,100%,0.08)',
+              background: 'hsl(var(--foreground) / 0.03)',
+              border: '1px solid hsl(var(--foreground) / 0.08)',
             }}
           >
             {oauthLoading === "google" ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-foreground/30 border-t-white rounded-full animate-spin" />
             ) : (
               <>
                 <GoogleGlyph />
@@ -860,7 +860,7 @@ const AuthPage = () => {
         </div>
 
         {/* Legal microcopy */}
-        <p className="relative text-[10.5px] leading-relaxed text-white/40 text-center mt-5 px-2">
+        <p className="relative text-[10.5px] leading-relaxed text-foreground/40 text-center mt-5 px-2">
           By continuing you agree to our{" "}
           <Link
             to="/legal"
@@ -887,15 +887,15 @@ const AuthPage = () => {
           <button
             type="button"
             onClick={() => navigate("/onboarding")}
-            className="flex items-center gap-1.5 text-[12px] text-white/50 hover:text-white/80 transition-colors"
+            className="flex items-center gap-1.5 text-[12px] text-foreground/50 hover:text-foreground/80 transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             Back
           </button>
           <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'hsla(0,0%,100%,0.15)' }} />
-            <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'hsla(0,0%,100%,0.15)' }} />
-            <div className="w-1.5 h-1.5 rounded-full" style={{ background: ACCENT, boxShadow: `0 0 8px ${ACCENT}99` }} />
+            <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'hsl(var(--foreground) / 0.15)' }} />
+            <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'hsl(var(--foreground) / 0.15)' }} />
+            <div className="w-1.5 h-1.5 rounded-full" style={{ background: ACCENT, boxShadow: `0 0 8px hsl(var(--primary) / 0.6)` }} />
           </div>
         </div>
       </motion.div>

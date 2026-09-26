@@ -160,9 +160,9 @@ function ScanTeamTile({ name, abbr, sportTitle, side, delay }: {
       <motion.div
         className="grid h-[76px] w-[76px] place-items-center rounded-[22px] p-3"
         style={{
-          background: "linear-gradient(150deg, hsla(228,30%,19%,0.96), hsla(228,32%,9%,0.96))",
-          border: "1px solid hsla(228,30%,28%,0.55)",
-          boxShadow: "0 10px 28px -10px hsla(250,76%,62%,0.45)",
+          background: "linear-gradient(150deg, hsl(var(--secondary) / 0.96), hsl(var(--card) / 0.96))",
+          border: "1px solid hsl(var(--border) / 0.55)",
+          boxShadow: "0 10px 28px -10px hsl(var(--primary) / 0.45)",
         }}
         animate={reduceMotion ? undefined : { y: [0, -4, 0] }}
         transition={{ duration: 2.6, repeat: Infinity, delay, ease: "easeInOut" }}
@@ -187,21 +187,21 @@ function ScanRadar() {
         <span
           key={size}
           className="absolute rounded-full"
-          style={{ width: size, height: size, border: "1px solid hsla(228,30%,40%,0.28)" }}
+          style={{ width: size, height: size, border: "1px solid hsl(var(--muted-foreground) / 0.28)" }}
         />
       ))}
       <motion.span
         className="absolute inset-0 rounded-full"
-        style={{ background: "conic-gradient(from 0deg, hsla(158,64%,52%,0.32), hsla(158,64%,52%,0) 70deg, transparent 360deg)" }}
+        style={{ background: "conic-gradient(from 0deg, hsl(var(--success) / 0.32), hsl(var(--success) / 0) 70deg, transparent 360deg)" }}
         animate={reduceMotion ? undefined : { rotate: 360 }}
         transition={{ duration: 2.8, repeat: Infinity, ease: "linear" }}
       >
         {/* The sweep's leading edge. */}
-        <span className="absolute left-1/2 top-1/2 h-[2px] w-1/2 origin-left rounded-full" style={{ background: "hsl(158 64% 52%)", boxShadow: "0 0 10px hsl(158 64% 52%)" }} />
+        <span className="absolute left-1/2 top-1/2 h-[2px] w-1/2 origin-left rounded-full" style={{ background: "hsl(var(--success))", boxShadow: "0 0 10px hsl(var(--success))" }} />
       </motion.span>
       <span
         className="relative grid h-[52px] w-[52px] place-items-center rounded-full text-[13px] font-black tracking-wider text-nba-green"
-        style={{ background: "hsla(158,64%,52%,0.08)", border: "1px solid hsla(158,64%,52%,0.35)" }}
+        style={{ background: "hsl(var(--success) / 0.08)", border: "1px solid hsl(var(--success) / 0.35)" }}
       >
         VS
       </span>
@@ -249,9 +249,9 @@ function GameAnalysisScan({ event, scope, details, onCancel }: Extract<GameAnaly
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[45] overflow-y-auto bg-[#07070b] text-foreground"
+      className="fixed inset-0 z-[45] overflow-y-auto bg-background text-foreground"
     >
-      <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(circle at 50% 22%, hsla(250,76%,62%,0.16), transparent 38%), linear-gradient(180deg, #0d0b18 0%, #07070b 70%)" }} />
+      <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(circle at 50% 22%, hsl(var(--primary) / 0.10), transparent 38%), hsl(var(--background))" }} />
 
       <div className="relative mx-auto flex min-h-full w-full max-w-md flex-col px-5 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]">
         <header className="flex items-center gap-3">
@@ -259,8 +259,8 @@ function GameAnalysisScan({ event, scope, details, onCancel }: Extract<GameAnaly
             type="button"
             onClick={onCancel}
             aria-label="Cancel analysis"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-foreground transition-colors hover:bg-white/[0.08]"
-            style={{ background: "hsla(228,24%,14%,0.9)", border: "1px solid hsla(228,30%,24%,0.6)" }}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-foreground transition-colors hover:bg-foreground/[0.08]"
+            style={{ background: "hsl(var(--secondary) / 0.9)", border: "1px solid hsl(var(--border) / 0.6)" }}
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
@@ -270,9 +270,9 @@ function GameAnalysisScan({ event, scope, details, onCancel }: Extract<GameAnaly
           </div>
           <span
             className="flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-bold tracking-[0.12em] text-nba-green"
-            style={{ background: "hsla(158,64%,52%,0.1)", border: "1px solid hsla(158,64%,52%,0.3)" }}
+            style={{ background: "hsl(var(--success) / 0.1)", border: "1px solid hsl(var(--success) / 0.3)" }}
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-nba-green" style={{ boxShadow: "0 0 6px hsl(158 64% 52%)" }} />
+            <span className="h-1.5 w-1.5 rounded-full bg-nba-green" style={{ boxShadow: "0 0 6px hsl(var(--success))" }} />
             LIVE
           </span>
         </header>
@@ -295,7 +295,7 @@ function GameAnalysisScan({ event, scope, details, onCancel }: Extract<GameAnaly
           </p>
         </div>
 
-        <section className="vision-card mt-6 p-4" style={{ borderColor: "hsla(228,30%,22%,0.45)" }}>
+        <section className="vision-card mt-6 p-4" style={{ borderColor: "hsl(var(--border) / 0.45)" }}>
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-nba-green">Building your report</span>
             <span className="text-[10px] font-semibold text-muted-foreground/65">Step {activeStep + 1} of {FULL_GAME_STEPS.length}</span>
@@ -306,7 +306,7 @@ function GameAnalysisScan({ event, scope, details, onCancel }: Extract<GameAnaly
               <span
                 key={step}
                 className="h-1 rounded-full transition-colors duration-500"
-                style={{ background: index <= activeStep ? "hsl(158 64% 52%)" : "hsla(228,24%,22%,0.9)" }}
+                style={{ background: index <= activeStep ? "hsl(var(--success))" : "hsl(var(--secondary) / 0.9)" }}
               />
             ))}
           </div>
@@ -320,16 +320,16 @@ function GameAnalysisScan({ event, scope, details, onCancel }: Extract<GameAnaly
                   key={step}
                   className="flex items-center gap-3 rounded-xl px-2.5 py-2.5 transition-colors"
                   style={current
-                    ? { background: "hsla(158,64%,52%,0.07)", border: "1px solid hsla(158,64%,52%,0.4)" }
+                    ? { background: "hsl(var(--success) / 0.07)", border: "1px solid hsl(var(--success) / 0.4)" }
                     : { border: "1px solid transparent" }}
                 >
                   <span
                     className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[10px] font-bold"
                     style={complete
-                      ? { background: "hsla(158,64%,52%,0.14)", border: "1px solid hsla(158,64%,52%,0.4)", color: "hsl(158 64% 52%)" }
+                      ? { background: "hsl(var(--success) / 0.14)", border: "1px solid hsl(var(--success) / 0.4)", color: "hsl(var(--success))" }
                       : current
-                        ? { border: "2px solid hsla(158,64%,52%,0.25)" }
-                        : { border: "1px solid hsla(228,30%,30%,0.6)", color: "hsla(228,15%,60%,0.5)" }}
+                        ? { border: "2px solid hsl(var(--success) / 0.25)" }
+                        : { border: "1px solid hsl(var(--border) / 0.6)", color: "hsl(var(--muted-foreground) / 0.5)" }}
                   >
                     {complete ? <Check className="h-3 w-3" strokeWidth={3} /> : current ? <Loader2 className="h-3.5 w-3.5 animate-spin text-nba-green" /> : index + 1}
                   </span>
@@ -351,7 +351,7 @@ function GameAnalysisScan({ event, scope, details, onCancel }: Extract<GameAnaly
           type="button"
           onClick={onCancel}
           className="mt-4 w-full rounded-2xl py-3.5 text-[13px] font-bold text-foreground/85 transition-colors hover:text-foreground"
-          style={{ background: "transparent", border: "1px solid hsla(228,30%,26%,0.6)" }}
+          style={{ background: "transparent", border: "1px solid hsl(var(--border) / 0.6)" }}
         >
           Cancel analysis
         </button>
@@ -440,12 +440,12 @@ function AddToParlayButton({
       }`}
       style={
         inSlip
-          ? { background: "hsla(250,76%,62%,0.08)", border: "1px solid hsla(250,76%,62%,0.3)" }
+          ? { background: "hsl(var(--primary) / 0.08)", border: "1px solid hsl(var(--primary) / 0.3)" }
           : actionable
-            ? { background: "linear-gradient(135deg, hsla(250,76%,62%,0.7), hsla(210,100%,60%,0.7))" }
+            ? { background: "linear-gradient(135deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.7))" }
             // A model that is not leaning hard enough to act on gets the muted
             // outline, so the button's weight matches the signal behind it.
-            : { background: "transparent", border: "1px solid hsla(228,30%,22%,0.5)" }
+            : { background: "transparent", border: "1px solid hsl(var(--border) / 0.5)" }
       }
     >
       {inSlip ? <X className="h-4 w-4" /> : <Layers className="h-4 w-4" />}
@@ -529,10 +529,10 @@ function GameAnalysisReportView({ report, onClose }: { report: GameAnalysisRepor
     : undefined;
 
   return (
-    <motion.div key="game-analysis-report" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }} className="fixed inset-0 z-[45] overflow-y-auto bg-[#08070d] text-foreground">
-      <div className="sticky top-0 z-10 border-b border-white/[0.07] bg-[#08070d]/90 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-xl">
+    <motion.div key="game-analysis-report" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }} className="fixed inset-0 z-[45] overflow-y-auto bg-background text-foreground">
+      <div className="sticky top-0 z-10 border-b border-foreground/[0.07] bg-background/90 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-md items-center justify-between">
-          <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.03] text-foreground transition-colors hover:bg-white/[0.08]" aria-label="Back to game lines"><ArrowLeft className="h-4 w-4" /></button>
+          <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-xl border border-foreground/[0.08] bg-foreground/[0.03] text-foreground transition-colors hover:bg-foreground/[0.08]" aria-label="Back to game lines"><ArrowLeft className="h-4 w-4" /></button>
           <div className="text-center"><p className="text-[8px] font-bold uppercase tracking-[0.16em] text-accent">Sentinel report</p><p className="mt-0.5 text-[11px] font-bold text-foreground">{marketScopeLabel(report.scope)} analysis</p></div>
           <div className="grid h-10 w-10 place-items-center rounded-xl bg-nba-green/10 text-nba-green"><ShieldCheck className="h-4 w-4" /></div>
         </div>
@@ -541,7 +541,7 @@ function GameAnalysisReportView({ report, onClose }: { report: GameAnalysisRepor
       <main className="mx-auto w-full max-w-md space-y-3 px-4 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-4">
         <div className="flex items-center justify-between px-1 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-2 font-bold uppercase tracking-[0.12em] text-nba-green">
-            <span className="h-[7px] w-[7px] rounded-full bg-nba-green" style={{ boxShadow: "0 0 8px hsl(158 64% 52%)" }} />
+            <span className="h-[7px] w-[7px] rounded-full bg-nba-green" style={{ boxShadow: "0 0 8px hsl(var(--success))" }} />
             Analysis complete
           </span>
           <span>{analysedAt}</span>
@@ -628,7 +628,7 @@ function GameAnalysisReportView({ report, onClose }: { report: GameAnalysisRepor
           </>
         ) : (
           <>
-            <section className="vision-card flex gap-3 p-4" style={{ borderColor: "hsla(228,30%,22%,0.35)" }}>
+            <section className="vision-card flex gap-3 p-4" style={{ borderColor: "hsl(var(--border) / 0.35)" }}>
               <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               <div>
                 <p className="text-sm font-bold text-foreground">Analysis unavailable</p>

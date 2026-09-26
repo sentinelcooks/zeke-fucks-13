@@ -20,17 +20,17 @@ export function BrandGlyph({ className }: { className?: string }) {
   );
 }
 
-/** App-icon tile (cobalt squircle with the white mark). `size` is in px. */
-export function BrandMark({ size = 32, className }: { size?: number; className?: string }) {
+/** App-icon tile (cobalt squircle with the white mark). `size` is in px; omit it to fill the parent. */
+export function BrandMark({ size, className }: { size?: number; className?: string }) {
   return (
     <span
       role="img"
       aria-label="Sentinel"
       className={cn("inline-grid shrink-0 place-items-center text-white", className)}
       style={{
-        width: size,
-        height: size,
-        borderRadius: size * 0.2237,
+        width: size ?? "100%",
+        height: size ?? "100%",
+        borderRadius: size ? size * 0.2237 : "22.37%",
         background: "linear-gradient(180deg, #4169FF, #1A3FE0)",
         boxShadow: "inset 0 0 0 0.5px rgba(255,255,255,0.2)",
       }}

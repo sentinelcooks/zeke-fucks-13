@@ -63,7 +63,7 @@ export function ConditionsCard({ context }: { context?: GameAnalysisContext | nu
           <div
             key={tile.label}
             className="rounded-2xl px-1.5 py-3 text-center"
-            style={{ background: "hsla(228,24%,10%,0.7)", border: "1px solid hsla(228,30%,22%,0.35)" }}
+            style={{ background: "hsl(var(--card) / 0.7)", border: "1px solid hsl(var(--border) / 0.35)" }}
           >
             <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{tile.label}</p>
             <p className="my-1 flex items-center justify-center gap-1 text-[18px] font-bold text-foreground">

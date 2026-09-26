@@ -89,7 +89,7 @@ const cleanReason = (r: string) => r.replace(/^unproven:\s*/, "");
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-xl p-3" style={{ background: "hsla(228,24%,12%,0.7)", border: "1px solid hsla(228,30%,22%,0.35)" }}>
+    <div className="rounded-xl p-3" style={{ background: "hsl(var(--card) / 0.7)", border: "1px solid hsl(var(--border) / 0.35)" }}>
       <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-muted-foreground/60">{label}</p>
       <p className="mt-1 text-[17px] font-black tabular-nums text-foreground">{value}</p>
       {sub && <p className="mt-0.5 text-[10px] text-muted-foreground/60">{sub}</p>}
@@ -116,7 +116,7 @@ export function NflPropAnalysisCard({ data }: { data: NflPropAnalysis }) {
       {/* Header */}
       <div className="vision-card p-4">
         <div className="flex items-center gap-3">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl" style={{ background: "hsla(214,100%,20%,0.5)", border: "1px solid hsla(214,80%,40%,0.35)" }}>
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl" style={{ background: "hsla(214,100%,20%,0.5)", border: "1px solid hsl(var(--primary) / 0.35)" }}>
             <UserRound className="h-5 w-5 text-foreground/80" />
           </span>
           <div className="min-w-0 flex-1">
@@ -126,20 +126,20 @@ export function NflPropAnalysisCard({ data }: { data: NflPropAnalysis }) {
             </p>
           </div>
         </div>
-        <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/[0.07] pt-3">
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-foreground/[0.07] pt-3">
           <p className="text-[13px] font-bold text-foreground">
             {sideLabel} {data.prop_type === "anytime_td" ? "" : data.line} {label}
           </p>
           {isPick ? (
             <span className="flex items-center gap-1 rounded-lg bg-nba-green/15 px-2 py-1 text-[10px] font-black text-nba-green"><BadgeCheck className="h-3.5 w-3.5" /> PLAY</span>
           ) : (
-            <span className="rounded-lg px-2 py-1 text-[10px] font-bold text-nba-yellow" style={{ background: "hsla(42,92%,55%,0.1)" }}>NOT A PICK</span>
+            <span className="rounded-lg px-2 py-1 text-[10px] font-bold text-nba-yellow" style={{ background: "hsl(var(--nba-yellow) / 0.1)" }}>NOT A PICK</span>
           )}
         </div>
       </div>
 
       {!isPick && (
-        <div className="flex items-start gap-2 rounded-xl px-3 py-2.5 text-[11px] leading-relaxed text-nba-yellow" style={{ background: "hsla(42,92%,55%,0.07)", border: "1px solid hsla(42,92%,55%,0.18)" }}>
+        <div className="flex items-start gap-2 rounded-xl px-3 py-2.5 text-[11px] leading-relaxed text-nba-yellow" style={{ background: "hsl(var(--nba-yellow) / 0.07)", border: "1px solid hsl(var(--nba-yellow) / 0.18)" }}>
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
             Model analysis only. NFL {label.toLowerCase()} is in forward testing ({data.forward_test}) — it becomes a pick only after the model proves profitable on graded results.
@@ -172,8 +172,8 @@ export function NflPropAnalysisCard({ data }: { data: NflPropAnalysis }) {
                   </span>
                   <span className={`tabular-nums ${active ? "font-bold text-foreground" : "text-muted-foreground/70"}`}>{pct(p)}</span>
                 </div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-                  <div className={`h-full rounded-full ${active ? "bg-accent" : "bg-white/20"}`} style={{ width: `${Math.min(100, p * 100)}%` }} />
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-foreground/[0.06]">
+                  <div className={`h-full rounded-full ${active ? "bg-accent" : "bg-foreground/20"}`} style={{ width: `${Math.min(100, p * 100)}%` }} />
                 </div>
               </div>
             );
@@ -233,7 +233,7 @@ export function NflPropAnalysisCard({ data }: { data: NflPropAnalysis }) {
           <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showFactors ? "rotate-180" : ""}`} />
         </button>
         {showFactors && (
-          <div className="divide-y divide-white/[0.05] px-4 pb-3">
+          <div className="divide-y divide-foreground/[0.05] px-4 pb-3">
             {chosen.factors.map((f) => (
               <div key={f.id} className="flex items-start justify-between gap-3 py-2">
                 <div className="min-w-0">

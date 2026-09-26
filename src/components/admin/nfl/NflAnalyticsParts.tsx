@@ -176,7 +176,7 @@ export function PerfTable({ title, rows, order }: { title: string; rows: Record<
                 <td className="px-3 py-1.5">{p.graded}</td>
                 <td className="px-3 py-1.5 whitespace-nowrap">{p.record}</td>
                 <td className="px-3 py-1.5">{pct(p.win_rate)}</td>
-                <td className={`px-3 py-1.5 ${p.roi !== null && p.roi < 0 ? "text-red-400" : p.roi ? "text-emerald-400" : ""}`}>{pct(p.roi)}</td>
+                <td className={`px-3 py-1.5 ${p.roi !== null && p.roi < 0 ? "text-danger" : p.roi ? "text-success" : ""}`}>{pct(p.roi)}</td>
                 <td className="px-3 py-1.5">{p.avg_edge === null ? "—" : `${p.avg_edge.toFixed(1)}%`}</td>
                 <td className="px-3 py-1.5">{p.avg_ev === null ? "—" : `${p.avg_ev.toFixed(1)}%`}</td>
                 <td className="px-3 py-1.5">{num(p.avg_confidence, 1)}</td>
@@ -192,6 +192,6 @@ export function PerfTable({ title, rows, order }: { title: string; rows: Record<
 
 export function Notice({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">{children}</div>
+    <div className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">{children}</div>
   );
 }

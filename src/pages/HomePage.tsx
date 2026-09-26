@@ -194,39 +194,39 @@ const HomePage = () => {
   const isNewUser = stats.total < 5;
 
   const quickLinks = [
-    { label: "Analyze", icon: BarChart3, path: "/dashboard/analyze", gradient: "from-[hsl(250,76%,62%)] to-[hsl(210,100%,60%)]", desc: "Props & Lines" },
-    { label: "Picks", icon: Sparkles, path: "/dashboard/picks", gradient: "from-[hsl(30,100%,50%)] to-[hsl(15,100%,55%)]", desc: "Today's picks" },
-    { label: "Tracker", icon: DollarSign, path: "/dashboard/tracker", gradient: "from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)]", desc: "Your bets" },
-    { label: "Lines", icon: Crosshair, path: "/dashboard/analyze?mode=lines", gradient: "from-[hsl(190,90%,55%)] to-[hsl(210,100%,60%)]", desc: "Moneylines" },
+    { label: "Analyze", icon: BarChart3, path: "/dashboard/analyze", gradient: "from-primary to-primary", desc: "Props & Lines" },
+    { label: "Picks", icon: Sparkles, path: "/dashboard/picks", gradient: "from-[hsl(var(--nba-yellow))] to-[hsl(15,100%,55%)]", desc: "Today's picks" },
+    { label: "Tracker", icon: DollarSign, path: "/dashboard/tracker", gradient: "from-success to-success", desc: "Your bets" },
+    { label: "Lines", icon: Crosshair, path: "/dashboard/analyze?mode=lines", gradient: "from-[hsl(var(--nba-cyan))] to-primary", desc: "Moneylines" },
   ];
 
   const statCards = [
     { 
       icon: Flame, label: "Today's Picks", value: stats.todayPicks || "—", 
-      gradient: "from-[hsl(250,76%,62%)] to-[hsl(280,70%,55%)]",
-      glow: "hsla(250,76%,62%,0.15)",
+      gradient: "from-primary to-primary",
+      glow: "hsl(var(--primary) / 0.15)",
       sub: "active today",
       path: "/dashboard/picks",
     },
     { 
       icon: Users, label: "Total Plays", value: stats.total, 
-      gradient: "from-[hsl(190,90%,55%)] to-[hsl(210,100%,60%)]",
-      glow: "hsla(190,90%,55%,0.15)",
+      gradient: "from-[hsl(var(--nba-cyan))] to-primary",
+      glow: "hsl(var(--nba-cyan) / 0.15)",
       sub: `${stats.wins}W / ${stats.losses}L`,
       path: "/dashboard/tracker",
     },
     { 
       icon: Target, label: "Hit Rate", value: `${stats.hitRate}%`, 
-      gradient: "from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)]",
-      glow: "hsla(158,64%,52%,0.15)",
+      gradient: "from-success to-success",
+      glow: "hsl(var(--success) / 0.15)",
       sub: stats.hitRate >= 55 ? "above avg" : "tracking",
       path: "/dashboard/tracker",
     },
     { 
       icon: DollarSign, label: "Net Profit", 
       value: fmtProfit(stats.profit),
-      gradient: stats.profit >= 0 ? "from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)]" : "from-[hsl(0,72%,51%)] to-[hsl(340,65%,47%)]",
-      glow: stats.profit >= 0 ? "hsla(158,64%,52%,0.15)" : "hsla(0,72%,51%,0.15)",
+      gradient: stats.profit >= 0 ? "from-success to-success" : "from-danger to-danger",
+      glow: stats.profit >= 0 ? "hsl(var(--success) / 0.15)" : "hsl(var(--danger) / 0.15)",
       sub: `${stats.roi}% ROI`,
       path: "/dashboard/tracker",
     },
@@ -239,8 +239,8 @@ const HomePage = () => {
   return (
     <div className="px-4 pt-1 pb-4 space-y-3 relative overflow-hidden">
       {/* Ambient background orbs — clamped to container */}
-      <div className="vision-orb w-64 h-64 -top-20 -right-20" style={{ background: 'hsl(250 76% 62%)' }} />
-      <div className="vision-orb w-48 h-48 top-[400px] -left-16" style={{ background: 'hsl(190 90% 55%)', animationDelay: '-3s' }} />
+      <div className="vision-orb w-64 h-64 -top-20 -right-20" style={{ background: 'hsl(var(--primary))' }} />
+      <div className="vision-orb w-48 h-48 top-[400px] -left-16" style={{ background: 'hsl(var(--nba-cyan))', animationDelay: '-3s' }} />
 
       
 
@@ -260,8 +260,8 @@ const HomePage = () => {
                 className="vision-card p-3 flex flex-col items-center gap-2 group active:scale-[0.97]"
               >
                 <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${link.gradient} flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all group-hover:scale-105`}
-                  style={{ boxShadow: '0 4px 12px -2px hsla(228, 20%, 0%, 0.3)' }}>
-                  <link.icon className="w-5 h-5 text-white" />
+                  style={{ boxShadow: '0 4px 12px -2px hsl(var(--background) / 0.3)' }}>
+                  <link.icon className="w-5 h-5 text-foreground" />
                 </div>
                 <div className="text-center">
                   <span className="text-[9px] font-semibold text-foreground/60 block">{link.label}</span>
@@ -298,10 +298,10 @@ const HomePage = () => {
                     className={`w-9 h-9 rounded-xl bg-gradient-to-br ${s.gradient} flex items-center justify-center shadow-lg transition-all group-hover:shadow-xl group-hover:scale-105`}
                     style={{ boxShadow: `0 4px 14px -2px ${s.glow}` }}
                   >
-                    <s.icon className="w-4 h-4 text-white" />
+                    <s.icon className="w-4 h-4 text-foreground" />
                   </div>
                   <span className="text-[7px] font-bold px-1.5 py-0.5 rounded-md text-muted-foreground/65 uppercase tracking-wider"
-                    style={{ background: 'hsla(228, 20%, 15%, 0.5)' }}>
+                    style={{ background: 'hsl(var(--secondary) / 0.5)' }}>
                     {s.sub}
                   </span>
                 </div>
@@ -317,10 +317,10 @@ const HomePage = () => {
 
       {/* ── WELCOME + STREAK ── */}
       <motion.div {...stagger(isNewUser ? 8 : 4)} className="relative rounded-2xl overflow-hidden p-4 vision-grain" style={{
-        background: 'linear-gradient(127.09deg, hsla(250, 76%, 62%, 0.15) 19.41%, hsla(210, 100%, 60%, 0.06) 76.65%)',
-        border: '1px solid hsla(250, 76%, 62%, 0.15)',
+        background: 'linear-gradient(127.09deg, hsl(var(--primary) / 0.15) 19.41%, hsl(var(--primary) / 0.06) 76.65%)',
+        border: '1px solid hsl(var(--primary) / 0.15)',
       }}>
-        <div className="absolute top-0 right-0 w-32 h-32 opacity-[0.08] pointer-events-none" style={{ background: 'radial-gradient(circle, hsl(250 76% 62%), transparent 70%)' }} />
+        <div className="absolute top-0 right-0 w-32 h-32 opacity-[0.08] pointer-events-none" style={{ background: 'radial-gradient(circle, hsl(var(--primary)), transparent 70%)' }} />
         
         <div className="relative z-10 flex items-start justify-between">
           <div className="min-w-0 flex-1">
@@ -346,7 +346,7 @@ const HomePage = () => {
                 stats.streak > 0 ? "bg-nba-green/8" : "bg-nba-red/8"
               }`}
               style={{
-                border: `1px solid ${stats.streak > 0 ? "hsla(158, 64%, 52%, 0.15)" : "hsla(0, 72%, 51%, 0.15)"}`,
+                border: `1px solid ${stats.streak > 0 ? "hsl(var(--success) / 0.15)" : "hsl(var(--danger) / 0.15)"}`,
               }}
             >
               <Zap className={`w-3 h-3 ${stats.streak > 0 ? "text-nba-green" : "text-nba-red"}`} />
@@ -367,13 +367,13 @@ const HomePage = () => {
           {...stagger(isNewUser ? 9 : 5)}
           className="relative rounded-xl overflow-hidden p-3 vision-grain"
           style={{
-            background: 'linear-gradient(127deg, hsla(158, 64%, 52%, 0.08) 0%, hsla(190, 90%, 55%, 0.04) 100%)',
-            border: '1px solid hsla(158, 64%, 52%, 0.1)',
+            background: 'linear-gradient(127deg, hsl(var(--success) / 0.08) 0%, hsl(var(--nba-cyan) / 0.04) 100%)',
+            border: '1px solid hsl(var(--success) / 0.1)',
           }}
         >
           <div className="flex items-start gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)] flex items-center justify-center shrink-0 shadow-lg">
-              <Sparkles className="w-3.5 h-3.5 text-white" />
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-success to-success flex items-center justify-center shrink-0 shadow-lg">
+              <Sparkles className="w-3.5 h-3.5 text-foreground" />
             </div>
             <div className="min-w-0">
               <p className="text-[8px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-0.5">AI Tip</p>
@@ -390,11 +390,11 @@ const HomePage = () => {
       <div className="grid grid-cols-2 gap-2.5">
         {/* Performance Ring */}
         <motion.div {...stagger(isNewUser ? 10 : 6)} className="vision-card p-3.5 flex flex-col items-center justify-center relative overflow-hidden">
-          <div className="vision-orb w-20 h-20 top-0 left-0" style={{ background: 'hsl(250 76% 62%)', animationDelay: '-2s' }} />
+          <div className="vision-orb w-20 h-20 top-0 left-0" style={{ background: 'hsl(var(--primary))', animationDelay: '-2s' }} />
           <p className="text-[8px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-1 relative z-10">Performance</p>
           <div className="relative w-24 h-24 my-1">
             <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-              <circle cx="60" cy="60" r={ringRadius} fill="none" stroke="hsla(228, 18%, 15%, 0.6)" strokeWidth="6" />
+              <circle cx="60" cy="60" r={ringRadius} fill="none" stroke="hsl(var(--border) / 0.6)" strokeWidth="6" />
               <motion.circle
                 cx="60" cy="60" r={ringRadius}
                 fill="none"
@@ -408,8 +408,8 @@ const HomePage = () => {
               />
               <defs>
                 <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="hsl(250 76% 62%)" />
-                  <stop offset="100%" stopColor="hsl(190 90% 55%)" />
+                  <stop offset="0%" stopColor="hsl(var(--primary))" />
+                  <stop offset="100%" stopColor="hsl(var(--nba-cyan))" />
                 </linearGradient>
               </defs>
             </svg>
@@ -452,13 +452,13 @@ const HomePage = () => {
                     <span className="text-[10px] font-semibold text-foreground/70 uppercase tracking-wide">{sport}</span>
                     <span className="text-[9px] text-muted-foreground/65 tabular-nums">{count}</span>
                   </div>
-                  <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'hsla(228, 18%, 15%, 0.6)' }}>
+                  <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'hsl(var(--secondary) / 0.6)' }}>
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: `${(count / stats.total) * 100}%` }}
                       transition={{ duration: 0.6, delay: 0.2 + i * 0.08 }}
                       className="h-full rounded-full"
-                      style={{ background: 'linear-gradient(90deg, hsl(250 76% 62%), hsl(210 100% 60%))' }}
+                      style={{ background: 'linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary)))' }}
                     />
                   </div>
                 </div>
@@ -476,12 +476,12 @@ const HomePage = () => {
       {/* ── 7-DAY PERFORMANCE ── */}
       <motion.div {...stagger(isNewUser ? 12 : 8)} className="vision-card p-4 relative overflow-hidden">
         <div className="absolute -bottom-8 -right-8 w-32 h-32 rounded-full opacity-[0.04] pointer-events-none"
-          style={{ background: 'radial-gradient(circle, hsl(158 64% 52%), transparent)' }} />
+          style={{ background: 'radial-gradient(circle, hsl(var(--success)), transparent)' }} />
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[hsl(250,76%,62%)] to-[hsl(210,100%,60%)] flex items-center justify-center shadow-lg">
-                <Activity className="w-3.5 h-3.5 text-white" />
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-primary flex items-center justify-center shadow-lg">
+                <Activity className="w-3.5 h-3.5 text-foreground" />
               </div>
               <div>
                 <p className="text-[11px] font-bold text-foreground">Last 7 Days</p>
@@ -499,7 +499,7 @@ const HomePage = () => {
               <motion.div 
                 key={s.label} 
                 className="text-center p-2.5 rounded-xl relative overflow-hidden"
-                style={{ background: 'hsla(228, 20%, 12%, 0.4)', border: '1px solid hsla(228, 20%, 20%, 0.15)' }}
+                style={{ background: 'hsl(var(--card) / 0.4)', border: '1px solid hsl(var(--border) / 0.15)' }}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 + i * 0.05 }}
@@ -556,8 +556,8 @@ const HomePage = () => {
                 className="vision-card p-3 flex flex-col items-center gap-2 group active:scale-[0.97]"
               >
                 <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${link.gradient} flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all`}
-                  style={{ boxShadow: '0 4px 12px -2px hsla(228, 20%, 0%, 0.3)' }}>
-                  <link.icon className="w-5 h-5 text-white" />
+                  style={{ boxShadow: '0 4px 12px -2px hsl(var(--background) / 0.3)' }}>
+                  <link.icon className="w-5 h-5 text-foreground" />
                 </div>
                 <span className="text-[9px] font-semibold text-foreground/50">{link.label}</span>
               </motion.button>

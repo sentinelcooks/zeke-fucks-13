@@ -85,7 +85,7 @@ function TabSelector({ tab, setTab }: { tab: "calc" | "scanner"; setTab: (t: "ca
             <motion.div
               layoutId="arb-tab-bg"
               className="absolute inset-0 rounded-xl"
-              style={{ background: 'linear-gradient(135deg, hsl(var(--accent)), hsl(210 100% 60%))' }}
+              style={{ background: 'linear-gradient(135deg, hsl(var(--accent)), hsl(var(--primary)))' }}
               transition={{ type: "spring", stiffness: 400, damping: 28 }}
             />
           )}
@@ -171,9 +171,9 @@ function ArbCalculator() {
       <div
         className="relative rounded-3xl overflow-hidden"
         style={{
-          background: 'linear-gradient(160deg, hsl(228 28% 12%), hsl(228 24% 7%))',
-          border: '1px solid hsla(250, 76%, 62%, 0.15)',
-          boxShadow: '0 8px 40px -12px hsla(250, 76%, 62%, 0.15), inset 0 1px 0 0 hsla(0, 0%, 100%, 0.04)',
+          background: 'linear-gradient(160deg, hsl(var(--card)), hsl(var(--card)))',
+          border: '1px solid hsl(var(--primary) / 0.15)',
+          boxShadow: '0 8px 40px -12px hsl(var(--primary) / 0.15), inset 0 1px 0 0 hsl(var(--foreground) / 0.04)',
         }}
       >
         {/* Ambient glow */}
@@ -186,7 +186,7 @@ function ArbCalculator() {
           {/* Header with format badge */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'hsla(250, 76%, 62%, 0.15)' }}>
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'hsl(var(--primary) / 0.15)' }}>
                 <Calculator className="w-4 h-4 text-accent" />
               </div>
               <div>
@@ -197,9 +197,9 @@ function ArbCalculator() {
             <span
               className="text-[10px] px-3 py-1 rounded-full font-bold tracking-wider uppercase"
               style={{
-                background: 'linear-gradient(135deg, hsla(250, 76%, 62%, 0.2), hsla(210, 100%, 60%, 0.1))',
+                background: 'linear-gradient(135deg, hsl(var(--primary) / 0.2), hsl(var(--primary) / 0.1))',
                 color: 'hsl(var(--accent))',
-                border: '1px solid hsla(250, 76%, 62%, 0.2)',
+                border: '1px solid hsl(var(--primary) / 0.2)',
               }}
             >
               {formatLabel}
@@ -229,9 +229,9 @@ function ArbCalculator() {
                   placeholder={ph1}
                   className="w-full h-12 rounded-2xl px-4 text-center text-lg font-bold font-mono text-foreground placeholder:text-muted-foreground/30 focus:outline-none transition-all"
                   style={{
-                    background: 'hsla(228, 20%, 8%, 0.8)',
-                    border: odds1 ? '1.5px solid hsla(250, 76%, 62%, 0.4)' : '1.5px solid hsla(228, 18%, 18%, 0.6)',
-                    boxShadow: odds1 ? '0 0 20px -8px hsla(250, 76%, 62%, 0.2)' : 'none',
+                    background: 'hsl(var(--card) / 0.8)',
+                    border: odds1 ? '1.5px solid hsl(var(--primary) / 0.4)' : '1.5px solid hsl(var(--secondary) / 0.6)',
+                    boxShadow: odds1 ? '0 0 20px -8px hsl(var(--primary) / 0.2)' : 'none',
                   }}
                 />
                 {imp1 && <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[8px] text-muted-foreground/60">{imp1}% implied</span>}
@@ -246,9 +246,9 @@ function ArbCalculator() {
                   placeholder={ph2}
                   className="w-full h-12 rounded-2xl px-4 text-center text-lg font-bold font-mono text-foreground placeholder:text-muted-foreground/30 focus:outline-none transition-all"
                   style={{
-                    background: 'hsla(228, 20%, 8%, 0.8)',
-                    border: odds2 ? '1.5px solid hsla(250, 76%, 62%, 0.4)' : '1.5px solid hsla(228, 18%, 18%, 0.6)',
-                    boxShadow: odds2 ? '0 0 20px -8px hsla(250, 76%, 62%, 0.2)' : 'none',
+                    background: 'hsl(var(--card) / 0.8)',
+                    border: odds2 ? '1.5px solid hsl(var(--primary) / 0.4)' : '1.5px solid hsl(var(--secondary) / 0.6)',
+                    boxShadow: odds2 ? '0 0 20px -8px hsl(var(--primary) / 0.2)' : 'none',
                   }}
                 />
                 {imp2 && <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[8px] text-muted-foreground/60">{imp2}% implied</span>}
@@ -269,11 +269,11 @@ function ArbCalculator() {
                   placeholder="100"
                   className="w-full h-12 rounded-2xl pl-8 pr-4 text-center text-lg font-bold font-mono text-foreground placeholder:text-muted-foreground/30 focus:outline-none transition-all"
                   style={{
-                    background: 'hsla(228, 20%, 8%, 0.8)',
+                    background: 'hsl(var(--card) / 0.8)',
                     border: lastEdited === "b" && effectiveStake1 > 0
-                      ? '1.5px solid hsla(158, 64%, 52%, 0.4)'
-                      : '1.5px solid hsla(228, 18%, 18%, 0.6)',
-                    boxShadow: lastEdited === "b" && effectiveStake1 > 0 ? '0 0 20px -8px hsla(158, 64%, 52%, 0.2)' : 'none',
+                      ? '1.5px solid hsl(var(--success) / 0.4)'
+                      : '1.5px solid hsl(var(--secondary) / 0.6)',
+                    boxShadow: lastEdited === "b" && effectiveStake1 > 0 ? '0 0 20px -8px hsl(var(--success) / 0.2)' : 'none',
                   }}
                 />
                 {lastEdited === "b" && effectiveStake1 > 0 && (
@@ -293,11 +293,11 @@ function ArbCalculator() {
                   placeholder="100"
                   className="w-full h-12 rounded-2xl pl-8 pr-4 text-center text-lg font-bold font-mono text-foreground placeholder:text-muted-foreground/30 focus:outline-none transition-all"
                   style={{
-                    background: 'hsla(228, 20%, 8%, 0.8)',
+                    background: 'hsl(var(--card) / 0.8)',
                     border: lastEdited === "a" && effectiveStake2 > 0
-                      ? '1.5px solid hsla(158, 64%, 52%, 0.4)'
-                      : '1.5px solid hsla(228, 18%, 18%, 0.6)',
-                    boxShadow: lastEdited === "a" && effectiveStake2 > 0 ? '0 0 20px -8px hsla(158, 64%, 52%, 0.2)' : 'none',
+                      ? '1.5px solid hsl(var(--success) / 0.4)'
+                      : '1.5px solid hsl(var(--secondary) / 0.6)',
+                    boxShadow: lastEdited === "a" && effectiveStake2 > 0 ? '0 0 20px -8px hsl(var(--success) / 0.2)' : 'none',
                   }}
                 />
                 {lastEdited === "a" && effectiveStake2 > 0 && (
@@ -314,8 +314,8 @@ function ArbCalculator() {
               <div
                 className="h-12 rounded-2xl flex items-center justify-center"
                 style={{
-                  background: payout1 > 0 ? 'linear-gradient(135deg, hsla(250, 76%, 62%, 0.08), hsla(210, 100%, 60%, 0.04))' : 'hsla(228, 20%, 8%, 0.5)',
-                  border: `1.5px solid ${payout1 > 0 ? 'hsla(250, 76%, 62%, 0.15)' : 'hsla(228, 18%, 18%, 0.3)'}`,
+                  background: payout1 > 0 ? 'linear-gradient(135deg, hsl(var(--primary) / 0.08), hsl(var(--primary) / 0.04))' : 'hsl(var(--card) / 0.5)',
+                  border: `1.5px solid ${payout1 > 0 ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--secondary) / 0.3)'}`,
                 }}
               >
                 <span className="text-lg font-bold font-mono text-foreground">
@@ -329,8 +329,8 @@ function ArbCalculator() {
               <div
                 className="h-12 rounded-2xl flex items-center justify-center"
                 style={{
-                  background: payout2 > 0 ? 'linear-gradient(135deg, hsla(250, 76%, 62%, 0.08), hsla(210, 100%, 60%, 0.04))' : 'hsla(228, 20%, 8%, 0.5)',
-                  border: `1.5px solid ${payout2 > 0 ? 'hsla(250, 76%, 62%, 0.15)' : 'hsla(228, 18%, 18%, 0.3)'}`,
+                  background: payout2 > 0 ? 'linear-gradient(135deg, hsl(var(--primary) / 0.08), hsl(var(--primary) / 0.04))' : 'hsl(var(--card) / 0.5)',
+                  border: `1.5px solid ${payout2 > 0 ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--secondary) / 0.3)'}`,
                 }}
               >
                 <span className="text-lg font-bold font-mono text-foreground">
@@ -346,11 +346,11 @@ function ArbCalculator() {
           className="relative z-10 px-5 py-4 mt-1"
           style={{
             background: hasArb
-              ? 'linear-gradient(135deg, hsla(160, 84%, 39%, 0.1), hsla(160, 84%, 39%, 0.03))'
+              ? 'linear-gradient(135deg, hsl(var(--success) / 0.1), hsl(var(--success) / 0.03))'
               : profit > 0
-                ? 'linear-gradient(135deg, hsla(250, 76%, 62%, 0.06), transparent)'
-                : 'hsla(228, 20%, 6%, 0.6)',
-            borderTop: '1px solid hsla(0, 0%, 100%, 0.04)',
+                ? 'linear-gradient(135deg, hsl(var(--primary) / 0.06), transparent)'
+                : 'hsl(var(--background) / 0.6)',
+            borderTop: '1px solid hsl(var(--foreground) / 0.04)',
           }}
         >
           <div className="grid grid-cols-3 gap-3 text-center">
@@ -379,14 +379,14 @@ function ArbCalculator() {
           className="rounded-2xl p-4 flex items-center gap-3"
           style={{
             background: hasArb
-              ? 'linear-gradient(135deg, hsla(160, 84%, 39%, 0.12), hsla(160, 84%, 39%, 0.03))'
-              : 'linear-gradient(135deg, hsla(0, 72%, 51%, 0.08), hsla(0, 72%, 51%, 0.02))',
-            border: `1px solid ${hasArb ? 'hsla(160, 84%, 39%, 0.2)' : 'hsla(0, 72%, 51%, 0.15)'}`,
+              ? 'linear-gradient(135deg, hsl(var(--success) / 0.12), hsl(var(--success) / 0.03))'
+              : 'linear-gradient(135deg, hsl(var(--danger) / 0.08), hsl(var(--danger) / 0.02))',
+            border: `1px solid ${hasArb ? 'hsl(var(--success) / 0.2)' : 'hsl(var(--danger) / 0.15)'}`,
           }}
         >
           <div
             className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: hasArb ? 'hsla(160, 84%, 39%, 0.15)' : 'hsla(0, 72%, 51%, 0.1)' }}
+            style={{ background: hasArb ? 'hsl(var(--success) / 0.15)' : 'hsl(var(--danger) / 0.1)' }}
           >
             {hasArb ? <CheckCircle2 className="w-5 h-5 text-nba-green" /> : <AlertTriangle className="w-5 h-5 text-nba-red" />}
           </div>
@@ -410,12 +410,12 @@ function ArbCalculator() {
       <div
         className="rounded-2xl p-4 space-y-2"
         style={{
-          background: 'linear-gradient(135deg, hsla(228, 24%, 12%, 0.8), hsla(228, 24%, 8%, 0.8))',
-          border: '1px solid hsla(228, 18%, 15%, 0.5)',
+          background: 'linear-gradient(135deg, hsl(var(--card) / 0.8), hsl(var(--card) / 0.8))',
+          border: '1px solid hsl(var(--border) / 0.5)',
         }}
       >
         <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'hsla(250, 76%, 62%, 0.12)' }}>
+          <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'hsl(var(--primary) / 0.12)' }}>
             <TrendingUp className="w-3 h-3 text-accent" />
           </div>
           <p className="text-[11px] font-bold text-foreground/80">How it works</p>
@@ -597,7 +597,7 @@ function ArbScanner() {
           onClick={scan}
           disabled={loading}
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-semibold text-accent-foreground transition-all active:scale-95 disabled:opacity-50"
-          style={{ background: 'linear-gradient(135deg, hsl(var(--accent)), hsl(210 100% 60%))' }}
+          style={{ background: 'linear-gradient(135deg, hsl(var(--accent)), hsl(var(--primary)))' }}
         >
           {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
           {loading ? "Scanning..." : "Scan Now"}
@@ -605,7 +605,7 @@ function ArbScanner() {
       </div>
 
       {error && (
-        <div className="rounded-xl p-3 text-[11px] text-nba-red" style={{ background: 'hsla(0, 72%, 51%, 0.08)', border: '1px solid hsla(0, 72%, 51%, 0.15)' }}>
+        <div className="rounded-xl p-3 text-[11px] text-nba-red" style={{ background: 'hsl(var(--danger) / 0.08)', border: '1px solid hsl(var(--danger) / 0.15)' }}>
           {error}
         </div>
       )}
@@ -641,23 +641,23 @@ function ArbScanner() {
               className="rounded-2xl p-4 space-y-3"
               style={{
                 background: isTrue
-                  ? 'linear-gradient(135deg, hsla(160, 84%, 39%, 0.08), hsl(var(--card)))'
+                  ? 'linear-gradient(135deg, hsl(var(--success) / 0.08), hsl(var(--card)))'
                   : 'hsl(var(--card))',
-                border: `1px solid ${isTrue ? 'hsla(160, 84%, 39%, 0.2)' : 'hsl(var(--border))'}`,
+                border: `1px solid ${isTrue ? 'hsl(var(--success) / 0.2)' : 'hsl(var(--border))'}`,
               }}
             >
               {/* Header */}
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-1.5">
-                    {isTrue && <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold text-nba-green" style={{ background: 'hsla(160, 84%, 39%, 0.2)' }}>TRUE ARB</span>}
-                    {!isTrue && <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold text-nba-yellow" style={{ background: 'hsla(43, 96%, 56%, 0.15)' }}>LOW VIG</span>}
+                    {isTrue && <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold text-nba-green" style={{ background: 'hsl(var(--success) / 0.2)' }}>TRUE ARB</span>}
+                    {!isTrue && <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold text-nba-yellow" style={{ background: 'hsl(var(--nba-yellow) / 0.15)' }}>LOW VIG</span>}
                   </div>
                   <p className="text-[11px] font-semibold text-foreground mt-1">{arb.event}</p>
                   <p className="text-[10px] text-muted-foreground">{arb.market}</p>
                 </div>
                 <div className="text-right">
-                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: isTrue ? 'hsla(160, 84%, 39%, 0.15)' : 'hsla(250, 76%, 62%, 0.12)' }}>
+                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: isTrue ? 'hsl(var(--success) / 0.15)' : 'hsl(var(--primary) / 0.12)' }}>
                     <span className={`text-[11px] font-bold font-mono ${isTrue ? 'text-nba-green' : 'text-accent'}`}>
                       {isTrue ? `+${arb.profitPct}%` : `${arb.totalImplied}%`}
                     </span>
@@ -685,7 +685,7 @@ function ArbScanner() {
                 const calc = arbProfit(arb.outcome1.odds, arb.outcome2.odds, 100);
                 if (!calc) return null;
                 return (
-                  <div className="flex items-center justify-between px-3 py-2 rounded-xl text-[10px]" style={{ background: 'hsla(160, 84%, 39%, 0.06)' }}>
+                  <div className="flex items-center justify-between px-3 py-2 rounded-xl text-[10px]" style={{ background: 'hsl(var(--success) / 0.06)' }}>
                     <span className="text-muted-foreground">$100 → ${calc.stake1} + ${calc.stake2}</span>
                     <span className="font-bold text-nba-green">= ${calc.profit} profit</span>
                   </div>
@@ -693,7 +693,7 @@ function ArbScanner() {
               })()}
 
               {!isTrue && (
-                <div className="flex items-center justify-between px-3 py-2 rounded-xl text-[10px]" style={{ background: 'hsla(250, 76%, 62%, 0.06)' }}>
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl text-[10px]" style={{ background: 'hsl(var(--primary) / 0.06)' }}>
                   <span className="text-muted-foreground">Overround: {(arb.totalImplied - 100).toFixed(1)}%</span>
                   <span className="font-medium text-accent">Very low vig</span>
                 </div>
@@ -720,8 +720,8 @@ const ArbitragePage = () => {
 
   return (
     <div className="flex flex-col min-h-full relative">
-      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(250 76% 62%)' }} />
-      <div className="vision-orb w-36 h-36 top-[600px] -left-12" style={{ background: 'hsl(160 84% 39%)', animationDelay: '-4s' }} />
+      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(var(--primary))' }} />
+      <div className="vision-orb w-36 h-36 top-[600px] -left-12" style={{ background: 'hsl(var(--success))', animationDelay: '-4s' }} />
 
       
 

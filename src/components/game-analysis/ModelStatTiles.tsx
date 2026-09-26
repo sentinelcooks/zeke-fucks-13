@@ -53,7 +53,7 @@ export function ModelStatTiles({
         <div
           key={tile.label}
           className="vision-card px-1 py-3.5 text-center"
-          style={{ borderColor: "hsla(228,30%,22%,0.35)" }}
+          style={{ borderColor: "hsl(var(--border) / 0.35)" }}
         >
           <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{tile.label}</p>
           <p className={`mt-1 text-[22px] font-black tabular-nums ${tile.accent ? "text-nba-green" : "text-foreground"}`}>

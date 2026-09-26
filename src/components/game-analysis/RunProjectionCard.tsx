@@ -35,15 +35,15 @@ export function RunProjectionCard({
   return (
     <AnalysisCard>
       <CardHeading icon={AlignLeft} title={title} note={`${projected.toFixed(1)} ${unit}`} />
-      <div className="relative mt-3 h-8 overflow-hidden rounded-lg" style={{ background: "hsla(228,24%,18%,0.8)" }}>
+      <div className="relative mt-3 h-8 overflow-hidden rounded-lg" style={{ background: "hsl(var(--secondary) / 0.8)" }}>
         <div
           className="flex h-full items-center rounded-lg px-3 text-[13px] font-bold text-white"
-          style={{ width: `${projectedPct}%`, background: "linear-gradient(90deg, hsla(250,76%,62%,0.85), hsla(210,100%,60%,0.85))" }}
+          style={{ width: `${projectedPct}%`, background: "linear-gradient(90deg, hsl(var(--primary) / 0.85), hsl(var(--primary) / 0.85))" }}
         >
           {projected.toFixed(1)}
         </div>
         {linePct !== null && (
-          <span className="absolute inset-y-0 w-0.5 bg-white/70" style={{ left: `${linePct}%` }} aria-hidden />
+          <span className="absolute inset-y-0 w-0.5 bg-foreground/70" style={{ left: `${linePct}%` }} aria-hidden />
         )}
       </div>
       <div className="mt-2 flex justify-between text-[11px] text-muted-foreground">

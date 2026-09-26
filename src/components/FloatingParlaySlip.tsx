@@ -39,8 +39,8 @@ export function FloatingParlaySlip() {
               exit={{ opacity: 0, y: 8, scale: 0.95 }}
               className="mb-2 rounded-2xl overflow-hidden shadow-2xl shadow-black/50"
               style={{
-                background: "linear-gradient(135deg, hsla(228, 30%, 10%, 0.97), hsla(228, 30%, 6%, 0.97))",
-                border: "1px solid hsla(250, 76%, 62%, 0.15)",
+                background: "linear-gradient(135deg, hsl(var(--card) / 0.97), hsl(var(--background) / 0.97))",
+                border: "1px solid hsl(var(--primary) / 0.15)",
                 backdropFilter: "blur(24px)",
               }}
             >
@@ -76,8 +76,8 @@ export function FloatingParlaySlip() {
                 {isOnParlayPage ? (
                   <button
                     onClick={() => setExpanded(false)}
-                    className="w-full py-2.5 rounded-xl text-[11px] font-bold text-white/70 tracking-wider border border-border/20"
-                    style={{ background: "hsla(228, 30%, 12%, 0.8)" }}
+                    className="w-full py-2.5 rounded-xl text-[11px] font-bold text-foreground/70 tracking-wider border border-border/20"
+                    style={{ background: "hsl(var(--card) / 0.8)" }}
                   >
                     CLOSE
                   </button>
@@ -85,7 +85,7 @@ export function FloatingParlaySlip() {
                   <button
                     onClick={() => navigate("/dashboard/parlay")}
                     className="w-full py-2.5 rounded-xl text-[11px] font-bold text-white tracking-wider"
-                    style={{ background: "linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))" }}
+                    style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))" }}
                   >
                     GO TO PARLAY BUILDER →
                   </button>
@@ -101,13 +101,13 @@ export function FloatingParlaySlip() {
           onClick={() => setExpanded(!expanded)}
           className="flex items-center gap-2 px-4 py-3 rounded-2xl shadow-xl shadow-black/40 ml-auto"
           style={{
-            background: "linear-gradient(135deg, hsla(250, 76%, 62%, 0.9), hsla(210, 100%, 60%, 0.9))",
-            border: "1px solid hsla(250, 76%, 62%, 0.3)",
+            background: "linear-gradient(135deg, hsl(var(--primary) / 0.9), hsl(var(--primary) / 0.9))",
+            border: "1px solid hsl(var(--primary) / 0.3)",
           }}
         >
-          <Layers className="w-4 h-4 text-white" />
-          <span className="text-[12px] font-bold text-white">{legs.length}</span>
-          <ChevronUp className={`w-3.5 h-3.5 text-white/70 transition-transform ${expanded ? "rotate-180" : ""}`} />
+          <Layers className="w-4 h-4 text-foreground" />
+          <span className="text-[12px] font-bold text-foreground">{legs.length}</span>
+          <ChevronUp className={`w-3.5 h-3.5 text-foreground/70 transition-transform ${expanded ? "rotate-180" : ""}`} />
         </motion.button>
       </motion.div>
     </AnimatePresence>

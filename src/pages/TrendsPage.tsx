@@ -39,9 +39,9 @@ const STREAK_ICONS: Record<string, typeof Flame> = {
 };
 
 const STREAK_COLORS: Record<string, string> = {
-  recent_form: "from-[hsl(30,100%,50%)] to-[hsl(15,100%,55%)]",
-  vs_opponent: "from-[hsl(250,76%,62%)] to-[hsl(280,70%,55%)]",
-  home_away: "from-[hsl(190,90%,55%)] to-[hsl(210,100%,60%)]",
+  recent_form: "from-[hsl(var(--nba-yellow))] to-[hsl(15,100%,55%)]",
+  vs_opponent: "from-primary to-primary",
+  home_away: "from-[hsl(var(--nba-cyan))] to-primary",
 };
 
 const CATEGORIES = [
@@ -89,8 +89,8 @@ const TrendsPage = () => {
   return (
     <div className="px-4 pt-2 pb-28 space-y-4 relative">
       {/* Ambient orbs */}
-      <div className="vision-orb w-64 h-64 -top-20 -right-20" style={{ background: "hsl(30 100% 50%)" }} />
-      <div className="vision-orb w-48 h-48 top-[500px] -left-16" style={{ background: "hsl(250 76% 62%)", animationDelay: "-3s" }} />
+      <div className="vision-orb w-64 h-64 -top-20 -right-20" style={{ background: "hsl(var(--nba-yellow))" }} />
+      <div className="vision-orb w-48 h-48 top-[500px] -left-16" style={{ background: "hsl(var(--primary))", animationDelay: "-3s" }} />
 
       
 
@@ -108,7 +108,7 @@ const TrendsPage = () => {
                   ? "bg-gradient-to-r from-accent to-[hsl(var(--nba-blue))] text-white shadow-lg shadow-accent/20"
                   : "text-muted-foreground/50 hover:text-muted-foreground/70"
               }`}
-              style={!active ? { background: "hsla(228, 20%, 12%, 0.6)", border: "1px solid hsla(228, 20%, 18%, 0.3)" } : undefined}
+              style={!active ? { background: "hsl(var(--card) / 0.6)", border: "1px solid hsl(var(--border) / 0.3)" } : undefined}
             >
               <Icon className="w-3.5 h-3.5" />
               {cat.label}
@@ -134,9 +134,9 @@ const TrendsPage = () => {
       {!loading && (category === "all" || category === "100club") && club100.length > 0 && (
         <motion.div {...stagger(0)} className="space-y-3">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[hsl(43,96%,56%)] to-[hsl(30,90%,50%)] flex items-center justify-center shadow-lg"
-              style={{ boxShadow: "0 4px 12px -2px hsla(43,96%,56%,0.3)" }}>
-              <Trophy className="w-4 h-4 text-white" />
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[hsl(var(--nba-yellow))] to-[hsl(var(--nba-yellow))] flex items-center justify-center shadow-lg"
+              style={{ boxShadow: "0 4px 12px -2px hsl(var(--nba-yellow) / 0.3)" }}>
+              <Trophy className="w-4 h-4 text-foreground" />
             </div>
             <div>
               <h2 className="text-sm font-extrabold text-foreground tracking-tight">100% Club</h2>
@@ -155,14 +155,14 @@ const TrendsPage = () => {
                 whileHover={{ scale: 1.01 }}
               >
                 <div className="absolute top-0 right-0 w-24 h-24 opacity-[0.04] pointer-events-none"
-                  style={{ background: "radial-gradient(circle, hsl(43 96% 56%), transparent 70%)" }} />
+                  style={{ background: "radial-gradient(circle, hsl(var(--nba-yellow)), transparent 70%)" }} />
 
                 <div className="flex items-start justify-between relative z-10">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1.5">
                       <span className="text-[13px] font-extrabold text-foreground">{prop.player}</span>
                       <span className="text-[9px] px-1.5 py-0.5 rounded-md font-bold text-muted-foreground/50 uppercase"
-                        style={{ background: "hsla(228, 20%, 15%, 0.5)" }}>
+                        style={{ background: "hsl(var(--secondary) / 0.5)" }}>
                         vs {prop.opponent.split(" ").pop()}
                       </span>
                     </div>
@@ -180,9 +180,9 @@ const TrendsPage = () => {
                 </div>
 
                 {/* Streak badge */}
-                <div className="flex items-center gap-2 mt-3 pt-3" style={{ borderTop: "1px solid hsla(228, 20%, 18%, 0.3)" }}>
+                <div className="flex items-center gap-2 mt-3 pt-3" style={{ borderTop: "1px solid hsl(var(--border) / 0.3)" }}>
                   <div className={`w-5 h-5 rounded-md bg-gradient-to-br ${gradient} flex items-center justify-center`}>
-                    <Icon className="w-3 h-3 text-white" />
+                    <Icon className="w-3 h-3 text-foreground" />
                   </div>
                   <span className="text-[10px] text-muted-foreground/50">
                     Hit in <span className="text-foreground font-bold">{prop.streak_games}</span> of last {prop.streak_total} games
@@ -199,9 +199,9 @@ const TrendsPage = () => {
       {!loading && (category === "all" || category === "sgp") && sgps.length > 0 && (
         <motion.div {...stagger(2)} className="space-y-3">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[hsl(250,76%,62%)] to-[hsl(210,100%,60%)] flex items-center justify-center shadow-lg"
-              style={{ boxShadow: "0 4px 12px -2px hsla(250,76%,62%,0.3)" }}>
-              <Zap className="w-4 h-4 text-white" />
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-primary flex items-center justify-center shadow-lg"
+              style={{ boxShadow: "0 4px 12px -2px hsl(var(--primary) / 0.3)" }}>
+              <Zap className="w-4 h-4 text-foreground" />
             </div>
             <div>
               <h2 className="text-sm font-extrabold text-foreground tracking-tight">Same-Game Parlays</h2>
@@ -216,7 +216,7 @@ const TrendsPage = () => {
               className="vision-card p-4 relative overflow-hidden"
             >
               <div className="absolute -top-6 -right-6 w-20 h-20 opacity-[0.05] pointer-events-none"
-                style={{ background: "radial-gradient(circle, hsl(250 76% 62%), transparent)" }} />
+                style={{ background: "radial-gradient(circle, hsl(var(--primary)), transparent)" }} />
 
               <div className="flex items-center justify-between mb-3 relative z-10">
                 <span className="text-[12px] font-extrabold text-foreground">{sgp.matchup}</span>
@@ -226,7 +226,7 @@ const TrendsPage = () => {
               <div className="space-y-2 relative z-10">
                 {sgp.legs.map((leg, li) => (
                   <div key={li} className="flex items-center justify-between px-3 py-2 rounded-xl"
-                    style={{ background: "hsla(228, 20%, 10%, 0.5)", border: "1px solid hsla(228, 20%, 18%, 0.2)" }}>
+                    style={{ background: "hsl(var(--card) / 0.5)", border: "1px solid hsl(var(--border) / 0.2)" }}>
                     <div className="flex items-center gap-2">
                       <BarChart3 className="w-3.5 h-3.5 text-accent/60" />
                       <span className="text-[11px] font-bold text-foreground">{leg.player}</span>
@@ -239,8 +239,8 @@ const TrendsPage = () => {
                 ))}
               </div>
 
-              <div className="flex items-center gap-2 mt-3 pt-2" style={{ borderTop: "1px solid hsla(228, 20%, 18%, 0.2)" }}>
-                <Star className="w-3.5 h-3.5 text-[hsl(43,96%,56%)]" />
+              <div className="flex items-center gap-2 mt-3 pt-2" style={{ borderTop: "1px solid hsl(var(--border) / 0.2)" }}>
+                <Star className="w-3.5 h-3.5 text-[hsl(var(--nba-yellow))]" />
                 <span className="text-[9px] text-muted-foreground/65">{sgp.streak_label}</span>
               </div>
             </motion.div>
@@ -252,8 +252,8 @@ const TrendsPage = () => {
       {!loading && category === "all" && trends.length > 0 && (
         <motion.div {...stagger(4)} className="space-y-3">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[hsl(158,64%,52%)] to-[hsl(175,55%,42%)] flex items-center justify-center shadow-lg">
-              <TrendingUp className="w-4 h-4 text-white" />
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-success to-success flex items-center justify-center shadow-lg">
+              <TrendingUp className="w-4 h-4 text-foreground" />
             </div>
             <div>
               <h2 className="text-sm font-extrabold text-foreground tracking-tight">Player Trends</h2>
@@ -271,7 +271,7 @@ const TrendsPage = () => {
                 className="vision-card p-3.5 flex items-center gap-3"
               >
                 <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0`}>
-                  <Icon className="w-4 h-4 text-white" />
+                  <Icon className="w-4 h-4 text-foreground" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">

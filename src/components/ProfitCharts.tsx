@@ -28,14 +28,14 @@ interface ProfitChartsProps {
   plays: Play[];
 }
 
-const GRID_COLOR = "hsla(228, 20%, 18%, 0.35)";
-const AXIS_COLOR = "hsla(228, 15%, 40%, 0.7)";
-const TOOLTIP_BG = "hsla(228, 22%, 8%, 0.97)";
-const TOOLTIP_BORDER = "hsla(228, 25%, 22%, 0.4)";
-const GREEN = "hsl(145, 70%, 50%)";
-const GREEN_DIM = "hsl(145, 50%, 38%)";
-const RED = "hsl(0, 72%, 55%)";
-const RED_DIM = "hsl(0, 55%, 42%)";
+const GRID_COLOR = "hsl(var(--secondary) / 0.35)";
+const AXIS_COLOR = "hsl(var(--muted-foreground) / 0.7)";
+const TOOLTIP_BG = "hsl(var(--card) / 0.97)";
+const TOOLTIP_BORDER = "hsl(var(--secondary) / 0.4)";
+const GREEN = "hsl(var(--success))";
+const GREEN_DIM = "hsl(var(--success))";
+const RED = "hsl(var(--danger))";
+const RED_DIM = "hsl(var(--danger))";
 
 const ProfitCharts = ({ plays }: ProfitChartsProps) => {
   const [view, setView] = useState<"cumulative" | "daily">("cumulative");
@@ -115,16 +115,16 @@ const ProfitCharts = ({ plays }: ProfitChartsProps) => {
           </h3>
           <div className="flex items-center gap-1">
             {isPositive ? (
-              <TrendingUp className="w-3.5 h-3.5 text-green-400" />
+              <TrendingUp className="w-3.5 h-3.5 text-success" />
             ) : (
-              <TrendingDown className="w-3.5 h-3.5 text-red-400" />
+              <TrendingDown className="w-3.5 h-3.5 text-danger" />
             )}
             <span className="text-[11px] font-bold tabular-nums" style={{ color: isPositive ? GREEN : RED }}>
               {fmtProfit(totalProfit)}
             </span>
           </div>
         </div>
-        <div className="flex gap-0.5 p-0.5 rounded-lg" style={{ background: 'hsla(228, 20%, 12%, 0.6)' }}>
+        <div className="flex gap-0.5 p-0.5 rounded-lg" style={{ background: 'hsl(var(--card) / 0.6)' }}>
           {(["cumulative", "daily"] as const).map((v) => (
             <button key={v} onClick={() => setView(v)}
               className={`px-2.5 py-1 text-[9px] font-bold rounded-md transition-all capitalize tracking-wider ${
@@ -132,7 +132,7 @@ const ProfitCharts = ({ plays }: ProfitChartsProps) => {
                   ? "text-accent-foreground shadow-sm"
                   : "text-muted-foreground/50 hover:text-foreground/70"
               }`}
-              style={view === v ? { background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))' } : {}}>
+              style={view === v ? { background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))' } : {}}>
               {v}
             </button>
           ))}
@@ -148,7 +148,7 @@ const ProfitCharts = ({ plays }: ProfitChartsProps) => {
           { label: "Worst Day", value: fmtProfit(worstDay), color: worstDay >= 0 ? GREEN : RED },
         ].map((stat) => (
           <div key={stat.label} className="rounded-lg px-2 py-1.5 text-center"
-            style={{ background: 'hsla(228, 20%, 12%, 0.5)', border: '1px solid hsla(228, 30%, 18%, 0.3)' }}>
+            style={{ background: 'hsl(var(--card) / 0.5)', border: '1px solid hsl(var(--border) / 0.3)' }}>
             <p className="text-[8px] text-muted-foreground/45 font-semibold uppercase tracking-wider">{stat.label}</p>
             <p className="text-[11px] font-black tabular-nums mt-0.5" style={{ color: stat.color }}>{stat.value}</p>
           </div>
@@ -184,12 +184,12 @@ const ProfitCharts = ({ plays }: ProfitChartsProps) => {
               <XAxis dataKey="date" tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} dy={6} />
               <YAxis tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false}
                 tickFormatter={(v) => fmtProfit(Number(v))} domain={['auto', 'auto']} width={56} />
-              <Tooltip content={customTooltip} cursor={{ stroke: 'hsla(228, 20%, 40%, 0.3)', strokeDasharray: '4 4' }} />
-              <ReferenceLine y={0} stroke="hsla(228, 15%, 30%, 0.4)" strokeDasharray="4 4" />
+              <Tooltip content={customTooltip} cursor={{ stroke: 'hsl(var(--muted-foreground) / 0.3)', strokeDasharray: '4 4' }} />
+              <ReferenceLine y={0} stroke="hsl(var(--border) / 0.4)" strokeDasharray="4 4" />
               <Area type="monotone" dataKey="profit"
                 stroke={isPositive ? "url(#lineGreen)" : "url(#lineRed)"} strokeWidth={2.5}
                 fill={isPositive ? "url(#profitGradientGreen)" : "url(#profitGradientRed)"}
-                baseValue={0} dot={false} activeDot={{ r: 4, fill: isPositive ? GREEN : RED, stroke: 'hsla(228, 22%, 8%, 0.9)', strokeWidth: 2 }} />
+                baseValue={0} dot={false} activeDot={{ r: 4, fill: isPositive ? GREEN : RED, stroke: 'hsl(var(--card) / 0.9)', strokeWidth: 2 }} />
             </AreaChart>
           ) : (
             <BarChart data={dailyData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }} barCategoryGap="30%" barGap={4}>
@@ -207,8 +207,8 @@ const ProfitCharts = ({ plays }: ProfitChartsProps) => {
               <XAxis dataKey="date" tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} dy={6} padding={{ left: 20, right: 20 }} />
               <YAxis tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false}
                 tickFormatter={(v) => fmtProfit(Number(v))} domain={['auto', 'auto']} width={56} />
-              <Tooltip content={customTooltip} cursor={{ fill: 'hsla(228, 20%, 20%, 0.15)', radius: 4 }} />
-              <ReferenceLine y={0} stroke="hsla(228, 15%, 30%, 0.4)" strokeDasharray="4 4" />
+              <Tooltip content={customTooltip} cursor={{ fill: 'hsl(var(--secondary) / 0.15)', radius: 4 }} />
+              <ReferenceLine y={0} stroke="hsl(var(--border) / 0.4)" strokeDasharray="4 4" />
               <Bar dataKey="profit" radius={[6, 6, 2, 2]} maxBarSize={40} minPointSize={3}>
                 {dailyData.map((entry, i) => (
                   <Cell key={i} fill={entry.profit >= 0 ? "url(#barGreen)" : "url(#barRed)"} />

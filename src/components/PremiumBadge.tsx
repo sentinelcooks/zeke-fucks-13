@@ -15,7 +15,7 @@ export function PremiumBadge({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full bg-[#FFC93C]/15 border border-[#FFC93C]/30 px-2 py-0.5 text-[9px] font-extrabold tracking-wider uppercase text-[#FFC93C] ${className}`}
+      className={`inline-flex items-center gap-1 rounded-full bg-[hsl(var(--nba-yellow))]/15 border border-[hsl(var(--nba-yellow))]/30 px-2 py-0.5 text-[9px] font-extrabold tracking-wider uppercase text-[hsl(var(--nba-yellow))] ${className}`}
     >
       <Crown className="w-2.5 h-2.5" />
       {label}

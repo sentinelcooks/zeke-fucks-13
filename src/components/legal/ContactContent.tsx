@@ -85,7 +85,7 @@ const ContactContent = () => {
 
             {sent ? (
               <div className="flex flex-col items-center justify-center py-8 gap-3 text-center">
-                <CheckCircle className="w-12 h-12 text-green-400" />
+                <CheckCircle className="w-12 h-12 text-success" />
                 <p className="text-foreground font-semibold text-base">Message Sent!</p>
                 <p className="text-muted-foreground text-xs">We'll review your message and respond shortly.</p>
                 <Button variant="ghost" onClick={handleClose} className="mt-2 text-xs text-accent">

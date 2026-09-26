@@ -28,8 +28,8 @@ export function PlayerCard({ name, team, position, jersey, headshotUrl }: Player
       <div className="relative z-10 flex items-center gap-4 p-4">
         {/* Player Headshot */}
         <div className="relative">
-          <div className="w-20 h-20 rounded-2xl overflow-hidden border border-[hsla(228,30%,22%,0.4)]"
-            style={{ background: 'linear-gradient(135deg, hsla(228,30%,18%,1), hsla(228,30%,10%,1))' }}
+          <div className="w-20 h-20 rounded-2xl overflow-hidden border border-border/40"
+            style={{ background: 'linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--card)))' }}
           >
             {showImg && (
               <img
@@ -49,9 +49,9 @@ export function PlayerCard({ name, team, position, jersey, headshotUrl }: Player
           </div>
           {/* Jersey number badge */}
           <div className="absolute -bottom-1.5 -right-1.5 min-w-[26px] h-[22px] rounded-lg flex items-center justify-center px-1 shadow-lg"
-            style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))' }}
+            style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))' }}
           >
-            <span className="text-[9px] font-black text-white">#{jersey}</span>
+            <span className="text-[9px] font-black text-foreground">#{jersey}</span>
           </div>
         </div>
 

@@ -266,10 +266,10 @@ const ParlayPage = () => {
                 exit={{ opacity: 0, scale: 0.97, y: -8 }}
                 transition={{ duration: 0.22 }}
                 className="rounded-2xl overflow-hidden"
-                style={{ background: "var(--gradient-card)", border: "1px solid hsla(228, 18%, 20%, 0.4)" }}
+                style={{ background: "var(--gradient-card)", border: "1px solid hsl(var(--border) / 0.4)" }}
               >
                 {/* Leg header */}
-                <div className="px-4 py-2.5 flex items-center justify-between" style={{ borderBottom: "1px solid hsla(228, 18%, 18%, 0.4)" }}>
+                <div className="px-4 py-2.5 flex items-center justify-between" style={{ borderBottom: "1px solid hsl(var(--border) / 0.4)" }}>
                   <div className="flex items-center gap-3">
                     <span className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black bg-primary/10 text-primary tabular-nums">{idx + 1}</span>
                     <div className="flex gap-0.5 bg-secondary/30 rounded-lg p-0.5">
@@ -311,7 +311,7 @@ const ParlayPage = () => {
                 </div>
 
                 {/* Leg footer with odds */}
-                <div className="px-4 py-2.5 flex items-center justify-between" style={{ borderTop: "1px solid hsla(228, 18%, 16%, 0.35)" }}>
+                <div className="px-4 py-2.5 flex items-center justify-between" style={{ borderTop: "1px solid hsl(var(--border) / 0.35)" }}>
                   <div className="flex items-center gap-2">
                     {fetchingOdds[leg.id] && <Loader2 className="w-3 h-3 animate-spin text-primary/50" />}
                     {leg.bestBook && (
@@ -347,7 +347,7 @@ const ParlayPage = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
               className="rounded-2xl p-4 mb-5 relative overflow-hidden"
-              style={{ background: "var(--gradient-card)", border: "1px solid hsla(228, 18%, 20%, 0.4)" }}
+              style={{ background: "var(--gradient-card)", border: "1px solid hsl(var(--border) / 0.4)" }}
             >
               {/* Subtle glow behind */}
               <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full bg-primary/8 blur-2xl pointer-events-none" />
@@ -397,7 +397,7 @@ const ParlayPage = () => {
           disabled={loading || validLegs.length < 1}
           whileTap={{ scale: 0.98 }}
           className="w-full mb-5 py-4 font-bold text-sm rounded-2xl text-primary-foreground transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 shadow-lg shadow-primary/20"
-          style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(250 70% 48%))" }}
+          style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))" }}
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
           {loading ? "ANALYZING..." : isSingleLeg ? "ANALYZE BET" : "ANALYZE PARLAY"}

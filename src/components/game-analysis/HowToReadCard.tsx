@@ -17,7 +17,7 @@ export function HowToReadCard({ narrative }: { narrative?: string | null }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <section className="vision-card overflow-hidden" style={{ borderColor: "hsla(228,30%,22%,0.35)" }}>
+    <section className="vision-card overflow-hidden" style={{ borderColor: "hsl(var(--border) / 0.35)" }}>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}

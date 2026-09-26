@@ -39,7 +39,7 @@ import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 import { withClientPlatform } from "@/lib/edgeFunctionPath";
 import { isSportTemporarilyHidden } from "@/lib/sportAvailability";
 
-import { Bar } from "react-chartjs-2";
+import { ThemedBar as Bar } from "@/components/charts/ThemedBar";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -247,7 +247,7 @@ function Section({ title, children, defaultOpen = true, icon }: { title: string;
       className="vision-card overflow-hidden relative"
     >
       {/* Subtle top gradient accent */}
-      <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(250,76%,62%,0.15), transparent)' }} />
+      <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--primary) / 0.15), transparent)' }} />
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-5 py-4 text-left group"
@@ -295,8 +295,8 @@ function GameChart({ data }: { data: any }) {
 
   const colors = values.map((v: number) =>
     data.over_under === "over"
-      ? v > lineval ? "hsla(158, 64%, 52%, 0.8)" : "hsla(0, 72%, 51%, 0.35)"
-      : v < lineval ? "hsla(158, 64%, 52%, 0.8)" : "hsla(0, 72%, 51%, 0.35)"
+      ? v > lineval ? "hsl(var(--success) / 0.8)" : "hsl(var(--danger) / 0.35)"
+      : v < lineval ? "hsl(var(--success) / 0.8)" : "hsl(var(--danger) / 0.35)"
   );
 
   return (
@@ -316,7 +316,7 @@ function GameChart({ data }: { data: any }) {
               label: `Line (${lineval})`,
               data: Array(labels.length).fill(lineval),
               type: "line" as any,
-              borderColor: "hsla(250, 76%, 62%, 0.5)",
+              borderColor: "hsl(var(--primary) / 0.5)",
               borderDash: [6, 4],
               borderWidth: 2,
               pointRadius: 0,
@@ -329,8 +329,8 @@ function GameChart({ data }: { data: any }) {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
           scales: {
-            x: { ticks: { color: "hsla(228, 10%, 45%, 0.6)", font: { size: 9 } }, grid: { display: false } },
-            y: { ticks: { color: "hsla(228, 10%, 45%, 0.6)", font: { size: 9 } }, grid: { color: "hsla(228, 18%, 15%, 0.4)" }, beginAtZero: true },
+            x: { ticks: { color: "hsl(var(--muted-foreground) / 0.6)", font: { size: 9 } }, grid: { display: false } },
+            y: { ticks: { color: "hsl(var(--muted-foreground) / 0.6)", font: { size: 9 } }, grid: { color: "hsl(var(--secondary) / 0.4)" }, beginAtZero: true },
           },
         }}
       />
@@ -393,7 +393,7 @@ function GamesTable({ games, line, overUnder, propType }: { games: any[]; line: 
             const sv = getStatVal(g);
             const isHit = overUnder === "over" ? sv > line : sv < line;
             return (
-              <tr key={i} className="border-b border-border/15 hover:bg-[hsla(228,20%,14%,0.4)] transition-colors">
+              <tr key={i} className="border-b border-border/15 hover:bg-secondary/40 transition-colors">
                 <td className="text-center py-2.5 px-1 whitespace-nowrap text-muted-foreground/50">{fmtDate(g.date)}</td>
                 <td className="text-center py-2.5 px-1 whitespace-nowrap font-medium text-foreground/80">{g.matchup?.replace(/.*(?:vs\.|@)\s*/, "")}</td>
                 <td className={`text-center py-2.5 px-1 font-bold ${g.result === "W" ? "text-nba-green" : "text-nba-red"}`}>{g.result}</td>
@@ -1222,8 +1222,8 @@ const NbaPropsPage = () => {
   return (
     <div className="flex flex-col min-h-full relative">
       {/* Ambient orbs */}
-      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(250 76% 62%)' }} />
-      <div className="vision-orb w-36 h-36 top-[600px] -left-12" style={{ background: 'hsl(210 100% 60%)', animationDelay: '-4s' }} />
+      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(var(--primary))' }} />
+      <div className="vision-orb w-36 h-36 top-[600px] -left-12" style={{ background: 'hsl(var(--primary))', animationDelay: '-4s' }} />
 
       
       <div className="px-4 pt-4 pb-6 space-y-3 relative z-10">
@@ -1231,8 +1231,8 @@ const NbaPropsPage = () => {
         {/* ── Sport Toggle (always visible) ── */}
         {mode === "props" ? (
         <div className="grid w-full max-w-full gap-1.5 rounded-2xl p-1.5" style={{
-          background: 'hsla(228, 25%, 7%, 0.8)',
-          border: '1px solid hsla(228, 30%, 18%, 0.3)',
+          background: 'hsl(var(--card) / 0.8)',
+          border: '1px solid hsl(var(--border) / 0.3)',
           backdropFilter: 'blur(12px)',
           gridTemplateColumns: `repeat(${["nba", "wnba", "mlb", "nhl", "nfl", "ufc"].filter((s) => !isSportTemporarilyHidden(s)).length}, minmax(0, 1fr))`,
         }}>
@@ -1278,8 +1278,8 @@ const NbaPropsPage = () => {
         </div>
         ) : (
         <div className="grid w-full max-w-full gap-1.5 rounded-2xl p-1.5" style={{
-          background: 'hsla(228, 25%, 7%, 0.8)',
-          border: '1px solid hsla(228, 30%, 18%, 0.3)',
+          background: 'hsl(var(--card) / 0.8)',
+          border: '1px solid hsl(var(--border) / 0.3)',
           backdropFilter: 'blur(12px)',
           gridTemplateColumns: `repeat(${["nba", "wnba", "mlb", "nhl", "nfl"].filter((s) => !isSportTemporarilyHidden(s)).length}, minmax(0, 1fr))`,
         }}>
@@ -1314,8 +1314,8 @@ const NbaPropsPage = () => {
 
         {/* ── Props / Lines Mode Toggle ── */}
         <div className="relative flex rounded-xl p-1 gap-1" style={{
-          background: 'hsla(228, 20%, 8%, 0.6)',
-          border: '1px solid hsla(228, 30%, 16%, 0.25)',
+          background: 'hsl(var(--card) / 0.6)',
+          border: '1px solid hsl(var(--border) / 0.25)',
         }}>
           {([
             { value: "props" as const, label: "Player Props", icon: <UserRound className="w-3.5 h-3.5" /> },
@@ -1333,8 +1333,8 @@ const NbaPropsPage = () => {
                     layoutId="analyze-mode"
                     className="absolute inset-0 rounded-lg"
                     style={{
-                      background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))',
-                      boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.3)',
+                      background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))',
+                      boxShadow: '0 4px 12px -2px hsl(var(--primary) / 0.3)',
                     }}
                     transition={{ type: "spring", stiffness: 400, damping: 30 }}
                   />
@@ -1372,8 +1372,8 @@ const NbaPropsPage = () => {
             {/* Fighter 1 Search */}
             <div className="vision-card p-4 relative z-30" ref={ufcRef1}>
               <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))', boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.25)' }}>
-                  <Swords className="w-4 h-4 text-white" />
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))', boxShadow: '0 4px 12px -2px hsl(var(--primary) / 0.25)' }}>
+                  <Swords className="w-4 h-4 text-foreground" />
                 </div>
                 <div>
                   <h3 className="text-[13px] font-bold text-foreground">Fighter 1</h3>
@@ -1381,9 +1381,9 @@ const NbaPropsPage = () => {
                 </div>
               </div>
               <div className="relative group">
-                <div className="relative rounded-xl overflow-hidden transition-all duration-300 group-focus-within:shadow-[0_0_20px_hsla(250,76%,62%,0.08)]" style={{
-                  background: 'hsla(228, 20%, 10%, 0.6)',
-                  border: '1px solid hsla(228, 30%, 20%, 0.25)',
+                <div className="relative rounded-xl overflow-hidden transition-all duration-300 group-focus-within:shadow-[0_0_20px_hsl(var(--primary) / 0.08)]" style={{
+                  background: 'hsl(var(--card) / 0.6)',
+                  border: '1px solid hsl(var(--border) / 0.25)',
                 }}>
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
                     <Search className="w-3.5 h-3.5 text-muted-foreground/45" />
@@ -1398,7 +1398,7 @@ const NbaPropsPage = () => {
                   {fighter1 && (
                     <button onClick={() => { setFighter1(""); setUfcSuggestions1([]); setShowUfcSug1(false); }}
                       className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-md flex items-center justify-center text-muted-foreground/55 hover:text-foreground transition-colors"
-                      style={{ background: 'hsla(228, 20%, 16%, 0.6)' }}>
+                      style={{ background: 'hsl(var(--secondary) / 0.6)' }}>
                       <X className="w-3 h-3" />
                     </button>
                   )}
@@ -1408,7 +1408,7 @@ const NbaPropsPage = () => {
                 {showUfcSug1 && (
                   <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
                     className="absolute left-4 right-4 mt-2 rounded-2xl overflow-hidden z-50 shadow-2xl shadow-black/60 max-h-[240px] overflow-y-auto"
-                    style={{ background: 'linear-gradient(127deg, hsla(228,30%,12%,0.98) 19%, hsla(228,30%,6%,0.95) 77%)', border: '1px solid hsla(228,30%,22%,0.3)', backdropFilter: 'blur(20px)' }}>
+                    style={{ background: 'linear-gradient(127deg, hsl(var(--card) / 0.98) 19%, hsl(var(--background) / 0.95) 77%)', border: '1px solid hsl(var(--border) / 0.3)', backdropFilter: 'blur(20px)' }}>
                     <div className="px-4 py-2.5 border-b border-border/20">
                       <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">Fighters</span>
                     </div>
@@ -1417,8 +1417,8 @@ const NbaPropsPage = () => {
                         onClick={() => { setFighter1(s.name); setShowUfcSug1(false); }}
                         className="flex items-center gap-3.5 px-4 py-3 cursor-pointer hover:bg-accent/6 active:bg-accent/10 transition-all border-b border-border/10 last:border-0 group">
                         <div className="relative w-11 h-11 rounded-full overflow-hidden flex-shrink-0 group-hover:ring-1 group-hover:ring-accent/20 transition-all" style={{
-                          background: 'linear-gradient(135deg, hsla(228,30%,18%,1), hsla(228,30%,10%,1))',
-                          border: '1px solid hsla(228,30%,22%,0.3)',
+                          background: 'linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--card)))',
+                          border: '1px solid hsl(var(--border) / 0.3)',
                         }}>
                           {s.headshot ? (
                             <>
@@ -1457,16 +1457,16 @@ const NbaPropsPage = () => {
 
             {/* VS divider */}
             <div className="flex items-center gap-3">
-              <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsla(228,18%,18%,0.5))' }} />
+              <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--secondary) / 0.5))' }} />
               <span className="text-[11px] font-extrabold text-muted-foreground/55 tracking-widest">VS</span>
-              <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, hsla(228,18%,18%,0.5), transparent)' }} />
+              <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, hsl(var(--secondary) / 0.5), transparent)' }} />
             </div>
 
             {/* Fighter 2 Search */}
             <div className="vision-card p-4 relative z-20" ref={ufcRef2}>
               <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(210 100% 60%), hsl(250 76% 62%))', boxShadow: '0 4px 12px -2px hsla(210,100%,60%,0.25)' }}>
-                  <Swords className="w-4 h-4 text-white" />
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))', boxShadow: '0 4px 12px -2px hsl(var(--primary) / 0.25)' }}>
+                  <Swords className="w-4 h-4 text-foreground" />
                 </div>
                 <div>
                   <h3 className="text-[13px] font-bold text-foreground">Fighter 2</h3>
@@ -1474,9 +1474,9 @@ const NbaPropsPage = () => {
                 </div>
               </div>
               <div className="relative group">
-                <div className="relative rounded-xl overflow-hidden transition-all duration-300 group-focus-within:shadow-[0_0_20px_hsla(250,76%,62%,0.08)]" style={{
-                  background: 'hsla(228, 20%, 10%, 0.6)',
-                  border: '1px solid hsla(228, 30%, 20%, 0.25)',
+                <div className="relative rounded-xl overflow-hidden transition-all duration-300 group-focus-within:shadow-[0_0_20px_hsl(var(--primary) / 0.08)]" style={{
+                  background: 'hsl(var(--card) / 0.6)',
+                  border: '1px solid hsl(var(--border) / 0.25)',
                 }}>
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
                     <Search className="w-3.5 h-3.5 text-muted-foreground/45" />
@@ -1491,7 +1491,7 @@ const NbaPropsPage = () => {
                   {fighter2 && (
                     <button onClick={() => { setFighter2(""); setUfcSuggestions2([]); setShowUfcSug2(false); }}
                       className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-md flex items-center justify-center text-muted-foreground/55 hover:text-foreground transition-colors"
-                      style={{ background: 'hsla(228, 20%, 16%, 0.6)' }}>
+                      style={{ background: 'hsl(var(--secondary) / 0.6)' }}>
                       <X className="w-3 h-3" />
                     </button>
                   )}
@@ -1501,7 +1501,7 @@ const NbaPropsPage = () => {
                 {showUfcSug2 && (
                   <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
                     className="absolute left-4 right-4 mt-2 rounded-2xl overflow-hidden z-50 shadow-2xl shadow-black/60 max-h-[240px] overflow-y-auto"
-                    style={{ background: 'linear-gradient(127deg, hsla(228,30%,12%,0.98) 19%, hsla(228,30%,6%,0.95) 77%)', border: '1px solid hsla(228,30%,22%,0.3)', backdropFilter: 'blur(20px)' }}>
+                    style={{ background: 'linear-gradient(127deg, hsl(var(--card) / 0.98) 19%, hsl(var(--background) / 0.95) 77%)', border: '1px solid hsl(var(--border) / 0.3)', backdropFilter: 'blur(20px)' }}>
                     <div className="px-4 py-2.5 border-b border-border/20">
                       <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">Fighters</span>
                     </div>
@@ -1510,8 +1510,8 @@ const NbaPropsPage = () => {
                         onClick={() => { setFighter2(s.name); setShowUfcSug2(false); }}
                         className="flex items-center gap-3.5 px-4 py-3 cursor-pointer hover:bg-accent/6 active:bg-accent/10 transition-all border-b border-border/10 last:border-0 group">
                         <div className="relative w-11 h-11 rounded-full overflow-hidden flex-shrink-0 group-hover:ring-1 group-hover:ring-accent/20 transition-all" style={{
-                          background: 'linear-gradient(135deg, hsla(228,30%,18%,1), hsla(228,30%,10%,1))',
-                          border: '1px solid hsla(228,30%,22%,0.3)',
+                          background: 'linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--card)))',
+                          border: '1px solid hsl(var(--border) / 0.3)',
                         }}>
                           {s.headshot ? (
                             <>
@@ -1556,8 +1556,8 @@ const NbaPropsPage = () => {
                 whileTap={{ scale: 0.97 }}
                 className="relative w-full group overflow-hidden rounded-xl shadow-2xl shadow-black/40"
               >
-                <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))' }} />
-                <div className="relative flex items-center justify-center gap-2 py-3.5 text-white font-extrabold text-[13px] tracking-wider">
+                <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))' }} />
+                <div className="relative flex items-center justify-center gap-2 py-3.5 text-foreground font-extrabold text-[13px] tracking-wider">
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Swords className="w-3.5 h-3.5" />}
                   {loading ? "Analyzing..." : "Analyze Matchup"}
                 </div>
@@ -1587,26 +1587,26 @@ const NbaPropsPage = () => {
           {/* ── Card 1: Player Search ── */}
           <div className="vision-card p-4 relative z-30" ref={suggestionsRef}>
             <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full opacity-[0.05] pointer-events-none"
-              style={{ background: 'radial-gradient(circle, hsl(250 76% 62%), transparent)' }} />
+              style={{ background: 'radial-gradient(circle, hsl(var(--primary)), transparent)' }} />
 
             <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))', boxShadow: '0 4px 12px -2px hsla(250,76%,62%,0.25)' }}>
-                <Search className="w-4 h-4 text-white" />
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))', boxShadow: '0 4px 12px -2px hsl(var(--primary) / 0.25)' }}>
+                <Search className="w-4 h-4 text-foreground" />
               </div>
               <div>
                 <h3 className="text-[13px] font-bold text-foreground">Player Search</h3>
                 <p className="text-[8px] text-muted-foreground/55 font-medium">Find any {sportLabel} player</p>
               </div>
-              <div className="ml-auto flex items-center gap-1 px-2 py-1 rounded-full" style={{ background: 'hsla(228, 20%, 12%, 0.5)', border: '1px solid hsla(228, 20%, 20%, 0.2)' }}>
+              <div className="ml-auto flex items-center gap-1 px-2 py-1 rounded-full" style={{ background: 'hsl(var(--card) / 0.5)', border: '1px solid hsl(var(--border) / 0.2)' }}>
                 <div className="w-1.5 h-1.5 rounded-full bg-nba-green animate-pulse" />
                 <span className="text-[7px] font-bold text-muted-foreground/55 uppercase tracking-wider">Live</span>
               </div>
             </div>
 
             <div className="relative group">
-              <div className="relative rounded-xl overflow-hidden transition-all duration-300 group-focus-within:shadow-[0_0_20px_hsla(250,76%,62%,0.08)]" style={{
-                background: 'hsla(228, 20%, 10%, 0.6)',
-                border: '1px solid hsla(228, 30%, 20%, 0.25)',
+              <div className="relative rounded-xl overflow-hidden transition-all duration-300 group-focus-within:shadow-[0_0_20px_hsl(var(--primary) / 0.08)]" style={{
+                background: 'hsl(var(--card) / 0.6)',
+                border: '1px solid hsl(var(--border) / 0.25)',
               }}>
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
                   <Crosshair className="w-3.5 h-3.5 text-muted-foreground/45" />
@@ -1623,7 +1623,7 @@ const NbaPropsPage = () => {
                   <button
                     onClick={() => { setPlayer(""); setSuggestions([]); setShowSuggestions(false); }}
                     className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-md flex items-center justify-center text-muted-foreground/55 hover:text-foreground transition-colors"
-                    style={{ background: 'hsla(228, 20%, 16%, 0.6)' }}
+                    style={{ background: 'hsl(var(--secondary) / 0.6)' }}
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -1641,8 +1641,8 @@ const NbaPropsPage = () => {
                   transition={{ duration: 0.15 }}
                   className="absolute left-4 right-4 mt-2 rounded-2xl overflow-hidden z-50 shadow-2xl shadow-black/60 max-h-[340px] overflow-y-auto"
                   style={{
-                    background: 'linear-gradient(127.09deg, hsla(228, 30%, 12%, 0.98) 19.41%, hsla(228, 30%, 6%, 0.95) 76.65%)',
-                    border: '1px solid hsla(228, 30%, 22%, 0.3)',
+                    background: 'linear-gradient(127.09deg, hsl(var(--card) / 0.98) 19.41%, hsl(var(--background) / 0.95) 76.65%)',
+                    border: '1px solid hsl(var(--border) / 0.3)',
                     backdropFilter: 'blur(20px)',
                   }}
                 >
@@ -1659,8 +1659,8 @@ const NbaPropsPage = () => {
                       className="flex items-center gap-3.5 px-4 py-3 cursor-pointer hover:bg-accent/6 active:bg-accent/10 transition-all border-b border-border/10 last:border-0 group"
                     >
                       <div className="relative w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 group-hover:ring-1 group-hover:ring-accent/20 transition-all" style={{
-                        background: 'linear-gradient(135deg, hsla(228,30%,18%,1), hsla(228,30%,10%,1))',
-                        border: '1px solid hsla(228,30%,22%,0.3)',
+                        background: 'linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--card)))',
+                        border: '1px solid hsl(var(--border) / 0.3)',
                       }}>
                         {s.headshot ? (
                           <>
@@ -1740,12 +1740,12 @@ const NbaPropsPage = () => {
                         : "text-muted-foreground/55 hover:text-muted-foreground/50"
                     }`}
                     style={isSelected ? {
-                      background: 'hsla(250, 76%, 62%, 0.12)',
-                      border: '1px solid hsla(250, 76%, 62%, 0.2)',
-                      boxShadow: '0 2px 8px -2px hsla(250,76%,62%,0.15)',
+                      background: 'hsl(var(--primary) / 0.12)',
+                      border: '1px solid hsl(var(--primary) / 0.2)',
+                      boxShadow: '0 2px 8px -2px hsl(var(--primary) / 0.15)',
                     } : {
-                      background: 'hsla(228, 20%, 10%, 0.3)',
-                      border: '1px solid hsla(228, 20%, 18%, 0.15)',
+                      background: 'hsl(var(--card) / 0.3)',
+                      border: '1px solid hsl(var(--border) / 0.15)',
                     }}
                   >
                     {cat.category}
@@ -1776,12 +1776,12 @@ const NbaPropsPage = () => {
                       whileTap={{ scale: 0.92 }}
                       className="relative flex flex-col items-center gap-1.5 py-3 rounded-xl transition-all duration-300"
                       style={isActive ? {
-                        background: 'linear-gradient(135deg, hsla(250, 76%, 62%, 0.2), hsla(210, 100%, 60%, 0.1))',
-                        border: '1px solid hsla(250, 76%, 62%, 0.25)',
-                        boxShadow: '0 4px 16px -4px hsla(250, 76%, 62%, 0.2), inset 0 1px 0 hsla(250, 76%, 62%, 0.1)',
+                        background: 'linear-gradient(135deg, hsl(var(--primary) / 0.2), hsl(var(--primary) / 0.1))',
+                        border: '1px solid hsl(var(--primary) / 0.25)',
+                        boxShadow: '0 4px 16px -4px hsl(var(--primary) / 0.2), inset 0 1px 0 hsl(var(--primary) / 0.1)',
                       } : {
-                        background: 'hsla(228, 20%, 10%, 0.4)',
-                        border: '1px solid hsla(228, 20%, 18%, 0.2)',
+                        background: 'hsl(var(--card) / 0.4)',
+                        border: '1px solid hsl(var(--border) / 0.2)',
                       }}
                     >
                       {/* Info icon */}
@@ -1799,7 +1799,7 @@ const NbaPropsPage = () => {
                         <motion.div
                           layoutId="chipDot"
                           className="absolute -bottom-0.5 w-3 h-[2px] rounded-full"
-                          style={{ background: 'linear-gradient(90deg, hsl(250 76% 62%), hsl(210 100% 60%))' }}
+                          style={{ background: 'linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary)))' }}
                           transition={{ type: "spring", stiffness: 500, damping: 30 }}
                         />
                       )}
@@ -1818,8 +1818,8 @@ const NbaPropsPage = () => {
               <div className="flex-1">
                 <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2">Direction</label>
                 <div className="flex rounded-xl p-1 gap-1" style={{
-                  background: 'hsla(228, 20%, 8%, 0.6)',
-                  border: '1px solid hsla(228, 30%, 16%, 0.25)',
+                  background: 'hsl(var(--card) / 0.6)',
+                  border: '1px solid hsl(var(--border) / 0.25)',
                 }}>
                   <motion.button
                     onClick={() => setOverUnder("over")}
@@ -1829,7 +1829,7 @@ const NbaPropsPage = () => {
                         ? "text-background"
                         : "text-muted-foreground/35 hover:text-foreground/50"
                     }`}
-                    style={overUnder === "over" ? { background: 'hsl(158 64% 52%)', boxShadow: '0 4px 12px -2px hsla(158,64%,52%,0.3)' } : {}}
+                    style={overUnder === "over" ? { background: 'hsl(var(--success))', boxShadow: '0 4px 12px -2px hsl(var(--success) / 0.3)' } : {}}
                   >
                     <TrendingUp className="w-3 h-3" />
                     OVER
@@ -1842,7 +1842,7 @@ const NbaPropsPage = () => {
                         ? "text-white"
                         : "text-muted-foreground/35 hover:text-foreground/50"
                     }`}
-                    style={overUnder === "under" ? { background: 'hsl(0 72% 51%)', boxShadow: '0 4px 12px -2px hsla(0,72%,51%,0.3)' } : {}}
+                    style={overUnder === "under" ? { background: 'hsl(var(--danger))', boxShadow: '0 4px 12px -2px hsl(var(--danger) / 0.3)' } : {}}
                   >
                     <TrendingDown className="w-3 h-3" />
                     UNDER
@@ -1852,9 +1852,9 @@ const NbaPropsPage = () => {
 
               <div className="w-24">
                 <label className="block text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55 mb-2 text-center">Line</label>
-                <div className="rounded-xl overflow-hidden transition-colors focus-within:shadow-[0_0_12px_hsla(250,76%,62%,0.06)]" style={{
-                  background: 'hsla(228, 20%, 10%, 0.5)',
-                  border: '1px solid hsla(228, 30%, 20%, 0.25)',
+                <div className="rounded-xl overflow-hidden transition-colors focus-within:shadow-[0_0_12px_hsl(var(--primary) / 0.06)]" style={{
+                  background: 'hsl(var(--card) / 0.5)',
+                  border: '1px solid hsl(var(--border) / 0.25)',
                 }}>
                   <input
                     type="number"
@@ -1876,8 +1876,8 @@ const NbaPropsPage = () => {
               <div
                 className="relative rounded-xl overflow-hidden cursor-pointer"
                 style={{
-                  background: 'hsla(228, 20%, 10%, 0.5)',
-                  border: '1px solid hsla(228, 30%, 20%, 0.25)',
+                  background: 'hsl(var(--card) / 0.5)',
+                  border: '1px solid hsl(var(--border) / 0.25)',
                 }}
                 onClick={() => setShowOppDropdown(!showOppDropdown)}
               >
@@ -1905,8 +1905,8 @@ const NbaPropsPage = () => {
                     exit={{ opacity: 0, y: -4 }}
                     className="absolute z-50 left-0 right-0 mt-1 rounded-xl overflow-hidden max-h-48 overflow-y-auto scrollbar-hide"
                     style={{
-                      background: 'hsl(228, 25%, 10%)',
-                      border: '1px solid hsla(228, 30%, 20%, 0.4)',
+                      background: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border) / 0.4)',
                       boxShadow: '0 12px 32px -8px rgba(0,0,0,0.6)',
                     }}
                   >
@@ -1938,7 +1938,7 @@ const NbaPropsPage = () => {
             </div>
 
             {/* Divider */}
-            <div className="h-[1px]" style={{ background: 'linear-gradient(90deg, transparent, hsla(228, 18%, 18%, 0.4), transparent)' }} />
+            <div className="h-[1px]" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--secondary) / 0.4), transparent)' }} />
 
             {/* Analyze Button — Sticky */}
             <div className="sticky bottom-20 z-30">
@@ -1948,8 +1948,8 @@ const NbaPropsPage = () => {
                 whileTap={{ scale: 0.97 }}
                 className="relative w-full group overflow-hidden rounded-xl shadow-2xl shadow-black/40"
               >
-                <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, hsl(250 76% 62%), hsl(210 100% 60%))' }} />
-                <div className="relative flex items-center justify-center gap-2 py-3.5 text-white font-extrabold text-[13px] tracking-wider">
+                <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))' }} />
+                <div className="relative flex items-center justify-center gap-2 py-3.5 text-foreground font-extrabold text-[13px] tracking-wider">
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                   {loading ? "Analyzing..." : "Run Analysis"}
                 </div>
@@ -1975,7 +1975,7 @@ const NbaPropsPage = () => {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-20 relative">
             {/* Ambient glow behind spinner */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-40 h-40 rounded-full opacity-20" style={{ background: 'radial-gradient(circle, hsl(250 76% 62%), transparent 70%)' }} />
+              <div className="w-40 h-40 rounded-full opacity-20" style={{ background: 'radial-gradient(circle, hsl(var(--primary)), transparent 70%)' }} />
             </div>
             <div className="relative w-16 h-16 mx-auto mb-4">
               <div className="absolute inset-0 rounded-full border-2 border-border/30" />
@@ -2049,7 +2049,7 @@ const NbaPropsPage = () => {
                 initial={{ opacity: 0, y: -8, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 className="flex items-center justify-between p-3 rounded-xl"
-                style={{ background: 'linear-gradient(135deg, hsla(158, 64%, 52%, 0.08), hsla(210, 100%, 60%, 0.04))', border: '1px solid hsla(158, 64%, 52%, 0.12)' }}
+                style={{ background: 'linear-gradient(135deg, hsl(var(--success) / 0.08), hsl(var(--primary) / 0.04))', border: '1px solid hsl(var(--success) / 0.12)' }}
               >
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-nba-green animate-glow-pulse" />
@@ -2069,24 +2069,24 @@ const NbaPropsPage = () => {
                     {/* Bio details */}
                     <div className="grid grid-cols-2 gap-1 mt-3 text-[9px]">
                       {f?.age && (
-                        <div className="rounded-lg py-1.5" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+                        <div className="rounded-lg py-1.5" style={{ background: 'hsl(var(--card) / 0.6)' }}>
                           <span className="block text-muted-foreground/65 uppercase font-bold">Age</span>
                           <span className="block text-sm font-extrabold text-foreground">{f.age}</span>
                         </div>
                       )}
                       {f?.height && (
-                        <div className="rounded-lg py-1.5" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+                        <div className="rounded-lg py-1.5" style={{ background: 'hsl(var(--card) / 0.6)' }}>
                           <span className="block text-muted-foreground/65 uppercase font-bold">Height</span>
                           <span className="block text-sm font-extrabold text-foreground">{f.height}</span>
                         </div>
                       )}
                       {f?.reach && (
-                        <div className="rounded-lg py-1.5" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+                        <div className="rounded-lg py-1.5" style={{ background: 'hsl(var(--card) / 0.6)' }}>
                           <span className="block text-muted-foreground/65 uppercase font-bold">Reach</span>
                           <span className="block text-sm font-extrabold text-foreground">{f.reach}</span>
                         </div>
                       )}
-                      <div className="rounded-lg py-1.5" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+                      <div className="rounded-lg py-1.5" style={{ background: 'hsl(var(--card) / 0.6)' }}>
                         <span className="block text-muted-foreground/65 uppercase font-bold">Stance</span>
                         <span className="block text-sm font-extrabold text-foreground">{f?.stance || "Orthodox"}</span>
                       </div>
@@ -2107,8 +2107,8 @@ const NbaPropsPage = () => {
                     {/* Win streak */}
                     {f?.win_streak > 0 && (
                       <div className="mt-2 flex items-center justify-center gap-1">
-                        <Trophy className="w-3 h-3 text-emerald-400" />
-                        <span className="text-[10px] font-bold text-emerald-400">{f.win_streak} Win Streak</span>
+                        <Trophy className="w-3 h-3 text-success" />
+                        <span className="text-[10px] font-bold text-success">{f.win_streak} Win Streak</span>
                       </div>
                     )}
                   </motion.div>
@@ -2120,10 +2120,10 @@ const NbaPropsPage = () => {
                 <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3, type: "spring" }}
                   className="vision-card p-5 text-center relative overflow-hidden"
                   style={{
-                    borderColor: results.best_bet.confidence === "strong" ? 'hsla(145,60%,45%,0.3)' : results.best_bet.confidence === "lean" ? 'hsla(210,100%,60%,0.3)' : 'hsla(43,96%,56%,0.3)',
+                    borderColor: results.best_bet.confidence === "strong" ? 'hsl(var(--success) / 0.3)' : results.best_bet.confidence === "lean" ? 'hsl(var(--primary) / 0.3)' : 'hsl(var(--nba-yellow) / 0.3)',
                   }}>
                   <div className="absolute inset-0 opacity-[0.04]" style={{
-                    background: `radial-gradient(circle at center, ${results.best_bet.confidence === "strong" ? "hsl(145 60% 45%)" : results.best_bet.confidence === "lean" ? "hsl(210 100% 60%)" : "hsl(43 96% 56%)"}, transparent 70%)`,
+                    background: `radial-gradient(circle at center, ${results.best_bet.confidence === "strong" ? "hsl(var(--success))" : results.best_bet.confidence === "lean" ? "hsl(var(--primary))" : "hsl(var(--nba-yellow))"}, transparent 70%)`,
                   }} />
                   <Trophy className={`w-5 h-5 mx-auto mb-1 ${results.best_bet.confidence === "strong" ? "text-nba-green" : results.best_bet.confidence === "lean" ? "text-nba-blue" : "text-nba-yellow"}`} />
                   <span className="text-[9px] uppercase tracking-[0.15em] text-muted-foreground/65 font-bold">Top Pick</span>
@@ -2201,10 +2201,10 @@ const NbaPropsPage = () => {
                         </div>
                         <div className="flex gap-1 h-1.5">
                           <div className="flex-1 flex justify-end">
-                            <div className="rounded-l-full transition-all" style={{ width: `${(v1 / max) * 100}%`, background: 'hsl(250 76% 62%)' }} />
+                            <div className="rounded-l-full transition-all" style={{ width: `${(v1 / max) * 100}%`, background: 'hsl(var(--primary))' }} />
                           </div>
                           <div className="flex-1">
-                            <div className="rounded-r-full transition-all" style={{ width: `${(v2 / max) * 100}%`, background: 'hsl(210 100% 60%)' }} />
+                            <div className="rounded-r-full transition-all" style={{ width: `${(v2 / max) * 100}%`, background: 'hsl(var(--primary))' }} />
                           </div>
                         </div>
                       </div>
@@ -2242,8 +2242,8 @@ const NbaPropsPage = () => {
                   <div className="space-y-2">
                     {results.round_predictions.map((rp: any, i: number) => (
                       <div key={i} className="rounded-xl p-3" style={{
-                        background: rp.confidence === "strong" ? 'hsla(145,60%,45%,0.06)' : rp.confidence === "lean" ? 'hsla(210,100%,60%,0.06)' : 'hsla(228,20%,15%,0.4)',
-                        border: `1px solid ${rp.confidence === "strong" ? 'hsla(145,60%,45%,0.15)' : rp.confidence === "lean" ? 'hsla(210,100%,60%,0.15)' : 'hsla(228,20%,22%,0.2)'}`,
+                        background: rp.confidence === "strong" ? 'hsl(var(--success) / 0.06)' : rp.confidence === "lean" ? 'hsl(var(--primary) / 0.06)' : 'hsl(var(--secondary) / 0.4)',
+                        border: `1px solid ${rp.confidence === "strong" ? 'hsl(var(--success) / 0.15)' : rp.confidence === "lean" ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--secondary) / 0.2)'}`,
                       }}>
                         <div className="flex items-center justify-between mb-1">
                           <span className={`text-[12px] font-bold ${rp.confidence === "strong" ? "text-nba-green" : rp.confidence === "lean" ? "text-nba-blue" : "text-muted-foreground"}`}>{rp.bet}</span>
@@ -2289,7 +2289,7 @@ const NbaPropsPage = () => {
                               <tr key={i} className="border-b border-border/15">
                                 <td className="text-center py-2 px-1 text-muted-foreground/50 whitespace-nowrap">{fight.date}</td>
                                 <td className="text-center py-2 px-1 font-medium text-foreground/80 whitespace-nowrap">{fight.opponent}</td>
-                                <td className={`text-center py-2 px-1 font-bold ${fight.result === "W" ? "text-emerald-400" : "text-red-400"}`}>{fight.result}</td>
+                                <td className={`text-center py-2 px-1 font-bold ${fight.result === "W" ? "text-success" : "text-danger"}`}>{fight.result}</td>
                                 <td className="text-center py-2 px-1 text-muted-foreground/60 whitespace-nowrap">{fight.method}</td>
                                 <td className="text-center py-2 px-1 text-foreground/70">{fight.round || `R${fight.roundNum}`}</td>
                               </tr>
@@ -2316,7 +2316,7 @@ const NbaPropsPage = () => {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ delay: 0.05 }}
                 className="flex items-center justify-between p-3 rounded-xl"
-                style={{ background: 'linear-gradient(135deg, hsla(158, 64%, 52%, 0.08), hsla(210, 100%, 60%, 0.04))', border: '1px solid hsla(158, 64%, 52%, 0.12)' }}
+                style={{ background: 'linear-gradient(135deg, hsl(var(--success) / 0.08), hsl(var(--primary) / 0.04))', border: '1px solid hsl(var(--success) / 0.12)' }}
               >
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-nba-green animate-glow-pulse" />
@@ -2392,8 +2392,8 @@ const NbaPropsPage = () => {
                       : "text-white"
                   }`}
                   style={globalSlip.isInSlip(player, propType, line) 
-                    ? { background: 'hsla(250, 76%, 62%, 0.08)' }
-                    : { background: 'linear-gradient(135deg, hsla(250, 76%, 62%, 0.7), hsla(210, 100%, 60%, 0.7))' }
+                    ? { background: 'hsl(var(--primary) / 0.08)' }
+                    : { background: 'linear-gradient(135deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.7))' }
                   }
                 >
                   {globalSlip.isInSlip(player, propType, line) ? (
@@ -2449,7 +2449,7 @@ const NbaPropsPage = () => {
                       <motion.div 
                         key={s.label}
                         className="text-center py-2 rounded-lg"
-                        style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}
+                        style={{ background: 'hsl(var(--card) / 0.6)' }}
                         initial={{ opacity: 0, y: 6 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.45 + i * 0.04 }}
@@ -2480,7 +2480,7 @@ const NbaPropsPage = () => {
                       .filter((factor: any) => Number(factor?.weight) > 0)
                       .sort((a: any, b: any) => Number(b.weight) - Number(a.weight))
                       .map((factor: any) => (
-                        <div key={factor.name || factor.label} className="rounded-lg px-3 py-2.5" style={{ background: 'hsla(228, 20%, 10%, 0.55)' }}>
+                        <div key={factor.name || factor.label} className="rounded-lg px-3 py-2.5" style={{ background: 'hsl(var(--card) / 0.55)' }}>
                           <div className="flex items-center justify-between gap-3">
                             <span className="text-[10px] font-bold text-foreground/80">{factor.label || factor.name}</span>
                             <span className="text-[10px] font-black tabular-nums text-accent">{Math.round(Number(factor.score) || 0)}/100</span>
@@ -2558,7 +2558,7 @@ const NbaPropsPage = () => {
                     { label: "Last Season", rate: prev.rate, total: prev.total },
                     { label: "Combined", rate: results.h2h_combined?.rate, total: results.h2h_combined?.total },
                   ].map((s) => (
-                    <div key={s.label} className="rounded-xl p-3 text-center" style={{ background: 'hsla(228, 20%, 10%, 0.6)' }}>
+                    <div key={s.label} className="rounded-xl p-3 text-center" style={{ background: 'hsl(var(--card) / 0.6)' }}>
                       <span className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground/65">{s.label}</span>
                       <span className={`block text-xl font-extrabold tabular-nums ${
                         (s.rate || 0) >= 65 ? "text-nba-green" : (s.rate || 0) >= 50 ? "text-nba-blue" : (s.rate || 0) >= 35 ? "text-nba-yellow" : "text-nba-red"
@@ -2590,7 +2590,7 @@ const NbaPropsPage = () => {
                       <div className="mt-2 space-y-1">
                         {results.teammate_injuries.map((inj: any, idx: number) => {
                           const statusColor = ["out", "doubtful"].includes(inj.status?.toLowerCase()) ? "text-nba-red" : "text-nba-yellow";
-                          const statusBg = ["out", "doubtful"].includes(inj.status?.toLowerCase()) ? "bg-destructive/15" : "bg-yellow-500/10";
+                          const statusBg = ["out", "doubtful"].includes(inj.status?.toLowerCase()) ? "bg-destructive/15" : "bg-warning/10";
                           return (
                             <div key={idx} className="flex items-center gap-2 py-2 border-b border-border/10 last:border-0">
                               <span className="text-xs font-semibold text-foreground/80">{inj.player_name}</span>
@@ -2609,7 +2609,7 @@ const NbaPropsPage = () => {
                       <div className="mt-2 space-y-1">
                         {results.opponent_injuries.map((inj: any, idx: number) => {
                           const statusColor = ["out", "doubtful"].includes(inj.status?.toLowerCase()) ? "text-nba-red" : "text-nba-yellow";
-                          const statusBg = ["out", "doubtful"].includes(inj.status?.toLowerCase()) ? "bg-destructive/15" : "bg-yellow-500/10";
+                          const statusBg = ["out", "doubtful"].includes(inj.status?.toLowerCase()) ? "bg-destructive/15" : "bg-warning/10";
                           return (
                             <div key={idx} className="flex items-center gap-2 py-2 border-b border-border/10 last:border-0">
                               <span className="text-xs font-semibold text-foreground/80">{inj.player_name}</span>
@@ -2638,7 +2638,7 @@ const NbaPropsPage = () => {
               {results.minutes_trend && results.minutes_trend.trend !== "insufficient_data" && (
                 <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="vision-card p-5 relative overflow-hidden">
                   <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full opacity-[0.06] pointer-events-none"
-                    style={{ background: `radial-gradient(circle, ${results.minutes_trend.trend === "up" ? "hsl(158 64% 52%)" : results.minutes_trend.trend === "down" ? "hsl(0 72% 51%)" : "hsl(210 100% 60%)"}, transparent)` }} />
+                    style={{ background: `radial-gradient(circle, ${results.minutes_trend.trend === "up" ? "hsl(var(--success))" : results.minutes_trend.trend === "down" ? "hsl(var(--danger))" : "hsl(var(--primary))"}, transparent)` }} />
                   <div className="flex items-center gap-2.5 mb-3">
                     <Activity className="w-3.5 h-3.5 text-accent/40" />
                     <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65">{sport === "mlb" ? "At-Bats Trend" : sport === "nhl" ? "TOI Trend" : "Minutes Trend"}</span>
@@ -2647,8 +2647,8 @@ const NbaPropsPage = () => {
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl font-extrabold relative overflow-hidden ${
                       results.minutes_trend.trend === "up" ? "text-nba-green" : results.minutes_trend.trend === "down" ? "text-nba-red" : "text-muted-foreground"
                     }`} style={{
-                      background: results.minutes_trend.trend === "up" ? "hsla(158,64%,52%,0.08)" : results.minutes_trend.trend === "down" ? "hsla(0,72%,51%,0.08)" : "hsla(228,20%,12%,0.5)",
-                      border: `1px solid ${results.minutes_trend.trend === "up" ? "hsla(158,64%,52%,0.15)" : results.minutes_trend.trend === "down" ? "hsla(0,72%,51%,0.15)" : "hsla(228,20%,20%,0.2)"}`,
+                      background: results.minutes_trend.trend === "up" ? "hsl(var(--success) / 0.08)" : results.minutes_trend.trend === "down" ? "hsl(var(--danger) / 0.08)" : "hsl(var(--card) / 0.5)",
+                      border: `1px solid ${results.minutes_trend.trend === "up" ? "hsl(var(--success) / 0.15)" : results.minutes_trend.trend === "down" ? "hsl(var(--danger) / 0.15)" : "hsl(var(--secondary) / 0.2)"}`,
                     }}>
                       {results.minutes_trend.trend === "up" ? "↑" : results.minutes_trend.trend === "down" ? "↓" : "→"}
                     </div>
@@ -2717,7 +2717,7 @@ const NbaPropsPage = () => {
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: ci * 0.04 }}
                             className="rounded-xl overflow-hidden"
-                            style={{ background: 'hsla(228, 20%, 8%, 0.5)' }}
+                            style={{ background: 'hsl(var(--card) / 0.5)' }}
                           >
                             <div className="flex items-center justify-between py-2.5 px-3">
                               <div className="flex-1 min-w-0">
@@ -2735,8 +2735,8 @@ const NbaPropsPage = () => {
                               </div>
                               <div className="flex items-center gap-2">
                                 <span className={`text-[16px] font-black tabular-nums ${
-                                  c.hit_rate >= 80 ? "text-emerald-400" :
-                                  c.hit_rate >= 60 ? "text-blue-400" : "text-amber-400"
+                                  c.hit_rate >= 80 ? "text-success" :
+                                  c.hit_rate >= 60 ? "text-primary" : "text-warning"
                                 }`}>{c.hit_rate}%</span>
                                 <motion.button
                                   whileTap={{ scale: 0.85 }}
@@ -2763,7 +2763,7 @@ const NbaPropsPage = () => {
                                     document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
                                     window.scrollTo({ top: 0, behavior: 'smooth' });
                                   }}
-                                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors bg-white/5 text-muted-foreground/65 hover:text-primary hover:bg-primary/10"
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors bg-foreground/5 text-muted-foreground/65 hover:text-primary hover:bg-primary/10"
                                 >
                                   <Search className="w-3.5 h-3.5" />
                                 </motion.button>
@@ -2780,7 +2780,7 @@ const NbaPropsPage = () => {
                                   className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
                                     isInSlip 
                                       ? "bg-accent/20 text-accent" 
-                                      : "bg-white/5 text-muted-foreground/65 hover:text-accent hover:bg-accent/10"
+                                      : "bg-foreground/5 text-muted-foreground/65 hover:text-accent hover:bg-accent/10"
                                   }`}
                                 >
                                   {isInSlip ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
@@ -2805,7 +2805,7 @@ const NbaPropsPage = () => {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 8 }}
                             className="mt-4 rounded-xl overflow-hidden"
-                            style={{ background: 'linear-gradient(135deg, hsla(250, 76%, 62%, 0.08), hsla(210, 100%, 60%, 0.04))', border: '1px solid hsla(250, 76%, 62%, 0.15)' }}
+                            style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.08), hsl(var(--primary) / 0.04))', border: '1px solid hsl(var(--primary) / 0.15)' }}
                           >
                             <div className="flex items-center justify-between px-4 py-3 border-b border-border/10">
                               <div className="flex items-center gap-2">
@@ -2883,7 +2883,7 @@ const NbaPropsPage = () => {
 
                                   return payouts.map((b, bi) => (
                                     <div key={bi} className={`flex items-center justify-between py-2 px-3 rounded-lg ${bi === 0 ? "ring-1 ring-nba-green/20" : ""}`}
-                                      style={{ background: bi === 0 ? 'hsla(158, 64%, 52%, 0.06)' : 'hsla(228, 20%, 8%, 0.4)' }}>
+                                      style={{ background: bi === 0 ? 'hsl(var(--success) / 0.06)' : 'hsl(var(--card) / 0.4)' }}>
                                       <div className="flex items-center gap-2">
                                         <span className="text-sm">{b.emoji}</span>
                                         <span className={`text-[11px] font-bold ${bi === 0 ? "text-nba-green" : "text-foreground/70"}`}>{b.name}</span>

@@ -100,14 +100,14 @@ export function AddToSlipSheet({ open, onOpenChange, pick }: Props) {
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent
         className="border-0 focus:outline-none"
-        style={{ background: "#111327", borderRadius: "20px 20px 0 0" }}
+        style={{ background: "hsl(var(--card))", borderRadius: "20px 20px 0 0" }}
       >
         <div className="px-5 pb-6 pt-2">
           {/* Pick summary */}
-          <div className="rounded-2xl px-4 py-4 mb-5" style={{ background: "hsla(250, 30%, 18%, 0.6)", border: "1px solid hsla(250, 40%, 30%, 0.25)" }}>
+          <div className="rounded-2xl px-4 py-4 mb-5" style={{ background: "hsl(var(--secondary) / 0.6)", border: "1px solid hsl(var(--primary) / 0.25)" }}>
             <p className="text-[15px] font-bold text-foreground">{pick.player}</p>
             <div className="flex items-center gap-2 mt-1.5">
-              <span className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: pick.overUnder === "over" ? "#22c55e" : "#ef4444" }}>
+              <span className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: pick.overUnder === "over" ? "hsl(var(--success))" : "hsl(var(--danger))" }}>
                 {pick.overUnder}
               </span>
               <span className="text-[13px] font-bold text-foreground">{pick.line}</span>
@@ -156,14 +156,14 @@ export function AddToSlipSheet({ open, onOpenChange, pick }: Props) {
               value={stake}
               onChange={(e) => setStake(e.target.value)}
               className="w-full h-12 rounded-xl pl-8 pr-4 text-[16px] font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40"
-              style={{ background: "hsla(250, 30%, 14%, 0.8)", border: "1px solid hsla(250, 40%, 30%, 0.3)" }}
+              style={{ background: "hsl(var(--secondary) / 0.8)", border: "1px solid hsl(var(--primary) / 0.3)" }}
             />
           </div>
 
           {/* Payout */}
           <div className="flex items-center justify-between px-1 mb-5">
             <span className="text-[11px] text-muted-foreground">Potential Payout</span>
-            <span className="text-[15px] font-bold" style={{ color: "#22d3ee" }}>
+            <span className="text-[15px] font-bold" style={{ color: "hsl(var(--nba-cyan))" }}>
               ${stakeNum > 0 ? payout : "0.00"}
             </span>
           </div>
@@ -171,8 +171,8 @@ export function AddToSlipSheet({ open, onOpenChange, pick }: Props) {
           {/* Confirm */}
           <button
             onClick={handleConfirm}
-            className="w-full py-4 rounded-xl font-bold text-white text-[13px] tracking-wider transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-            style={{ background: "linear-gradient(135deg, #7c6ff7, #22d3ee)" }}
+            className="w-full py-4 rounded-full font-semibold text-primary-foreground text-[17px] transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+            style={{ background: "hsl(var(--primary))" }}
           >
             <Layers className="w-4 h-4" />
             Add to Slip

@@ -241,24 +241,24 @@ export function PlayerAutocomplete({ sport, value, onChange, betType = "" }: Pla
           }
         }}
         placeholder={placeholder}
-        className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/55 outline-none transition-all duration-300 focus:shadow-[0_0_20px_hsla(250,76%,62%,0.08)]"
-        style={{ background: 'hsla(228, 20%, 10%, 0.6)', border: '1px solid hsla(228, 30%, 20%, 0.25)' }}
+        className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/55 outline-none transition-all duration-300 focus:shadow-[0_0_20px_hsl(var(--primary) / 0.08)]"
+        style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}
       />
       {open && suggestions.length > 0 && (
         <div className="absolute z-[80] top-full left-0 right-0 mt-1 rounded-xl overflow-hidden shadow-xl max-h-[280px] overflow-y-auto pb-1"
-          style={{ background: 'hsla(228, 18%, 12%, 0.98)', border: '1px solid hsla(228, 30%, 22%, 0.4)', backdropFilter: 'blur(20px)' }}>
+          style={{ background: 'hsl(var(--card) / 0.98)', border: '1px solid hsl(var(--border) / 0.4)', backdropFilter: 'blur(20px)' }}>
           {loading && (
             <div className="px-3 py-2 text-[10px] text-muted-foreground/50">Searching...</div>
           )}
           {suggestions.map((s, i) => (
-            <button key={i} className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/5 transition-colors"
+            <button key={i} className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-foreground/5 transition-colors"
               onClick={() => { onChange(s.name); setOpen(false); }}>
               {s.headshot ? (
-                <img src={s.headshot} alt="" className="w-7 h-7 rounded-full object-cover bg-white/5 shrink-0"
+                <img src={s.headshot} alt="" className="w-7 h-7 rounded-full object-cover bg-foreground/5 shrink-0"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
               ) : (
                 <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-muted-foreground shrink-0"
-                  style={{ background: 'hsla(228, 20%, 18%, 0.8)' }}>
+                  style={{ background: 'hsl(var(--secondary) / 0.8)' }}>
                   {s.name.split(" ").map(w => w[0]).join("").slice(0, 2)}
                 </div>
               )}

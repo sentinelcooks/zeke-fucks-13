@@ -84,7 +84,7 @@ export function ModelSignalCard({ score, marketTitle, pickLabel, price, projecti
         <svg viewBox="0 0 200 176" className="absolute inset-0" aria-hidden>
           <circle
             cx="100" cy="96" r={RADIUS} fill="none" strokeWidth="10" strokeLinecap="round"
-            stroke="hsla(228,24%,20%,0.85)"
+            stroke="hsl(var(--border) / 0.85)"
             strokeDasharray={`${ARC_LENGTH} ${CIRCUMFERENCE}`}
             transform="rotate(135 100 96)"
           />
@@ -146,12 +146,12 @@ function ProjectionGauge({ projection, line, color, unit }: { projection: number
           Model {projection.toFixed(1)}
         </span>
 
-        <div className="relative h-1.5 rounded-full" style={{ background: "hsla(228,24%,20%,0.9)" }}>
+        <div className="relative h-1.5 rounded-full" style={{ background: "hsl(var(--secondary) / 0.9)" }}>
           <div className="absolute inset-y-0 rounded-full" style={{ left: `${left}%`, width: `${width}%`, background: color }} />
           <span className="absolute top-1/2 h-[18px] w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-sm bg-white" style={{ left: `${linePct}%` }} />
           <span
             className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
-            style={{ left: `${projectionPct}%`, background: color, border: "3px solid hsl(230 30% 10%)" }}
+            style={{ left: `${projectionPct}%`, background: color, border: "3px solid hsl(var(--card))" }}
           />
         </div>
 

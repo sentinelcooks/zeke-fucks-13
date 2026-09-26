@@ -20,7 +20,7 @@ function TeamBadge({ name, sportTitle }: { name: string; sportTitle: string }) {
   return (
     <div
       className="mx-auto grid h-14 w-14 place-items-center rounded-2xl text-[13px] font-black text-accent"
-      style={{ background: "hsla(250,76%,62%,0.12)", border: "1px solid hsla(250,76%,62%,0.24)" }}
+      style={{ background: "hsl(var(--primary) / 0.12)", border: "1px solid hsl(var(--primary) / 0.24)" }}
     >
       {initials(name) || <Shield className="h-5 w-5" />}
     </div>
@@ -76,7 +76,7 @@ export function MatchupCard({
   return (
     <section
       className="overflow-hidden rounded-3xl border border-accent/20 p-5"
-      style={{ background: "radial-gradient(circle at 85% 0%, hsla(250,76%,62%,0.26), transparent 42%), linear-gradient(145deg, hsla(245,34%,15%,0.96), hsla(228,25%,8%,0.96))" }}
+      style={{ background: "radial-gradient(circle at 85% 0%, hsl(var(--primary) / 0.26), transparent 42%), linear-gradient(145deg, hsl(var(--secondary) / 0.96), hsl(var(--card) / 0.96))" }}
     >
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
         <TeamColumn name={awayTeam} sportTitle={sportTitle} side="Away" />
@@ -91,7 +91,7 @@ export function MatchupCard({
       </div>
 
       {showStarters && (
-        <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-t border-white/[0.07] pt-3.5">
+        <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-t border-foreground/[0.07] pt-3.5">
           <StarterColumn starter={awayStarter} align="left" better={bothEras && awayEra! < homeEra!} />
           <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/45">Starters</span>
           <StarterColumn starter={homeStarter} align="right" better={bothEras && homeEra! < awayEra!} />

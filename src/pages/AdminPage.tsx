@@ -504,7 +504,7 @@ const AdminPage = () => {
                 {oddsKeyStatus && (
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                     oddsKeyStatus.exists
-                      ? "bg-green-500/15 text-green-400"
+                      ? "bg-success/15 text-success"
                       : "bg-destructive/15 text-destructive"
                   }`}>
                     {oddsKeyStatus.exists ? "● Connected" : "○ Not Set"}
@@ -574,7 +574,7 @@ const AdminPage = () => {
                     <div className="bg-card rounded-lg border border-border p-3 text-center">
                       <div className="text-2xl font-bold text-foreground">{apiKeyStats.byStatus?.available ?? apiKeyStats.active ?? 0}</div>
                       <div className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
-                        <Zap className="w-3 h-3 text-green-500" /> Available
+                        <Zap className="w-3 h-3 text-success" /> Available
                       </div>
                     </div>
                     <div className="bg-card rounded-lg border border-border p-3 text-center">
@@ -731,7 +731,7 @@ const AdminPage = () => {
                 {testResults && (
                   <div className="space-y-1 max-h-48 overflow-y-auto">
                     {testResults.map((r, i) => (
-                      <div key={i} className={`flex items-center gap-2 text-xs font-mono px-2 py-1 rounded ${r.valid ? "bg-green-500/10 text-green-400" : "bg-destructive/10 text-destructive"}`}>
+                      <div key={i} className={`flex items-center gap-2 text-xs font-mono px-2 py-1 rounded ${r.valid ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}>
                         <span>{r.valid ? "✓" : "✗"}</span>
                         <span className="truncate flex-1">{r.key.slice(0, 8)}...{r.key.slice(-4)}</span>
                         <span className="text-muted-foreground">{r.error || ""}</span>
@@ -746,7 +746,7 @@ const AdminPage = () => {
                     )}
                     {!healthResult.error && (
                       <>
-                        <div className={healthResult.ok ? "text-green-400" : "text-destructive"}>
+                        <div className={healthResult.ok ? "text-success" : "text-destructive"}>
                           {healthResult.ok ? "✓ Healthy" : "✗ Unhealthy"}
                         </div>
                         <div>Master DB: {healthResult.masterDbConfigured ? "✓ configured" : "✗ not configured"}</div>
@@ -826,7 +826,7 @@ const AdminPage = () => {
                       <div className="flex items-center gap-2">
                         <code className="text-sm font-mono text-foreground bg-muted px-2 py-1 rounded">{k.key}</code>
                         <button onClick={() => copyKey(k.key, k.id)} className="text-muted-foreground hover:text-foreground">
-                          {copiedId === k.id ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                          {copiedId === k.id ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
                         </button>
                         {k.label && <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">{k.label}</span>}
                       </div>
@@ -836,7 +836,7 @@ const AdminPage = () => {
                           <RefreshCw className="w-3 h-3 inline mr-1" /> Reset ({k.key_sessions?.length || 0})
                         </button>
                         <button onClick={() => toggleKey(k.id, k.is_active)}
-                          className={`text-xs px-2 py-1 rounded transition-colors flex items-center gap-1 ${k.is_active ? "text-destructive hover:bg-destructive/10" : "text-green-500 hover:bg-green-500/10"}`}>
+                          className={`text-xs px-2 py-1 rounded transition-colors flex items-center gap-1 ${k.is_active ? "text-destructive hover:bg-destructive/10" : "text-success hover:bg-success/10"}`}>
                           {k.is_active ? <><ShieldOff className="w-3 h-3" /> Revoke</> : <><Shield className="w-3 h-3" /> Activate</>}
                         </button>
                       </div>
@@ -845,7 +845,7 @@ const AdminPage = () => {
                       <span>Devices: {k.key_sessions?.length || 0}/{k.max_devices}</span>
                       <span>Created: {new Date(k.created_at).toLocaleDateString()}</span>
                       {k.expires_at && <span>Expires: {new Date(k.expires_at).toLocaleDateString()}</span>}
-                      <span className={k.is_active ? "text-green-500" : "text-destructive"}>{k.is_active ? "Active" : "Revoked"}</span>
+                      <span className={k.is_active ? "text-success" : "text-destructive"}>{k.is_active ? "Active" : "Revoked"}</span>
                     </div>
                     {k.key_sessions && k.key_sessions.length > 0 && (
                       <div className="mt-3 space-y-2">
@@ -853,7 +853,7 @@ const AdminPage = () => {
                         {k.key_sessions.map((s: any) => (
                           <div key={s.id} className="bg-muted/50 rounded-lg p-3 text-xs space-y-1 border border-border/50">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className={`inline-block w-2 h-2 rounded-full ${s.is_blocked ? 'bg-destructive' : 'bg-green-500'}`} />
+                              <span className={`inline-block w-2 h-2 rounded-full ${s.is_blocked ? 'bg-destructive' : 'bg-success'}`} />
                               <span className="font-medium text-foreground">{s.is_blocked ? 'Blocked' : 'Active'}</span>
                               <span className="text-muted-foreground">•</span>
                               <span className="text-muted-foreground">IP: <code className="bg-background px-1 py-0.5 rounded">{s.ip_address || 'unknown'}</code></span>
