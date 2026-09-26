@@ -6,6 +6,7 @@ import {
   Target, Shield, Hand, Crosshair, Zap, CheckCircle2, XCircle, Clock,
   Trophy, Calendar, Layers, Filter,
 } from "lucide-react";
+import { CircleButton, PillTabs } from "@/components/playbook/controls";
 import { useAuth } from "@/contexts/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -560,33 +561,27 @@ const ProfitTrackerPage = () => {
 
   return (
     <div className="flex flex-col min-h-full relative">
-      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(var(--primary))' }} />
-      <div className="vision-orb w-36 h-36 top-[600px] -left-12" style={{ background: 'hsl(var(--success))', animationDelay: '-4s' }} />
 
       
 
       <div className="px-4 pt-4 pb-32 space-y-3 relative z-10">
 
         {/* ── Tab Selector ── */}
-        <div className="flex gap-1 p-1 rounded-2xl" style={{ background: 'hsl(var(--secondary))' }}>
-          {tabs.map(({ key, label, icon: Icon, count }) => (
-            <button key={key} onClick={() => setTab(key)}
-              className={`relative flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-semibold tracking-wide transition-all ${
-                tab === key ? "text-accent-foreground" : "text-muted-foreground"
-              }`}>
-              {tab === key && (
-                <motion.div layoutId="tracker-tab-bg" className="absolute inset-0 rounded-xl"
-                  style={{ background: 'linear-gradient(135deg, hsl(var(--accent)), hsl(var(--success)))' }}
-                  transition={{ type: "spring", stiffness: 400, damping: 28 }} />
-              )}
-              <Icon className="relative z-10 w-3.5 h-3.5" />
-              <span className="relative z-10">{label}</span>
-              {count && count > 0 && (
-                <span className="relative z-10 text-[8px] px-1.5 py-0.5 rounded-full bg-foreground/20 font-bold">{count}</span>
-              )}
-            </button>
-          ))}
-        </div>
+        <PillTabs<TrackerTab>
+          ariaLabel="Tracker view"
+          value={tab}
+          onChange={setTab}
+          options={tabs.map(({ key, label, icon: Icon, count }) => ({
+            value: key,
+            label: (
+              <span className="flex items-center gap-1.5">
+                <Icon className="h-4 w-4" />
+                {label}
+                {count && count > 0 ? <span className="rounded-full bg-fill/20 px-1.5 text-[12px] font-semibold tabular-nums">{count}</span> : null}
+              </span>
+            ),
+          }))}
+        />
 
         <AnimatePresence mode="wait">
           {/* ═══════════════ PLAYS TAB ═══════════════ */}
@@ -625,26 +620,21 @@ const ProfitTrackerPage = () => {
                     initial={{ opacity: 0, y: 20, scale: 0.97 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ delay: i * 0.07, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
-                    className="vision-card-animated p-4 group cursor-default"
-                    whileHover={{ scale: 1.02, y: -2 }}
+                    className="vision-card p-4"
                   >
-                    <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full opacity-[0.06] pointer-events-none"
-                      style={{ background: `radial-gradient(circle, ${s.glow.replace('0.15', '1')}, transparent)` }} />
                     <div className="relative z-10">
                       <div className="flex items-center justify-between mb-3">
-                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.gradient} flex items-center justify-center shadow-lg transition-all group-hover:shadow-xl group-hover:scale-105`}
-                          style={{ boxShadow: `0 4px 14px -2px ${s.glow}` }}>
-                          <s.icon className="w-5 h-5 text-foreground" />
+                        <div className={`w-9 h-9 rounded-[10px] bg-gradient-to-br ${s.gradient} flex items-center justify-center`}>
+                          <s.icon className="w-[18px] h-[18px] text-white" />
                         </div>
-                        <span className="text-[8px] font-bold px-2 py-0.5 rounded-md text-muted-foreground/65 uppercase tracking-wider"
-                          style={{ background: 'hsl(var(--secondary) / 0.5)' }}>{s.sub}</span>
+                        <span className="text-[12px] font-medium text-muted-foreground">{s.sub}</span>
                       </div>
-                      <p className="text-2xl font-extrabold text-foreground tabular-nums tracking-tight">
+                      <p className="text-[22px] font-bold text-foreground tabular-nums tracking-tight">
                         <motion.span key={String(s.value)} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
                           {s.value}
                         </motion.span>
                       </p>
-                      <p className="text-[10px] text-muted-foreground/65 font-semibold mt-0.5 uppercase tracking-wider">{s.label}</p>
+                      <p className="text-[11px] text-muted-foreground font-semibold mt-0.5 uppercase tracking-[0.03em]">{s.label}</p>
                     </div>
                   </motion.div>
                 ))}
@@ -684,24 +674,19 @@ const ProfitTrackerPage = () => {
                         initial={{ opacity: 0, y: 20, scale: 0.97 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         transition={{ delay: i * 0.07, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
-                        className="vision-card-animated p-4 group cursor-default"
-                        whileHover={{ scale: 1.02, y: -2 }}
+                        className="vision-card p-4"
                       >
-                        <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full opacity-[0.06] pointer-events-none"
-                          style={{ background: `radial-gradient(circle, ${b.glow.replace('0.15', '1')}, transparent)` }} />
                         <div className="relative z-10">
                           <div className="flex items-center justify-between mb-3">
-                            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${b.gradient} flex items-center justify-center shadow-lg transition-all group-hover:shadow-xl group-hover:scale-105`}
-                              style={{ boxShadow: `0 4px 14px -2px ${b.glow}` }}>
-                              <b.icon className="w-5 h-5 text-foreground" />
+                            <div className={`w-9 h-9 rounded-[10px] bg-gradient-to-br ${b.gradient} flex items-center justify-center`}>
+                              <b.icon className="w-[18px] h-[18px] text-white" />
                             </div>
-                            <span className="text-[8px] font-bold px-2 py-0.5 rounded-md text-muted-foreground/65 uppercase tracking-wider"
-                              style={{ background: 'hsl(var(--secondary) / 0.5)' }}>{b.stat.winRate}%</span>
+                            <span className="text-[12px] font-medium text-muted-foreground">{b.stat.winRate}%</span>
                           </div>
-                          <p className="text-2xl font-extrabold text-foreground tabular-nums tracking-tight">
+                          <p className="text-[22px] font-bold text-foreground tabular-nums tracking-tight">
                             {b.stat.wins}<span className="text-muted-foreground/50">W</span> – {b.stat.losses}<span className="text-muted-foreground/50">L</span>
                           </p>
-                          <p className="text-[10px] text-muted-foreground/65 font-semibold mt-0.5 uppercase tracking-wider">{b.label}</p>
+                          <p className="text-[11px] text-muted-foreground font-semibold mt-0.5 uppercase tracking-[0.03em]">{b.label}</p>
                           {b.stat.hasProfit && (
                             <p className={`text-[11px] font-bold tabular-nums mt-1.5 ${b.stat.profit >= 0 ? "text-nba-green" : "text-nba-red"}`}>
                               {fmtProfit(b.stat.profit)}
@@ -724,24 +709,20 @@ const ProfitTrackerPage = () => {
 
               {/* Action Buttons */}
               <div className="flex gap-2">
-                <motion.button whileTap={{ scale: 0.95 }} onClick={() => { setShowForm(!showForm); setShowParlayForm(false); }}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[12px] font-bold tracking-wider text-accent-foreground"
-                  style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--success)))', boxShadow: '0 4px 12px -2px hsl(var(--primary) / 0.3)' }}>
+                <motion.button whileTap={{ scale: 0.97 }} onClick={() => { setShowForm(!showForm); setShowParlayForm(false); }}
+                  className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-primary text-[15px] font-semibold text-primary-foreground">
                   {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                   {showForm ? "Cancel" : "Add Play"}
                 </motion.button>
-                <motion.button whileTap={{ scale: 0.95 }} onClick={() => { setShowParlayForm(!showParlayForm); setShowForm(false); }}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[12px] font-bold tracking-wider"
-                  style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--primary) / 0.3)', color: showParlayForm ? 'hsl(var(--danger))' : 'hsl(var(--primary))' }}>
+                <motion.button whileTap={{ scale: 0.97 }} onClick={() => { setShowParlayForm(!showParlayForm); setShowForm(false); }}
+                  className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-full text-[15px] font-semibold ${showParlayForm ? "bg-danger/10 text-danger" : "bg-primary/10 text-primary"}`}>
                   {showParlayForm ? <X className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
                   {showParlayForm ? "Cancel" : "Add Parlay"}
                 </motion.button>
                 {plays.length > 0 && (
-                  <motion.button whileTap={{ scale: 0.95 }} onClick={exportToCSV}
-                    className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[12px] font-bold tracking-wider text-muted-foreground/60 hover:text-foreground/80 transition-colors"
-                    style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}>
-                    <Download className="w-4 h-4" />
-                  </motion.button>
+                  <CircleButton onClick={exportToCSV} aria-label="Export plays as CSV">
+                    <Download />
+                  </CircleButton>
                 )}
               </div>
 
@@ -896,32 +877,27 @@ const ProfitTrackerPage = () => {
 
               {/* Plays Filters */}
               <div className="vision-card p-3 space-y-2">
-                <input type="text" placeholder="Search player..." value={playsSearch} onChange={(e) => setPlaysSearch(e.target.value)}
-                  className="w-full rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/55 outline-none"
-                  style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }} />
-                <div className="flex items-center gap-1 flex-wrap">
-                  <Filter className="w-3 h-3 text-muted-foreground/50" />
-                  {(["all", "win", "loss", "pending"] as ResultFilter[]).map((f) => (
-                    <button key={f} onClick={() => setPlaysResultFilter(f)}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
-                        playsResultFilter === f ? "bg-accent/15 text-accent" : "text-muted-foreground/60 hover:text-foreground/80"
-                      }`}>{f === "all" ? "All" : f === "win" ? "Wins" : f === "loss" ? "Losses" : "Pending"}</button>
-                  ))}
-                </div>
-                <div className="flex items-center gap-1 flex-wrap">
-                  {(["all", "nba", "wnba", "mlb", "nhl", "ufc"] as SportFilter[]).map((f) => (
-                    <button key={f} onClick={() => setPlaysSportFilter(f)}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
-                        playsSportFilter === f ? "bg-accent/15 text-accent" : "text-muted-foreground/60 hover:text-foreground/80"
-                      }`}>{f === "all" ? "All Sports" : f.toUpperCase()}</button>
-                  ))}
-                </div>
+                <input type="text" placeholder="Search player" aria-label="Search plays by player" value={playsSearch} onChange={(e) => setPlaysSearch(e.target.value)}
+                  className="h-11 w-full rounded-xl bg-fill/15 px-3.5 text-[17px] text-foreground placeholder:text-muted-foreground outline-none" />
+                <PillTabs<ResultFilter>
+                  scroll
+                  ariaLabel="Result"
+                  value={playsResultFilter}
+                  onChange={setPlaysResultFilter}
+                  options={(["all", "win", "loss", "pending"] as ResultFilter[]).map((f) => ({ value: f, label: f === "all" ? "All" : f === "win" ? "Wins" : f === "loss" ? "Losses" : "Pending" }))}
+                />
+                <PillTabs<SportFilter>
+                  scroll
+                  ariaLabel="Sport"
+                  value={playsSportFilter}
+                  onChange={setPlaysSportFilter}
+                  options={(["all", "nba", "wnba", "mlb", "nhl", "ufc"] as SportFilter[]).map((f) => ({ value: f, label: f === "all" ? "All sports" : f.toUpperCase() }))}
+                />
                 {playsDates.length > 0 && (
                   <div className="flex items-center gap-1.5">
                     <Calendar className="w-3 h-3 text-muted-foreground/50" />
-                    <select value={playsDateFilter} onChange={(e) => setPlaysDateFilter(e.target.value)}
-                      className="flex-1 rounded-lg px-2 py-1.5 text-[10px] font-bold text-foreground outline-none appearance-none"
-                      style={{ background: 'hsl(var(--card) / 0.6)', border: '1px solid hsl(var(--border) / 0.25)' }}>
+                    <select value={playsDateFilter} onChange={(e) => setPlaysDateFilter(e.target.value)} aria-label="Filter plays by date"
+                      className="h-11 flex-1 rounded-xl bg-fill/15 px-3 text-[15px] font-medium text-foreground outline-none appearance-none">
                       <option value="all">All Dates</option>
                       {playsDates.map(d => (
                         <option key={d} value={d}>{new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</option>
@@ -940,36 +916,27 @@ const ProfitTrackerPage = () => {
                 ) : filteredPlays.length === 0 ? (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="vision-card p-8 text-center">
                     <DollarSign className="w-8 h-8 mx-auto mb-3 text-muted-foreground/45" />
-                    <p className="text-[13px] text-muted-foreground/65 font-medium">{plays.length === 0 ? "No plays yet" : "No plays match filters"}</p>
-                    <p className="text-[10px] text-muted-foreground/50 mt-1">{plays.length === 0 ? 'Tap "Add Play" to start tracking' : "Try adjusting your filters"}</p>
+                    <p className="text-[17px] font-semibold text-foreground">{plays.length === 0 ? "No plays yet" : "No plays match filters"}</p>
+                    <p className="text-[15px] text-muted-foreground mt-1">{plays.length === 0 ? 'Tap "Add Play" to start tracking' : "Try adjusting your filters"}</p>
                   </motion.div>
                 ) : filteredPlays.map((p, i) => (
                   <motion.div key={p.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
                     className="vision-card p-4 relative overflow-hidden">
-                    <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl" style={{
-                      background: p.result === "win" ? 'hsl(var(--success))' : p.result === "loss" ? 'hsl(var(--danger))' : 'hsl(var(--primary))',
-                    }} />
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[9px] font-bold uppercase tracking-[0.15em] px-1.5 py-0.5 rounded-md text-muted-foreground/50"
-                            style={{ background: 'hsl(var(--secondary) / 0.5)', border: '1px solid hsl(var(--border) / 0.3)' }}>
-                            {p.sport.toUpperCase()}
-                          </span>
+                          <span className="text-[12px] font-semibold text-muted-foreground">{p.sport.toUpperCase()}</span>
                           {(p as any)._isParlay && (
-                            <span className="text-[9px] font-bold uppercase tracking-[0.15em] px-1.5 py-0.5 rounded-md text-accent"
-                              style={{ background: 'hsl(var(--primary) / 0.12)', border: '1px solid hsl(var(--primary) / 0.25)' }}>
-                              PARLAY
-                            </span>
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[12px] font-semibold text-primary">Parlay</span>
                           )}
-                          <span className="text-[9px] text-muted-foreground/55">{new Date(p.created_at).toLocaleDateString()}</span>
+                          <span className="text-[12px] text-muted-foreground">{new Date(p.created_at).toLocaleDateString()}</span>
                         </div>
                         {(() => {
                           const { headline, detail } = formatBetLabel({ subject: p.player_or_fighter, betType: p.bet_type, line: p.line, sport: p.sport });
                           return (
                             <>
-                              <p className="text-[13px] font-bold text-foreground truncate">{headline}</p>
-                              <p className="text-[11px] text-muted-foreground/50 mt-0.5">{detail} · {fmt(p.odds)} · ${p.stake}</p>
+                              <p className="text-[17px] font-semibold text-foreground truncate">{headline}</p>
+                              <p className="text-[13px] text-muted-foreground mt-0.5">{detail} · {fmt(p.odds)} · ${p.stake}</p>
                             </>
                           );
                         })()}
@@ -978,29 +945,27 @@ const ProfitTrackerPage = () => {
                         {p.result === "pending" ? (
                           <div className="flex gap-1">
                             <motion.button whileTap={{ scale: 0.9 }} onClick={() => (p as any)._isParlay ? updateParlayResult(p.id, "win") : updatePlayResult(p.id, "win")}
-                              className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white" style={{ background: 'hsl(var(--success))' }}>W</motion.button>
+                              aria-label="Mark as win" className="h-9 min-w-9 rounded-full bg-success/15 px-3 text-[13px] font-semibold text-success">W</motion.button>
                             <motion.button whileTap={{ scale: 0.9 }} onClick={() => (p as any)._isParlay ? updateParlayResult(p.id, "loss") : updatePlayResult(p.id, "loss")}
-                              className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white" style={{ background: 'hsl(var(--danger))' }}>L</motion.button>
+                              aria-label="Mark as loss" className="h-9 min-w-9 rounded-full bg-danger/15 px-3 text-[13px] font-semibold text-danger">L</motion.button>
                             {!(p as any)._isParlay && (
                               <motion.button whileTap={{ scale: 0.9 }} onClick={() => updatePlayResult(p.id, "push")}
-                                className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-muted-foreground"
-                                style={{ background: 'hsl(var(--secondary) / 0.5)', border: '1px solid hsl(var(--border) / 0.3)' }}>P</motion.button>
+                                aria-label="Mark as push" className="h-9 min-w-9 rounded-full bg-fill/15 px-3 text-[13px] font-semibold text-muted-foreground">P</motion.button>
                             )}
                           </div>
                         ) : (
                           <div className="text-right">
-                            <span className={`block text-[10px] font-bold uppercase tracking-wider ${
-                              p.result === "win" ? "text-nba-green" : p.result === "loss" ? "text-nba-red" : "text-muted-foreground/50"
+                            <span className={`inline-block rounded-full px-2 py-0.5 text-[12px] font-semibold capitalize ${
+                              p.result === "win" ? "bg-success/15 text-success" : p.result === "loss" ? "bg-danger/15 text-danger" : "bg-fill/15 text-muted-foreground"
                             }`}>{p.result}</span>
-                            <span className={`block text-[14px] font-black tabular-nums ${(p.payout || 0) >= 0 ? "text-nba-green" : "text-nba-red"}`}>
+                            <span className={`mt-1 block text-[15px] font-semibold tabular-nums ${(p.payout || 0) >= 0 ? "text-success" : "text-danger"}`}>
                               {fmtProfit(p.payout || 0)}
                             </span>
                           </div>
                         )}
-                        <motion.button whileTap={{ scale: 0.9 }} onClick={() => (p as any)._isParlay ? removeParlay(p.id) : deletePlay(p.id)}
-                          className="p-1.5 rounded-lg text-muted-foreground/45 hover:text-nba-red transition-colors">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </motion.button>
+                        <CircleButton size="sm" onClick={() => (p as any)._isParlay ? removeParlay(p.id) : deletePlay(p.id)} aria-label="Delete play" className="text-muted-foreground">
+                          <Trash2 />
+                        </CircleButton>
                       </div>
                     </div>
                   </motion.div>
@@ -1021,20 +986,16 @@ const ProfitTrackerPage = () => {
                 ].map((s, i) => (
                   <motion.div key={s.label} initial={{ opacity: 0, y: 20, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ delay: i * 0.07, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
-                    className="vision-card-animated p-3.5 group cursor-default" whileHover={{ scale: 1.02, y: -2 }}>
-                    <div className="absolute -top-6 -right-6 w-16 h-16 rounded-full opacity-[0.06] pointer-events-none"
-                      style={{ background: `radial-gradient(circle, ${s.glow.replace('0.15', '1')}, transparent)` }} />
+                    className="vision-card p-3.5">
                     <div className="relative z-10">
                       <div className="flex items-center justify-between mb-2">
-                        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${s.gradient} flex items-center justify-center shadow-lg`}
-                          style={{ boxShadow: `0 4px 14px -2px ${s.glow}` }}>
-                          <s.icon className="w-4 h-4 text-foreground" />
+                        <div className={`w-9 h-9 rounded-[10px] bg-gradient-to-br ${s.gradient} flex items-center justify-center`}>
+                          <s.icon className="w-[18px] h-[18px] text-white" />
                         </div>
-                        <span className="text-[7px] font-bold px-1.5 py-0.5 rounded-md text-muted-foreground/65 uppercase tracking-wider"
-                          style={{ background: 'hsl(var(--secondary) / 0.5)' }}>{s.sub}</span>
+                        <span className="text-[12px] font-medium text-muted-foreground">{s.sub}</span>
                       </div>
-                      <p className="text-xl font-extrabold text-foreground tabular-nums tracking-tight">{s.value}</p>
-                      <p className="text-[9px] text-muted-foreground/65 font-semibold mt-0.5 uppercase tracking-wider">{s.label}</p>
+                      <p className="text-[20px] font-bold text-foreground tabular-nums tracking-tight">{s.value}</p>
+                      <p className="text-[11px] text-muted-foreground font-semibold mt-0.5 uppercase tracking-[0.03em]">{s.label}</p>
                     </div>
                   </motion.div>
                 ))}
@@ -1047,20 +1008,16 @@ const ProfitTrackerPage = () => {
                 ].map((s, i) => (
                   <motion.div key={s.label} initial={{ opacity: 0, y: 20, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ delay: (i + 3) * 0.07, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
-                    className="vision-card-animated p-3.5 group cursor-default" whileHover={{ scale: 1.02, y: -2 }}>
-                    <div className="absolute -top-6 -right-6 w-16 h-16 rounded-full opacity-[0.06] pointer-events-none"
-                      style={{ background: `radial-gradient(circle, ${s.glow.replace('0.15', '1')}, transparent)` }} />
+                    className="vision-card p-3.5">
                     <div className="relative z-10">
                       <div className="flex items-center justify-between mb-2">
-                        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${s.gradient} flex items-center justify-center shadow-lg`}
-                          style={{ boxShadow: `0 4px 14px -2px ${s.glow}` }}>
-                          <s.icon className="w-4 h-4 text-foreground" />
+                        <div className={`w-9 h-9 rounded-[10px] bg-gradient-to-br ${s.gradient} flex items-center justify-center`}>
+                          <s.icon className="w-[18px] h-[18px] text-white" />
                         </div>
-                        <span className="text-[7px] font-bold px-1.5 py-0.5 rounded-md text-muted-foreground/65 uppercase tracking-wider"
-                          style={{ background: 'hsl(var(--secondary) / 0.5)' }}>{s.sub}</span>
+                        <span className="text-[12px] font-medium text-muted-foreground">{s.sub}</span>
                       </div>
-                      <p className="text-xl font-extrabold text-foreground tabular-nums tracking-tight">{s.value}</p>
-                      <p className="text-[9px] text-muted-foreground/65 font-semibold mt-0.5 uppercase tracking-wider">{s.label}</p>
+                      <p className="text-[20px] font-bold text-foreground tabular-nums tracking-tight">{s.value}</p>
+                      <p className="text-[11px] text-muted-foreground font-semibold mt-0.5 uppercase tracking-[0.03em]">{s.label}</p>
                     </div>
                   </motion.div>
                 ))}
@@ -1199,20 +1156,16 @@ const ProfitTrackerPage = () => {
                 ].map((s, i) => (
                   <motion.div key={s.label} initial={{ opacity: 0, y: 20, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ delay: i * 0.07, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
-                    className="vision-card-animated p-4 group cursor-default" whileHover={{ scale: 1.02, y: -2 }}>
-                    <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full opacity-[0.06] pointer-events-none"
-                      style={{ background: `radial-gradient(circle, ${s.glow.replace('0.15', '1')}, transparent)` }} />
+                    className="vision-card p-4">
                     <div className="relative z-10">
                       <div className="flex items-center justify-between mb-3">
-                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.gradient} flex items-center justify-center shadow-lg transition-all group-hover:shadow-xl group-hover:scale-105`}
-                          style={{ boxShadow: `0 4px 14px -2px ${s.glow}` }}>
-                          <s.icon className="w-5 h-5 text-foreground" />
+                        <div className={`w-9 h-9 rounded-[10px] bg-gradient-to-br ${s.gradient} flex items-center justify-center`}>
+                          <s.icon className="w-[18px] h-[18px] text-white" />
                         </div>
-                        <span className="text-[8px] font-bold px-2 py-0.5 rounded-md text-muted-foreground/65 uppercase tracking-wider"
-                          style={{ background: 'hsl(var(--secondary) / 0.5)' }}>{s.sub}</span>
+                        <span className="text-[12px] font-medium text-muted-foreground">{s.sub}</span>
                       </div>
-                      <p className="text-2xl font-extrabold text-foreground tabular-nums tracking-tight">{s.value}</p>
-                      <p className="text-[10px] text-muted-foreground/65 font-semibold mt-0.5 uppercase tracking-wider">{s.label}</p>
+                      <p className="text-[22px] font-bold text-foreground tabular-nums tracking-tight">{s.value}</p>
+                      <p className="text-[11px] text-muted-foreground font-semibold mt-0.5 uppercase tracking-[0.03em]">{s.label}</p>
                     </div>
                   </motion.div>
                 ))}

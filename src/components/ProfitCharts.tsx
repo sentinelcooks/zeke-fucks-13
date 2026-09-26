@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { PillTabs } from "@/components/playbook/controls";
 import { useProfitDisplay } from "@/hooks/useProfitDisplay";
 import {
   ResponsiveContainer,
@@ -124,19 +125,13 @@ const ProfitCharts = ({ plays }: ProfitChartsProps) => {
             </span>
           </div>
         </div>
-        <div className="flex gap-0.5 p-0.5 rounded-lg" style={{ background: 'hsl(var(--card) / 0.6)' }}>
-          {(["cumulative", "daily"] as const).map((v) => (
-            <button key={v} onClick={() => setView(v)}
-              className={`px-2.5 py-1 text-[9px] font-bold rounded-md transition-all capitalize tracking-wider ${
-                view === v
-                  ? "text-accent-foreground shadow-sm"
-                  : "text-muted-foreground/50 hover:text-foreground/70"
-              }`}
-              style={view === v ? { background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))' } : {}}>
-              {v}
-            </button>
-          ))}
-        </div>
+        <PillTabs<"cumulative" | "daily">
+          ariaLabel="Chart view"
+          className="w-[190px]"
+          value={view}
+          onChange={setView}
+          options={[{ value: "cumulative", label: "Cumulative" }, { value: "daily", label: "Daily" }]}
+        />
       </div>
 
       {/* Mini Stats Row */}
