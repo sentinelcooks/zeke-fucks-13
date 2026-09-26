@@ -84,22 +84,22 @@ export interface SettlementPalette {
 // looks the same the moment it settles as it does in tomorrow's recap.
 export const SETTLEMENT_PALETTE: Record<Exclude<SettlementState, "pending">, SettlementPalette> = {
   won: {
-    accent: "hsl(142 71% 45%)",
-    chip: "hsla(142, 71%, 45%, 0.14)",
-    border: "hsla(142, 71%, 45%, 0.38)",
-    wash: "hsla(142, 71%, 45%, 0.05)",
+    accent: "hsl(var(--success))",
+    chip: "hsl(var(--success) / 0.14)",
+    border: "hsl(var(--success) / 0.38)",
+    wash: "hsl(var(--success) / 0.05)",
   },
   lost: {
-    accent: "hsl(0 84% 60%)",
-    chip: "hsla(0, 84%, 60%, 0.13)",
-    border: "hsla(0, 84%, 60%, 0.34)",
-    wash: "hsla(0, 84%, 60%, 0.045)",
+    accent: "hsl(var(--danger))",
+    chip: "hsl(var(--danger) / 0.13)",
+    border: "hsl(var(--danger) / 0.34)",
+    wash: "hsl(var(--danger) / 0.045)",
   },
   push: {
-    accent: "hsl(45 93% 58%)",
-    chip: "hsla(45, 93%, 58%, 0.14)",
-    border: "hsla(45, 93%, 58%, 0.36)",
-    wash: "hsla(45, 93%, 58%, 0.05)",
+    accent: "hsl(var(--nba-yellow))",
+    chip: "hsl(var(--nba-yellow) / 0.14)",
+    border: "hsl(var(--nba-yellow) / 0.36)",
+    wash: "hsl(var(--nba-yellow) / 0.05)",
   },
 };
 

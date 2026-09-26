@@ -42,9 +42,9 @@ describe("SETTLEMENT_PALETTE", () => {
     }
   });
 
-  it("matches the green/red already used by Yesterday's Edge Results", () => {
-    expect(SETTLEMENT_PALETTE.won.accent).toBe("hsl(142 71% 45%)");
-    expect(SETTLEMENT_PALETTE.lost.accent).toBe("hsl(0 84% 60%)");
+  it("uses the same theme tokens as Yesterday's Edge Results", () => {
+    expect(SETTLEMENT_PALETTE.won.accent).toBe("hsl(var(--success))");
+    expect(SETTLEMENT_PALETTE.lost.accent).toBe("hsl(var(--danger))");
   });
 });
 

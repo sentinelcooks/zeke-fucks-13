@@ -4,6 +4,8 @@ import {
   Flame, ChevronRight, Sparkles, CheckCircle2, XCircle,
   BarChart3, Crosshair, DollarSign, MinusCircle, Target
 } from "lucide-react";
+import { CircleButton } from "@/components/playbook/controls";
+import { withAlpha } from "@/lib/themeColor";
 import { supabase } from "@/integrations/supabase/client";
 import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 import { useNavigate } from "react-router-dom";
@@ -177,8 +179,8 @@ function timeAgo(dateStr: string) {
 function CompactScore({ rate, isModelScore = false }: { rate: number; isModelScore?: boolean }) {
   return (
     <div className="shrink-0 pt-1 text-right">
-      <p className="text-lg font-extrabold tabular-nums text-foreground">{rate}{isModelScore ? "" : "%"}</p>
-      <p className="mt-0.5 text-[7px] font-bold uppercase tracking-[0.12em] text-muted-foreground/50">{isModelScore ? "MODEL SCORE" : "Confidence"}</p>
+      <p className="text-[22px] font-bold leading-none tabular-nums text-foreground">{rate}{isModelScore ? "" : "%"}</p>
+      <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground">{isModelScore ? "MODEL SCORE" : "CONFIDENCE"}</p>
     </div>
   );
 }
@@ -685,14 +687,12 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       
 
       <div className="w-full max-w-[430px] mx-auto px-5 pt-4 pb-6 space-y-5 relative">
-        <div className="vision-orb w-64 h-64 -top-24 -right-28 opacity-70" style={{ background: 'hsl(var(--primary))' }} />
-        <div className="vision-orb w-44 h-44 top-[760px] -left-24 opacity-45" style={{ background: 'hsl(var(--primary))', animationDelay: '-3s' }} />
 
         <motion.div {...stagger(0)} className="relative z-10">
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-accent/85">
+          <p className="text-[13px] font-semibold uppercase tracking-[0.02em] text-muted-foreground">
             {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
           </p>
-          <h1 className="mt-1 text-[29px] font-extrabold text-foreground tracking-tight">
+          <h1 className="mt-0.5 text-[28px] font-bold leading-tight tracking-tight text-foreground">
             {getGreeting()}, {resolveDisplayName(profile, user, "Player")}
           </h1>
           <p className="hidden">A focused view of today’s model-supported opportunities.</p>
@@ -700,12 +700,9 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
 
         {(picksLoading || verifiedDailyEdges.length > 0) && (
           <motion.section {...stagger(0.5)} className="relative z-10 -mx-5 overflow-hidden">
-          <div className="mb-3 flex items-end justify-between px-5">
-            <div>
-              <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-accent">Today’s best opportunity</p>
-              <h2 className="mt-1 text-[22px] font-extrabold tracking-tight text-foreground">Daily Edge</h2>
-            </div>
-            <span className="mb-1 text-[10px] font-medium text-muted-foreground/55">Updated {updatedMinutes}m ago</span>
+          <div className="mb-2.5 flex items-baseline justify-between px-5">
+            <h2 className="text-[20px] font-semibold tracking-tight text-foreground">Daily Edge</h2>
+            <span className="text-[13px] text-muted-foreground">Updated {updatedMinutes}m ago</span>
           </div>
 
           {picksLoading ? (
@@ -735,36 +732,38 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       initial={{ opacity: 0, x: 18 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.08 + index * 0.05 }}
-                      className="relative w-[86vw] max-w-[360px] min-w-[86vw] shrink-0 snap-start overflow-hidden rounded-[26px] p-5"
-                      style={{ background: 'radial-gradient(circle at 100% 0%, hsl(var(--primary) / 0.36), transparent 40%), radial-gradient(circle at 0% 100%, hsl(var(--primary) / 0.15), transparent 45%), linear-gradient(145deg, hsl(var(--secondary)), hsl(var(--card)) 72%)', boxShadow: '0 18px 40px -24px hsl(var(--primary) / 0.8), inset 0 1px 0 hsl(var(--primary) / 0.1)' }}
+                      className="relative w-[86vw] max-w-[360px] min-w-[86vw] shrink-0 snap-start overflow-hidden rounded-[22px] bg-card p-4 shadow-[inset_0_0_0_0.5px_hsl(var(--hairline))]"
                     >
-                      <div className="absolute -right-8 bottom-[-72px] h-44 w-44 rounded-full opacity-40 blur-3xl" style={{ background: 'hsl(var(--primary))' }} />
-                      <div className="relative">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="inline-flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-accent"><Flame className="h-3 w-3" /> Daily Edge</span>
-                          <span className="text-[9px] font-semibold text-muted-foreground/55">{index + 1} of {verifiedDailyEdges.length}</span>
+                      <div className="flex items-center justify-between gap-3 text-[13px]">
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-muted-foreground">
+                          <Flame className="h-3.5 w-3.5 text-primary" /> Daily Edge · {(pick.sport || "Sentinel").toUpperCase()}
+                        </span>
+                        <span className="text-muted-foreground">{index + 1} of {verifiedDailyEdges.length}</span>
+                      </div>
+                      <div className="mt-3 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className="text-[22px] font-bold leading-tight tracking-tight text-foreground">{title}</h3>
+                          <p className="mt-1 text-[15px] text-muted-foreground">{matchup}</p>
                         </div>
-                        <div className="mt-6 flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-accent/80">{(pick.sport || "Sentinel").toUpperCase()}</p>
-                            <h3 className="mt-2 text-[24px] font-extrabold leading-[1.05] tracking-tight text-foreground">{title}</h3>
-                            <p className="mt-2 text-[12px] font-medium text-muted-foreground/75">{matchup}</p>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <p className="text-2xl font-black tabular-nums text-foreground">{score}%</p>
-                            <p className="mt-0.5 text-[8px] font-bold uppercase tracking-[0.12em] text-muted-foreground/55">Confidence</p>
-                          </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-[22px] font-bold leading-none tabular-nums text-foreground">{score}%</p>
+                          <p className="mt-1 text-[12px] text-muted-foreground">confidence</p>
                         </div>
-                        <div className="mt-5 flex items-center justify-between gap-3 border-t border-foreground/[0.08] pt-3">
-                          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-accent">{verdict}</span>
-                          <span className="text-[10px] font-semibold text-muted-foreground/65">{pick.odds ? formatOddsFn(pick.odds) : "—"}</span>
-                        </div>
-                        <div className="mt-4 flex gap-2">
-                          <button type="button" onClick={() => navigate("/dashboard/picks")} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-[11px] font-bold text-white active:scale-[0.98]" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))', boxShadow: '0 10px 20px -12px hsl(var(--primary) / 0.8)' }}>
-                            View Daily Edge <ChevronRight className="h-3.5 w-3.5" />
-                          </button>
-                          <button type="button" onClick={() => navigate("/dashboard/analyze")} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-accent" style={{ background: 'hsl(var(--card) / 0.52)' }} aria-label="Open analysis"><BarChart3 className="h-4 w-4" /></button>
-                        </div>
+                      </div>
+                      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-fill/20" role="presentation">
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
+                      </div>
+                      <div className="mt-3 flex items-center justify-between gap-3">
+                        <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[13px] font-semibold capitalize text-primary">{verdict.toLowerCase()}</span>
+                        <span className="text-[15px] font-semibold tabular-nums text-foreground">{pick.odds ? formatOddsFn(pick.odds) : "—"}</span>
+                      </div>
+                      <div className="mt-4 flex gap-2">
+                        <button type="button" onClick={() => navigate("/dashboard/picks")} className="flex h-11 flex-1 items-center justify-center gap-1 rounded-full bg-primary text-[15px] font-semibold text-primary-foreground active:scale-[0.98]">
+                          View Daily Edge <ChevronRight className="h-4 w-4" />
+                        </button>
+                        <CircleButton onClick={() => navigate("/dashboard/analyze")} aria-label="Open analysis" className="text-primary">
+                          <BarChart3 />
+                        </CircleButton>
                       </div>
                     </motion.article>
                   );
@@ -780,7 +779,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
           </motion.section>
         )}
 
-        <motion.nav {...stagger(0.85)} aria-label="Explore Sentinel" className="relative z-10 border-y border-foreground/[0.06] py-2.5">
+        <motion.nav {...stagger(0.85)} aria-label="Explore Sentinel" className="relative z-10">
           <div className="flex items-center justify-between gap-2">
             {quickLinks.map((link, index) => (
               <motion.button
@@ -790,23 +789,20 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                 transition={{ delay: 0.2 + index * 0.04 }}
                 onClick={() => navigate(link.path)}
                 whileTap={{ scale: 0.93 }}
-                className="flex min-w-0 flex-1 flex-col items-center gap-1 py-1 text-muted-foreground/65 transition-colors active:text-accent"
+                className="flex min-w-0 flex-1 flex-col items-center gap-1.5 py-1"
               >
-                <span className="flex h-8 w-8 items-center justify-center text-accent"><link.icon className="h-4 w-4" /></span>
-                <span className="text-[9px] font-bold tracking-wide text-foreground/75">{link.label}</span>
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-card text-primary shadow-[inset_0_0_0_0.5px_hsl(var(--hairline))]"><link.icon className="h-5 w-5" /></span>
+                <span className="text-[12px] font-medium text-foreground">{link.label}</span>
               </motion.button>
             ))}
           </div>
         </motion.nav>
 
         <motion.div {...stagger(1)} className="relative z-10">
-          <div className="flex items-center justify-between border-b border-foreground/[0.07] pb-2.5 mb-0">
+          <div className="mb-2.5 flex items-baseline justify-between gap-3">
+            <h2 className="text-[20px] font-semibold tracking-tight text-foreground">Today's Edge Lineup</h2>
             <div className="flex items-center gap-2">
-              <Flame className="w-4 h-4 text-accent" style={{ animation: 'pulse-fire 3s ease-in-out infinite' }} />
-              <span className="text-xs font-bold tracking-[0.15em] uppercase text-foreground">Today's Edge Lineup</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-muted-foreground/45">
+              <span className="text-[13px] text-muted-foreground">
                 {lineupScanPending ? "Analyzing live slate…" : `${todayPicks.length} available · ${updatedMinutes}m ago`}
               </span>
             </div>
@@ -829,20 +825,16 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               </div>
             </div>
           ) : todayPicks.length === 0 ? (
-            <div className="w-full min-w-0 p-6 text-center" style={{
-              background: 'linear-gradient(165deg, hsl(var(--card)), hsl(var(--card)))',
-              border: '1px solid hsl(var(--border) / 0.6)',
-              borderRadius: 20,
-            }}>
-              <Sparkles className="w-6 h-6 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-[11px] text-muted-foreground/65 mb-1">
+            <div className="w-full min-w-0 rounded-[22px] bg-card p-6 text-center shadow-[inset_0_0_0_0.5px_hsl(var(--hairline))]">
+              <Sparkles className="mx-auto mb-2 h-7 w-7 text-muted-foreground/50" />
+              <p className="mb-1 text-[15px] font-semibold text-foreground">
                 {lineupError
                   ? lineupError
                   : lineupScanPending
                     ? "Sentinel is analyzing today’s live slate."
                     : "No model-supported picks are available yet."}
               </p>
-              <p className="text-[10px] text-muted-foreground/35">
+              <p className="text-[13px] text-muted-foreground">
                 {lineupScanPending
                   ? "Only analyzer-finalized plays will appear here."
                   : "Run a fresh analysis to check every eligible live market."}
@@ -851,8 +843,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                 type="button"
                 onClick={() => { void requestTodayLineup(); }}
                 disabled={lineupScanPending}
-                className="mt-4 inline-flex h-10 items-center justify-center rounded-xl px-4 text-[11px] font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-55"
-                style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))' }}
+                className="mt-4 inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-[15px] font-semibold text-primary-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-55"
               >
                 {lineupScanPending ? "Analyzing slate…" : lineupError ? "Try again" : "Analyze today’s slate"}
               </button>
@@ -896,19 +887,12 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.1 + i * 0.06 }}
-                    className="relative flex min-h-[210px] w-[84vw] max-w-[360px] shrink-0 snap-start flex-col overflow-hidden rounded-[22px] border"
+                    className="relative flex min-h-[210px] w-[84vw] max-w-[360px] shrink-0 snap-start flex-col overflow-hidden rounded-[22px] p-4"
                     style={{
-                      padding: '16px',
-                      // Settled cards swap the purple edge glow for the result
-                      // colour and lay a faint wash over the base gradient, so
-                      // a finished pick reads as finished without shouting.
-                      borderColor: settled ? settled.border : 'hsl(var(--foreground) / 0.08)',
-                      background: settled
-                        ? `linear-gradient(145deg, ${settled.wash}, transparent 60%), radial-gradient(circle at 100% 0%, ${settled.chip}, transparent 43%), linear-gradient(145deg, hsl(var(--secondary)), hsl(var(--card)) 72%)`
-                        : 'radial-gradient(circle at 100% 0%, hsl(var(--primary) / 0.28), transparent 43%), linear-gradient(145deg, hsl(var(--secondary)), hsl(var(--card)) 72%)',
-                      boxShadow: settled
-                        ? `inset 0 1px 0 hsl(var(--primary) / 0.06), 0 18px 34px -28px ${settled.border}`
-                        : 'inset 0 1px 0 hsl(var(--primary) / 0.08), 0 18px 34px -28px hsl(var(--primary) / 0.92)',
+                      // Settled cards take the result colour as an outline and a
+                      // faint wash, so a finished pick reads as finished without shouting.
+                      background: settled ? `linear-gradient(145deg, ${settled.wash}, transparent 60%), hsl(var(--card))` : 'hsl(var(--card))',
+                      boxShadow: `inset 0 0 0 ${settled ? '1px' : '0.5px'} ${settled ? settled.border : 'hsl(var(--hairline))'}`,
                     }}
                   >
 
@@ -916,13 +900,9 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     <div className="relative z-10 flex items-start gap-3">
                       {/* Left: Recommended team logo or player headshot */}
                       <div style={{
-                        width: 48, height: 48, borderRadius: 15, overflow: 'hidden',
-                        border: `1px solid ${isGameBet ? 'hsl(var(--primary) / 0.26)' : 'hsl(var(--border))'}`,
+                        width: 48, height: 48, borderRadius: 14, overflow: 'hidden',
                         flexShrink: 0, position: 'relative',
-                        background: isGameBet
-                          ? 'radial-gradient(circle at 50% 35%, hsl(var(--primary) / 0.14), transparent 68%), hsl(var(--secondary))'
-                          : 'hsl(var(--secondary))',
-                        boxShadow: isGameBet ? 'inset 0 1px 0 hsl(var(--foreground) / 0.05)' : 'none',
+                        background: 'hsl(var(--secondary))',
                       }}>
                         {isGameBet ? (() => {
                           const sportRaw = (pick.sport || 'nba').toLowerCase();
@@ -941,7 +921,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                                   <img
                                     src={selectedLogo}
                                     alt={`${logoTeam} logo`}
-                                    style={{ width: 38, height: 38, objectFit: 'contain', filter: 'drop-shadow(0 5px 8px rgba(0,0,0,0.34))' }}
+                                    style={{ width: 38, height: 38, objectFit: 'contain' }}
                                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                   />
                                 )}
@@ -951,15 +931,10 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                           return (
                             <div style={{
                               width: '100%', height: '100%',
-                              display: 'flex', flexDirection: 'column',
-                              alignItems: 'center', justifyContent: 'center',
-                              gap: 2,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
                             }}>
-                              <span style={{ fontSize: 16 }}>
-                                {pick.bet_type === 'moneyline' ? '💰' : pick.bet_type === 'spread' ? '📊' : '📈'}
-                              </span>
-                              <span style={{ fontSize: 8, fontWeight: 700, color: 'hsl(var(--nba-cyan))', letterSpacing: 1 }}>
-                                {(pick.bet_type || '').replace('_', '/').toUpperCase()}
+                              <span style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--primary))' }}>
+                                {pick.bet_type === 'moneyline' ? 'ML' : pick.bet_type === 'spread' ? 'SPR' : 'O/U'}
                               </span>
                             </div>
                           );
@@ -982,7 +957,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                               display: headshots[pick.player_name] ? 'none' : 'flex',
                               width: '100%', height: '100%',
                               alignItems: 'center', justifyContent: 'center',
-                              fontSize: 11, fontWeight: 700, color: 'hsl(var(--nba-cyan))',
+                              fontSize: 12, fontWeight: 700, color: 'hsl(var(--muted-foreground))',
                             }}>
                               {(pick.sport || 'NBA').toUpperCase()}
                             </div>
@@ -993,8 +968,8 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       {/* Middle: Name + Sport Pill + Matchup */}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{
-                          fontSize: isGameBet ? 15 : 17, fontWeight: 700, color: 'hsl(var(--foreground))',
-                          lineHeight: 1.2, wordBreak: 'break-word',
+                          fontSize: 17, fontWeight: 600, color: 'hsl(var(--foreground))',
+                          lineHeight: 1.25, wordBreak: 'break-word',
                           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
                           overflow: 'hidden',
                         }}>
@@ -1005,18 +980,16 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                         <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
                           <span style={{
                             display: 'inline-block',
-                            color: 'hsl(var(--primary))',
-                            fontSize: 9, fontWeight: 700, letterSpacing: 1,
-                            borderRadius: 20, padding: '2px 8px',
+                            color: 'hsl(var(--muted-foreground))',
+                            fontSize: 12, fontWeight: 600,
                           }}>{(pick.sport || 'NBA').toUpperCase()}</span>
                           {settled && (
                             <span style={{
                               display: 'inline-flex', alignItems: 'center', gap: 4,
                               background: settled.chip,
                               color: settled.accent,
-                              fontSize: 10, fontWeight: 800, letterSpacing: 1.1,
+                              fontSize: 12, fontWeight: 600,
                               borderRadius: 20, padding: '2px 9px',
-                              border: `1px solid ${settled.border}`,
                             }}>
                               {settlement.state === "won"
                                 ? <CheckCircle2 style={{ width: 10, height: 10 }} />
@@ -1062,7 +1035,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                         </div>
                         {!isGameBet && (
                           <p style={{
-                            fontSize: 12, color: 'hsl(var(--muted-foreground))',
+                            fontSize: 15, color: 'hsl(var(--muted-foreground))',
                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                             marginTop: 2,
                           }}>
@@ -1113,13 +1086,13 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                       return (
                         <div className="relative z-10" style={{
                           display: 'inline-flex', alignItems: 'center', gap: 6,
-                          background: 'transparent', border: 'none',
-                          borderRadius: 20, padding: '1px 0', marginTop: 14, alignSelf: 'flex-start', maxWidth: '100%',
+                          background: withAlpha(dotColor, 0.14),
+                          borderRadius: 999, padding: '4px 10px', marginTop: 14, alignSelf: 'flex-start', maxWidth: '100%',
                         }}>
-                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: dotColor }} />
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
                           <span style={{
-                            fontSize: 9, fontWeight: 700, letterSpacing: 1.2,
-                            color: dotColor, textTransform: 'uppercase', lineHeight: 1.35,
+                            fontSize: 12, fontWeight: 600, letterSpacing: 0.2,
+                            color: dotColor, textTransform: 'uppercase', lineHeight: 1.3,
                           }}>{badgeText}</span>
                         </div>
                       );
@@ -1129,7 +1102,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     <div className="relative z-10" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 6 }}>
                       <span style={{
                         color: 'hsl(var(--foreground))', padding: 0,
-                        fontSize: 12, fontWeight: 600,
+                        fontSize: 15, fontWeight: 600,
                         flex: '1 1 auto', minWidth: 0,
                       }}>
                         {isGameBet
@@ -1142,7 +1115,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                         }
                       </span>
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))', whiteSpace: 'nowrap' }}>{pick.odds ? formatOddsFn(pick.odds) : "—"}</div>
+                        <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{pick.odds ? formatOddsFn(pick.odds) : "—"}</div>
                       </div>
                     </div>
 
@@ -1170,7 +1143,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                     {/* BUTTONS — a settled pick can no longer be bet, so
                         "Add to Slip" is dropped and Details takes the row. */}
                     <div
-                      className={`relative z-10 mt-auto grid gap-2 border-t border-foreground/[0.08] pt-3 ${settled ? 'grid-cols-1' : 'grid-cols-2'}`}
+                      className={`relative z-10 mt-auto grid gap-2 pt-4 ${settled ? 'grid-cols-1' : 'grid-cols-2'}`}
                     >
                       <button
                         onClick={() => {
@@ -1231,12 +1204,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                             });
                           }
                         }}
-                        className="flex items-center justify-center active:opacity-70"
-                        style={{
-                          height: 38, borderRadius: 11,
-                          fontSize: 11, fontWeight: 600,
-                          background: 'hsl(var(--card) / 0.62)', border: '1px solid hsl(var(--primary) / 0.2)', color: 'hsl(var(--primary))',
-                        }}
+                        className="flex h-11 items-center justify-center rounded-full bg-primary/10 text-[15px] font-semibold text-primary active:opacity-70"
                       >
                         Details
                       </button>
@@ -1254,12 +1222,7 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                           });
                           setSlipSheetOpen(true);
                         }}
-                        className="flex items-center justify-center active:opacity-80"
-                        style={{
-                          height: 38, borderRadius: 11,
-                          fontSize: 11, fontWeight: 600,
-                          background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))', color: 'hsl(var(--foreground))',
-                        }}
+                        className="flex h-11 items-center justify-center rounded-full bg-primary text-[15px] font-semibold text-primary-foreground active:opacity-80"
                       >
                         Add to Slip
                       </button>
@@ -1288,31 +1251,29 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
           )}
         </motion.div>
 
-        <motion.section {...stagger(2)} className="relative z-10 w-full min-w-0 border-t border-foreground/[0.07] pt-5">
-          <div className="absolute -bottom-6 -right-6 w-24 h-24 rounded-full opacity-[0.04] pointer-events-none"
-            style={{ background: 'radial-gradient(circle, hsl(var(--success)), transparent)' }} />
-          <p className="text-[11px] font-bold tracking-[0.15em] uppercase mb-3" style={{ color: 'hsl(var(--primary))' }}>
+        <motion.section {...stagger(2)} className="relative z-10 w-full min-w-0">
+          <h2 className="mb-2.5 text-[20px] font-semibold tracking-tight text-foreground">
             {yesterdayPending.length > 0 ? "Yesterday's Edge" : "Yesterday's Edge Results"}
-          </p>
+          </h2>
           {hasYesterdayData ? (
             <>
-              <div className="space-y-0">
+              <div className="overflow-hidden rounded-[18px] bg-card px-4 shadow-[inset_0_0_0_0.5px_hsl(var(--hairline))]">
                 {yesterdayGraded
                   .slice(0, 10)
                   .map(pick => {
                     const isHit = pick.result === "hit";
                     const pickLabel = formatPickLabel(pick);
                     return (
-                      <div key={pick.id} className="flex items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '1px solid hsl(var(--border) / 0.4)' }}>
+                      <div key={pick.id} className="flex min-h-[48px] items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '0.5px solid hsl(var(--border))' }}>
                         <div className="flex items-center gap-2.5 min-w-0">
                           {isHit ? (
                             <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: 'hsl(var(--success))' }} />
                           ) : (
                             <XCircle className="w-4 h-4 shrink-0" style={{ color: 'hsl(var(--danger))' }} />
                           )}
-                          <span className="truncate" style={{ fontSize: 13, fontWeight: 700, color: 'hsl(var(--primary))' }}>{pick.player_name}</span>
+                          <span className="truncate" style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{pick.player_name}</span>
                         </div>
-                        <span className="tabular-nums shrink-0 ml-2" style={{ fontSize: 11, fontWeight: 700, color: isHit ? 'hsl(var(--success))' : 'hsl(var(--danger))' }}>
+                        <span className="tabular-nums shrink-0 ml-2" style={{ fontSize: 13, fontWeight: 600, color: isHit ? 'hsl(var(--success))' : 'hsl(var(--danger))' }}>
                           {pickLabel} — {isHit ? "HIT" : "MISS"}
                         </span>
                       </div>
@@ -1321,12 +1282,12 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                 {yesterdayVoid.map(pick => {
                   const pickLabel = formatPickLabel(pick);
                   return (
-                    <div key={pick.id} className="flex items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '1px solid hsl(var(--border) / 0.4)' }}>
+                    <div key={pick.id} className="flex min-h-[48px] items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '0.5px solid hsl(var(--border))' }}>
                       <div className="flex items-center gap-2.5 min-w-0">
                         <MinusCircle className="w-4 h-4 shrink-0" style={{ color: 'hsl(var(--muted-foreground))' }} />
-                        <span className="truncate" style={{ fontSize: 13, fontWeight: 700, color: 'hsl(var(--primary))' }}>{pick.player_name}</span>
+                        <span className="truncate" style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{pick.player_name}</span>
                       </div>
-                      <span className="tabular-nums shrink-0 ml-2" style={{ fontSize: 11, fontWeight: 700, color: 'hsl(var(--muted-foreground))' }}>
+                      <span className="tabular-nums shrink-0 ml-2" style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--muted-foreground))' }}>
                         {pickLabel} — VOID
                       </span>
                     </div>
@@ -1341,12 +1302,12 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                   const dead = isUnresolved(pick);
                   const tone = dead ? 'hsl(var(--muted-foreground))' : 'hsl(var(--nba-yellow))';
                   return (
-                    <div key={pick.id} className="flex items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '1px solid hsl(var(--border) / 0.4)' }}>
+                    <div key={pick.id} className="flex min-h-[48px] items-center justify-between py-2.5 last:border-0" style={{ borderBottom: '0.5px solid hsl(var(--border))' }}>
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="w-4 h-4 shrink-0 rounded-full" style={{ border: `2px solid ${tone}`, background: 'transparent' }} />
-                        <span className="truncate" style={{ fontSize: 13, fontWeight: 700, color: dead ? 'hsl(var(--primary))' : 'hsl(var(--primary))' }}>{pick.player_name}</span>
+                        <span className="truncate" style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{pick.player_name}</span>
                       </div>
-                      <span className="tabular-nums shrink-0 ml-2" style={{ fontSize: 11, fontWeight: 700, color: tone }}>
+                      <span className="tabular-nums shrink-0 ml-2" style={{ fontSize: 13, fontWeight: 600, color: tone }}>
                         {pickLabel} — {dead ? "NO RESULT" : "PENDING"}
                       </span>
                     </div>
@@ -1354,12 +1315,12 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                 })}
               </div>
               {yesterdayTotal > 0 && yesterdayPending.length === 0 ? (
-                <p className="text-center mt-3" style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--success))' }}>
+                <p className="text-center mt-3" style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--success))' }}>
                   Sentinel went {yesterdayHits}/{yesterdayTotal} yesterday • {yesterdayAcc}% accuracy
                   {yesterdayVoid.length > 0 ? ` · ${yesterdayVoid.length} void` : ""}
                 </p>
               ) : yesterdayPending.length > 0 ? (
-                <p className="text-center mt-3" style={{ fontSize: 12, fontWeight: 600, color: yesterdayLive > 0 ? 'hsl(var(--nba-yellow))' : 'hsl(var(--muted-foreground))' }}>
+                <p className="text-center mt-3" style={{ fontSize: 13, fontWeight: 600, color: yesterdayLive > 0 ? 'hsl(var(--nba-yellow))' : 'hsl(var(--muted-foreground))' }}>
                   {yesterdayLive > 0
                     ? `${yesterdayLive} edge pick${yesterdayLive > 1 ? "s" : ""} still pending - games in progress`
                     : `Sentinel went ${yesterdayHits}/${yesterdayTotal} yesterday • ${yesterdayAcc}% accuracy · ${yesterdayPending.length} without a result`}
@@ -1367,13 +1328,9 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
               ) : null}
             </>
           ) : (
-            <div className="flex items-center gap-3 py-3 px-2" style={{
-              background: 'hsl(var(--card))',
-              borderRadius: 14,
-            }}>
+            <div className="flex items-center gap-3 rounded-[18px] bg-card p-4 shadow-[inset_0_0_0_0.5px_hsl(var(--hairline))]">
               <div className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center" style={{
-                background: yesterdayError ? 'hsl(var(--nba-yellow))' : 'hsl(var(--secondary))',
-                border: `1px solid ${yesterdayError ? 'hsl(var(--nba-yellow) / 0.35)' : 'hsl(var(--secondary) / 0.5)'}`,
+                background: yesterdayError ? 'hsl(var(--nba-yellow) / 0.15)' : 'hsl(var(--secondary))',
               }}>
                 <Target className={`w-4 h-4 ${yesterdayError ? 'text-[hsl(var(--nba-yellow))]' : 'text-muted-foreground/40'}`} />
               </div>
@@ -1382,10 +1339,10 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                   do not know, and sends the user looking for a pick bug that
                   isn't there. */}
               <div className="min-w-0">
-                <p style={{ fontSize: 13, fontWeight: 700, color: 'hsl(var(--primary))' }}>
+                <p style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
                   {yesterdayError ? "Results unavailable" : "No edge yesterday"}
                 </p>
-                <p style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', lineHeight: 1.4 }}>
+                <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', lineHeight: 1.4 }}>
                   {yesterdayError ?? "No Today's Edge picks were generated yesterday."}
                 </p>
               </div>

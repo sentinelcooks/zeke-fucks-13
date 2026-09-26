@@ -32,9 +32,9 @@ export interface TierPresentation {
   actionable: boolean;
 }
 
-const STRONG_COLOR = "hsl(158 64% 52%)";
-const LEAN_COLOR = "hsl(220 100% 65%)";
-const CAUTION_COLOR = "hsl(38 92% 61%)";
+const STRONG_COLOR = "hsl(var(--success))";
+const LEAN_COLOR = "hsl(var(--primary))";
+const CAUTION_COLOR = "hsl(var(--warning))";
 
 export function tierForScore(score: number | null | undefined): TierPresentation {
   const value = Number(score);
