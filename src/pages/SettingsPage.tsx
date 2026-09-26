@@ -150,8 +150,8 @@ const ContactUsSection = () => {
             <MessageSquare className="w-4 h-4 text-foreground" />
           </div>
           <div className="text-left flex-1">
-            <p className="text-[13px] font-bold text-foreground">Contact Us</p>
-            <p className="text-[9px] text-muted-foreground/55">Send us a message or question</p>
+            <p className="text-[17px] font-medium text-foreground">Contact Us</p>
+            <p className="text-[13px] text-muted-foreground">Send us a message or question</p>
           </div>
           <ChevronRight className="w-4 h-4 text-muted-foreground/55" />
         </button>
@@ -415,8 +415,8 @@ const UnitCalculatorSection = () => {
           <Calculator className="w-4 h-4 text-foreground" />
         </div>
         <div className="flex-1">
-          <p className="text-[13px] font-bold text-foreground">Unit Size Calculator</p>
-          <p className="text-[9px] text-muted-foreground/55">Calculate your unit size based on bankroll</p>
+          <p className="text-[17px] font-medium text-foreground">Unit Size Calculator</p>
+          <p className="text-[13px] text-muted-foreground">Calculate your unit size based on bankroll</p>
         </div>
         <ChevronDown
           className={`w-4 h-4 text-muted-foreground/55 transition-transform ${
@@ -658,8 +658,8 @@ const ProfitDisplayModeSection = () => {
       transition={{ delay: 0.285 }}
       className="vision-card overflow-hidden relative z-10"
     >
-      <div className="px-5 py-3 border-b border-border/20">
-        <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">
+      <div className="px-5 py-3 border-b border-border">
+        <span className="text-[13px] font-semibold uppercase tracking-[0.02em] text-muted-foreground">
           Profit Display Mode
         </span>
       </div>
@@ -672,8 +672,8 @@ const ProfitDisplayModeSection = () => {
             <DollarSign className="w-4 h-4 text-foreground" />
           </div>
           <div>
-            <p className="text-[13px] font-bold text-foreground">Display Format</p>
-            <p className="text-[9px] text-muted-foreground/55">How profit/loss is shown across the app</p>
+            <p className="text-[17px] font-medium text-foreground">Display Format</p>
+            <p className="text-[13px] text-muted-foreground">How profit/loss is shown across the app</p>
           </div>
         </div>
         <div
@@ -997,8 +997,8 @@ const SettingsPage = () => {
 
       {/* Account */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="vision-card overflow-hidden relative z-10">
-        <div className="px-5 py-3 border-b border-border/20">
-          <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">Account</span>
+        <div className="px-5 py-3 border-b border-border">
+          <span className="text-[13px] font-semibold uppercase tracking-[0.02em] text-muted-foreground">Account</span>
         </div>
         <button
           type="button"
@@ -1009,7 +1009,7 @@ const SettingsPage = () => {
             <User className="w-5 h-5 text-foreground" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-bold text-foreground truncate">
+            <p className="text-[17px] font-medium text-foreground truncate">
               {resolveDisplayName(profile, user, "User")}
             </p>
             <p className="text-[10px] text-muted-foreground/65 truncate">{user?.email}</p>
@@ -1032,7 +1032,7 @@ const SettingsPage = () => {
             </DialogHeader>
 
             <div className="rounded-xl bg-secondary/35 border border-border/25 p-4 space-y-2">
-              <p className="text-[13px] font-bold text-foreground">{subscriptionTitle}</p>
+              <p className="text-[17px] font-medium text-foreground">{subscriptionTitle}</p>
               <p className="text-[11px] text-muted-foreground">{subscriptionTiming}</p>
               {!premiumLoading && premiumStatus !== "error" && (
                 <div className="flex items-center justify-between gap-3 pt-2 mt-2 border-t border-border/20">
@@ -1151,18 +1151,18 @@ const SettingsPage = () => {
 
       {/* Timezone */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="vision-card overflow-hidden relative z-10">
-        <div className="px-5 py-3 border-b border-border/20">
-          <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">Timezone</span>
+        <div className="px-5 py-3 border-b border-border">
+          <span className="text-[13px] font-semibold uppercase tracking-[0.02em] text-muted-foreground">Timezone</span>
         </div>
         <button
           onClick={() => setShowTzPicker(!showTzPicker)}
           className="w-full px-5 py-4 flex items-center justify-between hover:bg-secondary/20 transition-colors"
         >
           <div className="flex items-center gap-3">
-            <Globe className="w-5 h-5 text-accent/60" />
+            <Globe className="w-5 h-5 text-primary" />
             <div className="text-left">
-              <p className="text-[13px] font-bold text-foreground">{currentTzLabel}</p>
-              <p className="text-[9px] text-muted-foreground/55">Game times displayed in your timezone</p>
+              <p className="text-[17px] font-medium text-foreground">{currentTzLabel}</p>
+              <p className="text-[13px] text-muted-foreground">Game times displayed in your timezone</p>
             </div>
           </div>
           <ChevronRight className={`w-4 h-4 text-muted-foreground/55 transition-transform ${showTzPicker ? "rotate-90" : ""}`} />
@@ -1194,8 +1194,8 @@ const SettingsPage = () => {
 
       {/* Notifications */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="vision-card overflow-hidden relative z-10">
-        <div className="px-5 py-3 border-b border-border/20">
-          <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">Notifications</span>
+        <div className="px-5 py-3 border-b border-border">
+          <span className="text-[13px] font-semibold uppercase tracking-[0.02em] text-muted-foreground">Notifications</span>
         </div>
         <button
           onClick={handleNotifToggle}
@@ -1204,11 +1204,11 @@ const SettingsPage = () => {
           <div className="flex items-center gap-3">
             {notifEnabled ? <Bell className="w-5 h-5 text-nba-green" /> : <BellOff className="w-5 h-5 text-muted-foreground/55" />}
             <div className="text-left">
-              <p className="text-[13px] font-bold text-foreground">Game Notifications</p>
-              <p className="text-[9px] text-muted-foreground/55">Get alerts before games start</p>
+              <p className="text-[17px] font-medium text-foreground">Game Notifications</p>
+              <p className="text-[13px] text-muted-foreground">Get alerts before games start</p>
             </div>
           </div>
-          <div className={`w-12 h-7 rounded-full p-0.5 transition-all ${notifEnabled ? "bg-nba-green" : "bg-secondary"}`}>
+          <div className={`w-12 h-7 rounded-full p-0.5 transition-all ${notifEnabled ? "bg-success" : "bg-fill/30"}`}>
             <motion.div
               animate={{ x: notifEnabled ? 20 : 0 }}
               transition={{ type: "spring", stiffness: 500, damping: 30 }}
@@ -1237,8 +1237,8 @@ const SettingsPage = () => {
             <Trash2 className="w-4 h-4 text-destructive" />
           </div>
           <div className="text-left flex-1">
-            <p className="text-[13px] font-bold text-destructive">Delete Account</p>
-            <p className="text-[9px] text-muted-foreground/55">Permanently delete your Sentinel account and data</p>
+            <p className="text-[17px] font-medium text-destructive">Delete Account</p>
+            <p className="text-[13px] text-muted-foreground">Permanently delete your Sentinel account and data</p>
           </div>
           <ChevronRight className="w-4 h-4 text-muted-foreground/55" />
         </button>
@@ -1296,7 +1296,7 @@ const SettingsPage = () => {
           className="w-full vision-card px-5 py-4 flex items-center justify-center gap-2 text-destructive hover:bg-destructive/5 transition-colors"
         >
           <LogOut className="w-4 h-4" />
-          <span className="text-[13px] font-bold">Sign Out</span>
+          <span className="text-[17px] font-medium">Sign Out</span>
         </button>
       </motion.div>
 
