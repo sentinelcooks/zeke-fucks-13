@@ -59,7 +59,7 @@ describe("Today's Edge fallback selection", () => {
     expect(result.fallbackIds).toEqual(new Set(["wnba-fallback"]));
   });
 
-  it("selects the highest approved model scores across markets and sports", () => {
+  it("selects the highest approved model scores across markets and sports, with MLB outside the shared slots", () => {
     const rows = [
       fallbackPick("mlb-spread", "mlb", 0.71),
       fallbackPick("nba-moneyline", "nba", 0.79, {
@@ -75,8 +75,10 @@ describe("Today's Edge fallback selection", () => {
     ];
     const result = selectTodaysEdgePicks(rows, 4);
 
+    // The four shared slots go to NBA/NHL/WNBA/UFC; MLB's best spread is added
+    // on top because MLB shows its best pick per market.
     expect(result.picks.map((pick) => pick.id)).toEqual([
-      "nba-moneyline", "nhl-total", "wnba-prop", "mlb-spread",
+      "nba-moneyline", "nhl-total", "wnba-prop", "mlb-spread", "ufc-spread",
     ]);
   });
 
@@ -198,9 +200,9 @@ describe("selectTodaysEdgePicks — opposing sides of the same market", () => {
   });
 });
 
-describe("selectTodaysEdgePicks — category diversity", () => {
+describe("selectTodaysEdgePicks — category diversity (shared-slot sports)", () => {
   const cand = (over: Record<string, unknown>) => ({
-    sport: "mlb",
+    sport: "nba",
     tier: "daily",
     status: null,
     score_kind: "heuristic_score",
@@ -264,6 +266,62 @@ describe("selectTodaysEdgePicks — category diversity", () => {
   it("separates a game market from a prop", () => {
     expect(edgeCategoryOf({ id: "a", sport: "mlb", bet_type: "moneyline" }))
       .not.toBe(edgeCategoryOf({ id: "b", sport: "mlb", bet_type: "prop", prop_type: "rbi" }));
+  });
+});
+
+describe("selectTodaysEdgePicks — MLB best pick per market", () => {
+  const mlb = (over: Partial<TodaysEdgeCandidate> & { id: string }): TodaysEdgeCandidate => ({
+    sport: "mlb",
+    tier: "daily",
+    status: null,
+    score_kind: "heuristic_score",
+    model_diagnostics: { shadow_edge_candidate: true, confidenceSource: "analyzer" },
+    bet_type: "prop",
+    direction: "over",
+    line: 0.5,
+    ...over,
+  });
+
+  const slate = [
+    ...Array.from({ length: 6 }, (_, i) =>
+      mlb({ id: `rbi${i}`, prop_type: "rbi", player_name: `R${i}`, direction: "under", confidence: 0.75 - i * 0.01 })),
+    mlb({ id: "hits-a", prop_type: "hits", player_name: "H1", confidence: 0.70 }),
+    mlb({ id: "hits-b", prop_type: "hits", player_name: "H2", confidence: 0.66 }),
+    mlb({ id: "ks", prop_type: "pitcher_strikeouts", player_name: "P1", line: 5.5, confidence: 0.64 }),
+    mlb({ id: "er", prop_type: "earned_runs", player_name: "P2", line: 2.5, direction: "under", confidence: 0.67 }),
+    mlb({ id: "runs", prop_type: "runs", player_name: "B1", direction: "under", confidence: 0.63 }),
+    mlb({ id: "hrr", prop_type: "h+r+rbi", player_name: "B2", line: 1.5, confidence: 0.61 }),
+    mlb({ id: "ml", bet_type: "moneyline", prop_type: "moneyline", event_id: "g1", direction: "home", confidence: 0.62 }),
+  ];
+
+  it("shows the top pick in every market, not five of the same bet", () => {
+    const ids = selectTodaysEdgePicks(slate, 5).picks.map((p) => p.id);
+    expect(ids).toEqual(["rbi0", "hits-a", "er", "ks", "runs", "ml", "hrr"]);
+  });
+
+  it("is not truncated by the shared lineup limit", () => {
+    expect(selectTodaysEdgePicks(slate, 2).picks).toHaveLength(7);
+  });
+
+  it("leaves a market out when none of its picks cleared the backend bar", () => {
+    const rows = [
+      ...slate.filter((p) => p.id !== "ks"),
+      mlb({
+        id: "weak-ks", prop_type: "pitcher_strikeouts", player_name: "P3", line: 6.5, confidence: 0.9,
+        model_diagnostics: { shadow_edge_candidate: false },
+      }),
+    ];
+    const ids = selectTodaysEdgePicks(rows, 5).picks.map((p) => p.id);
+    expect(ids).not.toContain("weak-ks");
+    expect(ids.some((id) => id.includes("ks"))).toBe(false);
+  });
+
+  it("keeps the shared-slot rule for other sports on the same day", () => {
+    const nba = Array.from({ length: 7 }, (_, i) =>
+      mlb({ id: `nba${i}`, sport: "nba", prop_type: "points", player_name: `N${i}`, line: 20.5, confidence: 0.8 - i * 0.01 }));
+    const picks = selectTodaysEdgePicks([...slate, ...nba], 5).picks;
+    expect(picks.filter((p) => p.sport === "nba")).toHaveLength(5);
+    expect(picks.filter((p) => p.sport === "mlb")).toHaveLength(7);
   });
 });
 

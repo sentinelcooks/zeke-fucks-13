@@ -1,5 +1,5 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BrandMark } from "@/components/brand/BrandMark";
 
 interface MobileHeaderProps {
   title: string;
@@ -8,26 +8,54 @@ interface MobileHeaderProps {
   initials?: string;
 }
 
-/** Sticky glass header: brand mark + screen title, profile button opens Settings. */
+/** Page scroll position, from the window or the layout's scrolling <main>. */
+function useScrolledPastTop(threshold = 4): boolean {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = (event: Event) => {
+      const target = event.target;
+      // Ignore horizontal scrollers (chip rows, carousels) inside the page.
+      const el = target === document
+        ? document.scrollingElement
+        : target instanceof HTMLElement && target.tagName === "MAIN" ? target : null;
+      if (el) setScrolled(el.scrollTop > threshold);
+    };
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => document.removeEventListener("scroll", onScroll, { capture: true });
+  }, [threshold]);
+
+  return scrolled;
+}
+
+/**
+ * Sticky header shared by every dashboard tab: a monospace date eyebrow
+ * ("MON · SEP 28") over a large uppercase screen title, with the profile
+ * button (opens Settings) on the right. Transparent at the top of the page so
+ * it sits on the screen's own backdrop; frosted once content scrolls under it.
+ */
 export function MobileHeader({ title, initials }: MobileHeaderProps) {
   const navigate = useNavigate();
-  const dateStr = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  const scrolled = useScrolledPastTop();
+  const now = new Date();
+  const dateStr = `${now.toLocaleDateString("en-US", { weekday: "short" })} · ${now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
   return (
-    <header className="ios-blur sticky top-0 z-40 pt-safe shadow-[inset_0_-0.5px_0_hsl(var(--hairline))]">
-      <div className="flex items-center justify-between gap-3 px-4 pb-2.5 pt-1.5">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <BrandMark size={30} />
-          <div className="min-w-0">
-            <p className="truncate text-[11px] font-semibold uppercase tracking-[0.02em] text-muted-foreground">{dateStr}</p>
-            <h1 className="truncate text-[17px] font-semibold leading-tight text-foreground">{title}</h1>
-          </div>
+    <header
+      className={`sticky top-0 z-40 pt-safe transition-[background-color,box-shadow] duration-200 ${
+        scrolled ? "ios-blur shadow-[inset_0_-0.5px_0_hsl(var(--hairline))]" : "bg-transparent"
+      }`}
+    >
+      <div className="flex items-end justify-between gap-3 px-4 pb-3 pt-4">
+        <div className="min-w-0">
+          <p className="truncate font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{dateStr}</p>
+          <h1 className="truncate text-[30px] font-black uppercase leading-tight tracking-tight text-foreground">{title}</h1>
         </div>
         <button
           type="button"
           onClick={() => navigate("/dashboard/settings")}
           aria-label="Settings and account"
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-fill/15 text-[15px] font-semibold text-muted-foreground shadow-[inset_0_0_0_0.5px_hsl(var(--hairline))] active:scale-95"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-card text-[15px] font-bold text-foreground shadow-[inset_0_0_0_1px_hsl(var(--border))] active:scale-95"
         >
           {initials || "Me"}
         </button>

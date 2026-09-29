@@ -11,7 +11,7 @@ import ufcLogo from "@/assets/ufc-logo.png";
 import nflLogo from "@/assets/logo-nfl.png";
 import { NflPropAnalysisCard, type NflPropAnalysis } from "@/components/nfl/NflPropAnalysisCard";
 import { listNflTeams } from "@/utils/teamLogos";
-import { Search, Loader2, Target, TrendingUp, TrendingDown, Crosshair, Shield, Hand, RotateCcw, Zap, Trophy, ChevronDown, Sparkles, X, BarChart3, Activity, Swords, Link2, Timer, Clock, Layers, Flame, CircleDot, Hash, Gauge, Info, Plus, Trash2, DollarSign, UserRound } from "lucide-react";
+import { Search, Loader2, Target, TrendingUp, Crosshair, Shield, Hand, RotateCcw, Zap, Trophy, ChevronDown, Sparkles, X, BarChart3, Activity, Swords, Link2, Timer, Clock, Layers, Flame, CircleDot, Hash, Gauge, Plus, Trash2, DollarSign } from "lucide-react";
 import { searchPlayers, getTeams, analyzeProp, searchUfcFighters, analyzeUfcMatchup, validateMlbPropLine, fetchNflPlayerPropEdge, searchNflPlayers } from "@/services/api";
 import { supabase } from "@/integrations/supabase/client";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -37,6 +37,11 @@ import { isSavedPickPayload, mapSavedPickToView, type SavedDailyPickRow } from "
 import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
 import { withClientPlatform } from "@/lib/edgeFunctionPath";
 import { isSportTemporarilyHidden } from "@/lib/sportAvailability";
+import { SportChips, UnderlineTabs, type SportChipOption } from "@/components/analyze/SportChips";
+import { BaseballGlyph, BasketballGlyph, FootballGlyph, GloveGlyph, HockeyGlyph } from "@/components/analyze/SportGlyphs";
+import { PlayerPropsPanel, type PickedPlayer, type PlayerSuggestion } from "@/components/analyze/PlayerPropsPanel";
+import { useTrendingProps, type TrendingPropItem } from "@/hooks/useTrendingProps";
+import { useBookLine } from "@/hooks/useBookLine";
 
 
 // ── NBA Prop Categories ──
@@ -219,6 +224,23 @@ function propCategoriesFor(sport: string): PropCategory[] {
 
 type PropsSport = "nba" | "wnba" | "mlb" | "nhl" | "nfl" | "ufc";
 type LinesSport = "nba" | "wnba" | "mlb" | "nhl" | "nfl" | "ncaab";
+
+const PROPS_SPORT_OPTIONS: SportChipOption<PropsSport>[] = [
+  { value: "wnba", label: "WNBA", icon: BasketballGlyph },
+  { value: "mlb", label: "MLB", icon: BaseballGlyph },
+  { value: "nfl", label: "NFL", icon: FootballGlyph },
+  { value: "nhl", label: "NHL", icon: HockeyGlyph },
+  { value: "nba", label: "NBA", icon: BasketballGlyph },
+  { value: "ufc", label: "UFC", icon: GloveGlyph },
+];
+
+const LINES_SPORT_OPTIONS: SportChipOption<LinesSport>[] = [
+  { value: "wnba", label: "WNBA", icon: BasketballGlyph },
+  { value: "mlb", label: "MLB", icon: BaseballGlyph },
+  { value: "nfl", label: "NFL", icon: FootballGlyph },
+  { value: "nhl", label: "NHL", icon: HockeyGlyph },
+  { value: "nba", label: "NBA", icon: BasketballGlyph },
+];
 const DEFAULT_PROPS_SPORT: PropsSport = "wnba";
 const DEFAULT_LINES_SPORT: LinesSport = "wnba";
 
@@ -466,6 +488,10 @@ const NbaPropsPage = () => {
   const [opponent, setOpponent] = useState("");
   const [overUnder, setOverUnder] = useState<"over" | "under">("over");
   const [line, setLine] = useState("");
+  /** The player the user committed to; drives the player card vs the search box. */
+  const [picked, setPicked] = useState<PickedPlayer | null>(null);
+  /** Book line already known for a stat (a Trending tonight pick carries one), so no lookup is needed. */
+  const [knownBook, setKnownBook] = useState<{ propType: string; line: number } | null>(null);
   const [teams, setTeams] = useState<{ abbr: string; name: string }[]>([]);
   const [suggestions, setSuggestions] = useState<{ id?: string; name: string; headshot?: string; position?: string; jersey?: string; team?: string; teamName?: string }[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -481,18 +507,8 @@ const NbaPropsPage = () => {
   const [stakeAmount, setStakeAmount] = useState("10");
   const [slipSheetOpen, setSlipSheetOpen] = useState(false);
   const [slipSheetPick, setSlipSheetPick] = useState<import("@/components/AddToSlipSheet").SlipSheetPick | null>(null);
-  const [oppQuery, setOppQuery] = useState("");
-  const [showOppDropdown, setShowOppDropdown] = useState(false);
-  const oppDropdownRef = useRef<HTMLDivElement>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>();
   const suggestionsRef = useRef<HTMLDivElement>(null);
-  const categoryTabsRef = useRef<HTMLDivElement>(null);
-  const categoryTabsDragRef = useRef({
-    isPointerDown: false,
-    startX: 0,
-    scrollLeft: 0,
-    didDrag: false,
-  });
 
   // Prop explainer state
   const [explainerProp, setExplainerProp] = useState<{ value: string; label: string } | null>(null);
@@ -575,6 +591,7 @@ const NbaPropsPage = () => {
 
     if (!autoAnalyzePrefillRef.current) {
       setPlayer(""); setResults(null); setError(""); setOpponent(""); setLine(""); setSnapshotAvgValue(null);
+      setPicked(null); setKnownBook(null);
       setFighter1(""); setFighter2(""); setSavedPickMode("none");
     }
 
@@ -648,6 +665,8 @@ const NbaPropsPage = () => {
       setMode("props");
       setSport(s);
       setPlayer(navState.player);
+      setPicked({ name: navState.player });
+      setKnownBook(null);
       setPropType(nextPropType);
       setLine(String(navState.line || ""));
       setOverUnder(navState.over_under || "over");
@@ -937,59 +956,10 @@ const NbaPropsPage = () => {
       if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) setShowSuggestions(false);
       if (ufcRef1.current && !ufcRef1.current.contains(e.target as Node)) setShowUfcSug1(false);
       if (ufcRef2.current && !ufcRef2.current.contains(e.target as Node)) setShowUfcSug2(false);
-      if (oppDropdownRef.current && !oppDropdownRef.current.contains(e.target as Node)) setShowOppDropdown(false);
     };
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
   }, []);
-
-  const handleCategoryTabsPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    const tabs = categoryTabsRef.current;
-    if (!tabs) return;
-
-    categoryTabsDragRef.current = {
-      isPointerDown: true,
-      startX: e.clientX,
-      scrollLeft: tabs.scrollLeft,
-      didDrag: false,
-    };
-  };
-
-  const handleCategoryTabsPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const tabs = categoryTabsRef.current;
-    if (!tabs || !categoryTabsDragRef.current.isPointerDown) return;
-
-    const deltaX = e.clientX - categoryTabsDragRef.current.startX;
-    if (Math.abs(deltaX) > 6) {
-      categoryTabsDragRef.current.didDrag = true;
-    }
-    if (!categoryTabsDragRef.current.didDrag) return;
-
-    e.preventDefault();
-    tabs.scrollLeft = categoryTabsDragRef.current.scrollLeft - deltaX;
-  };
-
-  const handleCategoryTabsPointerEnd = () => {
-    const wasDrag = categoryTabsDragRef.current.didDrag;
-    categoryTabsDragRef.current.isPointerDown = false;
-
-    if (wasDrag) {
-      window.setTimeout(() => {
-        categoryTabsDragRef.current.didDrag = false;
-      }, 50);
-    }
-  };
-
-  const handleCategoryTabsWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    const tabs = categoryTabsRef.current;
-    if (!tabs || tabs.scrollWidth <= tabs.clientWidth) return;
-
-    const delta = Math.abs(e.deltaX) > 0 ? e.deltaX : e.deltaY;
-    if (delta === 0) return;
-
-    tabs.scrollLeft += delta;
-    e.preventDefault();
-  };
 
   const handlePlayerSearch = (q: string) => {
     setPlayer(q);
@@ -1148,138 +1118,119 @@ const NbaPropsPage = () => {
 
 
   const sportLabel = sport === "ufc" ? "UFC" : sport === "mlb" ? "MLB" : sport === "nhl" ? "NHL" : sport === "nfl" ? "NFL" : sport === "wnba" ? "WNBA" : "NBA";
+
+  // ── Player Props panel wiring (Trending tonight + book line) ──
+  const { items: trendingItems } = useTrendingProps(mode === "props" ? sport : "");
+  const knownBookLine = knownBook && knownBook.propType === propType ? knownBook.line : null;
+  const { info: bookInfo, loading: bookLineLoading } = useBookLine(
+    sport,
+    picked?.name ?? "",
+    propType,
+    !!picked && knownBookLine === null,
+  );
+  const bookLine = knownBookLine ?? bookInfo?.line ?? null;
+
+  // Prefill the line with the book line until the user sets their own.
+  useEffect(() => {
+    if (bookLine !== null && line === "") setLine(String(bookLine));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookLine]);
+
+  const pickedForDisplay: PickedPlayer | null = picked && {
+    ...picked,
+    // Team nicknames ("Aces @ Mercury"), matching the Trending tonight rows.
+    matchup: picked.matchup
+      ?? (bookInfo?.event?.away && bookInfo?.event?.home
+        ? `${bookInfo.event.away.split(" ").pop()} @ ${bookInfo.event.home.split(" ").pop()}`
+        : null),
+    commenceTime: picked.commenceTime ?? bookInfo?.event?.time ?? null,
+  };
+
+  // A player picked from Trending tonight, a saved pick or a typed name arrives
+  // without a headshot; look it up the same way the search box does.
+  useEffect(() => {
+    if (!picked || picked.headshot || sport === "ufc") return;
+    const name = picked.name;
+    let cancelled = false;
+    const lookup: Promise<Array<{ name: string; headshot?: string | null; team?: string }>> =
+      sport === "nfl" ? searchNflPlayers(name) : searchPlayers(name, sport);
+    lookup
+      .then((found) => {
+        if (cancelled) return;
+        const match = found?.find((p) => p.name.toLowerCase() === name.toLowerCase());
+        if (!match?.headshot) return;
+        setPicked((current) =>
+          current && current.name === name
+            ? { ...current, headshot: match.headshot, team: current.team ?? match.team ?? null }
+            : current,
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picked?.name, sport]);
+
+  const commitPlayer = (next: PickedPlayer) => {
+    setPlayer(next.name);
+    setPicked(next);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setKnownBook(null);
+    setLine("");
+  };
+
+  const clearPlayer = () => {
+    setPlayer("");
+    setPicked(null);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setKnownBook(null);
+    setLine("");
+  };
+
+  const handlePickTrending = (item: TrendingPropItem) => {
+    commitPlayer({ name: item.player, matchup: item.matchup, commenceTime: item.commence_time });
+    handlePropSelect(item.prop_type);
+    const cat = PROP_CATEGORIES.find((c) => c.props.some((p) => p.value === item.prop_type));
+    if (cat) setActiveCategory(cat.category);
+    setKnownBook({ propType: item.prop_type, line: item.line });
+    setLine(String(item.line));
+  };
+
+  const handlePanelPropSelect = (value: string) => {
+    // A line belongs to its stat (29 points is not 29 rebounds), so switching
+    // stat clears it and the new stat's book line fills in.
+    if (value !== propType) setLine("");
+    handlePropSelect(value);
+  };
   const sportEmoji = sport === "wnba" ? "W" : sport === "ufc" ? "🥊" : sport === "mlb" ? "⚾" : sport === "nhl" ? "🏒" : sport === "nfl" ? "🏈" : "🏀";
 
   const hasHiddenLinesNavigation = isSportTemporarilyHidden(linesNavigationState?.sport);
 
   return (
     <div className="flex flex-col min-h-full relative">
-      {/* Ambient orbs */}
-      <div className="vision-orb w-48 h-48 -top-10 -right-10" style={{ background: 'hsl(var(--primary))' }} />
-      <div className="vision-orb w-36 h-36 top-[600px] -left-12" style={{ background: 'hsl(var(--primary))', animationDelay: '-4s' }} />
-
-      
       <div className="px-4 pt-4 pb-6 space-y-3 relative z-10">
 
-        {/* ── Sport Toggle (always visible) ── */}
+        {/* ── Sport chips (always visible) ── */}
         {mode === "props" ? (
-        <div className="grid w-full max-w-full gap-1.5 rounded-2xl p-1.5" style={{
-          background: 'hsl(var(--card) / 0.8)',
-          border: '1px solid hsl(var(--border) / 0.3)',
-          backdropFilter: 'blur(12px)',
-          gridTemplateColumns: `repeat(${["nba", "wnba", "mlb", "nhl", "nfl", "ufc"].filter((s) => !isSportTemporarilyHidden(s)).length}, minmax(0, 1fr))`,
-        }}>
-          {[
-            { value: "nba" as const, label: "NBA", color: "#1D428A", icon: (active: boolean) => (
-              <img src={nbaLogo} alt="NBA" className={`h-5 w-5 object-contain shrink-0 ${active ? '' : 'opacity-70'}`} />
-            )},
-            { value: "wnba" as const, label: "WNBA", color: "#E03A3E", icon: (active: boolean) => (
-              <img src={wnbaLogo} alt="WNBA" className={`h-5 w-5 object-contain shrink-0 ${active ? "" : "opacity-70"}`} />
-            )},
-            { value: "mlb" as const, label: "MLB", color: "#002D72", icon: (active: boolean) => (
-              <img src={mlbLogo} alt="MLB" className={`h-5 w-5 object-contain shrink-0 ${active ? '' : 'opacity-70'}`} />
-            )},
-            { value: "nhl" as const, label: "NHL", color: "#111111", icon: (active: boolean) => (
-              <img src={nhlLogo} alt="NHL" className={`h-5 w-5 object-contain shrink-0 ${active ? '' : 'opacity-70'}`} />
-            )},
-            { value: "nfl" as const, label: "NFL", color: "#013369", icon: (active: boolean) => (
-              <img src={nflLogo} alt="NFL" className={`h-5 w-5 object-contain shrink-0 ${active ? '' : 'opacity-70'}`} />
-            )},
-            { value: "ufc" as const, label: "UFC", color: "#3a1518", icon: (active: boolean) => (
-              <img src={ufcLogo} alt="UFC" className={`h-5 w-5 object-contain shrink-0 ${active ? '' : 'opacity-70'}`} />
-            )},
-          ].filter((s) => !isSportTemporarilyHidden(s.value)).map((s) => {
-            const active = sport === s.value;
-            return (
-              <motion.button
-                key={s.value}
-                onClick={() => setSport(s.value)}
-                whileTap={{ scale: 0.96 }}
-                className={`flex min-h-[46px] w-full items-center justify-center gap-1.5 rounded-xl px-2.5 py-2.5 text-[12px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden whitespace-nowrap sm:min-h-[48px] sm:gap-2 sm:px-3 sm:text-[13px] ${
-                  active ? "text-white" : "text-muted-foreground/55 hover:text-muted-foreground/50"
-                }`}
-                style={active ? {
-                  background: `linear-gradient(135deg, ${s.color}, ${s.color}dd)`,
-                  boxShadow: `0 4px 16px -2px ${s.color}55`,
-                } : {}}
-              >
-                {s.icon(active)}
-                <span className="relative z-10 whitespace-nowrap">{s.label}</span>
-              </motion.button>
-            );
-          })}
-        </div>
+          <SportChips options={PROPS_SPORT_OPTIONS} value={sport} onChange={(value) => setSport(value)} />
         ) : (
-        <div className="grid w-full max-w-full gap-1.5 rounded-2xl p-1.5" style={{
-          background: 'hsl(var(--card) / 0.8)',
-          border: '1px solid hsl(var(--border) / 0.3)',
-          backdropFilter: 'blur(12px)',
-          gridTemplateColumns: `repeat(${["nba", "wnba", "mlb", "nhl", "nfl"].filter((s) => !isSportTemporarilyHidden(s)).length}, minmax(0, 1fr))`,
-        }}>
-          {[
-            { value: "nba", label: "NBA", color: "#1D428A", logo: nbaLogo, logoClass: "" },
-            { value: "wnba", label: "WNBA", color: "#E03A3E", logo: wnbaLogo, logoClass: "" },
-            { value: "mlb", label: "MLB", color: "#002D72", logo: mlbLogo, logoClass: "" },
-            { value: "nhl", label: "NHL", color: "#111111", logo: nhlLogo, logoClass: "" },
-            { value: "nfl", label: "NFL", color: "#013369", logo: nflLogo, logoClass: "" },
-          ].filter((s) => !isSportTemporarilyHidden(s.value)).map((s) => {
-            const active = linesSport === s.value;
-            return (
-              <motion.button
-                key={s.value}
-                onClick={() => setLinesSport(s.value as LinesSport)}
-                whileTap={{ scale: 0.96 }}
-                className={`flex min-h-[46px] w-full items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[12px] font-bold tracking-wide transition-all duration-300 relative overflow-hidden whitespace-nowrap sm:min-h-[48px] sm:gap-2 sm:px-3 sm:text-[13px] ${
-                  active ? "text-white" : "text-muted-foreground/55 hover:text-muted-foreground/50"
-                }`}
-                style={active ? {
-                  background: `linear-gradient(135deg, ${s.color}, ${s.color}dd)`,
-                  boxShadow: `0 4px 16px -2px ${s.color}55`,
-                } : {}}
-              >
-                <img src={s.logo} alt={s.label} className={`h-5 w-5 object-contain shrink-0 ${s.logoClass} ${active ? '' : 'opacity-70'}`} />
-                <span className="relative z-10 whitespace-nowrap">{s.label}</span>
-              </motion.button>
-            );
-          })}
-        </div>
+          <SportChips options={LINES_SPORT_OPTIONS} value={linesSport} onChange={(value) => setLinesSport(value)} />
         )}
 
-        {/* ── Props / Lines Mode Toggle ── */}
-        <div className="relative flex rounded-xl p-1 gap-1" style={{
-          background: 'hsl(var(--card) / 0.6)',
-          border: '1px solid hsl(var(--border) / 0.25)',
-        }}>
-          {([
-            { value: "props" as const, label: "Player Props", icon: <UserRound className="w-3.5 h-3.5" /> },
-            { value: "lines" as const, label: "Game Lines", icon: <Swords className="w-3.5 h-3.5" /> },
-          ]).map((opt) => {
-            const active = mode === opt.value;
-            return (
-              <button
-                key={opt.value}
-                onClick={() => setMode(opt.value)}
-                className={`relative flex-1 z-10 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-[11px] font-bold tracking-wider transition-all duration-300 ${active ? "text-accent-foreground" : "text-muted-foreground/65 hover:text-foreground/50"}`}
-              >
-                {active && (
-                  <motion.div
-                    layoutId="analyze-mode"
-                    className="absolute inset-0 rounded-lg"
-                    style={{
-                      background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))',
-                      boxShadow: '0 4px 12px -2px hsl(var(--primary) / 0.3)',
-                    }}
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                  />
-                )}
-                <span className="relative z-10 flex items-center gap-1.5">
-                  {opt.icon}
-                  {opt.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        {/* ── Player props / Game lines ── */}
+        <UnderlineTabs
+          ariaLabel="Analyze mode"
+          fill
+          options={[
+            { value: "props" as const, label: "Player props" },
+            { value: "lines" as const, label: "Game lines" },
+          ]}
+          value={mode}
+          onChange={(value) => setMode(value)}
+        />
 
         {/* ── Lines Mode: show MoneyLineSection ── */}
         {mode === "lines" && (
@@ -1509,398 +1460,41 @@ const NbaPropsPage = () => {
           </motion.div>
         )}
 
-        {/* ── VISION UI INPUT PANEL (NBA/MLB) ── */}
+        {/* ── Player props input (every sport but UFC) ── */}
         {mode === "props" && sport !== "ufc" && (
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
-          className="space-y-3"
-        >
-          {/* ── Card 1: Player Search ── */}
-          <div className="vision-card p-4 relative z-30" ref={suggestionsRef}>
-            <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full opacity-[0.05] pointer-events-none"
-              style={{ background: 'radial-gradient(circle, hsl(var(--primary)), transparent)' }} />
-
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))', boxShadow: '0 4px 12px -2px hsl(var(--primary) / 0.25)' }}>
-                <Search className="w-4 h-4 text-foreground" />
-              </div>
-              <div>
-                <h3 className="text-[13px] font-bold text-foreground">Player Search</h3>
-                <p className="text-[11px] text-muted-foreground/55 font-medium">Find any {sportLabel} player</p>
-              </div>
-              <div className="ml-auto flex items-center gap-1 px-2 py-1 rounded-full" style={{ background: 'hsl(var(--card) / 0.5)', border: '1px solid hsl(var(--border) / 0.2)' }}>
-                <div className="w-1.5 h-1.5 rounded-full bg-nba-green animate-pulse" />
-                <span className="text-[11px] font-bold text-muted-foreground/55 uppercase tracking-wider">Live</span>
-              </div>
-            </div>
-
-            <div className="relative group">
-              <div className="relative rounded-xl overflow-hidden transition-all duration-300 group-focus-within:shadow-[0_0_20px_hsl(var(--primary)_/_0.08)]" style={{
-                background: 'hsl(var(--card) / 0.6)',
-                border: '1px solid hsl(var(--border) / 0.25)',
-              }}>
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                  <Crosshair className="w-3.5 h-3.5 text-muted-foreground/45" />
-                </div>
-                <input
-                  type="text"
-                  value={player}
-                  onChange={(e) => handlePlayerSearch(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && (setShowSuggestions(false), handleAnalyze())}
-                  placeholder={`Search any ${sportLabel} player...`}
-                  className="w-full bg-transparent pl-10 pr-10 py-3 text-[13px] font-medium text-foreground placeholder:text-muted-foreground/65 focus:outline-none"
-                />
-                {player && (
-                  <button
-                    onClick={() => { setPlayer(""); setSuggestions([]); setShowSuggestions(false); }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-md flex items-center justify-center text-muted-foreground/55 hover:text-foreground transition-colors"
-                    style={{ background: 'hsl(var(--secondary) / 0.6)' }}
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Search suggestions dropdown */}
-            <AnimatePresence>
-              {showSuggestions && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -4, scale: 0.98 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute left-4 right-4 mt-2 rounded-2xl overflow-hidden z-50 shadow-2xl shadow-black/60 max-h-[340px] overflow-y-auto"
-                  style={{
-                    background: 'linear-gradient(127.09deg, hsl(var(--card) / 0.98) 19.41%, hsl(var(--background) / 0.95) 76.65%)',
-                    border: '1px solid hsl(var(--border) / 0.3)',
-                    backdropFilter: 'blur(20px)',
-                  }}
-                >
-                  <div className="px-4 py-2.5 border-b border-border/20">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55">Players</span>
-                  </div>
-                  {suggestions.map((s, i) => (
-                    <motion.div
-                      key={i}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.04 }}
-                      onClick={() => { setPlayer(s.name); setShowSuggestions(false); }}
-                      className="flex items-center gap-3.5 px-4 py-3 cursor-pointer hover:bg-accent/6 active:bg-accent/10 transition-all border-b border-border/10 last:border-0 group"
-                    >
-                      <div className="relative w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 group-hover:ring-1 group-hover:ring-accent/20 transition-all" style={{
-                        background: 'linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--card)))',
-                        border: '1px solid hsl(var(--border) / 0.3)',
-                      }}>
-                        {s.headshot ? (
-                          <>
-                            <img src={s.headshot} alt={s.name} className="w-full h-full object-cover object-top"
-                              onError={(e) => { 
-                                (e.target as HTMLImageElement).style.display = 'none';
-                                const parent = (e.target as HTMLImageElement).parentElement;
-                                const fallback = parent?.querySelector('[data-fallback]');
-                                if (fallback) (fallback as HTMLElement).style.display = 'flex';
-                              }} />
-                            <div data-fallback className="absolute inset-0 items-center justify-center" style={{ display: 'none' }}>
-                              <span className="text-xs font-black text-muted-foreground/45">{s.name.split(" ").map(n => n[0]).join("")}</span>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-xs font-black text-muted-foreground/45">{s.name.split(" ").map(n => n[0]).join("")}</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-bold text-foreground truncate leading-tight">{s.name}</p>
-                        <div className="flex items-center gap-1.5 mt-1">
-                          {s.team && <span className="text-[11px] font-bold text-accent/70 bg-accent/8 px-1.5 py-0.5 rounded-md leading-none">{s.team}</span>}
-                          {s.position && <span className="text-[11px] text-muted-foreground/65 font-medium leading-none">{s.position}</span>}
-                          {s.jersey && <span className="text-[11px] text-muted-foreground/55 leading-none">#{s.jersey}</span>}
-                        </div>
-                      </div>
-                      <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/45 -rotate-90 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </motion.div>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* ── Card 2: Stat Type — Categorized Vision UI ── */}
-          <div className="vision-card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div className="px-4 pt-4">
-              <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55 mb-3">Stat Type</label>
-            </div>
-            
-            {/* Category tabs — full-bleed scrollable row */}
-            <div
-              ref={categoryTabsRef}
-              className="stat-tabs flex gap-1.5 mb-3 cursor-grab active:cursor-grabbing"
-              onPointerDown={handleCategoryTabsPointerDown}
-              onPointerMove={handleCategoryTabsPointerMove}
-              onPointerUp={handleCategoryTabsPointerEnd}
-              onPointerCancel={handleCategoryTabsPointerEnd}
-              onPointerLeave={handleCategoryTabsPointerEnd}
-              onWheel={handleCategoryTabsWheel}
-              
-              style={{
-                overflowX: 'auto',
-                WebkitOverflowScrolling: 'touch',
-                scrollbarWidth: 'none',
-                paddingLeft: '16px',
-                paddingRight: '16px',
-                touchAction: 'pan-y pinch-zoom',
-                userSelect: categoryTabsDragRef.current.isPointerDown ? 'none' : 'auto',
-              }}
-            >
-              {PROP_CATEGORIES.map((cat) => {
-                const isSelected = activeCategory === cat.category;
-                return (
-                  <button
-                    key={cat.category}
-                    type="button"
-                    onClick={() => {
-                      if (categoryTabsDragRef.current.didDrag) return;
-                      setActiveCategory(cat.category);
-                    }}
-                    className={`shrink-0 px-3.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-[0.1em] transition-all duration-200 whitespace-nowrap ${
-                      isSelected
-                        ? "text-accent"
-                        : "text-muted-foreground/55 hover:text-muted-foreground/50"
-                    }`}
-                    style={isSelected ? {
-                      background: 'hsl(var(--primary) / 0.12)',
-                      border: '1px solid hsl(var(--primary) / 0.2)',
-                      boxShadow: '0 2px 8px -2px hsl(var(--primary) / 0.15)',
-                    } : {
-                      background: 'hsl(var(--card) / 0.3)',
-                      border: '1px solid hsl(var(--border) / 0.15)',
-                    }}
-                  >
-                    {cat.category}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="px-4 pb-4">
-
-            {/* Props grid for active category */}
-            <AnimatePresence mode="popLayout">
-              <motion.div
-                key={activeCategory}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.1 }}
-                className="grid grid-cols-4 gap-2"
-              >
-                {(PROP_CATEGORIES.find((c) => c.category === activeCategory)?.props || []).map((p) => {
-                  const isActive = propType === p.value;
-                  const PropIcon = p.icon;
-                  return (
-                    <motion.button
-                      key={p.value}
-                      onClick={() => handlePropSelect(p.value)}
-                      whileTap={{ scale: 0.92 }}
-                      className="relative flex flex-col items-center gap-1.5 py-3 rounded-xl transition-all duration-300"
-                      style={isActive ? {
-                        background: 'linear-gradient(135deg, hsl(var(--primary) / 0.2), hsl(var(--primary) / 0.1))',
-                        border: '1px solid hsl(var(--primary) / 0.25)',
-                        boxShadow: '0 4px 16px -4px hsl(var(--primary) / 0.2), inset 0 1px 0 hsl(var(--primary) / 0.1)',
-                      } : {
-                        background: 'hsl(var(--card) / 0.4)',
-                        border: '1px solid hsl(var(--border) / 0.2)',
-                      }}
-                    >
-                      {/* Info icon */}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setExplainerProp({ value: p.value, label: p.label }); }}
-                        className="absolute top-1 right-1 w-4 h-4 rounded-full flex items-center justify-center text-muted-foreground/45 hover:text-accent/70 hover:bg-accent/10 transition-all z-10"
-                      >
-                        <Info className="w-2.5 h-2.5" />
-                      </button>
-                      <PropIcon className={`w-4 h-4 transition-colors duration-300 ${isActive ? "text-accent" : "text-muted-foreground/50"}`} strokeWidth={isActive ? 2.2 : 1.5} />
-                      <span className={`text-[11px] font-bold tracking-wider transition-colors duration-300 ${isActive ? "text-accent" : "text-muted-foreground/65"}`}>
-                        {p.label}
-                      </span>
-                      {isActive && (
-                        <motion.div
-                          layoutId="chipDot"
-                          className="absolute -bottom-0.5 w-3 h-[2px] rounded-full"
-                          style={{ background: 'linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary)))' }}
-                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                        />
-                      )}
-                    </motion.button>
-                  );
-                })}
-              </motion.div>
-            </AnimatePresence>
-            </div>
-          </div>
-
-          {/* ── Card 3: Direction, Line, Opponent ── */}
-          <div className="vision-card p-4 space-y-4">
-            {/* Direction + Line row */}
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55 mb-2">Direction</label>
-                <div className="flex rounded-xl p-1 gap-1" style={{
-                  background: 'hsl(var(--card) / 0.6)',
-                  border: '1px solid hsl(var(--border) / 0.25)',
-                }}>
-                  <motion.button
-                    onClick={() => setOverUnder("over")}
-                    whileTap={{ scale: 0.95 }}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-[11px] font-bold tracking-wider transition-all duration-300 ${
-                      overUnder === "over"
-                        ? "text-background"
-                        : "text-muted-foreground/35 hover:text-foreground/50"
-                    }`}
-                    style={overUnder === "over" ? { background: 'hsl(var(--success))', boxShadow: '0 4px 12px -2px hsl(var(--success) / 0.3)' } : {}}
-                  >
-                    <TrendingUp className="w-3 h-3" />
-                    OVER
-                  </motion.button>
-                  <motion.button
-                    onClick={() => setOverUnder("under")}
-                    whileTap={{ scale: 0.95 }}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-[11px] font-bold tracking-wider transition-all duration-300 ${
-                      overUnder === "under"
-                        ? "text-white"
-                        : "text-muted-foreground/35 hover:text-foreground/50"
-                    }`}
-                    style={overUnder === "under" ? { background: 'hsl(var(--danger))', boxShadow: '0 4px 12px -2px hsl(var(--danger) / 0.3)' } : {}}
-                  >
-                    <TrendingDown className="w-3 h-3" />
-                    UNDER
-                  </motion.button>
-                </div>
-              </div>
-
-              <div className="w-24">
-                <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55 mb-2 text-center">Line</label>
-                <div className="rounded-xl overflow-hidden transition-colors focus-within:shadow-[0_0_12px_hsl(var(--primary)_/_0.06)]" style={{
-                  background: 'hsl(var(--card) / 0.5)',
-                  border: '1px solid hsl(var(--border) / 0.25)',
-                }}>
-                  <input
-                    type="number"
-                    value={line}
-                    onChange={(e) => setLine(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleAnalyze()}
-                    placeholder="0.0"
-                    step="0.5"
-                    min="0"
-                    className="w-full bg-transparent py-2.5 text-center text-lg font-extrabold text-foreground placeholder:text-muted-foreground/12 focus:outline-none tabular-nums"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Opponent */}
-            <div ref={oppDropdownRef} className="relative">
-              <label className="block text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground/55 mb-2">Opponent</label>
-              <div
-                className="relative rounded-xl overflow-hidden cursor-pointer"
-                style={{
-                  background: 'hsl(var(--card) / 0.5)',
-                  border: '1px solid hsl(var(--border) / 0.25)',
-                }}
-                onClick={() => setShowOppDropdown(!showOppDropdown)}
-              >
-                {showOppDropdown ? (
-                  <input
-                    autoFocus
-                    value={oppQuery}
-                    onChange={e => setOppQuery(e.target.value)}
-                    onClick={e => e.stopPropagation()}
-                    placeholder="Search team..."
-                    className="w-full bg-transparent px-4 py-3 text-[12px] text-foreground focus:outline-none placeholder:text-muted-foreground/55"
-                  />
-                ) : (
-                  <div className="px-4 py-3 text-[12px] text-foreground/70">
-                    {teams.find(t => t.abbr === opponent)?.name || "Auto-detect next game"}
-                  </div>
-                )}
-                <ChevronDown className={`absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50 pointer-events-none transition-transform ${showOppDropdown ? "rotate-180" : ""}`} />
-              </div>
-              <AnimatePresence>
-                {showOppDropdown && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    className="absolute z-50 left-0 right-0 mt-1 rounded-xl overflow-hidden max-h-48 overflow-y-auto scrollbar-hide"
-                    style={{
-                      background: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border) / 0.4)',
-                      boxShadow: '0 12px 32px -8px rgba(0,0,0,0.6)',
-                    }}
-                  >
-                    <button
-                      onClick={() => { setOpponent(""); setOppQuery(""); setShowOppDropdown(false); }}
-                      className={`w-full text-left px-4 py-2.5 text-[11px] hover:bg-accent/10 transition-colors ${!opponent ? "text-accent font-bold" : "text-foreground/60"}`}
-                    >
-                      Auto-detect next game
-                    </button>
-                    {(oppQuery
-                      ? teams.filter(t => t.name.toLowerCase().includes(oppQuery.toLowerCase()) || t.abbr.toLowerCase().includes(oppQuery.toLowerCase()))
-                      : teams
-                    ).map(t => (
-                      <button
-                        key={t.abbr}
-                        onClick={() => { setOpponent(t.abbr); setOppQuery(""); setShowOppDropdown(false); }}
-                        className={`w-full text-left px-4 py-2.5 text-[11px] hover:bg-accent/10 transition-colors flex items-center justify-between ${opponent === t.abbr ? "text-accent font-bold" : "text-foreground/60"}`}
-                      >
-                        <span>{t.name}</span>
-                        <span className="text-[11px] text-muted-foreground/55">{t.abbr}</span>
-                      </button>
-                    ))}
-                    {oppQuery && teams.filter(t => t.name.toLowerCase().includes(oppQuery.toLowerCase()) || t.abbr.toLowerCase().includes(oppQuery.toLowerCase())).length === 0 && (
-                      <div className="px-4 py-3 text-[11px] text-muted-foreground/55 text-center">No teams found</div>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Divider */}
-            <div className="h-[1px]" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--secondary) / 0.4), transparent)' }} />
-
-            {/* Analyze Button — Sticky */}
-            <div className="sticky bottom-20 z-30">
-              <motion.button
-                onClick={() => handleAnalyze()}
-                disabled={loading}
-                whileTap={{ scale: 0.97 }}
-                className="relative w-full group overflow-hidden rounded-xl shadow-2xl shadow-black/40"
-              >
-                <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)))' }} />
-                <div className="relative flex items-center justify-center gap-2 py-3.5 text-foreground font-extrabold text-[13px] tracking-wider">
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                  {loading ? "Analyzing..." : "Run Analysis"}
-                </div>
-              </motion.button>
-            </div>
-          </div>
-
-          {/* Data sources footer */}
-          <div className="flex items-center justify-center gap-3 pt-0.5">
-            {["Advanced Real-Time Data", "Real-Time Odds", "AI Insights"].map((label, i) => (
-              <div key={label} className="flex items-center gap-1.5">
-                {i > 0 && <div className="w-px h-2 bg-border/15" />}
-                <div className="w-1 h-1 rounded-full bg-accent/15" />
-                <span className="text-[11px] text-muted-foreground/45 font-semibold uppercase tracking-widest">{label}</span>
-              </div>
-            ))}
-          </div>
-        </motion.div>
+          <PlayerPropsPanel
+            sportLabel={sportLabel}
+            player={player}
+            picked={pickedForDisplay}
+            onPlayerSearch={handlePlayerSearch}
+            onClearPlayer={clearPlayer}
+            suggestions={suggestions}
+            showSuggestions={showSuggestions}
+            onPickSuggestion={(s: PlayerSuggestion) => commitPlayer({ name: s.name, team: s.team ?? null, headshot: s.headshot ?? null })}
+            suggestionsRef={suggestionsRef}
+            onSearchSubmit={() => {
+              if (player.trim().length >= 2) commitPlayer({ name: player.trim() });
+            }}
+            trending={trendingItems}
+            onPickTrending={handlePickTrending}
+            categories={PROP_CATEGORIES}
+            activeCategory={activeCategory}
+            onCategoryChange={setActiveCategory}
+            propType={propType}
+            onPropSelect={handlePanelPropSelect}
+            onExplainProp={setExplainerProp}
+            line={line}
+            onLineChange={setLine}
+            bookLine={bookLine}
+            bookLineLoading={bookLineLoading}
+            overUnder={overUnder}
+            onOverUnderChange={setOverUnder}
+            teams={teams}
+            opponent={opponent}
+            onOpponentChange={setOpponent}
+            loading={loading}
+            onAnalyze={() => handleAnalyze()}
+          />
         )}
 
         {/* Loading */}
@@ -1965,7 +1559,7 @@ const NbaPropsPage = () => {
         </AnimatePresence>
         )}
 
-        {/* UFC Results */}
+        {/* NFL Results */}
         {mode === "props" && sport === "nfl" && results?._isNfl && (
           <div ref={resultsRef}>
             <ErrorBoundary>
@@ -1974,7 +1568,273 @@ const NbaPropsPage = () => {
           </div>
         )}
 
+        {/* UFC Results — restored from 826f416; 4de5a99 deleted this block's body and merged its header into the props results */}
         {mode === "props" && sport !== "nfl" && results?._isUfc && (
+          <ErrorBoundary>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
+              {/* Analysis Complete Banner */}
+              <motion.div
+                initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                className="flex items-center justify-between p-3 rounded-xl"
+                style={{ background: 'linear-gradient(135deg, hsl(var(--success) / 0.08), hsl(var(--primary) / 0.04))', border: '1px solid hsl(var(--success) / 0.12)' }}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-nba-green animate-glow-pulse" />
+                  <span className="text-[11px] font-bold text-nba-green uppercase tracking-wider">Matchup Analysis Complete</span>
+                </div>
+              </motion.div>
+
+              {/* Fighter Cards with full bio */}
+              <div className="grid grid-cols-2 gap-2">
+                {[results.fighter1, results.fighter2].map((f: any, idx: number) => (
+                  <motion.div key={idx} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + idx * 0.1 }}
+                    className="vision-card p-4 text-center">
+                    {f?.image_url && <img src={f.image_url} alt={f.name} className="w-16 h-16 rounded-xl object-cover mx-auto mb-2 bg-secondary/30" />}
+                    <p className={`text-[13px] font-bold ${idx === 0 ? "text-accent" : "text-nba-blue"}`}>{f?.name}</p>
+                    <p className="text-[11px] text-muted-foreground/50">{f?.record}</p>
+                    <p className="text-[11px] text-muted-foreground/55">{f?.weight_class}</p>
+                    {/* Bio details */}
+                    <div className="grid grid-cols-2 gap-1 mt-3 text-[11px]">
+                      {f?.age && (
+                        <div className="rounded-lg py-1.5" style={{ background: 'hsl(var(--card) / 0.6)' }}>
+                          <span className="block text-muted-foreground/65 uppercase font-bold">Age</span>
+                          <span className="block text-sm font-extrabold text-foreground">{f.age}</span>
+                        </div>
+                      )}
+                      {f?.height && (
+                        <div className="rounded-lg py-1.5" style={{ background: 'hsl(var(--card) / 0.6)' }}>
+                          <span className="block text-muted-foreground/65 uppercase font-bold">Height</span>
+                          <span className="block text-sm font-extrabold text-foreground">{f.height}</span>
+                        </div>
+                      )}
+                      {f?.reach && (
+                        <div className="rounded-lg py-1.5" style={{ background: 'hsl(var(--card) / 0.6)' }}>
+                          <span className="block text-muted-foreground/65 uppercase font-bold">Reach</span>
+                          <span className="block text-sm font-extrabold text-foreground">{f.reach}</span>
+                        </div>
+                      )}
+                      <div className="rounded-lg py-1.5" style={{ background: 'hsl(var(--card) / 0.6)' }}>
+                        <span className="block text-muted-foreground/65 uppercase font-bold">Stance</span>
+                        <span className="block text-sm font-extrabold text-foreground">{f?.stance || "Orthodox"}</span>
+                      </div>
+                    </div>
+                    {/* Win method breakdown */}
+                    <div className="grid grid-cols-3 gap-1 mt-2">
+                      {[
+                        { label: "KO", val: f?.stats?.ko_wins },
+                        { label: "SUB", val: f?.stats?.sub_wins },
+                        { label: "DEC", val: f?.stats?.dec_wins },
+                      ].map(s => (
+                        <div key={s.label}>
+                          <span className="block text-[11px] text-muted-foreground/65 uppercase">{s.label}</span>
+                          <span className="block text-sm font-extrabold text-foreground">{s.val ?? 0}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Win streak */}
+                    {f?.win_streak > 0 && (
+                      <div className="mt-2 flex items-center justify-center gap-1">
+                        <Trophy className="w-3 h-3 text-success" />
+                        <span className="text-[11px] font-bold text-success">{f.win_streak} Win Streak</span>
+                      </div>
+                    )}
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* Top Pick */}
+              {results.best_bet && (
+                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3, type: "spring" }}
+                  className="vision-card p-5 text-center relative overflow-hidden"
+                  style={{
+                    borderColor: results.best_bet.confidence === "strong" ? 'hsl(var(--success) / 0.3)' : results.best_bet.confidence === "lean" ? 'hsl(var(--primary) / 0.3)' : 'hsl(var(--nba-yellow) / 0.3)',
+                  }}>
+                  <div className="absolute inset-0 opacity-[0.04]" style={{
+                    background: `radial-gradient(circle at center, ${results.best_bet.confidence === "strong" ? "hsl(var(--success))" : results.best_bet.confidence === "lean" ? "hsl(var(--primary))" : "hsl(var(--nba-yellow))"}, transparent 70%)`,
+                  }} />
+                  <Trophy className={`w-5 h-5 mx-auto mb-1 ${results.best_bet.confidence === "strong" ? "text-nba-green" : results.best_bet.confidence === "lean" ? "text-nba-blue" : "text-nba-yellow"}`} />
+                  <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground/65 font-bold">Top Pick</span>
+                  <p className={`text-lg font-extrabold mt-1 ${results.best_bet.confidence === "strong" ? "text-nba-green" : results.best_bet.confidence === "lean" ? "text-nba-blue" : "text-nba-yellow"}`}>
+                    {results.best_bet.bet}
+                  </p>
+                  {results.best_bet.probability && (
+                    <p className={`text-2xl font-black tabular-nums ${results.best_bet.confidence === "strong" ? "text-nba-green" : results.best_bet.confidence === "lean" ? "text-nba-blue" : "text-nba-yellow"}`}>
+                      {results.best_bet.probability}%
+                    </p>
+                  )}
+                  <span className={`inline-block text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full mt-1 ${
+                    results.best_bet.confidence === "strong" ? "bg-nba-green/15 text-nba-green" : results.best_bet.confidence === "lean" ? "bg-nba-blue/15 text-nba-blue" : "bg-nba-yellow/15 text-nba-yellow"
+                  }`}>{results.best_bet.confidence}</span>
+                  <p className="text-[11px] text-muted-foreground/50 mt-2 leading-relaxed">{results.best_bet.reasoning}</p>
+                </motion.div>
+              )}
+
+              {/* Stats Comparison */}
+              <div className="grid grid-cols-3 gap-2">
+                <StatPill label="Comb. SLpM" value={(results.combined_strikes_per_min || 0).toFixed(1)} color="default" delay={0.35} />
+                <StatPill label="Avg Rounds" value={(results.combined_avg_rounds || 0).toFixed(1)} color="blue" delay={0.4} />
+                <StatPill label="Finish %" value={`${(results.combined_finish_rate || 0).toFixed(0)}%`} color="red" delay={0.45} />
+              </div>
+
+              {/* Physical Comparison */}
+              {(results.fighter1?.height || results.fighter1?.reach || results.fighter1?.age) && (
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} className="vision-card p-4">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-3 block">Physical Comparison</span>
+                  <div className="space-y-2">
+                    {[
+                      { label: "Age", v1: results.fighter1?.age, v2: results.fighter2?.age, unit: "" },
+                      { label: "Height", v1: results.fighter1?.height, v2: results.fighter2?.height },
+                      { label: "Reach", v1: results.fighter1?.reach, v2: results.fighter2?.reach },
+                      { label: "Stance", v1: results.fighter1?.stance, v2: results.fighter2?.stance },
+                    ].filter(r => r.v1 || r.v2).map(({ label, v1, v2 }) => (
+                      <div key={label} className="flex items-center justify-between py-1.5 border-b border-border/10 last:border-0">
+                        <span className="text-[11px] font-bold text-accent tabular-nums">{v1 || "--"}</span>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/65">{label}</span>
+                        <span className="text-[11px] font-bold text-nba-blue tabular-nums">{v2 || "--"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Comparison Bars */}
+              {results.comparison && (
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="vision-card p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[11px] font-bold text-accent">{results.fighter1?.name}</span>
+                    <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted-foreground/55">Head to Head</span>
+                    <span className="text-[11px] font-bold text-nba-blue">{results.fighter2?.name}</span>
+                  </div>
+                  {[
+                    { label: "Strikes/Min", k: "strikes_per_min" },
+                    { label: "Str Absorbed/Min", k: "strikes_absorbed_per_min" },
+                    { label: "Finish Rate", k: "finish_rate", fmt: (v: number) => `${v}%` },
+                    { label: "KO Rate", k: "ko_rate", fmt: (v: number) => `${v}%` },
+                    { label: "Sub Rate", k: "sub_rate", fmt: (v: number) => `${v}%` },
+                    { label: "TD Avg", k: "takedown_avg" },
+                    { label: "Avg Rounds", k: "avg_fight_rounds" },
+                    { label: "Win Streak", k: "win_streak", fmt: (v: number) => `${v}` },
+                  ].map(({ label, k, fmt }) => {
+                    const v1 = results.comparison[k]?.fighter1 || 0;
+                    const v2 = results.comparison[k]?.fighter2 || 0;
+                    const max = Math.max(v1, v2, 0.1);
+                    const format = fmt || ((v: number) => typeof v === 'number' ? v.toFixed(1) : v);
+                    return (
+                      <div key={k} className="py-2">
+                        <div className="flex justify-between text-[11px] uppercase tracking-wider text-muted-foreground/65 mb-1">
+                          <span className="font-bold">{format(v1)}</span>
+                          <span className="font-semibold">{label}</span>
+                          <span className="font-bold">{format(v2)}</span>
+                        </div>
+                        <div className="flex gap-1 h-1.5">
+                          <div className="flex-1 flex justify-end">
+                            <div className="rounded-l-full transition-all" style={{ width: `${(v1 / max) * 100}%`, background: 'hsl(var(--primary))' }} />
+                          </div>
+                          <div className="flex-1">
+                            <div className="rounded-r-full transition-all" style={{ width: `${(v2 / max) * 100}%`, background: 'hsl(var(--primary))' }} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </motion.div>
+              )}
+
+              {/* Striking Stats Detail */}
+              {(results.fighter1?.stats?.str_accuracy || results.fighter2?.stats?.str_accuracy) && (
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="vision-card p-4">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-3 block">Detailed Stats</span>
+                  <div className="space-y-2">
+                    {[
+                      { label: "Str. Accuracy", v1: results.fighter1?.stats?.str_accuracy, v2: results.fighter2?.stats?.str_accuracy },
+                      { label: "Str. Defense", v1: results.fighter1?.stats?.str_defense, v2: results.fighter2?.stats?.str_defense },
+                      { label: "TD Accuracy", v1: results.fighter1?.stats?.td_accuracy, v2: results.fighter2?.stats?.td_accuracy },
+                      { label: "TD Defense", v1: results.fighter1?.stats?.td_defense, v2: results.fighter2?.stats?.td_defense },
+                      { label: "Sub Avg", v1: results.fighter1?.stats?.sub_avg?.toFixed(1), v2: results.fighter2?.stats?.sub_avg?.toFixed(1) },
+                    ].filter(r => r.v1 || r.v2).map(({ label, v1, v2 }) => (
+                      <div key={label} className="flex items-center justify-between py-1.5 border-b border-border/10 last:border-0">
+                        <span className="text-[11px] font-bold text-accent tabular-nums">{v1 || "--"}</span>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/65">{label}</span>
+                        <span className="text-[11px] font-bold text-nba-blue tabular-nums">{v2 || "--"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Round Predictions */}
+              {results.round_predictions?.length > 0 && (
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="vision-card p-4">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted-foreground/65 mb-3 block">Round Predictions</span>
+                  <div className="space-y-2">
+                    {results.round_predictions.map((rp: any, i: number) => (
+                      <div key={i} className="rounded-xl p-3" style={{
+                        background: rp.confidence === "strong" ? 'hsl(var(--success) / 0.06)' : rp.confidence === "lean" ? 'hsl(var(--primary) / 0.06)' : 'hsl(var(--secondary) / 0.4)',
+                        border: `1px solid ${rp.confidence === "strong" ? 'hsl(var(--success) / 0.15)' : rp.confidence === "lean" ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--secondary) / 0.2)'}`,
+                      }}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`text-[12px] font-bold ${rp.confidence === "strong" ? "text-nba-green" : rp.confidence === "lean" ? "text-nba-blue" : "text-muted-foreground"}`}>{rp.bet}</span>
+                          {rp.probability && <span className={`text-[11px] font-extrabold ${rp.confidence === "strong" ? "text-nba-green" : rp.confidence === "lean" ? "text-nba-blue" : "text-muted-foreground/50"}`}>{rp.probability}%</span>}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground/50 leading-relaxed">{rp.reasoning}</p>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* ML Pick */}
+              {results.ml_pick && (
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="vision-card p-4 text-center">
+                  <Zap className={`w-4 h-4 mx-auto mb-1 ${results.ml_pick.confidence === "strong" ? "text-nba-green" : "text-nba-blue"}`} />
+                  <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground/65 font-bold">Moneyline Pick</span>
+                  <p className={`text-lg font-extrabold mt-1 ${results.ml_pick.confidence === "strong" ? "text-nba-green" : results.ml_pick.confidence === "lean" ? "text-nba-blue" : "text-nba-yellow"}`}>
+                    {results.ml_pick.pick}
+                  </p>
+                  {results.ml_pick.probability && <p className="text-2xl font-black tabular-nums text-foreground">{results.ml_pick.probability}%</p>}
+                  <p className="text-[11px] text-muted-foreground/50 mt-2 leading-relaxed">{results.ml_pick.reasoning}</p>
+                </motion.div>
+              )}
+
+              {/* Recent Fights Table */}
+              {(results.fighter1?.recent_fights?.length > 0 || results.fighter2?.recent_fights?.length > 0) && (
+                <Section title="Recent Fights" icon={<BarChart3 className="w-3.5 h-3.5" />}>
+                  {[results.fighter1, results.fighter2].map((f: any, fIdx: number) => (
+                    <div key={fIdx} className={fIdx > 0 ? "mt-4 pt-4 border-t border-border/15" : ""}>
+                      <span className={`text-[11px] font-bold uppercase tracking-wider mb-2 block ${fIdx === 0 ? "text-accent" : "text-nba-blue"}`}>{f?.name}</span>
+                      <div className="overflow-x-auto scrollbar-hide -mx-5 px-5">
+                        <table className="w-full text-[11px]">
+                          <thead>
+                            <tr className="border-b border-border/30">
+                              {["Date", "Opponent", "Result", "Method", "Round"].map(h => (
+                                <th key={h} className="text-center py-2 px-1 text-muted-foreground/65 uppercase tracking-wider font-bold whitespace-nowrap">{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(f?.recent_fights || []).slice(0, 6).map((fight: any, i: number) => (
+                              <tr key={i} className="border-b border-border/15">
+                                <td className="text-center py-2 px-1 text-muted-foreground/50 whitespace-nowrap">{fight.date}</td>
+                                <td className="text-center py-2 px-1 font-medium text-foreground/80 whitespace-nowrap">{fight.opponent}</td>
+                                <td className={`text-center py-2 px-1 font-bold ${fight.result === "W" ? "text-success" : "text-danger"}`}>{fight.result}</td>
+                                <td className="text-center py-2 px-1 text-muted-foreground/60 whitespace-nowrap">{fight.method}</td>
+                                <td className="text-center py-2 px-1 text-foreground/70">{fight.round || `R${fight.roundNum}`}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </Section>
+              )}
+            </motion.div>
+          </ErrorBoundary>
+        )}
+
+        {/* NBA / WNBA / MLB / NHL Results */}
+        {mode === "props" && sport !== "nfl" && results && !results._isUfc && (
           <ErrorBoundary>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
               <PropAnalysisHero
@@ -2390,6 +2250,8 @@ const NbaPropsPage = () => {
                                     const lineNum = parseFloat(corrLineStr);
                                     // Sync UI state for visual feedback
                                     setPlayer(c.correlated_player);
+                                    setPicked({ name: c.correlated_player, team: c.correlated_team });
+                                    setKnownBook(null);
                                     setPropType(c.correlated_prop);
                                     setOverUnder(analyzedDir);
                                     setLine(corrLineStr);

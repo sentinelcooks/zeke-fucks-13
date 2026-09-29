@@ -540,6 +540,12 @@ const MLB_MAP: Record<string, string> = {
   batter_stolen_bases: "stolen_bases",
   batter_hits_runs_rbis: "h+r+rbi",
   pitcher_strikeouts: "pitcher_strikeouts",
+  // Pitcher markets use the prop names mlb_prop_model / mlb_data already score.
+  // pitcher_walks is walks ALLOWED — it must never collapse into batter "walks".
+  pitcher_earned_runs: "earned_runs",
+  pitcher_hits_allowed: "hits_allowed",
+  pitcher_walks: "walks_allowed",
+  pitcher_outs: "outs_recorded",
 };
 
 const NHL_MAP: Record<string, string> = {

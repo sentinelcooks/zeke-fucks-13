@@ -84,6 +84,27 @@ describe("verified pick grading", () => {
     expect(result).toEqual({ found: true, actual: 9 });
   });
 
+  it("grades pitcher earned runs, hits allowed and walks allowed from the pitching row", () => {
+    const summary = mlbSummary("pitching", ["IP", "H", "R", "ER", "BB", "K"], ["6.0", "5", "3", "2", "1", "7"]);
+    expect(getMlbPlayerStat(summary, "Shohei Ohtani", "earned_runs")).toEqual({ found: true, actual: 2 });
+    expect(getMlbPlayerStat(summary, "Shohei Ohtani", "hits_allowed")).toEqual({ found: true, actual: 5 });
+    expect(getMlbPlayerStat(summary, "Shohei Ohtani", "walks_allowed")).toEqual({ found: true, actual: 1 });
+  });
+
+  it("converts innings pitched to outs recorded", () => {
+    const summary = mlbSummary("pitching", ["IP"], ["5.2"]);
+    expect(getMlbPlayerStat(summary, "Shohei Ohtani", "outs_recorded")).toEqual({ found: true, actual: 17 });
+  });
+
+  it("never grades pitcher walks allowed from a batter's walks", () => {
+    const result = getMlbPlayerStat(
+      mlbSummary("batting", ["BB"], ["2"]),
+      "Shohei Ohtani",
+      "walks_allowed",
+    );
+    expect(result).toEqual({ found: false, actual: null, reason: "player_stat_group_missing" });
+  });
+
   it("does not turn a missing box-score field into a zero", () => {
     const result = getMlbPlayerStat(
       mlbSummary("batting", ["H", "R"], ["2", "1"]),

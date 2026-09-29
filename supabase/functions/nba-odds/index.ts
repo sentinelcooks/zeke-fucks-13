@@ -46,6 +46,10 @@ const NBA_PROP_MARKETS = [
 
 const MLB_PROP_MARKETS = [
   "pitcher_strikeouts",
+  "pitcher_earned_runs",
+  "pitcher_hits_allowed",
+  "pitcher_walks",
+  "pitcher_outs",
   "batter_hits",
   "batter_runs_scored",
   "batter_home_runs",

@@ -8,6 +8,7 @@ import { CircleButton } from "@/components/playbook/controls";
 import { withAlpha } from "@/lib/themeColor";
 import { supabase } from "@/integrations/supabase/client";
 import { premiumRequestHeaders } from "@/lib/premiumRequestHeaders";
+import { withClientPlatform } from "@/lib/edgeFunctionPath";
 import { useNavigate } from "react-router-dom";
 
 import { PnLCalendar } from "@/components/PnLCalendar";
@@ -205,6 +206,8 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
   const [picksLoading, setPicksLoading] = useState(true);
   const [lineupError, setLineupError] = useState<string | null>(null);
   const [lineupScanPending, setLineupScanPending] = useState(false);
+  /** True once a refresh confirmed every scanner found no games on today's slate. */
+  const [noGamesToday, setNoGamesToday] = useState(false);
   const [userSports, setUserSports] = useState<string[]>([]);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [headshots, setHeadshots] = useState<Record<string, string>>({});
@@ -511,14 +514,31 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
     if (lineupScanPending) return;
 
     setLineupError(null);
+    setNoGamesToday(false);
     setLineupScanPending(true);
     try {
       const headers = await premiumRequestHeaders();
       const { data, error } = await supabase.functions.invoke<{
         ok?: boolean;
         mode?: "rerank" | "queued" | "in_progress";
-      }>("force-refresh-edge", { headers });
+        counts?: { total?: number };
+        scans?: Array<{ sport: string; state: "queued" | "no_candidates" | "unavailable" }>;
+      }>(withClientPlatform("force-refresh-edge"), { headers });
       if (error || data?.ok === false) throw error ?? new Error("refresh_failed");
+
+      // Every scanner ran and found nothing to analyze: there are no games
+      // today. Polling would only spin for two minutes and end on the same
+      // empty card, so say so plainly instead.
+      const scans = data?.scans ?? [];
+      if (
+        (data?.counts?.total ?? 0) === 0 &&
+        scans.length > 0 &&
+        scans.every((scan) => scan.state === "no_candidates")
+      ) {
+        setNoGamesToday(true);
+        setLineupScanPending(false);
+        return;
+      }
 
       const visibleCount = await fetchTodayPicks();
       if ((visibleCount ?? 0) > 0 || data?.mode === "rerank") {
@@ -528,7 +548,14 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       }
     } catch (error) {
       console.error("[TodaysEdge] failed to start lineup refresh", error);
-      setLineupError("Today's slate could not be started. Please try again shortly.");
+      const status = (error as { context?: { status?: number } } | null)?.context?.status;
+      setLineupError(
+        status === 401
+          ? "Your session expired. Sign in again to refresh picks."
+          : status === 403
+            ? "This device isn't allowed to refresh picks. Remove an old device from your account and try again."
+            : "Today's slate could not be started. Please try again shortly.",
+      );
       setLineupScanPending(false);
     }
   }, [fetchTodayPicks, lineupScanPending, pollQueuedLineup]);
@@ -689,12 +716,10 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
       <div className="w-full max-w-[430px] mx-auto px-5 pt-4 pb-6 space-y-5 relative">
 
         <motion.div {...stagger(0)} className="relative z-10">
-          <p className="text-[13px] font-semibold uppercase tracking-[0.02em] text-muted-foreground">
-            {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-          </p>
-          <h1 className="mt-0.5 text-[28px] font-bold leading-tight tracking-tight text-foreground">
+          {/* The shared header already shows the date and the screen title. */}
+          <h2 className="text-[28px] font-bold leading-tight tracking-tight text-foreground">
             {getGreeting()}, {resolveDisplayName(profile, user, "Player")}
-          </h1>
+          </h2>
           <p className="hidden">A focused view of today’s model-supported opportunities.</p>
         </motion.div>
 
@@ -832,21 +857,25 @@ export function ModernHomeLayout({ plays, loading }: ModernHomeLayoutProps) {
                   ? lineupError
                   : lineupScanPending
                     ? "Sentinel is analyzing today’s live slate."
-                    : "No model-supported picks are available yet."}
+                    : noGamesToday
+                      ? "No games on today’s slate."
+                      : "Today’s picks haven’t posted yet."}
               </p>
               <p className="text-[13px] text-muted-foreground">
                 {lineupScanPending
                   ? "Only analyzer-finalized plays will appear here."
-                  : "Run a fresh analysis to check every eligible live market."}
+                  : noGamesToday
+                    ? "Picks populate automatically at 4am ET on the next game day."
+                    : "Run a fresh analysis to check every eligible live market."}
               </p>
-              <button
+              {!noGamesToday && <button
                 type="button"
                 onClick={() => { void requestTodayLineup(); }}
                 disabled={lineupScanPending}
                 className="mt-4 inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-[15px] font-semibold text-primary-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-55"
               >
                 {lineupScanPending ? "Analyzing slate…" : lineupError ? "Try again" : "Analyze today’s slate"}
-              </button>
+              </button>}
             </div>
           ) : (
             <>

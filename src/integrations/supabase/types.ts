@@ -1327,6 +1327,30 @@ export type Database = {
         }
         Relationships: []
       }
+      trending_props: {
+        Row: {
+          events_scanned: number
+          generated_at: string
+          items: Json
+          slate_date: string
+          sport: string
+        }
+        Insert: {
+          events_scanned?: number
+          generated_at?: string
+          items?: Json
+          slate_date: string
+          sport: string
+        }
+        Update: {
+          events_scanned?: number
+          generated_at?: string
+          items?: Json
+          slate_date?: string
+          sport?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

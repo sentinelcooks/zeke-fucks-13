@@ -43,7 +43,8 @@ describe("selectYesterdayEdgeRecap", () => {
   it("keeps graded rows so hits and misses can be displayed", () => {
     const rows = [
       shadowCandidate({ id: "hit", result: "hit", event_id: "e1" }),
-      shadowCandidate({ id: "miss", result: "miss", event_id: "e2", confidence: 0.65 }),
+      // A different market: MLB recaps one pick per market, like the live rail.
+      shadowCandidate({ id: "miss", result: "miss", event_id: "e2", prop_type: "hits", confidence: 0.65 }),
     ];
     const picks = selectYesterdayEdgeRecap(rows, YESTERDAY);
 
@@ -85,10 +86,12 @@ describe("selectYesterdayEdgeRecap", () => {
   });
 
   it("honours the limit and ranks by model score", () => {
+    // The limit governs shared-slot sports; MLB shows its best pick per market.
+    const wnba = { sport: "wnba", prop_type: "points", line: 18.5 };
     const rows = [
-      shadowCandidate({ id: "low", confidence: 0.55, event_id: "e1" }),
-      shadowCandidate({ id: "high", confidence: 0.91, event_id: "e2" }),
-      shadowCandidate({ id: "mid", confidence: 0.72, event_id: "e3" }),
+      shadowCandidate({ ...wnba, id: "low", confidence: 0.55, event_id: "e1" }),
+      shadowCandidate({ ...wnba, id: "high", confidence: 0.91, event_id: "e2" }),
+      shadowCandidate({ ...wnba, id: "mid", confidence: 0.72, event_id: "e3" }),
     ];
     const picks = selectYesterdayEdgeRecap(rows, YESTERDAY, 2);
 

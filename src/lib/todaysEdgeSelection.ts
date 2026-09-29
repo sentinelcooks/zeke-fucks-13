@@ -228,6 +228,35 @@ export function diversifyByCategory<T extends TodaysEdgeCandidate>(
   return selected;
 }
 
+/**
+ * Sports whose lineup shows the single best pick in EVERY market instead of
+ * competing for the shared top-N slots.
+ *
+ * MLB offers many distinct markets (pitcher Ks, earned runs, hits allowed,
+ * batter hits / runs / RBI / H+R+RBI, moneyline, total…). A shared top-5 was
+ * dominated by 0.5-line RBI unders, whose raw hit rate outranks everything
+ * else, so the user never saw the best play in the other markets. Here each
+ * market contributes its top-ranked pick. The quality bar is unchanged — only
+ * backend-approved shadow candidates are eligible, so a market with no pick
+ * clearing it simply does not appear.
+ */
+export const BEST_PER_MARKET_SPORTS = new Set(["mlb"]);
+
+function isBestPerMarketSport(pick: TodaysEdgeCandidate): boolean {
+  return BEST_PER_MARKET_SPORTS.has(String(pick.sport ?? "").toLowerCase());
+}
+
+/** Keeps the top-ranked pick in each category. Input must be quality-ranked. */
+export function bestPerCategory<T extends TodaysEdgeCandidate>(ranked: T[]): T[] {
+  const seen = new Set<string>();
+  return ranked.filter((pick) => {
+    const category = `${normalized(pick.sport)}|${edgeCategoryOf(pick)}`;
+    if (seen.has(category)) return false;
+    seen.add(category);
+    return true;
+  });
+}
+
 export function selectTodaysEdgePicks<T extends TodaysEdgeCandidate>(
   rows: T[],
   fallbackLimit = 5,
@@ -240,13 +269,19 @@ export function selectTodaysEdgePicks<T extends TodaysEdgeCandidate>(
   const fallback: PresentedTodaysEdgePick<T>[] = [];
 
   const fallbackSlots = Math.max(0, safeLimit - validated.length);
+  // dedupeConflicts returns picks in compareQuality order.
   const ranked = dedupeConflicts(
     rows.filter(
       (pick) => isFallbackCandidate(pick) && !validatedSports.has(String(pick.sport).toLowerCase()),
     ),
   ).filter((pick) => !validatedKeys.has(todaysEdgeConflictKey(pick)));
 
-  const selected = diversifyByCategory(ranked, fallbackSlots);
+  // Best-per-market sports get one card per market and do not consume the
+  // shared slots; every other sport competes for them as before.
+  const selected = [
+    ...bestPerCategory(ranked.filter(isBestPerMarketSport)),
+    ...diversifyByCategory(ranked.filter((pick) => !isBestPerMarketSport(pick)), fallbackSlots),
+  ].sort(compareQuality);
 
   for (const pick of selected) {
     fallbackIds.add(pick.id);

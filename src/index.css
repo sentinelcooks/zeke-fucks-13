@@ -21,10 +21,10 @@
     --popover-foreground: 0 0% 0%;
 
     /* Brand tint (cobalt) */
-    --primary: 228 100% 56%;
+    --primary: 155 78% 34%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 228 100% 56% / 0.2;
-    --primary-dim: 228 100% 56% / 0.1;
+    --primary-glow: 155 78% 34% / 0.2;
+    --primary-dim: 155 78% 34% / 0.1;
 
     --secondary: 240 11% 91%;
     --secondary-foreground: 0 0% 0%;
@@ -32,7 +32,7 @@
     --muted: 240 11% 93%;
     --muted-foreground: 240 3% 43%;
 
-    --accent: 228 100% 56%;
+    --accent: 155 78% 34%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 356 100% 42%;
@@ -40,7 +40,7 @@
 
     --border: 240 6% 85%;
     --input: 240 11% 91%;
-    --ring: 228 100% 56%;
+    --ring: 155 78% 34%;
 
     --radius: 1rem;
 
@@ -64,7 +64,7 @@
     --nba-yellow: 38 92% 42%;
     --nba-yellow-dim: 38 92% 42% / 0.12;
     --nba-blue: var(--primary);
-    --nba-blue-dim: 228 100% 56% / 0.1;
+    --nba-blue-dim: 155 78% 34% / 0.1;
     --nba-purple: var(--primary);
     --nba-cyan: 199 100% 32%;
 
@@ -78,12 +78,12 @@
 
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 240 3% 43%;
-    --sidebar-primary: 228 100% 56%;
+    --sidebar-primary: 155 78% 34%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 240 11% 93%;
     --sidebar-accent-foreground: 0 0% 0%;
     --sidebar-border: 240 6% 85%;
-    --sidebar-ring: 228 100% 56%;
+    --sidebar-ring: 155 78% 34%;
 
     /* Mobile safe areas */
     --safe-top: env(safe-area-inset-top, 0px);
@@ -105,10 +105,10 @@
     --popover: 240 3% 11%;
     --popover-foreground: 0 0% 100%;
 
-    --primary: 228 100% 68%;
+    --primary: 155 70% 40%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 228 100% 68% / 0.25;
-    --primary-dim: 228 100% 68% / 0.18;
+    --primary-glow: 155 70% 40% / 0.25;
+    --primary-dim: 155 70% 40% / 0.18;
 
     --secondary: 240 2% 17%;
     --secondary-foreground: 0 0% 100%;
@@ -116,7 +116,7 @@
     --muted: 240 3% 14%;
     --muted-foreground: 240 4% 64%;
 
-    --accent: 228 100% 68%;
+    --accent: 155 70% 40%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 3 100% 61%;
@@ -124,7 +124,7 @@
 
     --border: 240 3% 20%;
     --input: 240 3% 14%;
-    --ring: 228 100% 68%;
+    --ring: 155 70% 40%;
 
     --success: 135 64% 50%;
     --success-foreground: 140 100% 7%;
@@ -140,17 +140,17 @@
     --nba-red-dim: 3 100% 61% / 0.16;
     --nba-yellow: 45 100% 55%;
     --nba-yellow-dim: 45 100% 55% / 0.14;
-    --nba-blue-dim: 228 100% 68% / 0.18;
+    --nba-blue-dim: 155 70% 40% / 0.18;
     --nba-cyan: 199 100% 70%;
 
     --sidebar-background: 240 3% 11%;
     --sidebar-foreground: 240 4% 64%;
-    --sidebar-primary: 228 100% 68%;
+    --sidebar-primary: 155 70% 40%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 240 2% 17%;
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 240 3% 20%;
-    --sidebar-ring: 228 100% 68%;
+    --sidebar-ring: 155 70% 40%;
 
     color-scheme: dark;
   }

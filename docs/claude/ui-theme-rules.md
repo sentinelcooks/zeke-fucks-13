@@ -1,7 +1,7 @@
 # UI Theme Rules (Playbook)
 
 Sentinel's front end uses the **Playbook** design: SF Pro (system font), Apple
-system colors, a cobalt accent, and Light / Dark / System appearance chosen in
+system colors, an emerald accent, and Light / Dark / System appearance chosen in
 Settings → Appearance (`next-themes`, storage key `sentinel-theme`).
 
 Read this before changing any screen or component in `src/`.
@@ -15,7 +15,7 @@ Read this before changing any screen or component in `src/`.
   Tailwind palette classes (`text-green-500`, `bg-purple-600`). Semantic mapping:
   | Meaning | Token |
   |---|---|
-  | Brand / interactive | `primary` (cobalt) |
+  | Brand / interactive | `primary` (emerald, `155 78% 34%` light / `155 70% 40%` dark) |
   | Hit, win, positive | `success` |
   | Miss, loss, destructive | `danger` / `destructive` |
   | Caution | `warning` (or `nba-yellow` for yellow data states) |

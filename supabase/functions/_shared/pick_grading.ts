@@ -161,9 +161,31 @@ type MlbStatKey =
   | "total_bases"
   | "hits_runs_rbi"
   | "strikeouts_pit"
+  | "earned_runs_pit"
+  | "hits_allowed_pit"
+  | "walks_allowed_pit"
+  | "outs_pit"
   | "strikeouts_bat"
   | "walks"
   | "stolen_bases";
+
+// Stat keys read from a pitcher's box-score row. Everything else is batting.
+const PITCHING_STAT_KEYS = new Set<MlbStatKey>([
+  "strikeouts_pit",
+  "earned_runs_pit",
+  "hits_allowed_pit",
+  "walks_allowed_pit",
+  "outs_pit",
+]);
+
+// Box scores print innings pitched as whole.thirds ("5.2" = 5⅔ IP = 17 outs).
+function inningsToOuts(ip: number | null): number | null {
+  if (ip === null || !Number.isFinite(ip) || ip < 0) return null;
+  const whole = Math.trunc(ip);
+  const thirds = Math.round((ip - whole) * 10);
+  if (thirds < 0 || thirds > 2) return null;
+  return whole * 3 + thirds;
+}
 
 export const MLB_PROP_TO_STAT: Record<string, MlbStatKey> = {
   hits: "hits",
@@ -189,6 +211,15 @@ export const MLB_PROP_TO_STAT: Record<string, MlbStatKey> = {
   strikeouts: "strikeouts_pit",
   pitcher_strikeouts: "strikeouts_pit",
   mlb_strikeouts: "strikeouts_pit",
+  earned_runs: "earned_runs_pit",
+  pitcher_earned_runs: "earned_runs_pit",
+  hits_allowed: "hits_allowed_pit",
+  pitcher_hits_allowed: "hits_allowed_pit",
+  walks_allowed: "walks_allowed_pit",
+  pitcher_walks: "walks_allowed_pit",
+  pitcher_walks_allowed: "walks_allowed_pit",
+  outs_recorded: "outs_pit",
+  pitcher_outs: "outs_pit",
   batter_strikeouts: "strikeouts_bat",
   bb: "walks",
   walks: "walks",
@@ -286,11 +317,11 @@ export function getMlbPlayerStat(
     return { found: false, actual: null, reason: "player_not_found" };
   }
 
-  const pitching = key === "strikeouts_pit";
+  const pitching = PITCHING_STAT_KEYS.has(key);
   const preferredGroup = pitching ? "pitching" : "batting";
   const entry = matches.find((candidate) => candidate.group === preferredGroup);
   if (!entry) {
-    // Never grade pitcher strikeouts from a batter row (or vice versa).
+    // Never grade a pitcher stat from a batter row (or vice versa).
     return { found: false, actual: null, reason: "player_stat_group_missing" };
   }
   const pick = (...labels: string[]): number | null => {
@@ -314,6 +345,10 @@ export function getMlbPlayerStat(
     case "walks": actual = pick("BB"); break;
     case "stolen_bases": actual = pick("SB"); break;
     case "strikeouts_pit": actual = pick("K", "SO"); break;
+    case "earned_runs_pit": actual = pick("ER"); break;
+    case "hits_allowed_pit": actual = pick("H"); break;
+    case "walks_allowed_pit": actual = pick("BB"); break;
+    case "outs_pit": actual = inningsToOuts(pick("IP")); break;
     case "strikeouts_bat": actual = pick("SO", "K"); break;
     case "hits_runs_rbi": actual = required(pick("H"), pick("R"), pick("RBI")); break;
     case "total_bases": {
